@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@moldable-ai/storage": "^0.1.0",
-    "@moldable-ai/ui": "^0.1.0",
+    "@moldable-ai/ui": "^0.2.1",
     "@tanstack/react-query": "^5.90.16",
     "lucide-react": "^0.473.0",
     "next": "16.1.1",

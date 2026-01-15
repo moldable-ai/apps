@@ -31,3 +31,6 @@ next-env.d.ts
 
 # Test coverage
 coverage/
+
+# Tool caches
+.prettiercache
