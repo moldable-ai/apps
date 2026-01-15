@@ -14,5 +14,13 @@
     "@moldable-ai/ui": "^0.1.0",
     "@moldable-ai/storage": "^0.1.0"
   },
-  "env": []
+  "env": [],
+  "upstream": {
+    "repo": "moldable-ai/apps",
+    "path": "git-flow",
+    "installedVersion": "1.0.0",
+    "installedCommit": "79c470e37f19631020babbc35646d6ef4eb515fa",
+    "installedAt": "2026-01-15T03:56:56Z"
+  },
+  "modified": false
 }

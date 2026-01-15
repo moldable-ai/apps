@@ -18,12 +18,13 @@
     "@moldable-ai/ui": "^0.1.0",
     "@tanstack/react-query": "^5.90.16",
     "lucide-react": "^0.473.0",
-    "next": "15.5.7",
+    "next": "16.1.1",
     "react": "19.1.2",
     "react-dom": "19.1.2",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@moldable-ai/typescript-config": "0.1.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "19.2.8",

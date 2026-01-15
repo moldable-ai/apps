@@ -271,11 +271,6 @@ export default function MeetingsPage() {
             disabled={hasActiveMeeting}
             className="flex-1 cursor-pointer"
           >
-            {audioSource === 'system' ? (
-              <Monitor className="mr-2 size-4" />
-            ) : (
-              <Mic className="mr-2 size-4" />
-            )}
             New Meeting
           </Button>
           <Button

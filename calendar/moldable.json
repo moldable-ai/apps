@@ -14,20 +14,12 @@
     "@moldable-ai/ui": "^0.1.0",
     "@moldable-ai/storage": "^0.1.0"
   },
-  "env": [
-    {
-      "key": "GOOGLE_CLIENT_ID",
-      "name": "Google Client ID",
-      "description": "OAuth client ID for Google Calendar access",
-      "url": "https://console.cloud.google.com/apis/credentials",
-      "required": true
-    },
-    {
-      "key": "GOOGLE_CLIENT_SECRET",
-      "name": "Google Client Secret",
-      "description": "OAuth client secret for Google Calendar access",
-      "url": "https://console.cloud.google.com/apis/credentials",
-      "required": true
-    }
-  ]
+  "upstream": {
+    "repo": "moldable-ai/apps",
+    "path": "calendar",
+    "installedVersion": "0.1.0",
+    "installedCommit": "79c470e37f19631020babbc35646d6ef4eb515fa",
+    "installedAt": "2026-01-15T03:56:56Z"
+  },
+  "modified": false
 }

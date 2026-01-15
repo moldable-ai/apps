@@ -94,14 +94,18 @@ process.on('SIGTERM', async () => {
   process.exit(143)
 })
 
-const child = spawn('next', ['dev', ...forwardedArgs, ...extraArgs], {
-  env: {
-    ...process.env,
-    MOLDABLE_APP_ID: 'notes',
-    ...(port ? { MOLDABLE_PORT: port, PORT: port } : {}),
+const child = spawn(
+  'next',
+  ['dev', '--turbopack', ...forwardedArgs, ...extraArgs],
+  {
+    env: {
+      ...process.env,
+      MOLDABLE_APP_ID: 'notes',
+      ...(port ? { MOLDABLE_PORT: port, PORT: port } : {}),
+    },
+    stdio: 'inherit',
   },
-  stdio: 'inherit',
-})
+)
 
 if (child.pid) {
   myPid = child.pid

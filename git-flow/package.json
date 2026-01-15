@@ -33,11 +33,11 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
+    "@moldable-ai/typescript-config": "0.1.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^25.0.7",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.0.4",
-    "@types/react-query": "^1.2.9",
     "autoprefixer": "^10.4.23",
     "eslint": "^9.39.2",
     "postcss": "^8.4.49",

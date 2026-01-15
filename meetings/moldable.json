@@ -23,5 +23,13 @@
       "url": "https://console.deepgram.com/",
       "required": true
     }
-  ]
+  ],
+  "upstream": {
+    "repo": "moldable-ai/apps",
+    "path": "meetings",
+    "installedVersion": "0.1.0",
+    "installedCommit": "79c470e37f19631020babbc35646d6ef4eb515fa",
+    "installedAt": "2026-01-15T03:56:56Z"
+  },
+  "modified": false
 }

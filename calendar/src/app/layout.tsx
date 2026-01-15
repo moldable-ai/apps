@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
+import Script from 'next/script'
 import { ThemeProvider, themeScript } from '@moldable-ai/ui'
 import { Providers } from '@/components/providers'
 import './globals.css'
@@ -26,12 +27,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <Script id="theme-script" strategy="beforeInteractive">
+          {themeScript}
+        </Script>
         <ThemeProvider>
           <Providers>{children}</Providers>
         </ThemeProvider>
