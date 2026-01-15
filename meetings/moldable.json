@@ -1,0 +1,27 @@
+{
+  "name": "Meetings",
+  "version": "0.1.0",
+  "description": "Record, transcribe, and summarize meetings with real-time transcription",
+  "author": "Moldable Team",
+  "license": "MIT",
+  "repository": "moldable-ai/apps",
+  "icon": "🎙️",
+  "iconPath": "public/icon.png",
+  "widgetSize": "medium",
+  "category": "productivity",
+  "tags": ["meetings", "transcription", "audio", "recording"],
+  "moldableDependencies": {
+    "@moldable/ui": "^0.1.0",
+    "@moldable/editor": "^0.1.0",
+    "@moldable/storage": "^0.1.0"
+  },
+  "env": [
+    {
+      "key": "DEEPGRAM_API_KEY",
+      "name": "Deepgram API Key",
+      "description": "Powers real-time speech-to-text transcription",
+      "url": "https://console.deepgram.com/",
+      "required": true
+    }
+  ]
+}

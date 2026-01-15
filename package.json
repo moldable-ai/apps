@@ -1,0 +1,15 @@
+{
+  "name": "moldable-apps",
+  "version": "1.0.0",
+  "description": "Official Moldable apps collection",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "generate-manifest": "node scripts/generate-manifest.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/moldable-ai/apps.git"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,5 @@
+node_modules
+.next
+.moldable.instances.json
+data
+.env*

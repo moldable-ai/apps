@@ -1,0 +1,182 @@
+{
+  "$schema": "https://moldable.sh/schemas/manifest.json",
+  "version": "1",
+  "generatedAt": "2026-01-15T02:22:22.140Z",
+  "registry": "moldable-ai/apps",
+  "apps": [
+    {
+      "id": "calendar",
+      "name": "Calendar",
+      "version": "0.1.0",
+      "description": "Integrated calendar with Google Calendar connection",
+      "icon": "🗓️",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/calendar/public/icon.png",
+      "widgetSize": "medium",
+      "category": "productivity",
+      "tags": [
+        "calendar",
+        "schedule",
+        "events",
+        "google"
+      ],
+      "path": "calendar",
+      "requiredEnv": [
+        "GOOGLE_CLIENT_ID",
+        "GOOGLE_CLIENT_SECRET"
+      ],
+      "moldableDependencies": {
+        "@moldable/ui": "^0.1.0",
+        "@moldable/storage": "^0.1.0"
+      }
+    },
+    {
+      "id": "git-flow",
+      "name": "Git",
+      "version": "1.0.0",
+      "description": "Simple Git client for branch management, staging, and diffing",
+      "icon": "🛠️",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/git-flow/public/icon.png",
+      "widgetSize": "medium",
+      "category": "developer",
+      "tags": [
+        "git",
+        "version-control",
+        "developer",
+        "code"
+      ],
+      "path": "git-flow",
+      "requiredEnv": [],
+      "moldableDependencies": {
+        "@moldable/ui": "^0.1.0",
+        "@moldable/storage": "^0.1.0"
+      }
+    },
+    {
+      "id": "meetings",
+      "name": "Meetings",
+      "version": "0.1.0",
+      "description": "Record, transcribe, and summarize meetings with real-time transcription",
+      "icon": "🎙️",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/meetings/public/icon.png",
+      "widgetSize": "medium",
+      "category": "productivity",
+      "tags": [
+        "meetings",
+        "transcription",
+        "audio",
+        "recording"
+      ],
+      "path": "meetings",
+      "requiredEnv": [
+        "DEEPGRAM_API_KEY"
+      ],
+      "moldableDependencies": {
+        "@moldable/ui": "^0.1.0",
+        "@moldable/editor": "^0.1.0",
+        "@moldable/storage": "^0.1.0"
+      }
+    },
+    {
+      "id": "notes",
+      "name": "Notes",
+      "version": "0.1.0",
+      "description": "A Google Keep-style note taking app with pinning and markdown support",
+      "icon": "📝",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/notes/public/icon.png",
+      "widgetSize": "medium",
+      "category": "productivity",
+      "tags": [
+        "notes",
+        "markdown",
+        "writing",
+        "keep"
+      ],
+      "path": "notes",
+      "requiredEnv": [],
+      "moldableDependencies": {
+        "@moldable/ui": "^0.1.0",
+        "@moldable/editor": "^0.1.0",
+        "@moldable/storage": "^0.1.0"
+      }
+    },
+    {
+      "id": "scribo",
+      "name": "Scribo Languages",
+      "version": "0.1.0",
+      "description": "Language learning journal with AI-powered translations",
+      "icon": "📓",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/scribo/public/icon.png",
+      "widgetSize": "medium",
+      "category": "productivity",
+      "tags": [
+        "languages",
+        "translation",
+        "learning",
+        "journal"
+      ],
+      "path": "scribo",
+      "requiredEnv": [
+        "DEEPL_API_KEY"
+      ],
+      "moldableDependencies": {
+        "@moldable/ui": "^0.1.0",
+        "@moldable/editor": "^0.1.0",
+        "@moldable/storage": "^0.1.0"
+      }
+    },
+    {
+      "id": "todo",
+      "name": "Todo",
+      "version": "0.1.0",
+      "description": "Simple task management with quick add and completion tracking",
+      "icon": "✅",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/todo/public/icon.png",
+      "widgetSize": "small",
+      "category": "productivity",
+      "tags": [
+        "tasks",
+        "todo",
+        "checklist",
+        "productivity"
+      ],
+      "path": "todo",
+      "requiredEnv": [],
+      "moldableDependencies": {
+        "@moldable/ui": "^0.1.0",
+        "@moldable/storage": "^0.1.0"
+      }
+    }
+  ],
+  "categories": [
+    {
+      "id": "productivity",
+      "name": "Productivity",
+      "icon": "⚡"
+    },
+    {
+      "id": "finance",
+      "name": "Finance",
+      "icon": "💰"
+    },
+    {
+      "id": "health",
+      "name": "Health",
+      "icon": "❤️"
+    },
+    {
+      "id": "developer",
+      "name": "Developer Tools",
+      "icon": "🛠️"
+    },
+    {
+      "id": "entertainment",
+      "name": "Entertainment",
+      "icon": "🎮"
+    },
+    {
+      "id": "social",
+      "name": "Social",
+      "icon": "👥"
+    }
+  ]
+}

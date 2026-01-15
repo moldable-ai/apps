@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+.next/
+.turbo/
+dist/
+
+# Runtime files
+.moldable.instances.json
+.moldable.port
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment (should use Moldable's env system)
+.env
+.env.local
+.env.*.local
+
+# TypeScript build info
+tsconfig.tsbuildinfo
+next-env.d.ts
+
+# Test coverage
+coverage/

@@ -1,0 +1,38 @@
+{
+  "name": "calendar",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node ./scripts/moldable-dev.mjs",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@moldable/storage": "workspace:^",
+    "@moldable/ui": "workspace:^",
+    "@tanstack/react-query": "^5.90.16",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "googleapis": "^144.0.0",
+    "lucide-react": "^0.473.0",
+    "next": "15.5.7",
+    "react": "19.1.2",
+    "react-dom": "19.1.2",
+    "tailwind-merge": "^3.4.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@moldable/eslint-config": "workspace:*",
+    "@moldable/typescript-config": "workspace:*",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "19.2.8",
+    "@types/react-dom": "19.0.4",
+    "eslint": "^9.32.0",
+    "eslint-config-next": "15.5.7",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

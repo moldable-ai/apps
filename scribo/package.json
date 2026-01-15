@@ -1,0 +1,51 @@
+{
+  "name": "scribo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node ./scripts/moldable-dev.mjs",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint . --ext .ts,.tsx --max-warnings 0",
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "check-types": "tsc --noEmit",
+    "clean": "rm -rf .next .turbo"
+  },
+  "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.30.0",
+    "@lexical/code": "^0.39.0",
+    "@lexical/link": "^0.39.0",
+    "@lexical/list": "^0.39.0",
+    "@lexical/rich-text": "^0.39.0",
+    "@moldable/editor": "workspace:^",
+    "@moldable/storage": "workspace:^",
+    "@moldable/ui": "workspace:^",
+    "@tanstack/react-query": "^5.90.16",
+    "lexical": "^0.39.0",
+    "lucide-react": "^0.473.0",
+    "next": "15.5.7",
+    "react": "19.1.2",
+    "react-dom": "19.1.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@lexical/headless": "^0.39.0",
+    "@moldable/eslint-config": "workspace:*",
+    "@moldable/prettier-config": "workspace:*",
+    "@moldable/typescript-config": "workspace:*",
+    "@tailwindcss/postcss": "^4",
+    "@types/jsdom": "^27.0.0",
+    "@types/node": "^20",
+    "@types/react": "19.2.8",
+    "@types/react-dom": "19.0.4",
+    "eslint": "^9.32.0",
+    "eslint-config-next": "15.5.7",
+    "jsdom": "^27.4.0",
+    "prettier": "^3.5.3",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "vitest": "^4.0.16"
+  }
+}

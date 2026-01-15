@@ -1,0 +1,27 @@
+{
+  "name": "Scribo Languages",
+  "version": "0.1.0",
+  "description": "Language learning journal with AI-powered translations",
+  "author": "Moldable Team",
+  "license": "MIT",
+  "repository": "moldable-ai/apps",
+  "icon": "📓",
+  "iconPath": "public/icon.png",
+  "widgetSize": "medium",
+  "category": "productivity",
+  "tags": ["languages", "translation", "learning", "journal"],
+  "moldableDependencies": {
+    "@moldable/ui": "^0.1.0",
+    "@moldable/editor": "^0.1.0",
+    "@moldable/storage": "^0.1.0"
+  },
+  "env": [
+    {
+      "key": "DEEPL_API_KEY",
+      "name": "DeepL API Key",
+      "description": "Powers automatic translations between languages",
+      "url": "https://www.deepl.com/en/your-account/keys",
+      "required": true
+    }
+  ]
+}

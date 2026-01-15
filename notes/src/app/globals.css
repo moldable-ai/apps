@@ -1,0 +1,123 @@
+@import 'tailwindcss';
+@import '@moldable/ui/styles';
+@source '../**/*.{js,jsx,ts,tsx}';
+@source '../../../../packages/**/*.{js,jsx,ts,tsx}';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Markdown Checklist styles carried from Shippy */
+.prose ul > li:has(input[type='checkbox']) {
+  @apply relative list-none pl-0;
+}
+
+.prose ul > li input[type='checkbox'] {
+  @apply border-input absolute left-0 top-1/2 size-4 -translate-y-1/2 cursor-pointer appearance-none rounded-[4px] border bg-transparent transition-colors duration-150;
+  margin: 0;
+}
+
+.prose ul > li input[type='checkbox']:checked {
+  @apply bg-primary border-primary;
+}
+
+.prose ul > li input[type='checkbox']:checked::after {
+  content: '';
+  @apply absolute left-1/2 top-1/2 h-[0.5rem] w-[0.3rem] -translate-x-1/2 -translate-y-[60%] rotate-45 border-b-2 border-r-2 border-white;
+}
+
+.prose ul > li:has(input[type='checkbox']:checked) {
+  @apply text-muted-foreground line-through;
+}
+
+/* Lexical Editor Checklist Styles */
+.lexical-listitem-checked,
+.lexical-listitem-unchecked {
+  position: relative;
+  margin-left: 0.5em;
+  margin-right: 0.5em;
+  padding-left: 1.75em;
+  padding-right: 0.5em;
+  list-style-type: none;
+  outline: none;
+  display: block;
+  min-height: 1.5em;
+}
+
+.lexical-listitem-checked > *,
+.lexical-listitem-unchecked > * {
+  margin-left: 0.01em;
+}
+
+.lexical-listitem-unchecked:before,
+.lexical-listitem-checked:before {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  top: 50%;
+  left: 0;
+  cursor: pointer;
+  display: block;
+  position: absolute;
+  transform: translateY(-50%);
+  border-radius: 4px;
+  border: 1px solid var(--input);
+  background-color: transparent;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  transition: box-shadow 0.15s ease;
+  pointer-events: all;
+}
+
+.dark .lexical-listitem-unchecked:before {
+  background-color: color-mix(in oklch, var(--input) 30%, transparent);
+}
+
+.lexical-listitem-checked {
+  text-decoration: line-through;
+  color: var(--muted-foreground);
+}
+
+.lexical-listitem-unchecked:focus:before,
+.lexical-listitem-checked:focus:before {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 50%, transparent);
+}
+
+.lexical-listitem-checked:before {
+  border-color: var(--primary);
+  background-color: var(--primary);
+}
+
+.lexical-listitem-checked:after {
+  content: '';
+  cursor: pointer;
+  position: absolute;
+  display: block;
+  top: 50%;
+  left: 0.5rem;
+  width: 0.3rem;
+  height: 0.5rem;
+  transform: translate(-50%, -60%) rotate(45deg);
+  border-style: solid;
+  border-color: var(--primary-foreground);
+  border-width: 0 2px 2px 0;
+  pointer-events: none;
+}
+
+.lexical-nested-listitem {
+  list-style-type: none;
+}
+
+.lexical-nested-listitem:before,
+.lexical-nested-listitem:after {
+  display: none;
+}

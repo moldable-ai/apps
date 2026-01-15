@@ -1,0 +1,16 @@
+# Next.js
+.next/
+out/
+
+# Vercel
+.vercel/
+
+# Testing
+coverage/
+
+# Next.js build info
+next-env.d.ts
+node_modules
+
+# Local data
+data/

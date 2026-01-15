@@ -1,0 +1,18 @@
+{
+  "name": "Git",
+  "version": "1.0.0",
+  "description": "Simple Git client for branch management, staging, and diffing",
+  "author": "Moldable Team",
+  "license": "MIT",
+  "repository": "moldable-ai/apps",
+  "icon": "🛠️",
+  "iconPath": "public/icon.png",
+  "widgetSize": "medium",
+  "category": "developer",
+  "tags": ["git", "version-control", "developer", "code"],
+  "moldableDependencies": {
+    "@moldable/ui": "^0.1.0",
+    "@moldable/storage": "^0.1.0"
+  },
+  "env": []
+}

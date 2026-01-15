@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+@import '@moldable/ui/styles';
+@source '../**/*.{js,jsx,ts,tsx}';
+@source '../../../../packages/ui/src/**/*.{js,jsx,ts,tsx}';
+@source '../../../../packages/editor/src/**/*.{js,jsx,ts,tsx}';
+
+/* Platform-inspired custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-muted-foreground);
+  opacity: 0.2;
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
+
+/* Diff transitions */
+.diff-line {
+  transition: background-color 0.15s ease;
+}

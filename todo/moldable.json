@@ -1,0 +1,19 @@
+{
+  "name": "Todo",
+  "version": "0.1.0",
+  "description": "Simple task management with quick add and completion tracking",
+  "author": "Moldable Team",
+  "license": "MIT",
+  "repository": "moldable-ai/apps",
+  "icon": "✅",
+  "iconPath": "public/icon.png",
+  "widgetSize": "small",
+  "category": "productivity",
+  "tags": ["tasks", "todo", "checklist", "productivity"],
+  "moldableDependencies": {
+    "@moldable/ui": "^0.1.0",
+    "@moldable/storage": "^0.1.0"
+  },
+  "env": [],
+  "commands": "dynamic"
+}

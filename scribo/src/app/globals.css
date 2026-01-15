@@ -1,0 +1,5 @@
+@import 'tailwindcss';
+@import '@moldable/ui/styles';
+@import '@moldable/editor/styles';
+@source '../**/*.{js,jsx,ts,tsx}';
+@source '../../../../packages/**/*.{js,jsx,ts,tsx}';
