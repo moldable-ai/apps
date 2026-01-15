@@ -2,7 +2,7 @@
 
 import { BookOpen, Loader2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Markdown, cn } from '@moldable/ui'
+import { Markdown, cn } from '@moldable-ai/ui'
 import type { Language } from '@/lib/languages'
 
 // Map our language codes to BCP 47 language tags for the lang attribute
@@ -181,7 +181,7 @@ export function TranslationView({
       {translation ? (
         <Markdown
           markdown={translation}
-          className="w-full [&_.prose]:[overflow-wrap:anywhere] [&_.prose]:break-words"
+          className="w-full [&_.prose]:break-words [&_.prose]:[overflow-wrap:anywhere]"
         />
       ) : (
         <p className="text-muted-foreground italic">
@@ -192,14 +192,14 @@ export function TranslationView({
       {/* Word popup */}
       {popup && (
         <div
-          className="absolute z-50 max-w-[360px] min-w-[220px] rounded-lg border border-border bg-popover p-3 shadow-lg"
+          className="border-border bg-popover absolute z-50 min-w-[220px] max-w-[360px] rounded-lg border p-3 shadow-lg"
           style={{
             left: Math.min(Math.max(popup.x - 110, 10), 180),
             top: popup.y + 20,
           }}
         >
           {popup.isLoading ? (
-            <div className="flex items-center gap-2 text-muted-foreground">
+            <div className="text-muted-foreground flex items-center gap-2">
               <Loader2 className="size-4 animate-spin" />
               <span>Looking up...</span>
             </div>
@@ -208,18 +208,18 @@ export function TranslationView({
               {/* Word header */}
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <div className="text-lg font-semibold text-foreground">
+                  <div className="text-foreground text-lg font-semibold">
                     {popup.result.word}
                   </div>
                   {popup.result.phonetic && (
-                    <div className="text-sm text-muted-foreground">
+                    <div className="text-muted-foreground text-sm">
                       {popup.result.phonetic}
                     </div>
                   )}
                 </div>
                 <button
                   onClick={closePopup}
-                  className="shrink-0 cursor-pointer rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  className="text-muted-foreground hover:bg-muted hover:text-foreground shrink-0 cursor-pointer rounded p-1"
                 >
                   <X className="size-4" />
                 </button>
@@ -228,8 +228,8 @@ export function TranslationView({
               {/* Translations (e.g., French → English) */}
               {popup.result.translations &&
                 popup.result.translations.length > 0 && (
-                  <div className="rounded-md bg-muted/50 px-2 py-1.5 text-sm">
-                    <div className="text-xs font-medium text-muted-foreground">
+                  <div className="bg-muted/50 rounded-md px-2 py-1.5 text-sm">
+                    <div className="text-muted-foreground text-xs font-medium">
                       Translation
                     </div>
                     <div className="text-foreground">
@@ -247,14 +247,14 @@ export function TranslationView({
                 <div className="space-y-2">
                   {popup.result.meanings.slice(0, 3).map((meaning, i) => (
                     <div key={i} className="text-sm">
-                      <span className="font-medium text-primary">
+                      <span className="text-primary font-medium">
                         {meaning.partOfSpeech}
                       </span>
-                      <p className="mt-0.5 text-foreground">
+                      <p className="text-foreground mt-0.5">
                         {meaning.definition}
                       </p>
                       {meaning.example && (
-                        <p className="mt-1 text-xs text-muted-foreground italic">
+                        <p className="text-muted-foreground mt-1 text-xs italic">
                           &quot;{meaning.example}&quot;
                         </p>
                       )}
@@ -262,7 +262,7 @@ export function TranslationView({
                   ))}
                 </div>
               ) : popup.result.error ? (
-                <div className="text-sm text-muted-foreground">
+                <div className="text-muted-foreground text-sm">
                   {popup.result.error}
                   <div className="mt-2 text-xs">
                     <strong>Tip:</strong> Select the word and use Force Touch
@@ -272,7 +272,7 @@ export function TranslationView({
               ) : null}
 
               {/* Source indicator */}
-              <div className="flex items-center gap-1 pt-1 text-xs text-muted-foreground/60">
+              <div className="text-muted-foreground/60 flex items-center gap-1 pt-1 text-xs">
                 <BookOpen className="size-3" />
                 <span>FreeDictionaryAPI.com</span>
               </div>
@@ -283,7 +283,7 @@ export function TranslationView({
 
       {/* Hint for dictionary lookups */}
       {!isTranslating && translation && (
-        <div className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground/60">
+        <div className="text-muted-foreground/60 mt-4 flex items-center gap-1.5 text-xs">
           <BookOpen className="size-3" />
           <span>Double-click a word to look it up</span>
         </div>

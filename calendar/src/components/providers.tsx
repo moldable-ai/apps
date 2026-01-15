@@ -2,7 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactNode, useState } from 'react'
-import { WorkspaceProvider } from '@moldable/ui'
+import { WorkspaceProvider } from '@moldable-ai/ui'
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(

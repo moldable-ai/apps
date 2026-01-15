@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useWorkspace } from '@moldable/ui'
+import { useWorkspace } from '@moldable-ai/ui'
 import type { Todo } from '@/lib/types'
 
 export function generateId(): string {

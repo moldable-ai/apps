@@ -1,4 +1,9 @@
-import { getAppDataDir, readJson, safePath, writeJson } from '@moldable/storage'
+import {
+  getAppDataDir,
+  readJson,
+  safePath,
+  writeJson,
+} from '@moldable-ai/storage'
 import crypto from 'crypto'
 import { google } from 'googleapis'
 

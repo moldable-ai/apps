@@ -9,9 +9,9 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@moldable/editor": "workspace:*",
-    "@moldable/storage": "workspace:*",
-    "@moldable/ui": "workspace:*",
+    "@moldable-ai/editor": "^0.1.0",
+    "@moldable-ai/storage": "^0.1.0",
+    "@moldable-ai/ui": "^0.1.0",
     "@tailwindcss/typography": "^0.5.16",
     "@tanstack/react-query": "^5.90.16",
     "clsx": "^2.1.1",

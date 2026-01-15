@@ -1,4 +1,4 @@
-import { WidgetLayout } from '@moldable/ui'
+import { WidgetLayout } from '@moldable-ai/ui'
 
 export default function WidgetLayoutWrapper({
   children,

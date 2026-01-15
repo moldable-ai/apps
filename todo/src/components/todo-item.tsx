@@ -8,7 +8,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { forwardRef, useImperativeHandle, useRef } from 'react'
-import { Button, Checkbox, cn } from '@moldable/ui'
+import { Button, Checkbox, cn } from '@moldable-ai/ui'
 import type { Priority, Todo } from '@/lib/types'
 
 const PRIORITY_COLORS: Record<Priority, string> = {

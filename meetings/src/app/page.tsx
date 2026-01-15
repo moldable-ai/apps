@@ -28,7 +28,7 @@ import {
   ScrollArea,
   cn,
   useWorkspace,
-} from '@moldable/ui'
+} from '@moldable-ai/ui'
 import { formatDuration } from '@/lib/format'
 import { MeetingCard } from '@/components/two-pane-meeting-view'
 import {

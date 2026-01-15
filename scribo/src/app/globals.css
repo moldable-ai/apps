@@ -1,5 +1,6 @@
 @import 'tailwindcss';
-@import '@moldable/ui/styles';
-@import '@moldable/editor/styles';
+@import '@moldable-ai/ui/styles';
+@import '@moldable-ai/editor/styles';
 @source '../**/*.{js,jsx,ts,tsx}';
-@source '../../../../packages/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/editor/**/*.{js,jsx,ts,tsx}';

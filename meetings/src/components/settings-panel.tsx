@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
   Switch,
-} from '@moldable/ui'
+} from '@moldable-ai/ui'
 import type { MeetingSettings } from '@/types'
 
 interface SettingsPanelProps {
@@ -31,7 +31,7 @@ export function SettingsPanel({
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <Label htmlFor="save-audio">Save audio</Label>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               Save audio recording alongside transcript
             </p>
           </div>
@@ -49,7 +49,7 @@ export function SettingsPanel({
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <Label htmlFor="diarization">Speaker detection</Label>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-muted-foreground text-xs">
               Identify different speakers in the meeting
             </p>
           </div>
@@ -85,7 +85,7 @@ export function SettingsPanel({
               <SelectItem value="nova-3-medical">Nova 3 Medical</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             {settings.model === 'nova-2'
               ? 'Fast transcription for general use'
               : settings.model === 'nova-3'

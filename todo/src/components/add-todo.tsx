@@ -2,7 +2,7 @@
 
 import { Plus } from 'lucide-react'
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
-import { Button, Input } from '@moldable/ui'
+import { Button, Input } from '@moldable-ai/ui'
 
 interface AddTodoProps {
   onAdd: (title: string) => void

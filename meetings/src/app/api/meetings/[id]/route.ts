@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getWorkspaceFromRequest } from '@moldable/storage'
+import { getWorkspaceFromRequest } from '@moldable-ai/storage'
 import { deleteMeeting, getMeeting } from '@/lib/storage.server'
 
 interface RouteParams {

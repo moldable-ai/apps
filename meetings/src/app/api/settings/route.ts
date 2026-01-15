@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getWorkspaceFromRequest } from '@moldable/storage'
+import { getWorkspaceFromRequest } from '@moldable-ai/storage'
 import { loadSettings, saveSettings } from '@/lib/storage.server'
 import type { MeetingSettings } from '@/types'
 

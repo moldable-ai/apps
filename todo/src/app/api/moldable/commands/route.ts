@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import type { AppCommand, CommandsResponse } from '@moldable/ui'
+import type { AppCommand, CommandsResponse } from '@moldable-ai/ui'
 
 export const dynamic = 'force-dynamic'
 

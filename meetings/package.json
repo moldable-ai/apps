@@ -15,9 +15,9 @@
   },
   "dependencies": {
     "@deepgram/sdk": "^3.10.1",
-    "@moldable/editor": "workspace:^",
-    "@moldable/storage": "workspace:^",
-    "@moldable/ui": "workspace:^",
+    "@moldable-ai/editor": "^0.1.0",
+    "@moldable-ai/storage": "^0.1.0",
+    "@moldable-ai/ui": "^0.1.0",
     "@tanstack/react-query": "^5.90.16",
     "date-fns": "^4.1.0",
     "lucide-react": "^0.473.0",
@@ -28,9 +28,6 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@moldable/eslint-config": "workspace:*",
-    "@moldable/prettier-config": "workspace:*",
-    "@moldable/typescript-config": "workspace:*",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "19.2.8",

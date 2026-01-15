@@ -6,7 +6,7 @@ import {
   safePath,
   sanitizeId,
   writeJson,
-} from '@moldable/storage'
+} from '@moldable-ai/storage'
 import type { Note } from '../../../lib/types'
 import fs from 'fs/promises'
 import 'server-only'

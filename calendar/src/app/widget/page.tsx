@@ -2,7 +2,7 @@
 
 import { CalendarDays, Clock, ExternalLink } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useWorkspace } from '@moldable/ui'
+import { useWorkspace } from '@moldable-ai/ui'
 
 const GHOST_EXAMPLES = [
   { title: 'Weekly Sync', time: '10:00 AM', color: 'bg-blue-500' },

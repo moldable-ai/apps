@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
-import { useWorkspace } from '@moldable/ui'
+import { useWorkspace } from '@moldable-ai/ui'
 import type { Meeting, TranscriptSegment } from '@/types'
 
 export function useMeetings() {

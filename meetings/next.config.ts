@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@moldable/ui'],
+  transpilePackages: ['@moldable-ai/ui'],
   devIndicators: false,
 }
 

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
-import { ThemeProvider, themeScript } from '@moldable/ui'
+import { ThemeProvider, themeScript } from '@moldable-ai/ui'
 import { Providers } from '@/components/providers'
 import './globals.css'
 

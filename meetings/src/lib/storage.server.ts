@@ -14,7 +14,7 @@ import {
   safePath,
   sanitizeId,
   writeJson,
-} from '@moldable/storage'
+} from '@moldable-ai/storage'
 import type { Meeting, MeetingSettings } from '@/types'
 import { DEFAULT_SETTINGS } from '@/types'
 import fs from 'fs/promises'

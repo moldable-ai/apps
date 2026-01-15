@@ -2,6 +2,8 @@
 
 Official collection of apps for [Moldable](https://github.com/moldable-ai/moldable) - your personal software factory.
 
+**Website**: [moldable.sh](https://moldable.sh)
+
 ## Apps
 
 | App                     | Description                                            | Category     |
@@ -17,52 +19,75 @@ Official collection of apps for [Moldable](https://github.com/moldable-ai/moldab
 
 Apps are installed directly through the Moldable desktop app. Browse available apps and click "Install" to add them to your workspace.
 
-Manifest URL: `https://raw.githubusercontent.com/moldable-ai/apps/main/manifest.json`
+**Manifest URL**: `https://raw.githubusercontent.com/moldable-ai/apps/main/manifest.json`
+
+## Related Repositories
+
+| Repository                                                      | Description                          |
+| --------------------------------------------------------------- | ------------------------------------ |
+| [moldable-ai/moldable](https://github.com/moldable-ai/moldable) | Desktop app & shared packages        |
+| [moldable-ai/apps](https://github.com/moldable-ai/apps)         | Official apps collection (this repo) |
+
+## Shared Packages
+
+Apps use shared packages from npm:
+
+| Package                                                                      | Description                         |
+| ---------------------------------------------------------------------------- | ----------------------------------- |
+| [`@moldable-ai/ui`](https://www.npmjs.com/package/@moldable-ai/ui)           | UI components, theme system, shadcn |
+| [`@moldable-ai/editor`](https://www.npmjs.com/package/@moldable-ai/editor)   | Rich text markdown editor (Lexical) |
+| [`@moldable-ai/storage`](https://www.npmjs.com/package/@moldable-ai/storage) | Filesystem storage utilities        |
 
 ## For Developers
 
-### Structure
+See [AGENTS.md](AGENTS.md) for detailed development guidelines.
 
-Each app is a self-contained Next.js application with:
+### App Structure
+
+Each app is a self-contained Next.js application:
 
 ```
 app-name/
-├── moldable.json      # App manifest (name, version, description, etc.)
-├── package.json       # Dependencies
+├── moldable.json         # App manifest (required)
+├── package.json          # Dependencies
 ├── src/
-│   ├── app/           # Next.js App Router pages
-│   │   ├── page.tsx   # Main app view
-│   │   └── widget/    # Widget view (shown on Moldable canvas)
+│   ├── app/
+│   │   ├── page.tsx      # Main app view
+│   │   ├── widget/       # Widget view (required)
+│   │   └── api/moldable/health/  # Health check (required)
 │   ├── components/
 │   └── lib/
 ├── public/
-│   └── icon.png       # App icon
+│   └── icon.png          # App icon
 └── scripts/
-    └── moldable-dev.mjs  # Development startup script
+    └── moldable-dev.mjs  # Startup script (required)
 ```
 
 ### moldable.json
-
-The app manifest includes:
 
 ```json
 {
   "name": "App Name",
   "version": "1.0.0",
   "description": "What the app does",
+  "author": "Your Name",
+  "license": "MIT",
+  "repository": "moldable-ai/apps",
   "icon": "📦",
   "iconPath": "public/icon.png",
   "widgetSize": "medium",
   "category": "productivity",
   "tags": ["tag1", "tag2"],
   "moldableDependencies": {
-    "@moldable/ui": "^0.1.0"
+    "@moldable-ai/ui": "^0.1.0",
+    "@moldable-ai/storage": "^0.1.0"
   },
   "env": [
     {
       "key": "API_KEY",
       "name": "API Key",
       "description": "Required for...",
+      "url": "https://example.com/get-key",
       "required": true
     }
   ]
@@ -71,23 +96,27 @@ The app manifest includes:
 
 ### Generating the Manifest
 
-The root `manifest.json` is auto-generated from all app manifests:
+The root `manifest.json` is auto-generated:
 
 ```bash
 npm run generate-manifest
 ```
 
-This is run automatically by CI on each push.
+This runs automatically via GitHub Actions on each push.
 
 ## Creating a New App
 
 1. Create a new directory with your app name (kebab-case)
-2. Copy the structure from an existing app (e.g., `todo`)
+2. Copy structure from an existing app (e.g., `todo`)
 3. Create your `moldable.json` manifest
-4. Implement your app
-5. Run `npm run generate-manifest` to update the root manifest
+4. Implement your app (see [AGENTS.md](AGENTS.md) for guidelines)
+5. Run `npm run generate-manifest`
 6. Submit a PR
 
 ## License
 
-MIT
+[MIT](LICENSE)
+
+---
+
+Built by [Desiderata LLC](https://desiderata.fyi)

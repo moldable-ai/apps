@@ -1,5 +1,5 @@
 {
-  "extends": "@moldable/typescript-config/nextjs.json",
+  "extends": "@moldable-ai/typescript-config/nextjs.json",
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {

@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
-import { useWorkspace } from '@moldable/ui'
+import { useWorkspace } from '@moldable-ai/ui'
 import { formatDuration, formatRelativeTime } from '@/lib/format'
 import type { Meeting } from '@/types'
 

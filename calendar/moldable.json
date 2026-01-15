@@ -11,8 +11,8 @@
   "category": "productivity",
   "tags": ["calendar", "schedule", "events", "google"],
   "moldableDependencies": {
-    "@moldable/ui": "^0.1.0",
-    "@moldable/storage": "^0.1.0"
+    "@moldable-ai/ui": "^0.1.0",
+    "@moldable-ai/storage": "^0.1.0"
   },
   "env": [
     {

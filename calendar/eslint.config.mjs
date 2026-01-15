@@ -1,4 +1,4 @@
-import nextConfig from '@moldable/eslint-config/next'
+import nextConfig from '@moldable-ai/eslint-config/next'
 
 export default [
   ...nextConfig,

@@ -15,8 +15,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@moldable/storage": "workspace:^",
-    "@moldable/ui": "workspace:^",
+    "@moldable-ai/storage": "^0.1.0",
+    "@moldable-ai/ui": "^0.1.0",
     "@radix-ui/react-checkbox": "^1.3.2",
     "@radix-ui/react-select": "^2.2.5",
     "@tanstack/react-query": "^5.90.16",

@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useEffect, useState } from 'react'
-import { cn } from '@moldable/ui'
+import { cn } from '@moldable-ai/ui'
 
 interface AudioLevelIndicatorProps {
   level: number

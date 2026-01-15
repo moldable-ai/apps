@@ -1,4 +1,4 @@
-import { ThemeProvider, WorkspaceProvider } from '@moldable/ui'
+import { ThemeProvider, WorkspaceProvider } from '@moldable-ai/ui'
 import { QueryProvider } from '@/lib/query-provider'
 import './globals.css'
 

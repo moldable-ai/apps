@@ -3,7 +3,7 @@ import {
   $convertToMarkdownString,
   createMoldableHeadlessEditor,
   markdownTransformers,
-} from '@moldable/editor'
+} from '@moldable-ai/editor'
 import { $isCodeNode } from '@lexical/code'
 import { $isLinkNode } from '@lexical/link'
 import { $isListItemNode } from '@lexical/list'

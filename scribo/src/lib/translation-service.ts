@@ -3,7 +3,7 @@ import {
   $convertToMarkdownString,
   createMoldableHeadlessEditor,
   markdownTransformers,
-} from '@moldable/editor'
+} from '@moldable-ai/editor'
 import {
   $applyBlockTranslation,
   $extractTranslatableBlocks,

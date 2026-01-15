@@ -3,11 +3,10 @@
  * Generate manifest.json from all moldable.json files in the apps directory.
  * Run from the root of the moldable-apps repo.
  */
-
-import { readdirSync, readFileSync, writeFileSync, statSync } from 'fs'
-import { join, dirname } from 'path'
-import { fileURLToPath } from 'url'
 import { execSync } from 'child_process'
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
+import { dirname, join } from 'path'
+import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -30,7 +29,10 @@ const CATEGORIES = [
  */
 function getGitCommitHash() {
   try {
-    return execSync('git rev-parse HEAD', { cwd: ROOT, encoding: 'utf-8' }).trim()
+    return execSync('git rev-parse HEAD', {
+      cwd: ROOT,
+      encoding: 'utf-8',
+    }).trim()
   } catch {
     console.warn('⚠️  Could not get git commit hash')
     return null

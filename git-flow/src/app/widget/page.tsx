@@ -2,7 +2,7 @@
 
 import { CheckCircle2, GitBranch } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { WidgetLayout, useWorkspace } from '@moldable/ui'
+import { WidgetLayout, useWorkspace } from '@moldable-ai/ui'
 import { cn } from '@/lib/utils'
 
 interface GitFile {

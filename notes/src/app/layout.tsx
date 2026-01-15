@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { ThemeProvider, WorkspaceProvider, themeScript } from '@moldable/ui'
+import { ThemeProvider, WorkspaceProvider, themeScript } from '@moldable-ai/ui'
 import { QueryProvider } from '../lib/query-provider'
 import './globals.css'
 

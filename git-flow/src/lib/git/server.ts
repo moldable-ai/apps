@@ -1,4 +1,4 @@
-import { getAppDataDir, readJson, writeJson } from '@moldable/storage'
+import { getAppDataDir, readJson, writeJson } from '@moldable-ai/storage'
 import os from 'os'
 import path from 'path'
 import { simpleGit } from 'simple-git'

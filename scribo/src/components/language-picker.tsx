@@ -2,7 +2,7 @@
 
 import { ChevronDown } from 'lucide-react'
 import { useState } from 'react'
-import { Popover, PopoverContent, PopoverTrigger, cn } from '@moldable/ui'
+import { Popover, PopoverContent, PopoverTrigger, cn } from '@moldable-ai/ui'
 import { LANGUAGES, Language } from '@/lib/languages'
 
 interface LanguagePickerProps {

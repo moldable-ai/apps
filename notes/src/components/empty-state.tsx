@@ -1,7 +1,7 @@
 'use client'
 
 import { StickyNote } from 'lucide-react'
-import { cn } from '@moldable/ui'
+import { cn } from '@moldable-ai/ui'
 
 interface EmptyStateProps {
   title?: string

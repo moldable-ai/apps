@@ -1,7 +1,7 @@
 'use client'
 
 import { Mic, Pause, Play, Square } from 'lucide-react'
-import { cn } from '@moldable/ui'
+import { cn } from '@moldable-ai/ui'
 import { formatDuration } from '@/lib/format'
 
 interface RecordingControlsProps {

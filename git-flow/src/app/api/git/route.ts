@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getWorkspaceFromRequest } from '@moldable/storage'
+import { getWorkspaceFromRequest } from '@moldable-ai/storage'
 import {
   addRepo,
   commitFiles,
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
     if (body.action === 'undo') {
       const { hash } = body
       const { simpleGit } = await import('simple-git')
-      const { getAppDataDir, readJson } = await import('@moldable/storage')
+      const { getAppDataDir, readJson } = await import('@moldable-ai/storage')
       const path = await import('path')
 
       const dataDir = getAppDataDir(workspaceId)

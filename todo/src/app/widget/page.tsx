@@ -25,7 +25,7 @@ export default function Widget() {
   const totalCount = todos.length
 
   return (
-    <div className="flex h-full flex-col bg-background p-2">
+    <div className="bg-background flex h-full flex-col p-2">
       {/* Todo list */}
       <div className="scrollbar-hide flex-1 space-y-1 overflow-y-auto">
         {todos.length === 0 ? (
@@ -34,12 +34,12 @@ export default function Widget() {
               {GHOST_EXAMPLES.map((example, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center gap-2 rounded-md border border-border/40 bg-muted/20 px-2.5 py-1.5 opacity-50"
+                  className="border-border/40 bg-muted/20 flex items-center gap-2 rounded-md border px-2.5 py-1.5 opacity-50"
                 >
                   {example.completed ? (
-                    <CheckCircle2 className="size-3.5 text-primary" />
+                    <CheckCircle2 className="text-primary size-3.5" />
                   ) : (
-                    <Circle className="size-3.5 text-muted-foreground" />
+                    <Circle className="text-muted-foreground size-3.5" />
                   )}
                   <span
                     className={`text-[13px] ${example.completed ? 'text-muted-foreground line-through' : 'text-foreground'}`}
@@ -49,7 +49,7 @@ export default function Widget() {
                 </div>
               ))}
             </div>
-            <p className="pt-1.5 text-center text-[11px] text-muted-foreground">
+            <p className="text-muted-foreground pt-1.5 text-center text-[11px]">
               No todos yet. Click to start!
             </p>
           </div>
@@ -58,18 +58,18 @@ export default function Widget() {
             {activeTodos.map((todo) => (
               <div
                 key={todo.id}
-                className="flex items-center gap-2 rounded-md bg-muted/50 px-2.5 py-1.5"
+                className="bg-muted/50 flex items-center gap-2 rounded-md px-2.5 py-1.5"
               >
-                <Circle className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="line-clamp-1 text-[13px] text-foreground">
+                <Circle className="text-muted-foreground size-3.5 shrink-0" />
+                <span className="text-foreground line-clamp-1 text-[13px]">
                   {todo.title}
                 </span>
               </div>
             ))}
             {activeTodos.length === 0 && totalCount > 0 && (
               <div className="flex items-center justify-center gap-2 py-4">
-                <CheckCircle2 className="size-5 text-primary" />
-                <span className="text-sm text-muted-foreground">All done!</span>
+                <CheckCircle2 className="text-primary size-5" />
+                <span className="text-muted-foreground text-sm">All done!</span>
               </div>
             )}
           </>
@@ -78,7 +78,7 @@ export default function Widget() {
 
       {/* Footer stats */}
       {totalCount > 0 && (
-        <div className="border-t border-border/50 pt-1.5 text-center text-[11px] text-muted-foreground">
+        <div className="border-border/50 text-muted-foreground border-t pt-1.5 text-center text-[11px]">
           {completedCount}/{totalCount} completed
         </div>
       )}

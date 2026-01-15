@@ -2,7 +2,7 @@
 
 import { ListFilter, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, ScrollArea, useMoldableCommands } from '@moldable/ui'
+import { Button, ScrollArea, useMoldableCommands } from '@moldable-ai/ui'
 import type { Priority, Todo } from '@/lib/types'
 import {
   generateId,

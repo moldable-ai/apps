@@ -25,7 +25,7 @@ import React, {
   useRef,
   useState,
 } from 'react'
-import { MarkdownEditor } from '@moldable/editor'
+import { MarkdownEditor } from '@moldable-ai/editor'
 import {
   Button,
   Card,
@@ -36,7 +36,7 @@ import {
   ScrollArea,
   cn,
   useWorkspace,
-} from '@moldable/ui'
+} from '@moldable-ai/ui'
 import type { Note } from '../lib/types'
 import { EmptyState } from '../components/empty-state'
 import { Masonry } from 'masonic'

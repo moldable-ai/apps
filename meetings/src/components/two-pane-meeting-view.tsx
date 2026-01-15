@@ -1,8 +1,8 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { MarkdownEditor } from '@moldable/editor'
-import { cn, useWorkspace } from '@moldable/ui'
+import { MarkdownEditor } from '@moldable-ai/editor'
+import { cn, useWorkspace } from '@moldable-ai/ui'
 import { formatDuration, formatRelativeTime } from '@/lib/format'
 import { TranscriptView } from './transcript-view'
 import type { Meeting } from '@/types'

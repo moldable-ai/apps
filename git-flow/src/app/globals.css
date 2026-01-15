@@ -1,8 +1,8 @@
 @import 'tailwindcss';
-@import '@moldable/ui/styles';
+@import '@moldable-ai/ui/styles';
 @source '../**/*.{js,jsx,ts,tsx}';
-@source '../../../../packages/ui/src/**/*.{js,jsx,ts,tsx}';
-@source '../../../../packages/editor/src/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/editor/**/*.{js,jsx,ts,tsx}';
 
 /* Platform-inspired custom scrollbar */
 .custom-scrollbar::-webkit-scrollbar {

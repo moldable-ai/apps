@@ -21,7 +21,7 @@ import {
   PopoverTrigger,
   ScrollArea,
   useWorkspace,
-} from '@moldable/ui'
+} from '@moldable-ai/ui'
 import { cn } from '@/lib/utils'
 import {
   addMonths,

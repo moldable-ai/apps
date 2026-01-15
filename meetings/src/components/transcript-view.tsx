@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { cn } from '@moldable/ui'
+import { cn } from '@moldable-ai/ui'
 import { formatTimestamp } from '@/lib/format'
 import type { TranscriptSegment } from '@/types'
 
@@ -38,7 +38,7 @@ export function TranscriptView({
     return (
       <div
         className={cn(
-          'flex h-full items-center justify-center py-12 text-center text-muted-foreground',
+          'text-muted-foreground flex h-full items-center justify-center py-12 text-center',
           className,
         )}
       >
@@ -60,10 +60,10 @@ export function TranscriptView({
       <div className="space-y-3 p-6">
         {segments.map((segment) => (
           <div key={segment.id} className="flex items-start gap-3">
-            <span className="mt-0.5 shrink-0 font-mono text-xs leading-relaxed text-muted-foreground">
+            <span className="text-muted-foreground mt-0.5 shrink-0 font-mono text-xs leading-relaxed">
               {formatTimestamp(segment.startTime)}
             </span>
-            <p className="flex-1 text-sm leading-relaxed text-foreground">
+            <p className="text-foreground flex-1 text-sm leading-relaxed">
               {segment.text}
             </p>
           </div>

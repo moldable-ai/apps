@@ -1,5 +1,5 @@
 /**
- * Server-side storage for todos using @moldable/storage
+ * Server-side storage for todos using @moldable-ai/storage
  *
  * Data is stored in workspace-specific data directory:
  * - {workspace}/apps/{app-id}/data/todos.json
@@ -12,7 +12,7 @@ import {
   readJson,
   safePath,
   writeJson,
-} from '@moldable/storage'
+} from '@moldable-ai/storage'
 import 'server-only'
 
 interface Todo {

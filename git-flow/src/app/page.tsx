@@ -19,7 +19,7 @@ import {
   X,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { useWorkspace } from '@moldable/ui'
+import { useWorkspace } from '@moldable-ai/ui'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 import {

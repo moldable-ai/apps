@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getWorkspaceFromRequest } from '@moldable/storage'
+import { getWorkspaceFromRequest } from '@moldable-ai/storage'
 import { getAuthUrl } from '@/lib/calendar/google-auth'
 
 export async function GET(request: Request) {

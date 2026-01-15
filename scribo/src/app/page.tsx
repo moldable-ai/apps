@@ -9,7 +9,7 @@ import {
   VolumeX,
 } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
-import { MarkdownEditor } from '@moldable/editor'
+import { MarkdownEditor } from '@moldable-ai/editor'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,7 +24,7 @@ import {
   Input,
   ScrollArea,
   cn,
-} from '@moldable/ui'
+} from '@moldable-ai/ui'
 import { LANGUAGES, Language, isRTL } from '@/lib/languages'
 import { TranslationError, translateText } from '@/lib/translate'
 import type { JournalEntry } from '@/lib/types'
@@ -442,7 +442,6 @@ export default function Home() {
       <aside className="border-border bg-sidebar flex w-72 shrink-0 flex-col border-r">
         <header className="border-border flex h-12 items-center border-b px-2">
           <Button size="sm" onClick={createNewEntry} className="w-full">
-            <Plus className="size-4" />
             New Entry
           </Button>
         </header>

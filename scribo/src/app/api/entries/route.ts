@@ -1,5 +1,5 @@
 /**
- * Server-side storage for journal entries using @moldable/storage
+ * Server-side storage for journal entries using @moldable-ai/storage
  *
  * Data is stored in workspace-specific data directory:
  * - {workspace}/apps/{app-id}/data/entries/{id}.json
@@ -14,7 +14,7 @@ import {
   safePath,
   sanitizeId,
   writeJson,
-} from '@moldable/storage'
+} from '@moldable-ai/storage'
 import type { JournalEntry } from '@/lib/types'
 import fs from 'fs/promises'
 import 'server-only'

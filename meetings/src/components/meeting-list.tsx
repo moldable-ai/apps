@@ -2,14 +2,14 @@
 
 import { FileText, Mic, MoreVertical, Trash2 } from 'lucide-react'
 import { useMemo } from 'react'
-import { cn } from '@moldable/ui'
+import { cn } from '@moldable-ai/ui'
 import {
   Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@moldable/ui'
+} from '@moldable-ai/ui'
 import { formatDuration, formatRelativeTime } from '@/lib/format'
 import { exportTranscriptMarkdown } from '@/lib/storage'
 import type { Meeting } from '@/types'

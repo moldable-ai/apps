@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { Pin } from 'lucide-react'
-import { Card, CardContent, Markdown, useWorkspace } from '@moldable/ui'
+import { Card, CardContent, Markdown, useWorkspace } from '@moldable-ai/ui'
 import type { Note } from '../../lib/types'
 
 const GHOST_EXAMPLES = [

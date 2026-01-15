@@ -1,7 +1,7 @@
 'use client'
 
 import { Plus } from 'lucide-react'
-import { Button, cn } from '@moldable/ui'
+import { Button, cn } from '@moldable-ai/ui'
 
 interface EmptyStateProps {
   onCreateEntry: () => void
