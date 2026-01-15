@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@moldable-ai/storage": "^0.1.0",
-    "@moldable-ai/ui": "^0.2.1",
+    "@moldable-ai/ui": "^0.2.2",
     "@tanstack/react-query": "^5.90.16",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",

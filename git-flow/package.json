@@ -16,7 +16,7 @@
   "license": "ISC",
   "dependencies": {
     "@moldable-ai/storage": "^0.1.0",
-    "@moldable-ai/ui": "^0.2.1",
+    "@moldable-ai/ui": "^0.2.2",
     "@radix-ui/react-checkbox": "^1.3.2",
     "@radix-ui/react-select": "^2.2.5",
     "@tanstack/react-query": "^5.90.16",

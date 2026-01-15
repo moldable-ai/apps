@@ -21,7 +21,7 @@
     "@lexical/rich-text": "^0.39.0",
     "@moldable-ai/editor": "^0.1.0",
     "@moldable-ai/storage": "^0.1.0",
-    "@moldable-ai/ui": "^0.2.1",
+    "@moldable-ai/ui": "^0.2.2",
     "@tanstack/react-query": "^5.90.16",
     "lexical": "^0.39.0",
     "lucide-react": "^0.473.0",
