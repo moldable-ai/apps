@@ -1,7 +1,7 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-01-15T02:22:22.140Z",
+  "generatedAt": "2026-01-15T04:20:46.412Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
@@ -25,9 +25,10 @@
         "GOOGLE_CLIENT_SECRET"
       ],
       "moldableDependencies": {
-        "@moldable/ui": "^0.1.0",
-        "@moldable/storage": "^0.1.0"
-      }
+        "@moldable-ai/ui": "^0.1.0",
+        "@moldable-ai/storage": "^0.1.0"
+      },
+      "commit": "79c470e37f19631020babbc35646d6ef4eb515fa"
     },
     {
       "id": "git-flow",
@@ -47,9 +48,10 @@
       "path": "git-flow",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable/ui": "^0.1.0",
-        "@moldable/storage": "^0.1.0"
-      }
+        "@moldable-ai/ui": "^0.1.0",
+        "@moldable-ai/storage": "^0.1.0"
+      },
+      "commit": "79c470e37f19631020babbc35646d6ef4eb515fa"
     },
     {
       "id": "meetings",
@@ -71,10 +73,11 @@
         "DEEPGRAM_API_KEY"
       ],
       "moldableDependencies": {
-        "@moldable/ui": "^0.1.0",
-        "@moldable/editor": "^0.1.0",
-        "@moldable/storage": "^0.1.0"
-      }
+        "@moldable-ai/ui": "^0.1.0",
+        "@moldable-ai/editor": "^0.1.0",
+        "@moldable-ai/storage": "^0.1.0"
+      },
+      "commit": "79c470e37f19631020babbc35646d6ef4eb515fa"
     },
     {
       "id": "notes",
@@ -94,10 +97,11 @@
       "path": "notes",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable/ui": "^0.1.0",
-        "@moldable/editor": "^0.1.0",
-        "@moldable/storage": "^0.1.0"
-      }
+        "@moldable-ai/ui": "^0.1.0",
+        "@moldable-ai/editor": "^0.1.0",
+        "@moldable-ai/storage": "^0.1.0"
+      },
+      "commit": "79c470e37f19631020babbc35646d6ef4eb515fa"
     },
     {
       "id": "scribo",
@@ -119,10 +123,11 @@
         "DEEPL_API_KEY"
       ],
       "moldableDependencies": {
-        "@moldable/ui": "^0.1.0",
-        "@moldable/editor": "^0.1.0",
-        "@moldable/storage": "^0.1.0"
-      }
+        "@moldable-ai/ui": "^0.1.0",
+        "@moldable-ai/editor": "^0.1.0",
+        "@moldable-ai/storage": "^0.1.0"
+      },
+      "commit": "79c470e37f19631020babbc35646d6ef4eb515fa"
     },
     {
       "id": "todo",
@@ -142,9 +147,10 @@
       "path": "todo",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable/ui": "^0.1.0",
-        "@moldable/storage": "^0.1.0"
-      }
+        "@moldable-ai/ui": "^0.1.0",
+        "@moldable-ai/storage": "^0.1.0"
+      },
+      "commit": "79c470e37f19631020babbc35646d6ef4eb515fa"
     }
   ],
   "categories": [

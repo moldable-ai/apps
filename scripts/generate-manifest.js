@@ -7,6 +7,7 @@
 import { readdirSync, readFileSync, writeFileSync, statSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
+import { execSync } from 'child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
@@ -23,6 +24,18 @@ const CATEGORIES = [
   { id: 'entertainment', name: 'Entertainment', icon: '🎮' },
   { id: 'social', name: 'Social', icon: '👥' },
 ]
+
+/**
+ * Get the current git commit hash
+ */
+function getGitCommitHash() {
+  try {
+    return execSync('git rev-parse HEAD', { cwd: ROOT, encoding: 'utf-8' }).trim()
+  } catch {
+    console.warn('⚠️  Could not get git commit hash')
+    return null
+  }
+}
 
 function findApps(dir) {
   const apps = []
@@ -58,8 +71,12 @@ function generateManifest() {
   console.log('🔍 Scanning for apps...')
 
   const apps = findApps(ROOT)
+  const commit = getGitCommitHash()
 
   console.log(`📦 Found ${apps.length} apps`)
+  if (commit) {
+    console.log(`📌 Commit: ${commit.substring(0, 7)}`)
+  }
 
   // Transform apps for the manifest
   const manifestApps = apps.map((app) => ({
@@ -77,6 +94,7 @@ function generateManifest() {
     path: app.path,
     requiredEnv: (app.env || []).filter((e) => e.required).map((e) => e.key),
     moldableDependencies: app.moldableDependencies || {},
+    commit: commit,
   }))
 
   // Sort by name
