@@ -1,7 +1,7 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-01-15T04:21:09.970Z",
+  "generatedAt": "2026-01-15T20:37:13.641Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
@@ -20,15 +20,12 @@
         "google"
       ],
       "path": "calendar",
-      "requiredEnv": [
-        "GOOGLE_CLIENT_ID",
-        "GOOGLE_CLIENT_SECRET"
-      ],
+      "requiredEnv": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "21d328755c64d7f2236e5ea5c610d6b091f8eaaa"
+      "commit": "e4c14d577d66e09b20e9badb04bbc070122e4261"
     },
     {
       "id": "git-flow",
@@ -51,7 +48,7 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "21d328755c64d7f2236e5ea5c610d6b091f8eaaa"
+      "commit": "e4c14d577d66e09b20e9badb04bbc070122e4261"
     },
     {
       "id": "meetings",
@@ -77,7 +74,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "21d328755c64d7f2236e5ea5c610d6b091f8eaaa"
+      "commit": "e4c14d577d66e09b20e9badb04bbc070122e4261"
     },
     {
       "id": "notes",
@@ -101,7 +98,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "21d328755c64d7f2236e5ea5c610d6b091f8eaaa"
+      "commit": "e4c14d577d66e09b20e9badb04bbc070122e4261"
     },
     {
       "id": "scribo",
@@ -127,7 +124,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "21d328755c64d7f2236e5ea5c610d6b091f8eaaa"
+      "commit": "e4c14d577d66e09b20e9badb04bbc070122e4261"
     },
     {
       "id": "todo",
@@ -150,7 +147,7 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "21d328755c64d7f2236e5ea5c610d6b091f8eaaa"
+      "commit": "e4c14d577d66e09b20e9badb04bbc070122e4261"
     }
   ],
   "categories": [
