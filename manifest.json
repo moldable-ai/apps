@@ -1,7 +1,7 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-01-16T14:09:05.591Z",
+  "generatedAt": "2026-01-16T15:01:54.048Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
@@ -25,7 +25,7 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "12e949a4891dc5837c33e3fa3fded5ae664e6a90"
+      "commit": "38591f8253ba54227b2cc0eb462213dad0fbc56a"
     },
     {
       "id": "git-flow",
@@ -48,7 +48,28 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "12e949a4891dc5837c33e3fa3fded5ae664e6a90"
+      "commit": "38591f8253ba54227b2cc0eb462213dad0fbc56a"
+    },
+    {
+      "id": "hello-moldables",
+      "name": "Hello Moldables",
+      "version": "1.0.0",
+      "description": "Welcome to Moldable! Learn how to build and modify apps with AI.",
+      "icon": "👋",
+      "iconUrl": null,
+      "widgetSize": "medium",
+      "category": "getting-started",
+      "tags": [
+        "tutorial",
+        "welcome",
+        "getting-started"
+      ],
+      "path": "hello-moldables",
+      "requiredEnv": [],
+      "moldableDependencies": {
+        "@moldable-ai/ui": "^0.1.0"
+      },
+      "commit": "38591f8253ba54227b2cc0eb462213dad0fbc56a"
     },
     {
       "id": "meetings",
@@ -74,7 +95,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "12e949a4891dc5837c33e3fa3fded5ae664e6a90"
+      "commit": "38591f8253ba54227b2cc0eb462213dad0fbc56a"
     },
     {
       "id": "notes",
@@ -98,7 +119,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "12e949a4891dc5837c33e3fa3fded5ae664e6a90"
+      "commit": "38591f8253ba54227b2cc0eb462213dad0fbc56a"
     },
     {
       "id": "scribo",
@@ -124,7 +145,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "12e949a4891dc5837c33e3fa3fded5ae664e6a90"
+      "commit": "38591f8253ba54227b2cc0eb462213dad0fbc56a"
     },
     {
       "id": "todo",
@@ -147,10 +168,15 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "12e949a4891dc5837c33e3fa3fded5ae664e6a90"
+      "commit": "38591f8253ba54227b2cc0eb462213dad0fbc56a"
     }
   ],
   "categories": [
+    {
+      "id": "getting-started",
+      "name": "Getting Started",
+      "icon": "👋"
+    },
     {
       "id": "productivity",
       "name": "Productivity",

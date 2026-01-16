@@ -1,0 +1,16 @@
+{
+  "name": "Hello Moldables",
+  "version": "1.0.0",
+  "description": "Welcome to Moldable! Learn how to build and modify apps with AI.",
+  "author": "Moldable Team",
+  "license": "MIT",
+  "icon": "👋",
+  "widgetSize": "medium",
+  "category": "getting-started",
+  "tags": ["tutorial", "welcome", "getting-started"],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.1.0"
+  },
+  "env": [],
+  "builtIn": true
+}
