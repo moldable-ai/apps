@@ -1,6 +1,7 @@
 {
   "name": "Notes",
   "version": "0.1.1",
+  "visibility": "public",
   "description": "A Google Keep-style note taking app with pinning and markdown support",
   "author": "Moldable Team",
   "license": "MIT",

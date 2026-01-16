@@ -12,7 +12,11 @@
     "format:check": "prettier --check . --ignore-path .prettierignore --cache --cache-location .prettiercache",
     "check-types": "node scripts/check-types.js",
     "pre-commit": "pnpm format && git add -u && pnpm lint && pnpm check-types",
-    "prepare": "husky"
+    "prepare": "husky",
+    "app:copy": "node scripts/copy-apps.js",
+    "app:copy:all": "node scripts/copy-apps.js --all",
+    "release": "node scripts/release.js",
+    "release:dry": "node scripts/release.js --dry-run"
   },
   "repository": {
     "type": "git",

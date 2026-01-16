@@ -1,6 +1,7 @@
 {
   "name": "Scribo Languages",
   "version": "0.1.1",
+  "visibility": "public",
   "description": "Language learning journal with AI-powered translations",
   "author": "Moldable Team",
   "license": "MIT",

@@ -1,6 +1,7 @@
 {
   "name": "Hello Moldables",
   "version": "1.0.0",
+  "visibility": "public",
   "description": "Welcome to Moldable! Learn how to build and modify apps with AI.",
   "author": "Moldable Team",
   "license": "MIT",

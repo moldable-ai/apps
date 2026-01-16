@@ -42,6 +42,7 @@ app-name/
 {
   "name": "App Name",
   "version": "1.0.0",
+  "visibility": "public" | "private",
   "description": "What the app does",
   "author": "Moldable Team",
   "license": "MIT",
@@ -67,6 +68,8 @@ app-name/
   ]
 }
 ```
+
+> **Note**: The `visibility` field controls whether an app is included in the public release. Apps with `"visibility": "public"` will be copied to the moldable-apps repository when running `pnpm release` or `pnpm app:copy:all`.
 
 ## Tech Stack
 
@@ -183,15 +186,42 @@ Apps are NOT run directly - Moldable desktop manages app lifecycle. When develop
 4. Run `npm run generate-manifest` to update the registry
 5. Submit a PR
 
+## Releasing Apps
+
+The release process copies public apps from `~/.moldable/shared/apps`, runs quality checks, and commits:
+
+```bash
+pnpm release           # Full release (copy, format, lint, types, manifest, commit)
+pnpm release --dry-run # Preview what would happen
+pnpm release --skip-copy # Skip copying from ~/.moldable/shared/apps
+```
+
+The release script:
+
+1. Copies all apps with `"visibility": "public"` from `~/.moldable/shared/apps`
+2. Runs prettier (format)
+3. Runs eslint (lint)
+4. Checks TypeScript types
+5. Generates `manifest.json`
+6. Commits all changes (does NOT push - you push manually)
+
+### Copying Individual Apps
+
+```bash
+pnpm app:copy scribo      # Copy single app
+pnpm app:copy todo notes  # Copy multiple apps
+pnpm app:copy:all         # Copy all public apps
+```
+
 ## Manifest Generation
 
 The root `manifest.json` is auto-generated:
 
 ```bash
-npm run generate-manifest
+pnpm generate-manifest
 ```
 
-This runs on every push via GitHub Actions.
+This is run automatically as part of `pnpm release`.
 
 ## What NOT to Do
 

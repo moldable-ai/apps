@@ -1,6 +1,7 @@
 {
   "name": "Calendar",
   "version": "0.1.1",
+  "visibility": "public",
   "description": "Integrated calendar with Google Calendar connection",
   "author": "Moldable Team",
   "license": "MIT",
