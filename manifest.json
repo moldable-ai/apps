@@ -1,7 +1,7 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-01-16T00:35:27.181Z",
+  "generatedAt": "2026-01-16T14:09:05.591Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
@@ -25,7 +25,7 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "e077d65133d777adb1a6a3f6e4fe9de94233c6a5"
+      "commit": "12e949a4891dc5837c33e3fa3fded5ae664e6a90"
     },
     {
       "id": "git-flow",
@@ -48,7 +48,7 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "e077d65133d777adb1a6a3f6e4fe9de94233c6a5"
+      "commit": "12e949a4891dc5837c33e3fa3fded5ae664e6a90"
     },
     {
       "id": "meetings",
@@ -74,7 +74,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "e077d65133d777adb1a6a3f6e4fe9de94233c6a5"
+      "commit": "12e949a4891dc5837c33e3fa3fded5ae664e6a90"
     },
     {
       "id": "notes",
@@ -98,7 +98,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "e077d65133d777adb1a6a3f6e4fe9de94233c6a5"
+      "commit": "12e949a4891dc5837c33e3fa3fded5ae664e6a90"
     },
     {
       "id": "scribo",
@@ -124,7 +124,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "e077d65133d777adb1a6a3f6e4fe9de94233c6a5"
+      "commit": "12e949a4891dc5837c33e3fa3fded5ae664e6a90"
     },
     {
       "id": "todo",
@@ -147,7 +147,7 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "e077d65133d777adb1a6a3f6e4fe9de94233c6a5"
+      "commit": "12e949a4891dc5837c33e3fa3fded5ae664e6a90"
     }
   ],
   "categories": [
