@@ -1,17 +1,25 @@
 {
-  "name": "Hello Moldables",
-  "version": "1.0.0",
-  "visibility": "public",
-  "description": "Welcome to Moldable! Learn how to build and modify apps with AI.",
   "author": "Moldable Team",
-  "license": "MIT",
-  "icon": "👋",
-  "widgetSize": "medium",
+  "builtIn": true,
   "category": "getting-started",
-  "tags": ["tutorial", "welcome", "getting-started"],
+  "description": "Welcome to Moldable! Learn how to build and modify apps with AI.",
+  "env": [],
+  "icon": "👋",
+  "license": "MIT",
+  "modified": false,
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.1.0"
   },
-  "env": [],
-  "builtIn": true
+  "name": "Hello Moldables",
+  "tags": ["tutorial", "welcome", "getting-started"],
+  "upstream": {
+    "installedAt": "2026-01-16T17:38:34.302379+00:00",
+    "installedCommit": "46cdb04f1aa0f05e54a384a24a3ada617a733fa9",
+    "installedVersion": "0.1.0",
+    "path": "hello-moldables",
+    "repo": "moldable-ai/apps"
+  },
+  "version": "0.1.0",
+  "visibility": "public",
+  "widgetSize": "medium"
 }

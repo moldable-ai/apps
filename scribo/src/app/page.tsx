@@ -1,13 +1,6 @@
 'use client'
 
-import {
-  ArrowLeftRight,
-  Loader2,
-  Plus,
-  Trash2,
-  Volume2,
-  VolumeX,
-} from 'lucide-react'
+import { ArrowLeftRight, Loader2, Trash2, Volume2, VolumeX } from 'lucide-react'
 import { useCallback, useRef, useState } from 'react'
 import { MarkdownEditor } from '@moldable-ai/editor'
 import {

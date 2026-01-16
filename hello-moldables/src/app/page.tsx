@@ -20,14 +20,8 @@ const prompts = [
   {
     id: 2,
     text: 'Add a 5 sec countdown timer that shows confetti',
+    prompt: 'Add a 5 sec countdown timer that shows the confetti emoji icon',
     hint: 'Add focus controls',
-  },
-  {
-    id: 3,
-    text: 'Create a space invaders game',
-    prompt:
-      'Create a simple space invaders game that requires no assets (use shapes/CSS for all graphics)',
-    hint: 'No assets needed',
   },
 ]
 

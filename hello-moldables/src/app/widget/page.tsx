@@ -1,7 +1,5 @@
 'use client'
 
-import { useWorkspace } from '@moldable-ai/ui'
-
 const GHOST_ROWS = [
   { text: 'Create your first Moldable app', icon: '🚀' },
   { text: 'Learn the core concepts', icon: '📚' },

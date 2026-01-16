@@ -9,7 +9,6 @@ import {
   ExternalLink,
   Link as LinkIcon,
   Loader2,
-  LogIn,
   LogOut,
   MapPin,
 } from 'lucide-react'

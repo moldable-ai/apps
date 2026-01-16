@@ -57,7 +57,9 @@ async function deleteNote(id: string, workspaceId?: string): Promise<void> {
   try {
     const filePath = getNotePath(id, workspaceId)
     await fs.unlink(filePath)
-  } catch {}
+  } catch {
+    // File may not exist, ignore
+  }
 }
 
 export async function GET(request: Request) {
@@ -65,7 +67,7 @@ export async function GET(request: Request) {
     const workspaceId = getWorkspaceFromRequest(request)
     const notes = await loadNotes(workspaceId)
     return NextResponse.json(notes)
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to read notes' }, { status: 500 })
   }
 }
@@ -88,7 +90,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true })
-  } catch (error) {
+  } catch {
     return NextResponse.json({ error: 'Failed to save notes' }, { status: 500 })
   }
 }

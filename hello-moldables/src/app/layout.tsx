@@ -4,7 +4,7 @@ import { ThemeProvider, WorkspaceProvider, themeScript } from '@moldable-ai/ui'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Hello Moldables',
+  title: 'Welcome, friend!',
   description:
     'Welcome to Moldable! Learn how to build and modify apps with AI.',
 }

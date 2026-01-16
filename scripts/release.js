@@ -15,8 +15,7 @@
  * 5. Generates manifest.json
  * 6. Commits all changes (but does NOT push)
  */
-import { execSync, spawnSync } from 'node:child_process'
-import fs from 'node:fs'
+import { execSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -107,7 +106,7 @@ Examples:
       try {
         exec('node scripts/copy-apps.js --all')
         console.log('')
-      } catch (error) {
+      } catch {
         console.error('❌ Failed to copy apps')
         process.exit(1)
       }
@@ -124,7 +123,7 @@ Examples:
     try {
       exec('pnpm format')
       console.log('')
-    } catch (error) {
+    } catch {
       console.error('❌ Format failed')
       process.exit(1)
     }
@@ -138,7 +137,7 @@ Examples:
     try {
       exec('pnpm lint')
       console.log('')
-    } catch (error) {
+    } catch {
       console.error('❌ Lint failed. Fix errors and try again.')
       process.exit(1)
     }
@@ -152,7 +151,7 @@ Examples:
     try {
       exec('pnpm check-types')
       console.log('')
-    } catch (error) {
+    } catch {
       console.error('❌ Type check failed. Fix errors and try again.')
       process.exit(1)
     }
@@ -166,7 +165,7 @@ Examples:
     try {
       exec('pnpm generate-manifest')
       console.log('')
-    } catch (error) {
+    } catch {
       console.error('❌ Manifest generation failed')
       process.exit(1)
     }
@@ -195,7 +194,7 @@ Examples:
         const timestamp = new Date().toISOString().split('T')[0]
         exec(`git commit -m "release: update apps (${timestamp})"`)
         console.log('')
-      } catch (error) {
+      } catch {
         console.error('❌ Commit failed')
         process.exit(1)
       }

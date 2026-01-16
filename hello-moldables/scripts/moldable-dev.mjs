@@ -82,7 +82,9 @@ process.on('exit', () => {
       } else {
         fsSync.writeFileSync(instancesFile, JSON.stringify(filtered, null, 2))
       }
-    } catch {}
+    } catch {
+      // Ignore cleanup errors on exit
+    }
   }
 })
 process.on('SIGINT', async () => {
