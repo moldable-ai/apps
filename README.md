@@ -69,6 +69,7 @@ app-name/
 {
   "name": "App Name",
   "version": "1.0.0",
+  "visibility": "public",
   "description": "What the app does",
   "author": "Your Name",
   "license": "MIT",
@@ -94,24 +95,60 @@ app-name/
 }
 ```
 
-### Generating the Manifest
+The `visibility` field controls whether an app is included in the public release:
 
-The root `manifest.json` is auto-generated:
+- `"public"` - App will be copied when running `pnpm release` or `pnpm app:copy:all`
+- `"private"` - App will not be copied (useful for local-only apps)
+
+## Release Process
+
+Apps are developed locally in `~/.moldable/shared/apps` and released to this repo:
 
 ```bash
-npm run generate-manifest
+# Full release (copy, format, lint, types, manifest, commit)
+pnpm release
+
+# Preview what would happen
+pnpm release --dry-run
+
+# Skip copying (just format, lint, types, manifest, commit)
+pnpm release --skip-copy
 ```
 
-This runs automatically via GitHub Actions on each push.
+### Copying Apps
+
+```bash
+# Copy specific apps from ~/.moldable/shared/apps to this repo
+pnpm app:copy scribo
+pnpm app:copy todo notes
+
+# Copy all public apps
+pnpm app:copy:all
+```
+
+### Updating Local Apps
+
+Sync changes from this repo back to your local development apps:
+
+```bash
+# Update specific local apps from this repo
+pnpm app:update scribo
+pnpm app:update todo notes
+
+# Update all local apps
+pnpm app:update:all
+```
+
+This preserves `node_modules`, `.next`, and other build artifacts.
 
 ## Creating a New App
 
-1. Create a new directory with your app name (kebab-case)
+1. Create a new directory in `~/.moldable/shared/apps` with your app name (kebab-case)
 2. Copy structure from an existing app (e.g., `todo`)
-3. Create your `moldable.json` manifest
+3. Create your `moldable.json` manifest with `"visibility": "public"`
 4. Implement your app (see [AGENTS.md](AGENTS.md) for guidelines)
-5. Run `npm run generate-manifest`
-6. Submit a PR
+5. Run `pnpm release` to copy, validate, and commit
+6. Push and submit a PR
 
 ## License
 
