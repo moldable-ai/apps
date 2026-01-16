@@ -28,7 +28,10 @@ const CLIENT_ID =
   '41613180648-695hpsmivjfsi02vkge9k713j3un09i4.apps.googleusercontent.com'
 const CLIENT_SECRET = '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'
 
-const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly']
+const SCOPES = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/calendar.readonly',
+]
 
 // Helper to get the redirect URI based on current port
 function getRedirectUri(): string {
