@@ -1,13 +1,13 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-01-15T20:37:13.641Z",
+  "generatedAt": "2026-01-16T00:35:27.181Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
       "id": "calendar",
       "name": "Calendar",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Integrated calendar with Google Calendar connection",
       "icon": "🗓️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/calendar/public/icon.png",
@@ -25,12 +25,12 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "e4c14d577d66e09b20e9badb04bbc070122e4261"
+      "commit": "e077d65133d777adb1a6a3f6e4fe9de94233c6a5"
     },
     {
       "id": "git-flow",
       "name": "Git",
-      "version": "1.0.0",
+      "version": "0.1.1",
       "description": "Simple Git client for branch management, staging, and diffing",
       "icon": "🛠️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/git-flow/public/icon.png",
@@ -48,12 +48,12 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "e4c14d577d66e09b20e9badb04bbc070122e4261"
+      "commit": "e077d65133d777adb1a6a3f6e4fe9de94233c6a5"
     },
     {
       "id": "meetings",
       "name": "Meetings",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Record, transcribe, and summarize meetings with real-time transcription",
       "icon": "🎙️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/meetings/public/icon.png",
@@ -74,12 +74,12 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "e4c14d577d66e09b20e9badb04bbc070122e4261"
+      "commit": "e077d65133d777adb1a6a3f6e4fe9de94233c6a5"
     },
     {
       "id": "notes",
       "name": "Notes",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "A Google Keep-style note taking app with pinning and markdown support",
       "icon": "📝",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/notes/public/icon.png",
@@ -98,12 +98,12 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "e4c14d577d66e09b20e9badb04bbc070122e4261"
+      "commit": "e077d65133d777adb1a6a3f6e4fe9de94233c6a5"
     },
     {
       "id": "scribo",
       "name": "Scribo Languages",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Language learning journal with AI-powered translations",
       "icon": "📓",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/scribo/public/icon.png",
@@ -124,12 +124,12 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "e4c14d577d66e09b20e9badb04bbc070122e4261"
+      "commit": "e077d65133d777adb1a6a3f6e4fe9de94233c6a5"
     },
     {
       "id": "todo",
       "name": "Todo",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Simple task management with quick add and completion tracking",
       "icon": "✅",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/todo/public/icon.png",
@@ -147,7 +147,7 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "e4c14d577d66e09b20e9badb04bbc070122e4261"
+      "commit": "e077d65133d777adb1a6a3f6e4fe9de94233c6a5"
     }
   ],
   "categories": [
