@@ -24,7 +24,9 @@ const prompts = [
   },
   {
     id: 3,
-    text: 'Mold it into a space invaders game',
+    text: 'Create a space invaders game',
+    prompt:
+      'Create a simple space invaders game that requires no assets (use shapes/CSS for all graphics)',
     hint: 'No assets needed',
   },
 ]
@@ -60,14 +62,14 @@ export default function HelloMoldables() {
         </p>
 
         <div className="mt-12">
-          <p className="text-muted-foreground/60 mb-4 text-xs font-semibold">
-            Give it a try:
+          <p className="text-foreground/80 mb-5 text-sm font-medium">
+            With Moldable, you can build or tweak any app to your liking:
           </p>
           <div className="space-y-3">
             {prompts.map((prompt) => (
               <button
                 key={prompt.id}
-                onClick={() => sendToChatInput(prompt.text)}
+                onClick={() => sendToChatInput(prompt.prompt ?? prompt.text)}
                 className="border-border/40 bg-card/20 hover:border-primary/30 hover:bg-primary/5 flex w-full cursor-pointer items-start gap-4 rounded-xl border p-4 text-left transition-colors"
               >
                 <span className="bg-primary/10 text-primary ring-primary/20 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ring-1 ring-inset">

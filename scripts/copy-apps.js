@@ -10,6 +10,7 @@
  * Only apps with "visibility": "public" in their moldable.json will be copied
  * when using --all. Individual app names bypass the visibility check.
  */
+import { execSync } from 'child_process'
 import {
   cpSync,
   existsSync,
@@ -197,10 +198,12 @@ function main() {
 
   let success = 0
   let failed = 0
+  const copiedApps = []
 
   for (const appId of appsToCopy) {
     if (copyApp(appId)) {
       success++
+      copiedApps.push(appId)
     } else {
       failed++
     }
@@ -210,6 +213,25 @@ function main() {
   console.log(
     `✨ Copied ${success} app(s)${failed > 0 ? `, ${failed} failed` : ''}`,
   )
+
+  // Format copied apps
+  if (copiedApps.length > 0) {
+    console.log('')
+    console.log('✨ Formatting copied apps...')
+    const appPaths = copiedApps.map((id) => join(TARGET_DIR, id)).join(' ')
+    try {
+      execSync(
+        `pnpm prettier --write ${appPaths} --ignore-path .prettierignore --cache --cache-location .prettiercache`,
+        {
+          cwd: TARGET_DIR,
+          stdio: 'inherit',
+        },
+      )
+      console.log('   ✅ Formatted')
+    } catch {
+      console.error('   ⚠️  Format failed (non-fatal)')
+    }
+  }
 }
 
 main()
