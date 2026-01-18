@@ -1,0 +1,17 @@
+{
+  "name": "Daily Affirmations",
+  "version": "0.1.0",
+  "visibility": "public",
+  "description": "A soothing, daily affirmation app to improve mental health and positivity.",
+  "author": "",
+  "license": "MIT",
+  "icon": "✨",
+  "iconPath": "public/icon.png",
+  "widgetSize": "medium",
+  "category": "custom",
+  "tags": [],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.1.0"
+  },
+  "env": []
+}
