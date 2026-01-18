@@ -1,0 +1,17 @@
+{
+  "name": "Time Tracker",
+  "version": "0.1.0",
+  "visibility": "public",
+  "description": "Track time for work projects with weekly views and export",
+  "author": "",
+  "license": "MIT",
+  "icon": "⏱️",
+  "iconPath": "public/icon.png",
+  "widgetSize": "medium",
+  "category": "custom",
+  "tags": [],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.1.0"
+  },
+  "env": []
+}
