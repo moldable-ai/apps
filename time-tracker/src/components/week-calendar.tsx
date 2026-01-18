@@ -12,7 +12,6 @@ import {
   isSameDay,
   isToday,
   parseISO,
-  startOfWeek,
 } from 'date-fns'
 
 interface WeekCalendarProps {
