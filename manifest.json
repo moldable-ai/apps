@@ -1,7 +1,7 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-01-18T17:29:43.516Z",
+  "generatedAt": "2026-01-18T22:25:45.913Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
@@ -25,7 +25,24 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "76019a752bbebe60dec6ec1d93bbb9c3da9b812c"
+      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
+    },
+    {
+      "id": "affirmations",
+      "name": "Daily Affirmations",
+      "version": "0.1.0",
+      "description": "A soothing, daily affirmation app to improve mental health and positivity.",
+      "icon": "✨",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/affirmations/public/icon.png",
+      "widgetSize": "medium",
+      "category": "custom",
+      "tags": [],
+      "path": "affirmations",
+      "requiredEnv": [],
+      "moldableDependencies": {
+        "@moldable-ai/ui": "^0.1.0"
+      },
+      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
     },
     {
       "id": "git-flow",
@@ -48,7 +65,7 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "76019a752bbebe60dec6ec1d93bbb9c3da9b812c"
+      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
     },
     {
       "id": "hello-moldables",
@@ -69,7 +86,7 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.1.0"
       },
-      "commit": "76019a752bbebe60dec6ec1d93bbb9c3da9b812c"
+      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
     },
     {
       "id": "meetings",
@@ -95,7 +112,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "76019a752bbebe60dec6ec1d93bbb9c3da9b812c"
+      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
     },
     {
       "id": "notes",
@@ -119,7 +136,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "76019a752bbebe60dec6ec1d93bbb9c3da9b812c"
+      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
     },
     {
       "id": "scribo",
@@ -145,7 +162,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "76019a752bbebe60dec6ec1d93bbb9c3da9b812c"
+      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
     },
     {
       "id": "time-tracker",
@@ -162,7 +179,7 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.1.0"
       },
-      "commit": "76019a752bbebe60dec6ec1d93bbb9c3da9b812c"
+      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
     },
     {
       "id": "todo",
@@ -185,7 +202,7 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "76019a752bbebe60dec6ec1d93bbb9c3da9b812c"
+      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
     }
   ],
   "categories": [
