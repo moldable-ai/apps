@@ -1,16 +1,18 @@
 'use client'
 
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  List,
-  Settings,
-} from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, List } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Button, ScrollArea } from '@moldable-ai/ui'
+import {
+  Button,
+  ScrollArea,
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@moldable-ai/ui'
 import { cn } from '@/lib/utils'
 import { ExportDialog } from '@/components/export-dialog'
+import { NewProjectDialog } from '@/components/new-project-dialog'
 import { ProjectManager } from '@/components/project-manager'
 import { TimeList } from '@/components/time-list'
 import { Timer } from '@/components/timer'
@@ -25,7 +27,8 @@ export default function HomePage() {
   )
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
-  const [showSettings, setShowSettings] = useState(false)
+  const [showProjectManager, setShowProjectManager] = useState(false)
+  const [showNewProject, setShowNewProject] = useState(false)
 
   const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 0 })
   const startDate = format(currentWeek, 'yyyy-MM-dd')
@@ -59,20 +62,32 @@ export default function HomePage() {
       {/* Header with Timer */}
       <header className="border-border shrink-0 border-b px-6 py-3">
         <div className="flex items-center gap-4">
-          <Timer />
+          <Timer
+            onNewProject={() => setShowNewProject(true)}
+            onManageProjects={() => setShowProjectManager(true)}
+          />
           <div className="bg-border h-8 w-px shrink-0" />
-          <div className="flex items-center gap-2">
-            <ExportDialog />
-            <Button
-              variant={showSettings ? 'secondary' : 'ghost'}
-              size="icon"
-              onClick={() => setShowSettings(!showSettings)}
-            >
-              <Settings className="size-4" />
-            </Button>
-          </div>
+          <ExportDialog />
         </div>
       </header>
+
+      {/* New Project Dialog */}
+      <NewProjectDialog
+        open={showNewProject}
+        onOpenChange={setShowNewProject}
+      />
+
+      {/* Project Manager Sheet */}
+      <Sheet open={showProjectManager} onOpenChange={setShowProjectManager}>
+        <SheetContent className="flex flex-col px-6">
+          <SheetHeader className="px-0">
+            <SheetTitle>Manage Projects</SheetTitle>
+          </SheetHeader>
+          <div className="flex-1 overflow-y-auto pt-6">
+            <ProjectManager onNewProject={() => setShowNewProject(true)} />
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Main content */}
       <div className="flex min-h-0 flex-1">
@@ -154,13 +169,6 @@ export default function HomePage() {
             </div>
           </ScrollArea>
         </main>
-
-        {/* Settings sidebar */}
-        {showSettings && (
-          <aside className="border-border w-80 shrink-0 overflow-y-auto border-l p-6">
-            <ProjectManager />
-          </aside>
-        )}
       </div>
     </div>
   )

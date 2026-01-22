@@ -20,6 +20,7 @@ import {
 import React, {
   memo,
   useCallback,
+  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -59,6 +60,7 @@ export default function NotesPage() {
   const [isCreating, setIsCreating] = useState(false)
   const [currentView, setCurrentView] = useState<ViewType>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const deferredSearchQuery = useDeferredValue(searchQuery)
 
   const { data: notes = [], isLoading } = useQuery<Note[]>({
     queryKey: ['notes', workspaceId],
@@ -178,27 +180,36 @@ export default function NotesPage() {
     setEditingNote(note)
   }, [])
 
+  // When searching, search across ALL non-deleted notes and group by label
+  // Use deferred value for filtering to keep UI responsive
+  const isSearching = deferredSearchQuery.trim().length > 0
+
   const filteredNotes = useMemo(() => {
     let result = notes
 
-    // Filter by view
-    if (currentView === 'trash') {
-      result = result.filter((n) => n.isDeleted)
-    } else if (currentView === 'archive') {
-      result = result.filter((n) => n.isArchived && !n.isDeleted)
-    } else if (currentView === 'all') {
-      result = result.filter((n) => !n.isArchived && !n.isDeleted)
-    } else if (currentView.startsWith('label:')) {
-      const label = currentView.split('label:')[1]
-      result = result.filter(
-        (n) =>
-          !n.isDeleted && n.labels?.some((l) => toCapitalCase(l) === label),
-      )
+    // Filter by view (only when not searching)
+    if (!isSearching) {
+      if (currentView === 'trash') {
+        result = result.filter((n) => n.isDeleted)
+      } else if (currentView === 'archive') {
+        result = result.filter((n) => n.isArchived && !n.isDeleted)
+      } else if (currentView === 'all') {
+        result = result.filter((n) => !n.isArchived && !n.isDeleted)
+      } else if (currentView.startsWith('label:')) {
+        const label = currentView.split('label:')[1]
+        result = result.filter(
+          (n) =>
+            !n.isDeleted && n.labels?.some((l) => toCapitalCase(l) === label),
+        )
+      }
+    } else {
+      // When searching, include all non-deleted notes (including archived)
+      result = result.filter((n) => !n.isDeleted)
     }
 
-    // Filter by search
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase()
+    // Filter by search (use deferred value)
+    if (deferredSearchQuery) {
+      const q = deferredSearchQuery.toLowerCase()
       result = result.filter(
         (n) =>
           n.title?.toLowerCase().includes(q) ||
@@ -208,7 +219,35 @@ export default function NotesPage() {
     }
 
     return result
-  }, [notes, currentView, searchQuery])
+  }, [notes, currentView, deferredSearchQuery, isSearching])
+
+  // Group notes by label when searching
+  const groupedSearchResults = useMemo(() => {
+    if (!isSearching) return null
+
+    const unlabeled: Note[] = []
+    const byLabel: Record<string, Note[]> = {}
+
+    for (const note of filteredNotes) {
+      if (!note.labels || note.labels.length === 0) {
+        unlabeled.push(note)
+      } else {
+        // Add to each label group (note may appear in multiple)
+        for (const label of note.labels) {
+          const normalizedLabel = toCapitalCase(label)
+          if (!byLabel[normalizedLabel]) {
+            byLabel[normalizedLabel] = []
+          }
+          byLabel[normalizedLabel].push(note)
+        }
+      }
+    }
+
+    // Sort labels alphabetically
+    const sortedLabels = Object.keys(byLabel).sort()
+
+    return { unlabeled, byLabel, sortedLabels }
+  }, [isSearching, filteredNotes])
 
   const pinnedNotes = filteredNotes.filter((n) => n.isPinned)
   const otherNotes = filteredNotes.filter((n) => !n.isPinned)
@@ -291,11 +330,19 @@ export default function NotesPage() {
               <Search className="text-muted-foreground absolute left-3 top-1/2 size-4 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search notes..."
-                className="bg-muted/50 focus:bg-background focus:ring-primary/20 w-full rounded-md border py-2 pl-10 pr-4 text-sm outline-none transition-colors focus:ring-1"
+                placeholder="Search all notes..."
+                className="bg-muted/50 focus:bg-background focus:ring-primary/20 w-full rounded-md border py-2 pl-10 pr-10 text-sm outline-none transition-colors focus:ring-1"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-muted-foreground hover:text-foreground absolute right-3 top-1/2 -translate-y-1/2"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -327,6 +374,8 @@ export default function NotesPage() {
           filteredNotes={filteredNotes}
           viewTitle={viewTitle}
           searchQuery={searchQuery}
+          isSearching={isSearching}
+          groupedSearchResults={groupedSearchResults}
           onEdit={handleEditNote}
           onTrash={handleMoveToTrash}
           onRestore={handleRestoreFromTrash}
@@ -381,12 +430,20 @@ const MasonryNoteCard = memo(function MasonryNoteCard({
   )
 })
 
+type GroupedSearchResults = {
+  unlabeled: Note[]
+  byLabel: Record<string, Note[]>
+  sortedLabels: string[]
+} | null
+
 function MasonryNotesGrid({
   pinnedNotes,
   otherNotes,
   filteredNotes,
   viewTitle,
   searchQuery,
+  isSearching,
+  groupedSearchResults,
   onEdit,
   onTrash,
   onRestore,
@@ -399,6 +456,8 @@ function MasonryNotesGrid({
   filteredNotes: Note[]
   viewTitle: string
   searchQuery: string
+  isSearching: boolean
+  groupedSearchResults: GroupedSearchResults
   onEdit: (note: Note) => void
   onTrash: (id: string) => void
   onDelete: (id: string) => void
@@ -459,6 +518,38 @@ function MasonryNotesGrid({
     ],
   )
 
+  // Helper to create masonry items from notes
+  const createMasonryItems = useCallback(
+    (notes: Note[]) =>
+      notes.map((note) => ({
+        id: note.id,
+        note,
+        onEdit,
+        onTrash,
+        onDelete,
+        onRestore,
+        onTogglePin,
+        onToggleArchive,
+      })),
+    [onEdit, onTrash, onDelete, onRestore, onTogglePin, onToggleArchive],
+  )
+
+  // Prepare grouped items for search results
+  const groupedItems = useMemo(() => {
+    if (!groupedSearchResults) return null
+
+    return {
+      unlabeled: createMasonryItems(groupedSearchResults.unlabeled),
+      byLabel: Object.fromEntries(
+        groupedSearchResults.sortedLabels.map((label) => [
+          label,
+          createMasonryItems(groupedSearchResults.byLabel[label]),
+        ]),
+      ),
+      sortedLabels: groupedSearchResults.sortedLabels,
+    }
+  }, [groupedSearchResults, createMasonryItems])
+
   if (filteredNotes.length === 0) {
     const getEmptyStateProps = () => {
       if (searchQuery) {
@@ -495,7 +586,9 @@ function MasonryNotesGrid({
       <div className="flex flex-1 flex-col overflow-hidden">
         <div className="mx-auto w-full max-w-6xl px-6 pt-6 md:px-8 md:pt-8">
           <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-2xl font-bold">{viewTitle}</h2>
+            <h2 className="text-2xl font-bold">
+              {isSearching ? 'Search Results' : viewTitle}
+            </h2>
             <span className="text-muted-foreground text-sm">0 notes</span>
           </div>
         </div>
@@ -512,7 +605,9 @@ function MasonryNotesGrid({
       <div className="flex-1 overflow-auto">
         <div className="mx-auto max-w-6xl px-6 pb-[var(--chat-safe-padding)] pt-6 md:px-8 md:pt-8">
           <div className="mb-6 flex items-center justify-between">
-            <h2 className="text-2xl font-bold">{viewTitle}</h2>
+            <h2 className="text-2xl font-bold">
+              {isSearching ? 'Search Results' : viewTitle}
+            </h2>
             <span className="text-muted-foreground text-sm">
               {filteredNotes.length}{' '}
               {filteredNotes.length === 1 ? 'note' : 'notes'}
@@ -523,6 +618,61 @@ function MasonryNotesGrid({
     )
   }
 
+  // Render grouped search results
+  if (isSearching && groupedItems) {
+    return (
+      <div className="flex-1 overflow-auto">
+        <div className="mx-auto max-w-6xl px-6 pb-[var(--chat-safe-padding)] pt-6 md:px-8 md:pt-8">
+          <div className="mb-6 flex items-center justify-between">
+            <h2 className="text-2xl font-bold">Search Results</h2>
+            <span className="text-muted-foreground text-sm">
+              {filteredNotes.length}{' '}
+              {filteredNotes.length === 1 ? 'note' : 'notes'}
+            </span>
+          </div>
+
+          <div className="space-y-8">
+            {/* Unlabeled notes first */}
+            {groupedItems.unlabeled.length > 0 && (
+              <section className="space-y-4">
+                <h3 className="text-muted-foreground text-xs font-semibold uppercase tracking-wider">
+                  Unlabeled
+                </h3>
+                <Masonry
+                  key={`unlabeled-${groupedItems.unlabeled.length}`}
+                  items={groupedItems.unlabeled}
+                  columnGutter={16}
+                  columnWidth={300}
+                  overscanBy={2}
+                  render={MasonryNoteCard}
+                />
+              </section>
+            )}
+
+            {/* Labeled notes grouped by label */}
+            {groupedItems.sortedLabels.map((label) => (
+              <section key={label} className="space-y-4">
+                <h3 className="text-muted-foreground flex items-center gap-2 text-xs font-semibold uppercase tracking-wider">
+                  <Tag className="size-3" />
+                  {label}
+                </h3>
+                <Masonry
+                  key={`label-${label}-${groupedItems.byLabel[label].length}`}
+                  items={groupedItems.byLabel[label]}
+                  columnGutter={16}
+                  columnWidth={300}
+                  overscanBy={2}
+                  render={MasonryNoteCard}
+                />
+              </section>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Normal view (not searching)
   return (
     <div className="flex-1 overflow-auto">
       <div className="mx-auto max-w-6xl px-6 pb-[var(--chat-safe-padding)] pt-6 md:px-8 md:pt-8">

@@ -13,19 +13,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  Input,
   useWorkspace,
 } from '@moldable-ai/ui'
-import { PROJECT_COLORS, Project } from '@/lib/types'
-import { cn } from '@/lib/utils'
+import { Project } from '@/lib/types'
 import { useTimeTracker } from './time-tracker-context'
 
-export function ProjectManager() {
+interface ProjectManagerProps {
+  onNewProject?: () => void
+}
+
+export function ProjectManager({ onNewProject }: ProjectManagerProps) {
   const { fetchWithWorkspace } = useWorkspace()
   const {
     projects,
@@ -35,33 +32,9 @@ export function ProjectManager() {
     refreshProjects,
   } = useTimeTracker()
 
-  const [isOpen, setIsOpen] = useState(false)
-  const [newProjectName, setNewProjectName] = useState('')
-  const [selectedColor, setSelectedColor] = useState(PROJECT_COLORS[0])
   const [showArchived, setShowArchived] = useState(false)
   const [archivingProject, setArchivingProject] = useState<Project | null>(null)
   const [deletingProject, setDeletingProject] = useState<Project | null>(null)
-
-  // Create project mutation
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetchWithWorkspace('/api/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newProjectName, color: selectedColor }),
-      })
-      return res.json() as Promise<Project>
-    },
-    onSuccess: (newProject) => {
-      // If no project is currently selected, select the newly created one
-      if (!selectedProjectId) {
-        setSelectedProjectId(newProject.id)
-      }
-      refreshProjects()
-      setNewProjectName('')
-      setIsOpen(false)
-    },
-  })
 
   // Archive/Unarchive mutation
   const archiveMutation = useMutation({
@@ -125,66 +98,14 @@ export function ProjectManager() {
     }
   }
 
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newProjectName.trim()) return
-    createMutation.mutate()
-  }
-
   const archivedProjects = projects.filter((p) => p.archived)
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Projects</h2>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-1">
-              <Plus className="size-4" />
-              New Project
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create Project</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleCreate} className="space-y-4">
-              <Input
-                placeholder="Project name"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                autoFocus
-              />
-              <div className="space-y-2">
-                <label className="text-muted-foreground text-sm">Color</label>
-                <div className="flex flex-wrap gap-2">
-                  {PROJECT_COLORS.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setSelectedColor(color)}
-                      className={cn(
-                        'size-8 rounded-full transition-all',
-                        selectedColor === color
-                          ? 'ring-ring ring-2 ring-offset-2'
-                          : 'hover:scale-110',
-                      )}
-                      style={{ backgroundColor: color }}
-                    />
-                  ))}
-                </div>
-              </div>
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={!newProjectName.trim() || createMutation.isPending}
-              >
-                Create Project
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
+      <Button size="sm" className="w-full gap-1" onClick={onNewProject}>
+        <Plus className="size-4" />
+        New Project
+      </Button>
 
       {/* Active projects */}
       <div className="space-y-2">

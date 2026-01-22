@@ -34,8 +34,8 @@ async function loadNotes(workspaceId?: string): Promise<Note[]> {
         const data = await fs.readFile(filePath, 'utf-8')
         const note = JSON.parse(data)
         notes.push(note)
-      } catch (e) {
-        console.error(`Failed to read note file ${file}:`, e)
+      } catch {
+        // Ignore individual file read errors
       }
     }
 
@@ -57,9 +57,7 @@ async function deleteNote(id: string, workspaceId?: string): Promise<void> {
   try {
     const filePath = getNotePath(id, workspaceId)
     await fs.unlink(filePath)
-  } catch {
-    // File may not exist, ignore
-  }
+  } catch {}
 }
 
 export async function GET(request: Request) {

@@ -26,7 +26,12 @@ const SOURCE_DIR = join(homedir(), '.moldable', 'shared', 'apps')
 const TARGET_DIR = join(homedir(), 'moldable-apps')
 
 // Moldable runtime files to always exclude (not typically in .gitignore)
-const ALWAYS_EXCLUDE = ['.moldable.port', '.moldable.instances.json']
+const ALWAYS_EXCLUDE = [
+  '.moldable.port',
+  '.moldable.instances.json',
+  '.moldable.install.json',
+  '.moldable.migrations.json',
+]
 
 /**
  * Parse a .gitignore file and return patterns to exclude

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ChevronDown, Play, Square } from 'lucide-react'
+import { ChevronDown, Play, Plus, Settings, Square } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import {
   Button,
@@ -15,7 +15,12 @@ import { formatDuration } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useTimeTracker } from './time-tracker-context'
 
-export function Timer() {
+interface TimerProps {
+  onNewProject?: () => void
+  onManageProjects?: () => void
+}
+
+export function Timer({ onNewProject, onManageProjects }: TimerProps) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
   const {
@@ -181,6 +186,29 @@ export function Timer() {
               </button>
             ))
           )}
+
+          {/* Separator and actions */}
+          <div className="bg-border my-1 h-px" />
+          <button
+            onClick={() => {
+              setProjectOpen(false)
+              onNewProject?.()
+            }}
+            className="hover:bg-muted text-muted-foreground hover:text-foreground flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm"
+          >
+            <Plus className="size-3" />
+            <span>New Project</span>
+          </button>
+          <button
+            onClick={() => {
+              setProjectOpen(false)
+              onManageProjects?.()
+            }}
+            className="hover:bg-muted text-muted-foreground hover:text-foreground flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm"
+          >
+            <Settings className="size-3" />
+            <span>Manage Projects</span>
+          </button>
         </PopoverContent>
       </Popover>
 

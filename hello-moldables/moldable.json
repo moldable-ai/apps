@@ -13,8 +13,8 @@
   "name": "Hello Moldables",
   "tags": ["tutorial", "welcome", "getting-started"],
   "upstream": {
-    "installedAt": "2026-01-16T17:38:34.302379+00:00",
-    "installedCommit": "46cdb04f1aa0f05e54a384a24a3ada617a733fa9",
+    "installedAt": "2026-01-21T18:07:52.994137+00:00",
+    "installedCommit": "942609ddc1dd6cd28c04908e05b12290b8b46325",
     "installedVersion": "0.1.0",
     "path": "hello-moldables",
     "repo": "moldable-ai/apps"

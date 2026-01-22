@@ -17,7 +17,14 @@ const SOURCE_DIR = join(homedir(), 'moldable-apps')
 const TARGET_DIR = join(homedir(), '.moldable', 'shared', 'apps')
 
 // Files/folders to preserve in the target (not overwrite from source)
-const PRESERVE = ['node_modules', '.next', '.turbo', 'pnpm-lock.yaml']
+const PRESERVE = [
+  'node_modules',
+  '.next',
+  '.turbo',
+  'pnpm-lock.yaml',
+  '.moldable.install.json',
+  '.moldable.migrations.json',
+]
 
 // Files that only exist in the repo, not in local apps
 const REPO_ONLY = [
