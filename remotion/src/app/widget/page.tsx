@@ -1,8 +1,7 @@
 'use client'
 
-import { Clock, Film, Plus } from 'lucide-react'
-import { Button } from '@moldable-ai/ui'
-import { useCreateProject, useProjects } from '@/lib/hooks'
+import { Clock, Film } from 'lucide-react'
+import { useProjects } from '@/lib/hooks'
 
 function formatDuration(frames: number, fps: number) {
   const seconds = frames / fps
@@ -28,36 +27,12 @@ function formatDate(dateString: string) {
 
 export default function WidgetPage() {
   const { data: projects, isLoading } = useProjects()
-  const createProject = useCreateProject()
-
-  const handleCreateProject = async () => {
-    await createProject.mutateAsync({
-      name: 'Untitled Project',
-    })
-  }
 
   // Take most recent 3 projects
   const recentProjects = projects?.slice(0, 3) ?? []
 
   return (
     <div className="p-4">
-      {/* Header */}
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Film className="text-primary h-5 w-5" />
-          <h2 className="text-foreground font-semibold">Remotion</h2>
-        </div>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={handleCreateProject}
-          disabled={createProject.isPending}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
-      </div>
-
-      {/* Content */}
       <div className="space-y-2">
         {isLoading ? (
           Array.from({ length: 3 }).map((_, i) => (
