@@ -17,7 +17,7 @@
     "app:copy:all": "node scripts/copy-apps.js --all",
     "app:update": "node scripts/update-apps.js",
     "app:update:all": "node scripts/update-apps.js --all",
-    "release": "node scripts/release.js",
+    "release": "node scripts/release.js --skip-copy",
     "release:dry": "node scripts/release.js --dry-run"
   },
   "repository": {

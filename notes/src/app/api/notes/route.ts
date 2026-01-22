@@ -57,7 +57,9 @@ async function deleteNote(id: string, workspaceId?: string): Promise<void> {
   try {
     const filePath = getNotePath(id, workspaceId)
     await fs.unlink(filePath)
-  } catch {}
+  } catch {
+    // Ignore deletion errors (e.g. file already gone)
+  }
 }
 
 export async function GET(request: Request) {
