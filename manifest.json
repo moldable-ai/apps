@@ -1,7 +1,7 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-01-18T22:25:45.913Z",
+  "generatedAt": "2026-01-22T18:27:17.014Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
@@ -25,7 +25,7 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
+      "commit": "5f18f43899eed8cd7d75f9a0de07a4f7b1687d59"
     },
     {
       "id": "affirmations",
@@ -42,7 +42,7 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.1.0"
       },
-      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
+      "commit": "5f18f43899eed8cd7d75f9a0de07a4f7b1687d59"
     },
     {
       "id": "git-flow",
@@ -65,7 +65,7 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
+      "commit": "5f18f43899eed8cd7d75f9a0de07a4f7b1687d59"
     },
     {
       "id": "hello-moldables",
@@ -86,7 +86,7 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.1.0"
       },
-      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
+      "commit": "5f18f43899eed8cd7d75f9a0de07a4f7b1687d59"
     },
     {
       "id": "meetings",
@@ -112,7 +112,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
+      "commit": "5f18f43899eed8cd7d75f9a0de07a4f7b1687d59"
     },
     {
       "id": "notes",
@@ -136,7 +136,24 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
+      "commit": "5f18f43899eed8cd7d75f9a0de07a4f7b1687d59"
+    },
+    {
+      "id": "remotion",
+      "name": "Remotion",
+      "version": "0.1.0",
+      "description": "Create programmatic videos with Remotion - manage projects, preview compositions, and render videos",
+      "icon": "🎬",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/remotion/public/icon.png",
+      "widgetSize": "large",
+      "category": "custom",
+      "tags": [],
+      "path": "remotion",
+      "requiredEnv": [],
+      "moldableDependencies": {
+        "@moldable-ai/ui": "^0.1.0"
+      },
+      "commit": "5f18f43899eed8cd7d75f9a0de07a4f7b1687d59"
     },
     {
       "id": "scribo",
@@ -162,7 +179,7 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
+      "commit": "5f18f43899eed8cd7d75f9a0de07a4f7b1687d59"
     },
     {
       "id": "time-tracker",
@@ -179,7 +196,7 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.1.0"
       },
-      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
+      "commit": "5f18f43899eed8cd7d75f9a0de07a4f7b1687d59"
     },
     {
       "id": "todo",
@@ -202,7 +219,7 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "942609ddc1dd6cd28c04908e05b12290b8b46325"
+      "commit": "5f18f43899eed8cd7d75f9a0de07a4f7b1687d59"
     }
   ],
   "categories": [
