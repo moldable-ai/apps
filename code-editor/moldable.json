@@ -1,0 +1,17 @@
+{
+  "name": "Code",
+  "version": "0.1.0",
+  "visibility": "public",
+  "description": "A lightweight, VS Code-like IDE for exploring and editing local codebases with integrated AI context and browser preview.",
+  "author": "",
+  "license": "MIT",
+  "icon": "💻",
+  "iconPath": "public/icon.png",
+  "widgetSize": "medium",
+  "category": "custom",
+  "tags": [],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.1.0"
+  },
+  "env": []
+}

@@ -31,6 +31,7 @@ const forwardedArgs = process.argv.slice(2).filter((arg) => arg !== '--')
 
 // Resolve the path to `next` binary - can't rely on PATH including node_modules/.bin
 const nextBin = path.join(process.cwd(), 'node_modules', '.bin', 'next')
+
 // Check that next binary exists before trying to spawn
 if (!fsSync.existsSync(nextBin)) {
   console.error(`Error: next binary not found at ${nextBin}`)
@@ -111,7 +112,7 @@ const child = spawn(
   {
     env: {
       ...process.env,
-      MOLDABLE_APP_ID: 'notes',
+      MOLDABLE_APP_ID: 'code-editor',
       ...(port ? { MOLDABLE_PORT: port, PORT: port } : {}),
     },
     stdio: 'inherit',
