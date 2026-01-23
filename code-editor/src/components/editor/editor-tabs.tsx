@@ -32,7 +32,7 @@ export function EditorTabs({
 
   return (
     <div className="bg-muted/30 flex h-9 shrink-0 border-b">
-      <div className="flex-1 overflow-x-auto">
+      <div className="editor-tabs-scroll flex-1 overflow-x-auto">
         <div className="flex h-full">
           {uniqueTabs.map((tab) => (
             <button

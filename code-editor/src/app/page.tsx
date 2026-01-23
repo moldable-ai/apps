@@ -19,8 +19,22 @@ export default function CodeEditorPage() {
     getSavedTabs,
   } = useProject()
 
+  // Wrapper for selecting a project from the dropdown
+  const handleSelectProject = useCallback(
+    async (
+      path: string,
+      currentOpenFiles: string[],
+      currentActiveFile: string | null,
+    ) => {
+      // Save current tabs before switching
+      await saveCurrentProjectTabs(currentOpenFiles, currentActiveFile)
+      await openProject(path)
+    },
+    [saveCurrentProjectTabs, openProject],
+  )
+
   // Wrapper for openFolderPicker that can save tabs first
-  const handleChangeProject = useCallback(
+  const handleOpenFolder = useCallback(
     async (currentOpenFiles: string[], currentActiveFile: string | null) => {
       // Save current tabs before switching
       await saveCurrentProjectTabs(currentOpenFiles, currentActiveFile)
@@ -71,7 +85,9 @@ export default function CodeEditorPage() {
         rootPath={rootPath}
         previewUrl={previewUrl}
         savedTabs={savedTabs}
-        onChangeProject={handleChangeProject}
+        recentProjects={recentProjects}
+        onSelectProject={handleSelectProject}
+        onOpenFolder={handleOpenFolder}
         onCloseProject={handleCloseProject}
         onPreviewUrlChange={setPreviewUrl}
         onTabsChange={handleTabsChange}

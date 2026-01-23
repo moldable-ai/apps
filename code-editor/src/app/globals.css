@@ -52,3 +52,14 @@
 [data-cmdk-input-wrapper] svg {
   margin-right: 0.75rem;
 }
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-none,
+.editor-tabs-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar,
+.editor-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}

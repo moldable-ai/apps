@@ -8,12 +8,14 @@ interface FileTreeProps {
   rootPath: string
   onFileSelect: (path: string) => void
   selectedPath?: string | null
+  onDeleteRequest: (file: FileItem) => void
 }
 
 export function FileTree({
   rootPath,
   onFileSelect,
   selectedPath,
+  onDeleteRequest,
 }: FileTreeProps) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
 
@@ -60,6 +62,7 @@ export function FileTree({
             rootPath={rootPath}
             onFileSelect={onFileSelect}
             selectedPath={selectedPath}
+            onDeleteRequest={onDeleteRequest}
           />
         ))}
       </div>
