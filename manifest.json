@@ -1,13 +1,13 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-01-23T19:38:57.682Z",
+  "generatedAt": "2026-01-27T05:53:53.779Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
       "id": "calendar",
       "name": "Calendar",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": "Integrated calendar with Google Calendar connection",
       "icon": "🗓️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/calendar/public/icon.png",
@@ -25,12 +25,12 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "5681f27c6b4fa92820695e4235d4413b7e26b986"
+      "commit": "94fe2792feb17688e27052605f408e1f043d1550"
     },
     {
       "id": "code-editor",
       "name": "Code",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "A lightweight, VS Code-like IDE for exploring and editing local codebases with integrated AI context and browser preview.",
       "icon": "💻",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/code-editor/public/icon.png",
@@ -42,12 +42,12 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.1.0"
       },
-      "commit": "5681f27c6b4fa92820695e4235d4413b7e26b986"
+      "commit": "94fe2792feb17688e27052605f408e1f043d1550"
     },
     {
       "id": "affirmations",
       "name": "Daily Affirmations",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "A soothing, daily affirmation app to improve mental health and positivity.",
       "icon": "✨",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/affirmations/public/icon.png",
@@ -59,12 +59,12 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.1.0"
       },
-      "commit": "5681f27c6b4fa92820695e4235d4413b7e26b986"
+      "commit": "94fe2792feb17688e27052605f408e1f043d1550"
     },
     {
       "id": "git-flow",
       "name": "Git",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": "Simple Git client for branch management, staging, and diffing",
       "icon": "🛠️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/git-flow/public/icon.png",
@@ -82,12 +82,12 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "5681f27c6b4fa92820695e4235d4413b7e26b986"
+      "commit": "94fe2792feb17688e27052605f408e1f043d1550"
     },
     {
       "id": "hello-moldables",
       "name": "Hello Moldables",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Welcome to Moldable! Learn how to build and modify apps with AI.",
       "icon": "👋",
       "iconUrl": null,
@@ -103,12 +103,12 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.1.0"
       },
-      "commit": "5681f27c6b4fa92820695e4235d4413b7e26b986"
+      "commit": "94fe2792feb17688e27052605f408e1f043d1550"
     },
     {
       "id": "meetings",
       "name": "Meetings",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": "Record, transcribe, and summarize meetings with real-time transcription",
       "icon": "🎙️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/meetings/public/icon.png",
@@ -129,12 +129,12 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "5681f27c6b4fa92820695e4235d4413b7e26b986"
+      "commit": "94fe2792feb17688e27052605f408e1f043d1550"
     },
     {
       "id": "notes",
       "name": "Notes",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": "A Google Keep-style note taking app with pinning and markdown support",
       "icon": "📝",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/notes/public/icon.png",
@@ -153,12 +153,12 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "5681f27c6b4fa92820695e4235d4413b7e26b986"
+      "commit": "94fe2792feb17688e27052605f408e1f043d1550"
     },
     {
       "id": "remotion",
       "name": "Remotion",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Create programmatic videos with Remotion - manage projects, preview compositions, and render videos",
       "icon": "🎬",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/remotion/public/icon.png",
@@ -170,12 +170,12 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.1.0"
       },
-      "commit": "5681f27c6b4fa92820695e4235d4413b7e26b986"
+      "commit": "94fe2792feb17688e27052605f408e1f043d1550"
     },
     {
       "id": "scribo",
       "name": "Scribo Languages",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": "Language learning journal with AI-powered translations",
       "icon": "📓",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/scribo/public/icon.png",
@@ -196,12 +196,12 @@
         "@moldable-ai/editor": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "5681f27c6b4fa92820695e4235d4413b7e26b986"
+      "commit": "94fe2792feb17688e27052605f408e1f043d1550"
     },
     {
       "id": "time-tracker",
       "name": "Time Tracker",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "description": "Track time for work projects with weekly views and export",
       "icon": "⏱️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/time-tracker/public/icon.png",
@@ -213,12 +213,12 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.1.0"
       },
-      "commit": "5681f27c6b4fa92820695e4235d4413b7e26b986"
+      "commit": "94fe2792feb17688e27052605f408e1f043d1550"
     },
     {
       "id": "todo",
       "name": "Todo",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "description": "Simple task management with quick add and completion tracking",
       "icon": "✅",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/todo/public/icon.png",
@@ -236,7 +236,7 @@
         "@moldable-ai/ui": "^0.1.0",
         "@moldable-ai/storage": "^0.1.0"
       },
-      "commit": "5681f27c6b4fa92820695e4235d4413b7e26b986"
+      "commit": "94fe2792feb17688e27052605f408e1f043d1550"
     }
   ],
   "categories": [

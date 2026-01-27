@@ -1,6 +1,6 @@
 {
   "name": "Git",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "visibility": "public",
   "description": "Simple Git client for branch management, staging, and diffing",
   "author": "Moldable Team",

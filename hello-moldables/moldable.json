@@ -19,7 +19,7 @@
     "path": "hello-moldables",
     "repo": "moldable-ai/apps"
   },
-  "version": "0.1.0",
+  "version": "0.1.1",
   "visibility": "public",
   "widgetSize": "medium"
 }
