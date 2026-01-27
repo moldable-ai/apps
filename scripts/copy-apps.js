@@ -27,6 +27,8 @@ const TARGET_DIR = join(homedir(), 'moldable-apps')
 
 // Moldable runtime files to always exclude (not typically in .gitignore)
 const ALWAYS_EXCLUDE = [
+  '.next',
+  // 'node_modules', // we copy these over so we can do type checking on the apps before they commit
   '.moldable.port',
   '.moldable.instances.json',
   '.moldable.install.json',

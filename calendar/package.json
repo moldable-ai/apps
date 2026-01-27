@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@moldable-ai/storage": "^0.1.0",
-    "@moldable-ai/ui": "^0.2.2",
+    "@moldable-ai/ui": "^0.2.6",
     "@tanstack/react-query": "^5.90.16",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -25,13 +25,13 @@
   },
   "devDependencies": {
     "@moldable-ai/typescript-config": "0.1.0",
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^20",
     "@types/react": "19.2.8",
     "@types/react-dom": "19.0.4",
     "eslint": "^9.32.0",
     "eslint-config-next": "15.5.7",
-    "tailwindcss": "^4",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5"
   }
 }

@@ -1,7 +1,7 @@
 @import 'tailwindcss';
-@import '@moldable-ai/ui/styles';
+@import '@moldable-ai/ui';
 @source '../**/*.{js,jsx,ts,tsx}';
-@source '../../node_modules/@moldable-ai/ui/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';
 
 @theme {
   --font-sans: Inter, system-ui, -apple-system, sans-serif;

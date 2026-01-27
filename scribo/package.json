@@ -21,7 +21,7 @@
     "@lexical/rich-text": "^0.39.0",
     "@moldable-ai/editor": "^0.1.0",
     "@moldable-ai/storage": "^0.1.0",
-    "@moldable-ai/ui": "^0.2.2",
+    "@moldable-ai/ui": "^0.2.6",
     "@tanstack/react-query": "^5.90.16",
     "lexical": "^0.39.0",
     "lucide-react": "^0.473.0",
@@ -33,7 +33,7 @@
   "devDependencies": {
     "@lexical/headless": "^0.39.0",
     "@moldable-ai/typescript-config": "0.1.0",
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.1.18",
     "@types/jsdom": "^27.0.0",
     "@types/node": "^20",
     "@types/react": "19.2.8",
@@ -42,7 +42,7 @@
     "eslint-config-next": "15.5.7",
     "jsdom": "^27.4.0",
     "prettier": "^3.5.3",
-    "tailwindcss": "^4",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5",
     "vitest": "^4.0.16"
   }

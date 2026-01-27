@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "@moldable-ai/storage": "^0.1.1",
-    "@moldable-ai/ui": "^0.2.2",
+    "@moldable-ai/ui": "^0.2.6",
     "@tanstack/react-query": "^5.62.8",
     "clsx": "^2.1.1",
     "framer-motion": "^11.0.0",
@@ -13,12 +13,12 @@
   },
   "devDependencies": {
     "@moldable-ai/typescript-config": "0.1.0",
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^20.17.10",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.0.4",
     "postcss": "^8.4.49",
-    "tailwindcss": "^4.0.0-alpha.30",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5.7.2"
   },
   "name": "affirmations",
