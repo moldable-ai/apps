@@ -9,6 +9,7 @@ import {
   getRecentRepos,
   getStatus,
   pushCommits,
+  undoUnpushedCommit,
 } from '@/lib/git/server'
 
 export async function GET(req: NextRequest) {
@@ -74,35 +75,18 @@ export async function POST(req: NextRequest) {
     // Check if it's an undo action
     if (body.action === 'undo') {
       const { hash } = body
-      const { simpleGit } = await import('simple-git')
-      const { getAppDataDir, readJson } = await import('@moldable-ai/storage')
-      const path = await import('path')
-
-      const dataDir = getAppDataDir(workspaceId)
-      const config = (await readJson(
-        path.join(dataDir, 'settings.json'),
-        {},
-      )) as {
-        currentRepoPath?: string
-      }
-      const g = simpleGit(config.currentRepoPath)
-
-      // Basic validation: only allow undoing the most recent commit for safety
-      // and checking if it matches the hash
-      const log = await g.log({ maxCount: 1 })
-      if (log.latest?.hash !== hash) {
-        throw new Error('Can only undo the most recent commit.')
-      }
-
-      await g.reset(['--soft', 'HEAD~1'])
-      return NextResponse.json({ success: true })
+      const result = await undoUnpushedCommit(hash, workspaceId)
+      return NextResponse.json(result)
     }
 
     // Otherwise assume it's a repo change
     const { path } = body
     const status = await addRepo(path, workspaceId)
-    const diff = await getDiff(path, undefined, workspaceId)
-    return NextResponse.json({ ...status, diff })
+    const [diff, repos] = await Promise.all([
+      getDiff(path, undefined, workspaceId),
+      getRecentRepos(workspaceId),
+    ])
+    return NextResponse.json({ ...status, diff, recentRepos: repos })
   } catch (error) {
     return NextResponse.json(
       {

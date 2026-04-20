@@ -136,6 +136,28 @@ export async function pushCommits(workspaceId?: string) {
   }
 }
 
+export async function undoUnpushedCommit(hash: string, workspaceId?: string) {
+  const settings = await getSettings(workspaceId)
+  const g = simpleGit(settings.currentRepoPath)
+
+  const log = await g.log({ maxCount: 1 })
+  if (log.latest?.hash !== hash) {
+    throw new Error('Can only undo the most recent commit.')
+  }
+
+  const upstream = await g.revparse(['--abbrev-ref', '@{u}']).catch(() => null)
+  if (upstream) {
+    const ahead = await g.log(['@{u}..HEAD'])
+    const isUnpushed = ahead.all.some((commit) => commit.hash === hash)
+    if (!isUnpushed) {
+      throw new Error('Can only undo commits that have not been pushed.')
+    }
+  }
+
+  await g.reset(['--soft', 'HEAD~1'])
+  return { success: true }
+}
+
 export async function getHistory(repoPath?: string, workspaceId?: string) {
   const settings = await getSettings(workspaceId)
   const pathToUse = repoPath || settings.currentRepoPath
