@@ -2,6 +2,12 @@ import { NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
+
 export async function GET() {
   const appId = process.env.MOLDABLE_APP_ID ?? 'todo'
   const portRaw = process.env.MOLDABLE_PORT
@@ -16,7 +22,15 @@ export async function GET() {
     {
       headers: {
         'Cache-Control': 'no-store',
+        ...corsHeaders,
       },
     },
   )
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 204,
+    headers: corsHeaders,
+  })
 }

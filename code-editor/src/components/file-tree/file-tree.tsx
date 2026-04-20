@@ -52,7 +52,7 @@ export function FileTree({
   }
 
   return (
-    <ScrollArea className="h-full">
+    <ScrollArea className="h-full min-h-0">
       <div className="py-1">
         {data.files.map((file) => (
           <FileTreeItem

@@ -32,5 +32,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: '/api/:path*',
+  matcher: '/api/((?!moldable(?:/|$)).*)',
 }

@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowUp,
+  Ban,
   Binary,
   Copy,
   FolderGit,
@@ -12,6 +13,7 @@ import {
   Github,
   History,
   LayoutList,
+  MessageSquare,
   RefreshCw,
   RotateCcw,
   ShieldAlert,
@@ -19,7 +21,15 @@ import {
   X,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { sendToMoldable, useWorkspace } from '@moldable-ai/ui'
+import {
+  Separator,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  sendToMoldable,
+  useWorkspace,
+} from '@moldable-ai/ui'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -37,13 +47,20 @@ interface GitFile {
   working_dir: string
 }
 
+interface RecentRepo {
+  name: string
+  path: string
+  isDirty?: boolean
+}
+
 interface GitData {
   currentBranch: string
   repoName: string
   repoPath: string
   files: GitFile[]
-  recentRepos: { name: string; path: string }[]
+  recentRepos: RecentRepo[]
   branches: string[]
+  isClean?: boolean
 }
 
 interface LogEntry {
@@ -53,6 +70,29 @@ interface LogEntry {
   author_name: string
   author_email: string
   isUnpushed?: boolean
+}
+
+interface CommitInput {
+  summary: string
+  description: string
+}
+
+interface GeneratedCommitMessage {
+  summary: string
+  description?: string
+}
+
+interface CodeReviewFinding {
+  severity?: string
+  file?: string
+  title?: string
+  details?: string
+  suggestion?: string
+}
+
+interface CodeReviewResult {
+  summary: string
+  findings: CodeReviewFinding[]
 }
 
 export default function GitFlowPage() {
@@ -66,6 +106,15 @@ export default function GitFlowPage() {
 
   const [summary, setSummary] = useState('')
   const [description, setDescription] = useState('')
+  const [codeReview, setCodeReview] = useState<CodeReviewResult | null>(null)
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false)
+  const [chatActionFeedback, setChatActionFeedback] = useState<string | null>(
+    null,
+  )
+  const [dismissedFindingKeys, setDismissedFindingKeys] = useState<Set<string>>(
+    new Set(),
+  )
+  const [isHandingOffToChat, setIsHandingOffToChat] = useState(false)
 
   // Query for Git data (status, branches, etc)
   const {
@@ -120,17 +169,66 @@ export default function GitFlowPage() {
     enabled: !!selectedFile || !!selectedCommit,
   })
 
+  // Mutation for generating a commit message from selected diffs
+  const generateCommitMessageMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetchWithWorkspace('/api/git', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generateCommitMessage',
+          paths: Array.from(selectedFiles),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to generate commit message')
+      }
+      return json as GeneratedCommitMessage
+    },
+    onError: (err: Error) => {
+      setError(err.message)
+    },
+  })
+
+  // Mutation for reviewing selected changes
+  const reviewCodeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetchWithWorkspace('/api/git', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reviewCode',
+          paths: Array.from(selectedFiles),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to review code')
+      }
+      return json as CodeReviewResult
+    },
+    onSuccess: (review) => {
+      setDismissedFindingKeys(new Set())
+      setCodeReview(review)
+      setIsReviewModalOpen(true)
+    },
+    onError: (err: Error) => {
+      setError(err.message)
+    },
+  })
+
   // Mutation for Committing
   const commitMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (input: CommitInput) => {
       const res = await fetchWithWorkspace('/api/git', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'commit',
           paths: Array.from(selectedFiles),
-          summary,
-          description,
+          summary: input.summary,
+          description: input.description,
         }),
       })
       const json = await res.json()
@@ -141,6 +239,8 @@ export default function GitFlowPage() {
       setSummary('')
       setDescription('')
       setSelectedFiles(new Set())
+      setSelectedFile(null)
+      setSelectedCommit(null)
       queryClient.invalidateQueries({ queryKey: ['git-status', workspaceId] })
       queryClient.invalidateQueries({ queryKey: ['git-history', workspaceId] })
     },
@@ -276,13 +376,35 @@ export default function GitFlowPage() {
     setSelectedCommit(history?.[0]?.hash ?? null)
   }
 
-  const handleCommit = () => {
+  const handleCommit = async () => {
     if (selectedFiles.size === 0) {
       setError('Please select at least one file to commit.')
       return
     }
     setError(null)
-    commitMutation.mutate()
+    generateCommitMessageMutation.reset()
+    reviewCodeMutation.reset()
+    commitMutation.reset()
+
+    let commitSummary = summary.trim()
+    let commitDescription = description.trim()
+
+    if (!commitSummary) {
+      try {
+        const generated = await generateCommitMessageMutation.mutateAsync()
+        commitSummary = generated.summary.trim()
+        commitDescription = generated.description?.trim() ?? ''
+        setSummary(commitSummary)
+        setDescription(commitDescription)
+      } catch {
+        return
+      }
+    }
+
+    commitMutation.mutate({
+      summary: commitSummary,
+      description: commitDescription,
+    })
   }
 
   const copyError = () => {
@@ -297,6 +419,137 @@ export default function GitFlowPage() {
     }
   }
 
+  const buildReviewPrompt = (findings?: CodeReviewFinding[]) => {
+    if (!codeReview) return ''
+
+    const selectedPaths = Array.from(selectedFiles)
+    const reviewFindings = findings ?? codeReview.findings
+
+    return [
+      `Help me fix code review feedback in the Git app at ${data?.repoPath ?? 'the current repository'}.`,
+      '',
+      `Selected files (${selectedPaths.length}):`,
+      selectedPaths.length > 0
+        ? selectedPaths.map((path) => `- ${path}`).join('\n')
+        : '- No specific files selected',
+      '',
+      'Review summary:',
+      codeReview.summary,
+      '',
+      'Review findings:',
+      reviewFindings.length > 0
+        ? reviewFindings
+            .map((finding, index) => {
+              return [
+                `${index + 1}. ${finding.title ?? 'Review finding'}`,
+                finding.severity ? `Severity: ${finding.severity}` : null,
+                finding.file ? `File: ${finding.file}` : null,
+                finding.details ? `Details: ${finding.details}` : null,
+                finding.suggestion
+                  ? `Suggested fix: ${finding.suggestion}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join('\n')
+            })
+            .join('\n\n')
+        : '- No findings, but please review the summary and suggest any worthwhile fixes.',
+      '',
+      'Please make the necessary code changes directly in this app.',
+    ].join('\n')
+  }
+
+  const loadReviewIntoChat = (findings?: CodeReviewFinding[]) => {
+    const prompt = buildReviewPrompt(findings)
+    if (!prompt) return
+
+    try {
+      setIsHandingOffToChat(true)
+      setChatActionFeedback(null)
+
+      sendToMoldable({
+        type: 'moldable:set-chat-instructions',
+        text: `The user is working in the Git app at ${data?.repoPath ?? 'the current repository'}. They want help addressing code review feedback. Use the repository and findings below as the active task context.\n\n${prompt}`,
+      })
+      window.parent.postMessage(
+        { type: 'moldable:set-chat-input', text: prompt },
+        '*',
+      )
+
+      window.setTimeout(() => {
+        setIsHandingOffToChat(false)
+        setChatActionFeedback('Loaded review details into chat.')
+        window.setTimeout(() => setChatActionFeedback(null), 4000)
+      }, 600)
+    } catch {
+      setIsHandingOffToChat(false)
+      setChatActionFeedback('Could not load review details into chat.')
+      window.setTimeout(() => setChatActionFeedback(null), 4000)
+    }
+  }
+
+  const getFindingKey = (finding: CodeReviewFinding, index: number) => {
+    return `${finding.file ?? 'finding'}::${finding.title ?? 'untitled'}::${index}`
+  }
+
+  const dismissFinding = (finding: CodeReviewFinding, index: number) => {
+    const key = getFindingKey(finding, index)
+    setDismissedFindingKeys((previous) => new Set(previous).add(key))
+  }
+
+  const copyFinding = async (finding: CodeReviewFinding, index: number) => {
+    const findingText = [
+      `${index + 1}. ${finding.title ?? 'Review finding'}`,
+      finding.severity ? `Severity: ${finding.severity}` : null,
+      finding.file ? `File: ${finding.file}` : null,
+      finding.details ? `Details: ${finding.details}` : null,
+      finding.suggestion ? `Suggested fix: ${finding.suggestion}` : null,
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    await navigator.clipboard.writeText(findingText)
+  }
+
+  const copyAllReview = async () => {
+    if (!codeReview) return
+
+    const reviewText = [
+      'Code Review',
+      '',
+      'Review summary:',
+      codeReview.summary,
+      '',
+      'Review findings:',
+      visibleFindings.length > 0
+        ? visibleFindings
+            .map(({ finding, originalIndex }) => {
+              return [
+                `${originalIndex + 1}. ${finding.title ?? 'Review finding'}`,
+                finding.severity ? `Severity: ${finding.severity}` : null,
+                finding.file ? `File: ${finding.file}` : null,
+                finding.details ? `Details: ${finding.details}` : null,
+                finding.suggestion
+                  ? `Suggested fix: ${finding.suggestion}`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join('\n')
+            })
+            .join('\n\n')
+        : 'No review items remaining',
+    ].join('\n')
+
+    try {
+      await navigator.clipboard.writeText(reviewText)
+      setChatActionFeedback('Copied review details.')
+      window.setTimeout(() => setChatActionFeedback(null), 4000)
+    } catch {
+      setChatActionFeedback('Could not copy review details.')
+      window.setTimeout(() => setChatActionFeedback(null), 4000)
+    }
+  }
+
   const toggleFile = (path: string) => {
     const newSelected = new Set(selectedFiles)
     if (newSelected.has(path)) {
@@ -304,10 +557,12 @@ export default function GitFlowPage() {
     } else {
       newSelected.add(path)
     }
+    setCodeReview(null)
     setSelectedFiles(newSelected)
   }
 
   const handleSelectAll = (checked: boolean) => {
+    setCodeReview(null)
     if (checked && data?.files) {
       setSelectedFiles(new Set(data.files.map((f) => f.path)))
     } else {
@@ -317,7 +572,17 @@ export default function GitFlowPage() {
 
   const handleRepoChange = (repoPath: string) => {
     setError(null)
+    setCodeReview(null)
     repoMutation.mutate(repoPath)
+  }
+
+  const handleReviewCode = () => {
+    if (selectedFiles.size === 0) {
+      setError('Please select at least one file to review.')
+      return
+    }
+    setError(null)
+    reviewCodeMutation.mutate()
   }
 
   const handlePickFolder = async () => {
@@ -366,7 +631,18 @@ export default function GitFlowPage() {
     latestCommit?.hash === selectedCommit &&
     latestCommit.isUnpushed === true
 
+  const visibleFindings = codeReview
+    ? codeReview.findings
+        .map((finding, index) => ({ finding, originalIndex: index }))
+        .filter(
+          ({ finding, originalIndex }) =>
+            !dismissedFindingKeys.has(getFindingKey(finding, originalIndex)),
+        )
+    : []
+
   const errorTitle = (() => {
+    if (generateCommitMessageMutation.isError) return 'Generation Failed'
+    if (reviewCodeMutation.isError) return 'Review Failed'
     if (commitMutation.isError) return 'Commit Failed'
     if (pushMutation.isError) return 'Push Failed'
     if (undoMutation.isError) return 'Undo Failed'
@@ -404,6 +680,13 @@ export default function GitFlowPage() {
                     <span className="text-foreground text-sm font-bold leading-none">
                       {data?.repoName || data?.repoPath?.split('/').pop()}
                     </span>
+                    {data?.isClean === false ? (
+                      <span
+                        className="bg-primary inline-block size-2 rounded-full"
+                        aria-label="Repository has uncommitted changes"
+                        title="Repository has uncommitted changes"
+                      />
+                    ) : null}
                   </div>
                 </div>
               </SelectTrigger>
@@ -420,9 +703,18 @@ export default function GitFlowPage() {
                 {data?.recentRepos?.map((repo) => (
                   <SelectItem key={repo.path} value={repo.path}>
                     <div className="flex flex-col items-start gap-0.5 py-0.5">
-                      <span className="text-xs font-semibold leading-none">
-                        {repo.name}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold leading-none">
+                          {repo.name}
+                        </span>
+                        {repo.isDirty ? (
+                          <span
+                            className="bg-primary inline-block size-2 rounded-full"
+                            aria-label={`${repo.name} has uncommitted changes`}
+                            title="Repository has uncommitted changes"
+                          />
+                        ) : null}
+                      </div>
                       <span className="text-muted-foreground max-w-[220px] truncate font-mono text-[9.5px] opacity-60">
                         {repo.path}
                       </span>
@@ -470,15 +762,27 @@ export default function GitFlowPage() {
             Push
           </button>
           <div className="bg-border/60 h-4 w-px" />
-          <button
-            onClick={() => fetchData()}
-            title="Refresh Status"
-            className="hover:bg-accent text-muted-foreground flex size-8 cursor-pointer items-center justify-center rounded-md transition-all active:scale-95"
-          >
-            <RefreshCw
-              className={cn('size-4', loading && 'text-primary animate-spin')}
-            />
-          </button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => fetchData()}
+                  className="hover:bg-accent text-muted-foreground flex size-8 cursor-pointer items-center justify-center rounded-md transition-all active:scale-95"
+                  aria-label="Refresh status"
+                >
+                  <RefreshCw
+                    className={cn(
+                      'size-4',
+                      loading && 'text-primary animate-spin',
+                    )}
+                  />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Refresh status</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </header>
 
@@ -525,6 +829,233 @@ export default function GitFlowPage() {
           </>
         )}
 
+        {/* Code Review Modal */}
+        {isReviewModalOpen && codeReview && (
+          <>
+            <div
+              className="bg-background/50 animate-in fade-in absolute inset-0 z-40 cursor-pointer backdrop-blur-sm duration-200"
+              onClick={() => setIsReviewModalOpen(false)}
+            />
+            <div className="pointer-events-none absolute inset-x-0 bottom-[var(--chat-safe-padding)] top-0 z-50 flex min-h-0 items-center justify-center p-4 md:p-8">
+              <div className="bg-background pointer-events-auto flex h-[min(calc(85vh-var(--chat-safe-padding)),900px)] max-h-full min-h-0 w-full max-w-4xl flex-col overflow-hidden rounded-xl border shadow-2xl">
+                <div className="bg-muted/30 flex items-start justify-between gap-4 border-b px-4 py-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="text-primary size-4" />
+                      <h2 className="text-sm font-bold tracking-tight">
+                        Code Review
+                      </h2>
+                      {visibleFindings.length > 0 && (
+                        <span className="text-muted-foreground text-[11px]">
+                          {visibleFindings.length}{' '}
+                          {visibleFindings.length === 1
+                            ? 'finding'
+                            : 'findings'}
+                        </span>
+                      )}
+                    </div>
+                    {visibleFindings.length > 0 && (
+                      <p className="text-muted-foreground mt-1 max-w-3xl text-xs leading-relaxed">
+                        {codeReview.summary}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      onClick={() => setIsReviewModalOpen(false)}
+                      className="hover:bg-accent cursor-pointer rounded-md p-2 transition-colors active:scale-95"
+                      aria-label="Close code review"
+                    >
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                </div>
+
+                {chatActionFeedback && (
+                  <div className="bg-primary/10 text-primary border-b px-4 py-2 text-[11px] font-medium">
+                    {chatActionFeedback}
+                  </div>
+                )}
+
+                <div className="relative min-h-0 flex-1">
+                  {(reviewCodeMutation.isPending || isHandingOffToChat) && (
+                    <div className="bg-background/75 absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 backdrop-blur-[2px]">
+                      <RefreshCw className="text-primary size-6 animate-spin" />
+                      <div className="space-y-1 text-center">
+                        <p className="text-sm font-semibold">
+                          {isHandingOffToChat
+                            ? 'Handing off to chat…'
+                            : 'Verifying fixes…'}
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                          {isHandingOffToChat
+                            ? 'Keeping this review open so you can verify fixes after.'
+                            : 'Re-running code review on the current changes.'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="custom-scrollbar h-full overflow-y-auto p-4 md:p-5">
+                    {visibleFindings.length === 0 ? (
+                      <div className="text-muted-foreground flex h-full min-h-[240px] flex-col items-center justify-center gap-3 text-center">
+                        <ShieldAlert className="size-8 opacity-40" />
+                        <p className="text-foreground text-sm font-semibold">
+                          No review items remaining
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {visibleFindings.map(({ finding, originalIndex }) => (
+                          <div
+                            key={`${finding.file ?? 'finding'}-${originalIndex}`}
+                            className="bg-card rounded-lg border p-4 shadow-sm"
+                          >
+                            <div className="flex flex-wrap items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h3 className="text-sm font-semibold tracking-tight">
+                                    {finding.title ??
+                                      `Finding ${originalIndex + 1}`}
+                                  </h3>
+                                  <span className="bg-muted text-muted-foreground rounded px-2 py-0.5 text-[10px] font-bold uppercase">
+                                    {finding.severity ?? 'note'}
+                                  </span>
+                                </div>
+                                {finding.file && (
+                                  <p className="text-muted-foreground mt-1 break-all font-mono text-[11px]">
+                                    {finding.file}
+                                  </p>
+                                )}
+                              </div>
+                              <TooltipProvider>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        onClick={() =>
+                                          copyFinding(finding, originalIndex)
+                                        }
+                                        className="border-border bg-background hover:bg-accent cursor-pointer rounded-md border p-2 transition-all active:scale-95"
+                                        aria-label="Copy finding"
+                                      >
+                                        <Copy className="size-3.5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                      <p>Copy finding</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                  <button
+                                    onClick={() =>
+                                      loadReviewIntoChat([finding])
+                                    }
+                                    className="border-border bg-background hover:bg-accent flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-2 text-[11px] font-bold transition-all active:scale-95"
+                                  >
+                                    <MessageSquare className="size-3.5" />
+                                    Fix in chat
+                                  </button>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <button
+                                        onClick={() =>
+                                          dismissFinding(finding, originalIndex)
+                                        }
+                                        className="border-border bg-background hover:bg-accent cursor-pointer rounded-md border p-2 transition-all active:scale-95"
+                                        aria-label="Dismiss finding"
+                                      >
+                                        <Ban className="size-3.5" />
+                                      </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top">
+                                      <p>Dismiss finding</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              </TooltipProvider>
+                            </div>
+
+                            {finding.details && (
+                              <div className="mt-3">
+                                <p className="text-foreground/70 text-[11px] font-bold uppercase tracking-wider">
+                                  Details
+                                </p>
+                                <p className="text-foreground/85 mt-1 text-sm leading-relaxed">
+                                  {finding.details}
+                                </p>
+                              </div>
+                            )}
+
+                            {finding.suggestion && (
+                              <div className="bg-muted/40 mt-3 rounded-md border p-3">
+                                <p className="text-foreground/70 text-[11px] font-bold uppercase tracking-wider">
+                                  Suggested fix
+                                </p>
+                                <p className="text-foreground/85 mt-1 text-sm leading-relaxed">
+                                  {finding.suggestion}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-muted/20 flex items-center justify-between gap-3 border-t px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {visibleFindings.length > 0 && (
+                      <>
+                        <button
+                          onClick={copyAllReview}
+                          className="border-border bg-background hover:bg-accent flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-2 text-[11px] font-bold transition-all active:scale-95"
+                        >
+                          <Copy className="size-3.5" />
+                          Copy all
+                        </button>
+                        <button
+                          onClick={() => loadReviewIntoChat()}
+                          disabled={isHandingOffToChat}
+                          className="border-border bg-background hover:bg-accent flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-2 text-[11px] font-bold transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <MessageSquare className="size-3.5" />
+                          Fix all in chat
+                        </button>
+                        <button
+                          onClick={handleReviewCode}
+                          disabled={reviewCodeMutation.isPending}
+                          className="border-border bg-background hover:bg-accent flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-2 text-[11px] font-bold transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {reviewCodeMutation.isPending ? (
+                            <>
+                              <RefreshCw className="size-3.5 animate-spin" />
+                              Re-running review...
+                            </>
+                          ) : (
+                            <>
+                              <ShieldAlert className="size-3.5" />
+                              Re-run code review
+                            </>
+                          )}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Separator orientation="vertical" className="h-6" />
+                    <button
+                      onClick={() => setIsReviewModalOpen(false)}
+                      className="border-border bg-background hover:bg-accent cursor-pointer rounded-md border px-3 py-2 text-[11px] font-bold transition-all active:scale-95"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Sidebar */}
         <aside className="bg-muted/5 flex w-72 shrink-0 flex-col border-r">
           <div className="flex h-10 shrink-0 items-center border-b px-2">
@@ -540,6 +1071,7 @@ export default function GitFlowPage() {
               <LayoutList className="size-3" />
               Changes
             </button>
+            <div className="bg-border/60 mx-1 h-4 w-px shrink-0 self-center rounded-full" />
             <button
               onClick={handleHistoryTabSelect}
               className={cn(
@@ -642,10 +1174,14 @@ export default function GitFlowPage() {
                   <div className="bg-muted/20 shrink-0 border-t p-4">
                     <div className="space-y-1.5">
                       <input
-                        placeholder="Commit summary..."
+                        placeholder="Leave blank to autogenerate a conventional commit message"
                         value={summary}
                         onChange={(e) => setSummary(e.target.value)}
-                        disabled={commitMutation.isPending}
+                        disabled={
+                          commitMutation.isPending ||
+                          generateCommitMessageMutation.isPending ||
+                          reviewCodeMutation.isPending
+                        }
                         className="bg-background focus:ring-primary placeholder:text-muted-foreground/50 w-full rounded-md border px-3 py-1.5 text-xs font-medium shadow-sm outline-none focus:ring-1 disabled:opacity-50"
                       />
                       <textarea
@@ -653,20 +1189,66 @@ export default function GitFlowPage() {
                         rows={4}
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
-                        disabled={commitMutation.isPending}
+                        disabled={
+                          commitMutation.isPending ||
+                          generateCommitMessageMutation.isPending ||
+                          reviewCodeMutation.isPending
+                        }
                         className="bg-background focus:ring-primary placeholder:text-muted-foreground/50 w-full resize-none rounded-md border px-3 py-1.5 text-xs shadow-sm outline-none focus:ring-1 disabled:opacity-50"
                       />
-                      <div className="pt-1.5">
+                      {codeReview && visibleFindings.length > 0 && (
+                        <button
+                          onClick={() => setIsReviewModalOpen(true)}
+                          className="bg-background/80 hover:bg-accent flex w-full cursor-pointer items-center gap-2 rounded-md border p-3 text-left text-xs font-medium shadow-sm transition-all active:scale-[0.99]"
+                        >
+                          <ShieldAlert className="text-primary size-3.5 shrink-0" />
+                          <span className="min-w-0">
+                            Code review: {visibleFindings.length}{' '}
+                            {visibleFindings.length === 1
+                              ? 'finding'
+                              : 'findings'}
+                          </span>
+                        </button>
+                      )}
+                      <div className="space-y-1.5 pt-1.5">
+                        <button
+                          onClick={handleReviewCode}
+                          className="border-border bg-background text-foreground hover:bg-accent flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border py-2 text-xs font-bold shadow-sm transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                          disabled={
+                            selectedFiles.size === 0 ||
+                            commitMutation.isPending ||
+                            generateCommitMessageMutation.isPending ||
+                            reviewCodeMutation.isPending
+                          }
+                        >
+                          {reviewCodeMutation.isPending ? (
+                            <>
+                              <RefreshCw className="size-3 animate-spin" />
+                              Reviewing code...
+                            </>
+                          ) : (
+                            <>
+                              <ShieldAlert className="size-3" />
+                              Review code
+                            </>
+                          )}
+                        </button>
                         <button
                           onClick={handleCommit}
                           className="bg-primary text-primary-foreground flex w-full cursor-pointer items-center justify-center gap-2 rounded-md py-2 text-xs font-bold shadow-md transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                           disabled={
                             selectedFiles.size === 0 ||
                             commitMutation.isPending ||
-                            !summary.trim()
+                            generateCommitMessageMutation.isPending ||
+                            reviewCodeMutation.isPending
                           }
                         >
-                          {commitMutation.isPending ? (
+                          {generateCommitMessageMutation.isPending ? (
+                            <>
+                              <RefreshCw className="size-3 animate-spin" />
+                              Generating message...
+                            </>
+                          ) : commitMutation.isPending ? (
                             <>
                               <RefreshCw className="size-3 animate-spin" />
                               Committing...

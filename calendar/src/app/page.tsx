@@ -340,7 +340,7 @@ export default function FullPage() {
   return (
     <div className="bg-background flex h-screen flex-row overflow-hidden">
       {/* Left Side Panel - Agenda stays on the very left */}
-      <aside className="border-border bg-card/30 flex w-64 flex-col border-r">
+      <aside className="border-border bg-card/30 flex min-h-0 w-64 flex-col border-r">
         <div className="p-5 pb-3">
           <h3 className="text-2xl font-bold tracking-tight">
             {isToday(selectedDate) ? 'Today' : format(selectedDate, 'EEEE')}
@@ -350,7 +350,7 @@ export default function FullPage() {
           </p>
         </div>
 
-        <ScrollArea className="flex-1">
+        <ScrollArea className="min-h-0 flex-1">
           <div className="p-5 pt-0">
             {selectedDateEvents.length === 0 ? (
               <div className="py-10 text-center">

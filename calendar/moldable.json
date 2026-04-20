@@ -1,6 +1,6 @@
 {
   "name": "Calendar",
-  "version": "0.1.2",
+  "version": "0.1.1",
   "visibility": "public",
   "description": "Integrated calendar with Google Calendar connection",
   "author": "Moldable Team",
@@ -22,5 +22,6 @@
     "installedCommit": "79c470e37f19631020babbc35646d6ef4eb515fa",
     "installedAt": "2026-01-15T03:56:56Z"
   },
-  "modified": false
+  "modified": false,
+  "routeName": "calendar"
 }

@@ -1,6 +1,6 @@
 {
   "name": "Remotion",
-  "version": "0.1.1",
+  "version": "0.1.0",
   "visibility": "public",
   "description": "Create programmatic videos with Remotion - manage projects, preview compositions, and render videos",
   "author": "",
@@ -14,5 +14,6 @@
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.1.0"
   },
-  "env": []
+  "env": [],
+  "routeName": "remotion"
 }

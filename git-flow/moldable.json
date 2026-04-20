@@ -1,6 +1,6 @@
 {
   "name": "Git",
-  "version": "0.1.2",
+  "version": "0.1.1",
   "visibility": "public",
   "description": "Simple Git client for branch management, staging, and diffing",
   "author": "Moldable Team",
@@ -9,6 +9,7 @@
   "icon": "🛠️",
   "iconPath": "public/icon.png",
   "widgetSize": "medium",
+  "routeName": "git-flow",
   "category": "developer",
   "tags": ["git", "version-control", "developer", "code"],
   "moldableDependencies": {

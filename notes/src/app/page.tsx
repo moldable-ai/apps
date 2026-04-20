@@ -271,8 +271,8 @@ export default function NotesPage() {
   return (
     <div className="bg-background flex h-screen w-full">
       {/* Sidebar */}
-      <aside className="bg-sidebar flex w-64 shrink-0 flex-col border-r">
-        <ScrollArea className="flex-1 px-3 pt-4">
+      <aside className="bg-sidebar flex min-h-0 w-64 shrink-0 flex-col border-r">
+        <ScrollArea className="min-h-0 flex-1 px-3 pt-4">
           <nav className="space-y-1">
             <SidebarItem
               icon={<Inbox className="size-4" />}

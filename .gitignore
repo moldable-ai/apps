@@ -9,6 +9,7 @@ dist/
 # Runtime files
 .moldable.instances.json
 .moldable.port
+*.log
 
 # IDE
 .idea/

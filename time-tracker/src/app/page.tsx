@@ -92,7 +92,7 @@ export default function HomePage() {
       {/* Main content */}
       <div className="flex min-h-0 flex-1">
         {/* Main area */}
-        <main className="flex flex-1 flex-col overflow-hidden">
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {/* View controls */}
           <div className="border-border flex shrink-0 items-center justify-between border-b px-6 py-3">
             <div className="flex items-center gap-2">
@@ -142,7 +142,7 @@ export default function HomePage() {
           </div>
 
           {/* Content area */}
-          <ScrollArea className="flex-1">
+          <ScrollArea className="min-h-0 flex-1">
             <div className="p-6 pb-[var(--chat-safe-padding)]">
               {viewMode === 'calendar' && (
                 <div className="mb-6">

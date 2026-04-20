@@ -107,18 +107,14 @@ process.on('SIGTERM', async () => {
   process.exit(143)
 })
 
-const child = spawn(
-  nextBin,
-  ['dev', '--turbopack', ...forwardedArgs, ...extraArgs],
-  {
-    env: {
-      ...process.env,
-      MOLDABLE_APP_ID: 'git-flow',
-      ...(port ? { MOLDABLE_PORT: port, PORT: port } : {}),
-    },
-    stdio: 'inherit',
+const child = spawn(nextBin, ['dev', ...forwardedArgs, ...extraArgs], {
+  env: {
+    ...process.env,
+    MOLDABLE_APP_ID: 'git-flow',
+    ...(port ? { MOLDABLE_PORT: port, PORT: port } : {}),
   },
-)
+  stdio: 'inherit',
+})
 
 // Register this instance
 if (child.pid) {

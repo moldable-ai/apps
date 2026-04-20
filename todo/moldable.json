@@ -1,6 +1,6 @@
 {
   "name": "Todo",
-  "version": "0.1.2",
+  "version": "0.1.1",
   "visibility": "public",
   "description": "Simple task management with quick add and completion tracking",
   "author": "Moldable Team",
@@ -24,5 +24,6 @@
     "installedCommit": "79c470e37f19631020babbc35646d6ef4eb515fa",
     "installedAt": "2026-01-15T03:56:56Z"
   },
-  "modified": false
+  "modified": false,
+  "routeName": "todo"
 }

@@ -286,15 +286,15 @@ export default function Home() {
       </header>
 
       {/* Main content */}
-      <main className="flex flex-1 flex-col overflow-hidden pt-6">
-        <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-6">
+      <main className="flex min-h-0 flex-1 flex-col overflow-hidden pt-6">
+        <div className="mx-auto flex min-h-0 w-full max-w-2xl flex-1 flex-col px-6">
           {/* Add todo form */}
           <div className="mb-4">
             <AddTodo ref={addTodoRef} onAdd={addTodo} />
           </div>
 
           {/* Todo list */}
-          <ScrollArea className="flex-1">
+          <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-2 pb-[var(--chat-safe-padding)] pr-4">
               {sortedTodos.length === 0 ? (
                 <div className="text-muted-foreground py-12 text-center">

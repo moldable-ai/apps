@@ -432,14 +432,14 @@ export default function Home() {
   return (
     <div className="bg-background flex h-screen w-full overflow-x-hidden">
       {/* Sidebar - Entry list */}
-      <aside className="border-border bg-sidebar flex w-72 shrink-0 flex-col border-r">
+      <aside className="border-border bg-sidebar flex min-h-0 w-72 shrink-0 flex-col border-r">
         <header className="border-border flex h-12 items-center border-b px-2">
           <Button size="sm" onClick={createNewEntry} className="w-full">
             New Entry
           </Button>
         </header>
 
-        <ScrollArea className="flex-1">
+        <ScrollArea className="min-h-0 flex-1">
           <div className="p-2">
             {entries.map((entry) => (
               <div

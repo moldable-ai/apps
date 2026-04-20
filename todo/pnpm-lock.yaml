@@ -12,8 +12,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@moldable-ai/ui':
-        specifier: file:/Users/rob/moldable/packages/ui
-        version: file:../../../../moldable/packages/ui(@types/react-dom@19.0.4(@types/react@19.2.8))(@types/react@19.2.8)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
+        specifier: ^0.2.6
+        version: 0.2.6(@types/react-dom@19.0.4(@types/react@19.2.8))(@types/react@19.2.8)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
       '@tanstack/react-query':
         specifier: ^5.90.16
         version: 5.90.17(react@19.1.2)
@@ -37,7 +37,7 @@ importers:
         specifier: 0.1.0
         version: 0.1.0
       '@tailwindcss/postcss':
-        specifier: ^4.1.10
+        specifier: ^4.1.18
         version: 4.1.18
       '@types/node':
         specifier: ^20
@@ -58,7 +58,7 @@ importers:
         specifier: ^3.5.3
         version: 3.8.0
       tailwindcss:
-        specifier: ^4.1.10
+        specifier: ^4.1.18
         version: 4.1.18
       typescript:
         specifier: ^5
@@ -499,8 +499,8 @@ packages:
   '@moldable-ai/typescript-config@0.1.0':
     resolution: {integrity: sha512-ohNU5DJqg4VpggLwcjueJcdHkqsKrSAy2gqmhkMN/TCh++reJSBw1FkBesjjs90Jjar5mc922/xTMFhLSVOYYg==}
 
-  '@moldable-ai/ui@file:../../../../moldable/packages/ui':
-    resolution: {directory: ../../../../moldable/packages/ui, type: directory}
+  '@moldable-ai/ui@0.2.6':
+    resolution: {integrity: sha512-d64lwuTBbLRLt/i1JY731Tv0QX7tC+0F2WJOYVYxQWsclqgrfLl2lcpSIUvJRQ82ewceVtx0ezFZBDQOwDBDjg==}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
@@ -4011,7 +4011,7 @@ snapshots:
 
   '@moldable-ai/typescript-config@0.1.0': {}
 
-  '@moldable-ai/ui@file:../../../../moldable/packages/ui(@types/react-dom@19.0.4(@types/react@19.2.8))(@types/react@19.2.8)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)':
+  '@moldable-ai/ui@0.2.6(@types/react-dom@19.0.4(@types/react@19.2.8))(@types/react@19.2.8)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)':
     dependencies:
       '@base-ui/react': 1.1.0(@types/react@19.2.8)(react-dom@19.1.2(react@19.1.2))(react@19.1.2)
       '@hookform/resolvers': 5.2.2(react-hook-form@7.71.1(react@19.1.2))

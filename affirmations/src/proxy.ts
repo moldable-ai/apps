@@ -17,17 +17,18 @@ export function proxy(_request: NextRequest) {
 
 /**
  * Configure which paths the proxy runs on.
- * By default, it runs on all paths except static files and api routes.
+ * By default, it runs on all paths except static files and Moldable internal API routes.
  */
 export const config = {
   matcher: [
     /*
      * Match all request paths except:
+     * - api/moldable (desktop health and internal routes)
      * - _next/static (static files)
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder files
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!api/moldable(?:/|$)|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

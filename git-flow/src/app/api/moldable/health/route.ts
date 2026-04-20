@@ -12,9 +12,10 @@ export async function GET() {
   const appId = process.env.MOLDABLE_APP_ID ?? 'git-flow'
   const portRaw = process.env.MOLDABLE_PORT
   const port = portRaw ? Number(portRaw) : null
+  const url = process.env.MOLDABLE_APP_URL ?? process.env.PORTLESS_URL ?? null
 
   return NextResponse.json(
-    { appId, port, ts: Date.now() },
+    { appId, port, url, ts: Date.now() },
     {
       headers: {
         'Cache-Control': 'no-store',

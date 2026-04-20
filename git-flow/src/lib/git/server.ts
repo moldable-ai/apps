@@ -1,4 +1,5 @@
 import { getAppDataDir, readJson, writeJson } from '@moldable-ai/storage'
+import { spawn } from 'child_process'
 import os from 'os'
 import path from 'path'
 import { simpleGit } from 'simple-git'
@@ -7,6 +8,7 @@ import { z } from 'zod'
 const RepoEntrySchema = z.object({
   name: z.string(),
   path: z.string(),
+  isDirty: z.boolean().optional(),
 })
 
 const SettingsSchema = z.object({
@@ -19,6 +21,95 @@ type Settings = z.infer<typeof SettingsSchema>
 const DEFAULT_SETTINGS: Settings = {
   currentRepoPath: '/Users/rob/moldable',
   recentRepos: [{ name: 'moldable', path: '/Users/rob/moldable' }],
+}
+
+const MAX_GIT_OUTPUT_CHARS = 16000
+
+const GIT_HOOK_ENV_OVERRIDES: Record<string, string> = {
+  NEXT_TELEMETRY_DISABLED: '1',
+  TURBO_DAEMON: 'false',
+  TURBO_TELEMETRY_DISABLED: '1',
+}
+
+function isMoldableRuntimePath(entry: string) {
+  return (
+    entry.includes('/desktop/src-tauri/target/debug/node/bin') ||
+    entry.includes('/Moldable.app/Contents/Resources/node/bin')
+  )
+}
+
+function getGitHookPath() {
+  const pathValue = process.env.PATH
+  if (!pathValue) return undefined
+
+  const entries = pathValue
+    .split(path.delimiter)
+    .filter((entry) => entry && !isMoldableRuntimePath(entry))
+
+  return entries.length > 0 ? entries.join(path.delimiter) : undefined
+}
+
+function getGitHookEnv() {
+  const env: Record<string, string> = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === 'string') {
+      env[key] = value
+    }
+  }
+
+  return {
+    ...env,
+    ...GIT_HOOK_ENV_OVERRIDES,
+    ...(getGitHookPath() ? { PATH: getGitHookPath() } : {}),
+  }
+}
+
+function appendCappedOutput(current: string, chunk: string) {
+  const next = current + chunk
+  if (next.length <= MAX_GIT_OUTPUT_CHARS) return next
+  return next.slice(-MAX_GIT_OUTPUT_CHARS)
+}
+
+function formatGitFailure(args: string[], stdout: string, stderr: string) {
+  const output = [stdout.trim(), stderr.trim()].filter(Boolean).join('\n\n')
+  const prefix = `git ${args.join(' ')} failed`
+  return output ? `${prefix}\n\n${output}` : prefix
+}
+
+async function runGit(args: string[], cwd: string) {
+  return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+    const child = spawn('git', args, {
+      cwd,
+      env: getGitHookEnv() as NodeJS.ProcessEnv,
+      windowsHide: true,
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    child.stdin.end()
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout = appendCappedOutput(stdout, chunk.toString('utf8'))
+    })
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr = appendCappedOutput(stderr, chunk.toString('utf8'))
+    })
+
+    child.on('error', reject)
+    child.on('close', (code, signal) => {
+      if (code === 0) {
+        resolve({ stdout, stderr })
+        return
+      }
+
+      const message = signal
+        ? `${formatGitFailure(args, stdout, stderr)}\n\nProcess was terminated by ${signal}.`
+        : formatGitFailure(args, stdout, stderr)
+      reject(new Error(message))
+    })
+  })
 }
 
 async function getSettings(workspaceId?: string): Promise<Settings> {
@@ -40,7 +131,25 @@ async function saveSettings(settings: Settings, workspaceId?: string) {
 
 export async function getRecentRepos(workspaceId?: string) {
   const settings = await getSettings(workspaceId)
-  return settings.recentRepos
+
+  const repos = await Promise.all(
+    settings.recentRepos.map(async (repo) => {
+      try {
+        const status = await simpleGit(repo.path).status()
+        return {
+          ...repo,
+          isDirty: !status.isClean(),
+        }
+      } catch {
+        return {
+          ...repo,
+          isDirty: false,
+        }
+      }
+    }),
+  )
+
+  return repos
 }
 
 export async function addRepo(repoPath: string, workspaceId?: string) {
@@ -105,17 +214,20 @@ export async function commitFiles(
   workspaceId?: string,
 ) {
   const settings = await getSettings(workspaceId)
-  const g = simpleGit(settings.currentRepoPath)
 
   try {
     // 1. Stage only the selected files
-    await g.add(paths)
+    await runGit(['add', '--', ...paths], settings.currentRepoPath)
 
     // 2. Commit with summary and description
-    const message = description ? `${summary}\n\n${description}` : summary
-    const result = await g.commit(message)
+    const commitArgs = ['commit', '-m', summary]
+    if (description) {
+      commitArgs.push('-m', description)
+    }
+    await runGit(commitArgs, settings.currentRepoPath)
+    const result = await runGit(['rev-parse', 'HEAD'], settings.currentRepoPath)
 
-    return { success: true, commit: result.commit }
+    return { success: true, commit: result.stdout.trim() }
   } catch (err) {
     console.error('Git commit error:', err)
     // Return the specific error message (e.g. from pre-commit hooks)
@@ -249,4 +361,16 @@ export async function getDiff(
   // Otherwise return full diff (staged + unstaged)
   const [staged, unstaged] = await Promise.all([g.diff(['--cached']), g.diff()])
   return [staged, unstaged].filter(Boolean).join('\n')
+}
+
+export async function getDiffForFiles(paths: string[], workspaceId?: string) {
+  const uniquePaths = Array.from(new Set(paths)).filter(Boolean)
+  const diffs = await Promise.all(
+    uniquePaths.map(async (filePath) => {
+      const diff = await getDiff(undefined, filePath, workspaceId)
+      return diff ? `diff --moldable-selected-file ${filePath}\n${diff}` : ''
+    }),
+  )
+
+  return diffs.filter(Boolean).join('\n\n')
 }
