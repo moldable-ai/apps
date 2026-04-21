@@ -7,8 +7,9 @@
   "icon": "👋",
   "license": "MIT",
   "modified": false,
+  "runtime": "vite_hono",
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.1.0"
+    "@moldable-ai/ui": "^0.2.6"
   },
   "name": "Hello Moldables",
   "tags": ["tutorial", "welcome", "getting-started"],

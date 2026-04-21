@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "visibility": "public",
   "description": "A lightweight, VS Code-like IDE for exploring and editing local codebases with integrated AI context and browser preview.",
+  "runtime": "vite_hono",
   "author": "",
   "license": "MIT",
   "icon": "💻",
@@ -11,7 +12,8 @@
   "category": "custom",
   "tags": [],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.1.0"
+    "@moldable-ai/ui": "^0.2.6",
+    "@moldable-ai/storage": "^0.1.3"
   },
   "env": [],
   "routeName": "code-editor"

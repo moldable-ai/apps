@@ -1,0 +1,23 @@
+@import 'tailwindcss';
+@import '@moldable-ai/ui/styles';
+
+@source './**/*.{js,jsx,ts,tsx}';
+@source '../components/**/*.{js,jsx,ts,tsx}';
+@source '../hooks/**/*.{js,jsx,ts,tsx}';
+@source '../lib/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/editor/dist/**/*.{js,jsx,ts,tsx}';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

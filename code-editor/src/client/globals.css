@@ -1,0 +1,69 @@
+@import 'tailwindcss';
+@import '@moldable-ai/ui/styles';
+
+@source './**/*.{js,jsx,ts,tsx}';
+@source '../components/**/*.{js,jsx,ts,tsx}';
+@source '../hooks/**/*.{js,jsx,ts,tsx}';
+@source '../lib/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';
+
+@theme {
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html,
+  body {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Ensure Monaco editor widgets (autocomplete, hover, etc.) appear above panels */
+.monaco-editor .monaco-hover,
+.monaco-editor .suggest-widget,
+.monaco-editor .parameter-hints-widget,
+.monaco-editor .editor-widget,
+.monaco-editor .find-widget {
+  z-index: 100 !important;
+}
+
+/* Ensure command palette dialog appears above everything */
+[data-radix-portal] {
+  z-index: 200 !important;
+}
+
+/* Remove focus ring from command palette input */
+[data-cmdk-input-wrapper] input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Add space between search icon and input in command palette */
+[data-cmdk-input-wrapper] svg {
+  margin-right: 0.75rem;
+}
+
+/* Hide scrollbar but keep scroll functionality */
+.scrollbar-none,
+.editor-tabs-scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar,
+.editor-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}

@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" class="h-full">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Code</title>
+    <script>
+      ;(function () {
+        try {
+          var params = new URLSearchParams(window.location.search)
+          var theme = params.get('theme')
+          if (!theme) theme = localStorage.getItem('moldable-theme')
+          if (theme === 'system' || !theme) {
+            theme = window.matchMedia('(prefers-color-scheme: dark)').matches
+              ? 'dark'
+              : 'light'
+          }
+          document.documentElement.classList.add(theme)
+          document.documentElement.style.colorScheme = theme
+        } catch (e) {
+          document.documentElement.classList.add('dark')
+        }
+      })()
+    </script>
+  </head>
+  <body class="h-full overflow-hidden font-sans antialiased">
+    <div id="root" class="h-full w-full"></div>
+    <script type="module" src="/src/client/main.tsx"></script>
+  </body>
+</html>

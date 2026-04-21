@@ -2,7 +2,6 @@
 node_modules/
 
 # Build outputs
-.next/
 .turbo/
 dist/
 
@@ -28,7 +27,6 @@ Thumbs.db
 
 # TypeScript build info
 tsconfig.tsbuildinfo
-next-env.d.ts
 
 # Test coverage
 coverage/

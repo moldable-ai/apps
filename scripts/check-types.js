@@ -12,7 +12,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(__dirname, '..')
 
 // Directories to ignore
-const IGNORE_DIRS = ['node_modules', '.git', 'scripts', '.next', '.turbo']
+const IGNORE_DIRS = [
+  'node_modules',
+  '.git',
+  'scripts',
+  'dist',
+  '.vite',
+  '.turbo',
+]
 
 function findApps(dir) {
   const apps = []

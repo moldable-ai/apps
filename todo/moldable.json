@@ -1,6 +1,7 @@
 {
   "name": "Todo",
   "version": "0.1.1",
+  "runtime": "vite_hono",
   "visibility": "public",
   "description": "Simple task management with quick add and completion tracking",
   "author": "Moldable Team",

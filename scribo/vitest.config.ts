@@ -6,6 +6,13 @@ export default defineConfig({
     environment: 'jsdom',
     include: ['src/**/*.test.ts'],
     passWithNoTests: true,
+    deps: {
+      optimizer: {
+        web: {
+          include: ['@moldable-ai/editor'],
+        },
+      },
+    },
   },
   resolve: {
     alias: {

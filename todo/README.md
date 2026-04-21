@@ -1,6 +1,6 @@
 # Todo
 
-A simple, elegant todo app built with Next.js 15.
+A simple, elegant todo app built with Vite, Hono, and React 19.
 
 ## Features
 
@@ -21,13 +21,13 @@ pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to see the full app.
+Open the local URL printed by `pnpm dev` to see the full app.
 
-Open [http://localhost:3000/widget](http://localhost:3000/widget) for the widget view.
+Open `/widget` on that local URL for the widget view.
 
 ## Tech Stack
 
-- **Framework**: Next.js 15 + React 19
+- **Framework**: Vite + Hono + React 19
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS 4 + shadcn/ui
 - **State Management**: TanStack Query
@@ -37,12 +37,13 @@ Open [http://localhost:3000/widget](http://localhost:3000/widget) for the widget
 
 ```
 src/
-├── app/
-│   ├── api/todos/       # API routes for CRUD
-│   ├── widget/          # Widget view
-│   ├── layout.tsx       # Root layout
-│   ├── page.tsx         # Main app
+├── client/
+│   ├── app.tsx          # Main app view
+│   ├── widget.tsx       # Widget view
 │   └── globals.css      # Global styles
+├── server/
+│   ├── app.ts           # Hono API routes
+│   └── index.ts         # Server entry
 ├── components/
 │   ├── add-todo.tsx     # Add todo form
 │   ├── empty-state.tsx  # Empty state display

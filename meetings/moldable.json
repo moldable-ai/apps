@@ -1,6 +1,7 @@
 {
   "name": "Meetings",
   "version": "0.1.1",
+  "runtime": "vite_hono",
   "visibility": "public",
   "description": "Record, transcribe, and summarize meetings with real-time transcription",
   "author": "Moldable Team",
@@ -12,9 +13,9 @@
   "category": "productivity",
   "tags": ["meetings", "transcription", "audio", "recording"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.1.0",
-    "@moldable-ai/editor": "^0.1.0",
-    "@moldable-ai/storage": "^0.1.0"
+    "@moldable-ai/ui": "^0.2.6",
+    "@moldable-ai/editor": "^0.1.5",
+    "@moldable-ai/storage": "^0.1.3"
   },
   "env": [
     {

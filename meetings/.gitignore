@@ -1,16 +1,24 @@
-# Next.js
-.next/
-out/
+# Vite
+dist/
+.vite/
 
-# Vercel
-.vercel/
+# Dependencies
+node_modules/
 
 # Testing
 coverage/
 
-# Next.js build info
-next-env.d.ts
-node_modules
+# TypeScript
+*.tsbuildinfo
+
+# Moldable
+.moldable.instances.json
 
 # Local data
 data/
+
+build/
+out/
+.moldable.port
+.moldable.install.json
+.moldable.migrations.json

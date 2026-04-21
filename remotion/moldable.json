@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "visibility": "public",
   "description": "Create programmatic videos with Remotion - manage projects, preview compositions, and render videos",
+  "runtime": "vite_hono",
   "author": "",
   "license": "MIT",
   "icon": "🎬",
@@ -12,7 +13,8 @@
   "skills": ["remotion-dev/skills/remotion"],
   "tags": [],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.1.0"
+    "@moldable-ai/ui": "^0.2.6",
+    "@moldable-ai/storage": "^0.1.3"
   },
   "env": [],
   "routeName": "remotion"

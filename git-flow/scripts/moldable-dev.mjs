@@ -19,26 +19,16 @@ const port =
   process.env.MOLDABLE_PORT ??
   process.env.PORT ??
   null
-const hasHostname =
-  process.argv.includes('--hostname') || process.argv.includes('-H')
-
-const extraArgs = []
-if (!hasHostname) {
-  extraArgs.push('--hostname', '127.0.0.1')
-}
 
 const forwardedArgs = process.argv.slice(2).filter((arg) => arg !== '--')
+const tsxBin = path.join(process.cwd(), 'node_modules', '.bin', 'tsx')
 
-// Resolve the path to `next` binary - can't rely on PATH including node_modules/.bin
-const nextBin = path.join(process.cwd(), 'node_modules', '.bin', 'next')
-// Check that next binary exists before trying to spawn
-if (!fsSync.existsSync(nextBin)) {
-  console.error(`Error: next binary not found at ${nextBin}`)
+if (!fsSync.existsSync(tsxBin)) {
+  console.error(`Error: tsx binary not found at ${tsxBin}`)
   console.error('Run "pnpm install" to install dependencies.')
   process.exit(1)
 }
 
-// Track ALL running instances in a JSON file (handles multiple Moldable restarts)
 const instancesFile = path.join(process.cwd(), '.moldable.instances.json')
 let myPid = null
 
@@ -69,7 +59,6 @@ async function unregisterInstance(pid) {
   const instances = await readInstances()
   const filtered = instances.filter((i) => i.pid !== pid)
   if (filtered.length === 0) {
-    // Remove file if no instances left
     await fs.unlink(instancesFile).catch(() => {})
   } else {
     await writeInstances(filtered)
@@ -83,7 +72,6 @@ async function cleanup() {
 }
 
 process.on('exit', () => {
-  // Sync cleanup on exit (can't await)
   if (myPid) {
     try {
       const instances = JSON.parse(fsSync.readFileSync(instancesFile, 'utf8'))
@@ -94,7 +82,7 @@ process.on('exit', () => {
         fsSync.writeFileSync(instancesFile, JSON.stringify(filtered, null, 2))
       }
     } catch {
-      // Ignore cleanup errors
+      // Ignore cleanup errors.
     }
   }
 })
@@ -107,7 +95,7 @@ process.on('SIGTERM', async () => {
   process.exit(143)
 })
 
-const child = spawn(nextBin, ['dev', ...forwardedArgs, ...extraArgs], {
+const child = spawn(tsxBin, ['src/server/index.ts', ...forwardedArgs], {
   env: {
     ...process.env,
     MOLDABLE_APP_ID: 'git-flow',
@@ -116,7 +104,6 @@ const child = spawn(nextBin, ['dev', ...forwardedArgs, ...extraArgs], {
   stdio: 'inherit',
 })
 
-// Register this instance
 if (child.pid) {
   myPid = child.pid
   await registerInstance(child.pid, port)

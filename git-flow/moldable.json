@@ -3,6 +3,7 @@
   "version": "0.1.1",
   "visibility": "public",
   "description": "Simple Git client for branch management, staging, and diffing",
+  "runtime": "vite_hono",
   "author": "Moldable Team",
   "license": "MIT",
   "repository": "moldable-ai/apps",
@@ -13,8 +14,8 @@
   "category": "developer",
   "tags": ["git", "version-control", "developer", "code"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.1.0",
-    "@moldable-ai/storage": "^0.1.0"
+    "@moldable-ai/ui": "^0.2.6",
+    "@moldable-ai/storage": "^0.1.3"
   },
   "env": [],
   "upstream": {

@@ -8,29 +8,27 @@ This repository contains official apps for [Moldable](https://github.com/moldabl
 
 ## App Structure
 
-Each app is a self-contained Next.js application:
+Each app is a self-contained Vite + Hono + React application:
 
 ```
 app-name/
 ├── moldable.json           # App manifest (required)
 ├── package.json            # Dependencies
-├── next.config.ts          # Next.js config (must have devIndicators: false)
+├── index.html              # Full app HTML entry
+├── widget.html             # Widget HTML entry
+├── vite.config.ts          # Vite config
+├── eslint.config.js        # Shared Moldable app ESLint config
 ├── scripts/
 │   └── moldable-dev.mjs    # Startup script (required)
-├── public/
-│   └── icon.png            # App icon
 ├── src/
-│   ├── app/
-│   │   ├── layout.tsx      # Root layout
-│   │   ├── page.tsx        # Main app view
-│   │   ├── globals.css     # Styles
-│   │   ├── widget/         # Widget view (required)
-│   │   │   ├── layout.tsx  # Must use <WidgetLayout> from @moldable-ai/ui
-│   │   │   └── page.tsx    # Glanceable widget content
-│   │   └── api/
-│   │       └── moldable/
-│   │           └── health/
-│   │               └── route.ts  # Health check endpoint (required)
+│   ├── client/
+│   │   ├── main.tsx        # React entry with ThemeProvider + WorkspaceProvider
+│   │   ├── app.tsx         # Main app view
+│   │   ├── widget.tsx      # Glanceable widget content
+│   │   └── globals.css     # Styles
+│   ├── server/
+│   │   ├── index.ts        # Server entry
+│   │   └── app.ts          # Hono routes, including /api/moldable/health
 │   ├── components/
 │   └── lib/
 └── tsconfig.json
@@ -73,7 +71,7 @@ app-name/
 
 ## Tech Stack
 
-- **Framework**: Next.js 15+ with App Router
+- **Framework**: Vite + Hono
 - **React**: 19+
 - **Styling**: Tailwind CSS 4 + shadcn/ui
 - **Package Manager**: pnpm
@@ -95,22 +93,22 @@ Apps use shared packages from `@moldable-ai/*`:
 All apps MUST use the shared theme system:
 
 ```tsx
-// app/layout.tsx
-import { ThemeProvider } from '@moldable-ai/ui'
+// src/client/main.tsx
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { ThemeProvider, WorkspaceProvider } from '@moldable-ai/ui'
+import { App } from './app'
+import './globals.css'
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
-  return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="antialiased">
-        <ThemeProvider>{children}</ThemeProvider>
-      </body>
-    </html>
-  )
-}
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <ThemeProvider>
+      <WorkspaceProvider>
+        <App />
+      </WorkspaceProvider>
+    </ThemeProvider>
+  </StrictMode>,
+)
 ```
 
 ```css
@@ -119,16 +117,16 @@ export default function RootLayout({
 @import '@moldable-ai/ui/styles';
 ```
 
-### Widget Layout (Required)
+### Widget View (Required)
 
-Widget pages must use the WidgetLayout component:
+Apps must expose a widget entry through `widget.html` and `src/client/widget.tsx`.
 
 ```tsx
-// app/widget/layout.tsx
+// src/client/widget.tsx
 import { WidgetLayout } from '@moldable-ai/ui'
 
-export default function Layout({ children }: { children: React.ReactNode }) {
-  return <WidgetLayout>{children}</WidgetLayout>
+export function Widget() {
+  return <WidgetLayout>...</WidgetLayout>
 }
 ```
 
@@ -162,12 +160,11 @@ All `<button>` elements must include `cursor-pointer` class (unless disabled).
 Every app needs a health check endpoint at `/api/moldable/health`:
 
 ```ts
-// src/app/api/moldable/health/route.ts
-import { NextResponse } from 'next/server'
+// src/server/app.ts
+import { Hono } from 'hono'
 
-export async function GET() {
-  return NextResponse.json({ status: 'ok' })
-}
+export const app = new Hono()
+app.get('/api/moldable/health', (c) => c.json({ status: 'ok' }))
 ```
 
 ## Development

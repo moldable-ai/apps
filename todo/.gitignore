@@ -1,5 +1,3 @@
-# Next.js
-.next/
 out/
 
 # Vercel
@@ -8,9 +6,16 @@ out/
 # Testing
 coverage/
 
-# Next.js build info
-next-env.d.ts
 node_modules
 
 # Local data (SQLite database)
 data/
+
+dist/
+.vite/
+build/
+*.tsbuildinfo
+.moldable.instances.json
+.moldable.port
+.moldable.install.json
+.moldable.migrations.json

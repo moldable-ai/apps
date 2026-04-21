@@ -19,10 +19,8 @@ A simple meeting recorder with real-time transcription powered by Deepgram.
    ```
    DEEPGRAM_API_KEY=your_api_key_here
    ```
-3. Run the app:
-   ```bash
-   pnpm --filter meetings dev
-   ```
+3. Launch the app from Moldable. The desktop app manages the Vite/Hono
+   runtime and passes the active workspace context to API requests.
 
 ## How It Works
 
@@ -30,7 +28,8 @@ A simple meeting recorder with real-time transcription powered by Deepgram.
 
 2. **Transcription**: Audio is streamed in real-time to Deepgram's API, which returns transcribed text as you speak.
 
-3. **Storage**: Transcripts are automatically saved to localStorage as segments arrive. No data is lost even if you close the browser.
+3. **Storage**: Transcripts are automatically saved to workspace-scoped JSON
+   files as segments arrive. No data is lost even if you close the browser.
 
 4. **Playback**: View past meetings and their full transcripts. Export to Markdown for sharing or archival.
 
@@ -38,10 +37,10 @@ A simple meeting recorder with real-time transcription powered by Deepgram.
 
 ```
 src/
-├── app/
-│   ├── api/deepgram/token/  # Secure token generation
-│   ├── widget/              # Dashboard widget
-│   └── page.tsx             # Main app
+├── client/
+│   ├── app.tsx              # Main app
+│   ├── widget.tsx           # Dashboard widget
+│   └── query-provider.tsx   # React Query provider
 ├── components/
 │   ├── recording-controls   # Record/pause/stop UI
 │   ├── transcript-view      # Live/static transcript display
@@ -53,7 +52,10 @@ src/
 │   └── use-meetings         # Meeting CRUD
 ├── lib/
 │   ├── format               # Time/date formatting
-│   └── storage              # localStorage operations
+│   └── storage.server       # Workspace-aware filesystem storage
+├── server/
+│   ├── app.ts               # Hono API routes
+│   └── index.ts             # Vite/Hono runtime entry
 └── types/
     └── meeting              # TypeScript types
 ```
@@ -67,9 +69,9 @@ src/
 
 ## Data Storage
 
-All data is stored in localStorage:
+All data is stored under the active Moldable workspace:
 
-- `meetings:list` - Array of all meetings with their transcripts
-- `meetings:settings` - User preferences
+- `meetings/{id}.json` - One file per meeting with transcript and notes
+- `settings.json` - User preferences
 
 Transcripts are saved incrementally as segments arrive, so nothing is lost even during long meetings.

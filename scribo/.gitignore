@@ -1,16 +1,28 @@
-# Next.js
-.next/
-out/
+# dependencies
+node_modules/
 
-# Vercel
-.vercel/
+# local env files
+.env*.local
 
-# Testing
+# test output
 coverage/
 
-# Next.js build info
-next-env.d.ts
-node_modules
+# debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
 
-# Local data (journal entries stored on disk)
-data/
+# typescript
+*.tsbuildinfo
+
+# moldable
+.moldable.instances.json
+
+dist/
+.vite/
+build/
+out/
+.moldable.port
+.moldable.install.json
+.moldable.migrations.json

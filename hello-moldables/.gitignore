@@ -2,8 +2,6 @@
 /node_modules
 /.pnpm-debug.log*
 
-# next.js
-/.next/
 /out/
 
 # production
@@ -23,7 +21,13 @@ yarn-error.log*
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
 
 # moldable
 .moldable.instances.json
+
+dist/
+.vite/
+coverage/
+.moldable.port
+.moldable.install.json
+.moldable.migrations.json

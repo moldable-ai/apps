@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Standalone render script for Remotion compositions
- * Called by the API route to avoid bundler conflicts with Next.js
+ * Called by the API route to keep Remotion bundling isolated from the app server
  *
  * Usage: node scripts/render.mjs <projectDir> <outputPath>
  *

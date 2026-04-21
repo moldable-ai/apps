@@ -44,21 +44,26 @@ See [AGENTS.md](AGENTS.md) for detailed development guidelines.
 
 ### App Structure
 
-Each app is a self-contained Next.js application:
+Each app is a self-contained Vite + Hono + React application:
 
 ```
 app-name/
 ├── moldable.json         # App manifest (required)
 ├── package.json          # Dependencies
+├── index.html            # Full app HTML entry
+├── widget.html           # Widget HTML entry
+├── vite.config.ts        # Vite config
+├── eslint.config.js      # Shared Moldable app ESLint config
 ├── src/
-│   ├── app/
-│   │   ├── page.tsx      # Main app view
-│   │   ├── widget/       # Widget view (required)
-│   │   └── api/moldable/health/  # Health check (required)
+│   ├── client/
+│   │   ├── app.tsx       # Main app view
+│   │   ├── widget.tsx    # Widget view (required)
+│   │   └── main.tsx      # React entry
+│   ├── server/
+│   │   ├── app.ts        # Hono routes, including /api/moldable/health
+│   │   └── index.ts      # Server entry
 │   ├── components/
 │   └── lib/
-├── public/
-│   └── icon.png          # App icon
 └── scripts/
     └── moldable-dev.mjs  # Startup script (required)
 ```
@@ -139,7 +144,7 @@ pnpm app:update todo notes
 pnpm app:update:all
 ```
 
-This preserves `node_modules`, `.next`, and other build artifacts.
+This preserves local dependencies, lockfiles, and Moldable runtime metadata.
 
 ## Creating a New App
 

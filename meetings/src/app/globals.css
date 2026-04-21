@@ -1,4 +1,0 @@
-@import 'tailwindcss';
-@import '@moldable-ai/ui';
-@source '../**/*.{js,jsx,ts,tsx}';
-@source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';

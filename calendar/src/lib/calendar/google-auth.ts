@@ -1,4 +1,5 @@
 import {
+  ensureDir,
   getAppDataDir,
   readJson,
   safePath,
@@ -36,7 +37,7 @@ const SCOPES = [
 // Helper to get the redirect URI based on current port
 function getRedirectUri(): string {
   // Default to 3006, but this could be made dynamic if needed
-  const port = process.env.PORT || '3006'
+  const port = process.env.MOLDABLE_PORT || process.env.PORT || '3006'
   // Use localhost (not 127.0.0.1) for Google Desktop app OAuth
   return `http://localhost:${port}/api/auth/callback`
 }
@@ -85,6 +86,7 @@ export async function getAuthUrl(workspaceId?: string) {
   // because the OAuth callback won't have workspace context
   const dataDir = getAppDataDir()
   const pkcePath = safePath(dataDir, 'pkce-state.json')
+  await ensureDir(dataDir)
   await writeJson(pkcePath, {
     code_verifier: codeVerifier,
     created_at: Date.now(),
@@ -139,6 +141,7 @@ export async function saveTokens(code: string) {
     // Save tokens to workspace-specific location (using workspace from PKCE state)
     const workspaceDataDir = getAppDataDir(pkceState.workspace_id)
     const tokenPath = safePath(workspaceDataDir, 'tokens.json')
+    await ensureDir(workspaceDataDir)
     await writeJson(tokenPath, tokens)
 
     // Clean up PKCE state
@@ -163,5 +166,6 @@ export async function isAuthenticated(workspaceId?: string): Promise<boolean> {
 export async function clearTokens(workspaceId?: string): Promise<void> {
   const dataDir = getAppDataDir(workspaceId)
   const tokenPath = safePath(dataDir, 'tokens.json')
+  await ensureDir(dataDir)
   await writeJson(tokenPath, null)
 }

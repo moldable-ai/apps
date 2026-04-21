@@ -19,7 +19,8 @@ const TARGET_DIR = join(homedir(), '.moldable', 'shared', 'apps')
 // Files/folders to preserve in the target (not overwrite from source)
 const PRESERVE = [
   'node_modules',
-  '.next',
+  'dist',
+  '.vite',
   '.turbo',
   'pnpm-lock.yaml',
   '.moldable.install.json',

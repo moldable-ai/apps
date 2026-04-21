@@ -30,7 +30,8 @@ const IGNORE_DIRS = new Set([
   'node_modules',
   '.git',
   'scripts',
-  '.next',
+  'dist',
+  '.vite',
   '.turbo',
 ])
 
@@ -130,18 +131,25 @@ function bumpAppVersions(versionArg, { dryRun }) {
   const updates = []
   for (const app of apps) {
     const current = app.manifest.version || '0.1.0'
-    const next = versionKinds.has(versionArg)
+    const targetVersion = versionKinds.has(versionArg)
       ? bumpSemver(current, versionArg)
       : versionArg
 
-    updates.push({ id: app.id, manifestPath: app.manifestPath, current, next })
+    updates.push({
+      id: app.id,
+      manifestPath: app.manifestPath,
+      current,
+      targetVersion,
+    })
   }
 
   if (dryRun) {
     console.log(`  Would bump ${updates.length} public apps:`)
     updates
       .slice(0, 10)
-      .forEach((u) => console.log(`    - ${u.id}: ${u.current} -> ${u.next}`))
+      .forEach((u) =>
+        console.log(`    - ${u.id}: ${u.current} -> ${u.targetVersion}`),
+      )
     if (updates.length > 10) {
       console.log(`    ... and ${updates.length - 10} more`)
     }
@@ -152,7 +160,7 @@ function bumpAppVersions(versionArg, { dryRun }) {
   for (const update of updates) {
     const raw = readFileSync(update.manifestPath, 'utf-8')
     const manifest = JSON.parse(raw)
-    manifest.version = update.next
+    manifest.version = update.targetVersion
     writeFileSync(update.manifestPath, JSON.stringify(manifest, null, 2) + '\n')
   }
 

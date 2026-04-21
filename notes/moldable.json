@@ -3,6 +3,7 @@
   "version": "0.1.1",
   "visibility": "public",
   "description": "A Google Keep-style note taking app with pinning and markdown support",
+  "runtime": "vite_hono",
   "author": "Moldable Team",
   "license": "MIT",
   "repository": "moldable-ai/apps",
@@ -12,9 +13,9 @@
   "category": "productivity",
   "tags": ["notes", "markdown", "writing", "keep"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.1.0",
-    "@moldable-ai/editor": "^0.1.0",
-    "@moldable-ai/storage": "^0.1.0"
+    "@moldable-ai/ui": "^0.2.6",
+    "@moldable-ai/editor": "^0.1.5",
+    "@moldable-ai/storage": "^0.1.3"
   },
   "env": [],
   "upstream": {

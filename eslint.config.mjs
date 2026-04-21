@@ -45,8 +45,6 @@ export default tseslint.config(
     ignores: [
       'node_modules/**',
       '**/node_modules/**',
-      '.next/**',
-      '**/.next/**',
       'out/**',
       '**/out/**',
       'dist/**',

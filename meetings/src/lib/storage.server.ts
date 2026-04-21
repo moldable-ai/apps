@@ -15,10 +15,9 @@ import {
   sanitizeId,
   writeJson,
 } from '@moldable-ai/storage'
-import type { Meeting, MeetingSettings } from '@/types'
-import { DEFAULT_SETTINGS } from '@/types'
-import fs from 'fs/promises'
-import 'server-only'
+import type { Meeting, MeetingSettings } from '../types'
+import { DEFAULT_SETTINGS } from '../types'
+import fs from 'node:fs/promises'
 
 /** Get the meetings directory */
 function getMeetingsDir(workspaceId?: string): string {

@@ -1,5 +1,14 @@
 node_modules
-.next
 .moldable.instances.json
 data
 .env*
+
+dist/
+.vite/
+build/
+out/
+coverage/
+*.tsbuildinfo
+.moldable.port
+.moldable.install.json
+.moldable.migrations.json

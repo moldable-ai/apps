@@ -18,17 +18,24 @@ import {
   readdirSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from 'fs'
 import { homedir } from 'os'
 import { basename, join, relative } from 'path'
 
 const SOURCE_DIR = join(homedir(), '.moldable', 'shared', 'apps')
 const TARGET_DIR = join(homedir(), 'moldable-apps')
+const RELEASE_ESLINT_CONFIG_VERSION = '0.1.3'
 
-// Moldable runtime files to always exclude (not typically in .gitignore)
+// Local dependency, build, and Moldable runtime files to always exclude.
 const ALWAYS_EXCLUDE = [
-  '.next',
-  // 'node_modules', // we copy these over so we can do type checking on the apps before they commit
+  'node_modules',
+  'dist',
+  '.vite',
+  'out',
+  'build',
+  'coverage',
+  '.turbo',
   '.moldable.port',
   '.moldable.instances.json',
   '.moldable.install.json',
@@ -48,7 +55,7 @@ function parseGitignore(gitignorePath) {
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line && !line.startsWith('#')) // Remove comments and empty lines
-    .map((pattern) => pattern.replace(/\/$/, '')) // Remove trailing slashes
+    .map((pattern) => pattern.replace(/\/$/, '').replace(/^\//, '')) // Normalize simple root-relative patterns
 }
 
 /**
@@ -99,6 +106,20 @@ function isPublicApp(appPath) {
   return manifest?.visibility === 'public'
 }
 
+function rewriteReleaseDependencies(appPath) {
+  const packageJsonPath = join(appPath, 'package.json')
+  if (!existsSync(packageJsonPath)) return
+
+  const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+  if (
+    pkg.devDependencies?.['@moldable-ai/eslint-config']?.startsWith('file:')
+  ) {
+    pkg.devDependencies['@moldable-ai/eslint-config'] =
+      RELEASE_ESLINT_CONFIG_VERSION
+    writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`)
+  }
+}
+
 function copyApp(appId) {
   const sourceApp = join(SOURCE_DIR, appId)
   const targetApp = join(TARGET_DIR, appId)
@@ -134,6 +155,8 @@ function copyApp(appId) {
       return !shouldExclude(src, sourceApp, excludePatterns)
     },
   })
+
+  rewriteReleaseDependencies(targetApp)
 
   console.log(`   ✅ Done`)
   return true
