@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AppWindow,
   ArrowUp,
   Ban,
   Binary,
@@ -16,11 +17,13 @@ import {
   MessageSquare,
   RefreshCw,
   RotateCcw,
+  Search,
   ShieldAlert,
   Terminal,
+  Wrench,
   X,
 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Separator,
   Tooltip,
@@ -63,6 +66,14 @@ interface GitData {
   isClean?: boolean
 }
 
+interface DetectedEditor {
+  id: string
+  name: string
+  appName: string
+  appPath: string
+  iconPath?: string
+}
+
 interface LogEntry {
   hash: string
   date: string
@@ -95,6 +106,43 @@ interface CodeReviewResult {
   findings: CodeReviewFinding[]
 }
 
+function getAppMonogram(name: string) {
+  const letters = name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase()
+
+  return letters || name.slice(0, 2).toUpperCase()
+}
+
+function AppIcon({ editor }: { editor?: DetectedEditor | null }) {
+  const [failed, setFailed] = useState(false)
+
+  if (editor?.id && !failed) {
+    return (
+      <img
+        src={`/api/git?editorIcon=${encodeURIComponent(editor.id)}`}
+        alt=""
+        className="size-4 rounded-sm object-contain"
+        onError={() => setFailed(true)}
+      />
+    )
+  }
+
+  if (editor?.name === 'Xcode') {
+    return <Wrench className="size-4" />
+  }
+
+  return (
+    <span className="text-[10px] font-black tracking-tight">
+      {getAppMonogram(editor?.name ?? 'App')}
+    </span>
+  )
+}
+
 export default function GitFlowPage() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
@@ -115,6 +163,12 @@ export default function GitFlowPage() {
     new Set(),
   )
   const [isHandingOffToChat, setIsHandingOffToChat] = useState(false)
+  const [fileFilter, setFileFilter] = useState('')
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+  const [preferredEditorId, setPreferredEditorId] = useState<string | null>(
+    null,
+  )
+  const fileFilterInputRef = useRef<HTMLInputElement | null>(null)
 
   // Query for Git data (status, branches, etc)
   const {
@@ -145,6 +199,17 @@ export default function GitFlowPage() {
     enabled: !!data?.repoPath, // Enable even when not in history view to show pending last commit
     refetchInterval: 10000,
     refetchOnWindowFocus: true,
+  })
+
+  const { data: editors = [] } = useQuery<DetectedEditor[]>({
+    queryKey: ['git-editors', workspaceId],
+    queryFn: async () => {
+      const res = await fetchWithWorkspace('/api/git?editors=1')
+      if (!res.ok) throw new Error('Failed to fetch editors')
+      const json = await res.json()
+      return json.editors ?? []
+    },
+    staleTime: 60_000,
   })
 
   // Query for File Diff
@@ -346,6 +411,58 @@ export default function GitFlowPage() {
     },
   })
 
+  const filteredFiles = useMemo(() => {
+    const files = data?.files ?? []
+    const filter = fileFilter.trim().toLowerCase()
+
+    if (!filter) return files
+
+    return files.filter((file) => file.path.toLowerCase().includes(filter))
+  }, [data?.files, fileFilter])
+
+  const visibleChangedFileCount = filteredFiles.length
+
+  const selectRelativeFile = useCallback(
+    (direction: -1 | 1) => {
+      if (view !== 'changes' || filteredFiles.length === 0) return
+
+      const currentIndex = filteredFiles.findIndex(
+        (file) => file.path === selectedFile,
+      )
+      const fallbackIndex = direction > 0 ? -1 : 0
+      const startIndex = currentIndex >= 0 ? currentIndex : fallbackIndex
+      const nextIndex = Math.min(
+        filteredFiles.length - 1,
+        Math.max(0, startIndex + direction),
+      )
+
+      setSelectedCommit(null)
+      setSelectedFile(filteredFiles[nextIndex]?.path ?? null)
+    },
+    [filteredFiles, selectedFile, view],
+  )
+
+  const handleOpenFileInEditor = async (filePath: string) => {
+    try {
+      setError(null)
+      const res = await fetchWithWorkspace('/api/git', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'openInEditor',
+          path: filePath,
+          editorId: preferredEditorId,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to open file')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to open file')
+    }
+  }
+
   // Auto-select first file on initial load
   useEffect(() => {
     if (data?.files && data.files.length > 0 && !selectedFile) {
@@ -353,6 +470,49 @@ export default function GitFlowPage() {
       setSelectedFiles(new Set(data.files.map((f: GitFile) => f.path)))
     }
   }, [data, selectedFile])
+
+  useEffect(() => {
+    if (!preferredEditorId && editors.length > 0) {
+      setPreferredEditorId(editors[0].id)
+    }
+  }, [editors, preferredEditorId])
+
+  useEffect(() => {
+    if (!isFilterOpen) return
+    fileFilterInputRef.current?.focus()
+  }, [isFilterOpen])
+
+  useEffect(() => {
+    if (view !== 'changes' || filteredFiles.length === 0) return
+    if (
+      selectedFile &&
+      filteredFiles.some((file) => file.path === selectedFile)
+    ) {
+      return
+    }
+
+    setSelectedFile(filteredFiles[0]?.path ?? null)
+  }, [filteredFiles, selectedFile, view])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const tagName = target?.tagName?.toLowerCase()
+      const isTypingTarget =
+        tagName === 'input' ||
+        tagName === 'textarea' ||
+        target?.isContentEditable === true
+
+      if (isTypingTarget || view !== 'changes') return
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+
+      event.preventDefault()
+      selectRelativeFile(event.key === 'ArrowDown' ? 1 : -1)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectRelativeFile, view])
 
   const handleFileSelect = (filePath: string) => {
     setSelectedCommit(null)
@@ -367,7 +527,7 @@ export default function GitFlowPage() {
   const handleChangesTabSelect = () => {
     setView('changes')
     setSelectedCommit(null)
-    setSelectedFile(data?.files?.[0]?.path ?? null)
+    setSelectedFile(filteredFiles[0]?.path ?? data?.files?.[0]?.path ?? null)
   }
 
   const handleHistoryTabSelect = () => {
@@ -585,6 +745,11 @@ export default function GitFlowPage() {
     reviewCodeMutation.mutate()
   }
 
+  const selectedApp =
+    editors.find((editor) => editor.id === preferredEditorId) ??
+    editors[0] ??
+    null
+
   const handlePickFolder = async () => {
     try {
       const selected = await new Promise<string | null>((resolve) => {
@@ -625,6 +790,7 @@ export default function GitFlowPage() {
     history?.some((commit) => commit.isUnpushed) ?? false
   const changedFileCount = data?.files?.length ?? 0
   const hasChangedFiles = changedFileCount > 0
+  const hasVisibleChangedFiles = visibleChangedFileCount > 0
   const latestCommit = history?.[0]
   const canUndoSelectedCommit =
     !!selectedCommit &&
@@ -745,6 +911,58 @@ export default function GitFlowPage() {
               </SelectContent>
             </Select>
           </div>
+
+          {editors.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Select
+                value={preferredEditorId ?? editors[0]?.id}
+                onValueChange={setPreferredEditorId}
+              >
+                <SelectTrigger className="hover:bg-muted/50 border-border/60 bg-background/80 h-10 min-w-[180px] max-w-[220px] rounded-xl border px-2.5 shadow-sm transition-colors">
+                  <div className="flex min-w-0 items-center gap-2 pr-2">
+                    <div className="bg-muted text-foreground border-border/50 flex size-7 shrink-0 items-center justify-center rounded-lg border shadow-sm">
+                      {selectedApp ? (
+                        <AppIcon editor={selectedApp} />
+                      ) : (
+                        <AppWindow className="size-4" />
+                      )}
+                    </div>
+                    <div className="min-w-0 text-left">
+                      <div className="text-muted-foreground text-[10px] font-medium uppercase leading-none tracking-tight">
+                        Editor
+                      </div>
+                      <div className="text-foreground truncate text-sm font-bold leading-none">
+                        {selectedApp?.name ?? 'Choose editor'}
+                      </div>
+                    </div>
+                  </div>
+                </SelectTrigger>
+                <SelectContent className="w-[260px] rounded-2xl p-1.5 shadow-xl">
+                  {editors.map((editor) => (
+                    <SelectItem
+                      key={editor.id}
+                      value={editor.id}
+                      className="rounded-xl px-2 py-2 pr-8"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div className="bg-muted text-foreground border-border/50 flex size-8 shrink-0 items-center justify-center rounded-lg border shadow-sm">
+                          <AppIcon editor={editor} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold">
+                            {editor.name}
+                          </div>
+                          <div className="text-muted-foreground truncate text-[11px]">
+                            {editor.appPath.split('/').slice(-2).join('/')}
+                          </div>
+                        </div>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-3">
@@ -1088,22 +1306,56 @@ export default function GitFlowPage() {
 
           {view === 'changes' ? (
             <>
-              <div className="bg-muted/10 flex shrink-0 items-center justify-between border-b p-3.5">
-                <div className="flex items-center gap-2">
-                  <Checkbox
-                    id="select-all"
-                    checked={
-                      hasChangedFiles && selectedFiles.size === changedFileCount
-                    }
-                    onCheckedChange={(checked) =>
-                      handleSelectAll(checked === true)
-                    }
-                  />
-                  <h2 className="text-foreground text-[12px] font-semibold">
-                    {changedFileCount} changed{' '}
-                    {changedFileCount === 1 ? 'file' : 'files'}
-                  </h2>
-                </div>
+              <div className="bg-muted/10 flex shrink-0 items-center justify-between gap-2 border-b p-3.5">
+                {isFilterOpen ? (
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <Search className="text-muted-foreground size-3.5 shrink-0" />
+                    <input
+                      ref={fileFilterInputRef}
+                      value={fileFilter}
+                      onChange={(e) => setFileFilter(e.target.value)}
+                      placeholder="Filter changed files"
+                      className="bg-background focus:ring-primary h-8 min-w-0 flex-1 rounded-md border px-2.5 text-xs outline-none focus:ring-1"
+                    />
+                    <button
+                      onClick={() => {
+                        setFileFilter('')
+                        setIsFilterOpen(false)
+                      }}
+                      className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors"
+                      aria-label="Close file filter"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Checkbox
+                        id="select-all"
+                        checked={
+                          hasChangedFiles &&
+                          selectedFiles.size === changedFileCount
+                        }
+                        onCheckedChange={(checked) =>
+                          handleSelectAll(checked === true)
+                        }
+                      />
+                      <h2 className="text-foreground text-[12px] font-semibold">
+                        {changedFileCount} changed{' '}
+                        {changedFileCount === 1 ? 'file' : 'files'}
+                      </h2>
+                    </div>
+                    <button
+                      onClick={() => setIsFilterOpen(true)}
+                      className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors"
+                      aria-label="Filter changed files"
+                      title="Filter changed files"
+                    >
+                      <Search className="size-3.5" />
+                    </button>
+                  </>
+                )}
               </div>
 
               <div className="flex min-h-0 flex-1 flex-col">
@@ -1118,9 +1370,17 @@ export default function GitFlowPage() {
                         No uncommitted changes detected.
                       </p>
                     </div>
+                  ) : !hasVisibleChangedFiles ? (
+                    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+                      <Search className="text-muted-foreground size-5 opacity-50" />
+                      <p className="text-xs font-semibold">No matching files</p>
+                      <p className="text-muted-foreground text-[10px]">
+                        Try a different filter.
+                      </p>
+                    </div>
                   ) : (
                     <div className="space-y-0.5">
-                      {data?.files?.map((file) => (
+                      {filteredFiles.map((file) => (
                         <div
                           key={file.path}
                           onClick={() => handleFileSelect(file.path)}
@@ -1400,9 +1660,19 @@ export default function GitFlowPage() {
                       {selectedCommit.substring(0, 12)}
                     </button>
                   ) : (
-                    <span className="border-muted-foreground/40 truncate border-b border-dashed pb-0.5">
+                    <button
+                      onClick={() =>
+                        selectedFile && handleOpenFileInEditor(selectedFile)
+                      }
+                      title={
+                        selectedApp
+                          ? `Open with ${selectedApp.name}`
+                          : 'Open with editor'
+                      }
+                      className="border-muted-foreground/40 hover:text-primary cursor-pointer truncate border-b border-dashed pb-0.5 text-left transition-colors"
+                    >
                       {selectedFile}
-                    </span>
+                    </button>
                   )}
                 </div>
                 <div className="flex items-center gap-3">

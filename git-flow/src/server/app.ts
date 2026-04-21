@@ -1,19 +1,29 @@
-import { getWorkspaceFromRequest } from '@moldable-ai/storage'
+import {
+  getAppDataDir,
+  getWorkspaceFromRequest,
+  readJson,
+} from '@moldable-ai/storage'
 import {
   addRepo,
   commitFiles,
   getCommitDiff,
+  getDetectedEditors,
   getDiff,
   getDiffForFiles,
+  getEditorIconPngPath,
   getHistory,
   getRecentRepos,
   getStatus,
+  openFileInEditor,
   pushCommits,
+  setPreferredEditor,
   undoUnpushedCommit,
 } from '../lib/git/server'
 import { generateAppJson } from '../lib/llm/generate-json.server'
+import { readFile } from 'fs/promises'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import path from 'path'
 
 const MAX_COMMIT_DIFF_CHARS = 60000
 const MAX_REVIEW_DIFF_CHARS = 120000
@@ -41,6 +51,12 @@ type GitPostBody = {
   description?: string
   hash?: string
   path?: string
+  editorId?: string
+}
+
+type GitEditorsResponse = {
+  editors: Awaited<ReturnType<typeof getDetectedEditors>>
+  preferredEditorId?: string
 }
 
 const commitMessageSchema = {
@@ -233,6 +249,41 @@ app.get('/api/git', async (c) => {
     const filePath = c.req.query('file')
     const hash = c.req.query('hash')
     const history = c.req.query('history')
+    const editors = c.req.query('editors')
+    const editorIcon = c.req.query('editorIcon')
+
+    if (editorIcon) {
+      const pngPath = await getEditorIconPngPath(editorIcon, workspaceId)
+
+      if (!pngPath) {
+        return c.json({ error: 'Editor icon not found' }, 404)
+      }
+
+      const iconBuffer = await readFile(pngPath)
+      return new Response(iconBuffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'public, max-age=3600',
+        },
+      })
+    }
+
+    if (editors !== undefined) {
+      const detectedEditors = await getDetectedEditors()
+      const settings = await readJson(
+        path.join(getAppDataDir(workspaceId), 'settings.json'),
+        {},
+      ).catch(() => ({}))
+
+      return c.json({
+        editors: detectedEditors,
+        preferredEditorId:
+          typeof settings?.preferredEditorId === 'string'
+            ? settings.preferredEditorId
+            : undefined,
+      } satisfies GitEditorsResponse)
+    }
 
     if (filePath) {
       const diff = await getDiff(undefined, filePath, workspaceId)
@@ -293,6 +344,20 @@ app.post('/api/git', async (c) => {
 
     if (body.action === 'undo') {
       const result = await undoUnpushedCommit(body.hash ?? '', workspaceId)
+      return c.json(result)
+    }
+
+    if (body.action === 'openInEditor') {
+      const result = await openFileInEditor(
+        body.path ?? '',
+        body.editorId,
+        workspaceId,
+      )
+      return c.json(result)
+    }
+
+    if (body.action === 'setPreferredEditor') {
+      const result = await setPreferredEditor(body.editorId ?? '', workspaceId)
       return c.json(result)
     }
 

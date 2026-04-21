@@ -8,13 +8,36 @@ import {
 } from 'node:http'
 import path from 'node:path'
 import { Readable } from 'node:stream'
-import { type ViteDevServer, createServer as createViteServer } from 'vite'
+import {
+  type HmrOptions,
+  type ViteDevServer,
+  createServer as createViteServer,
+} from 'vite'
 
 const host = process.env.MOLDABLE_HOST ?? '127.0.0.1'
 const port = Number(process.env.MOLDABLE_PORT ?? process.env.PORT ?? 3000)
 const isProduction = process.env.NODE_ENV === 'production'
 const root = process.cwd()
 const distDir = path.join(root, 'dist')
+
+function createHmrOptions(server: HttpServer): HmrOptions {
+  const appUrl = process.env.MOLDABLE_APP_URL
+  if (!appUrl) return { server }
+
+  try {
+    const url = new URL(appUrl)
+    const isHttps = url.protocol === 'https:'
+
+    return {
+      server,
+      protocol: isHttps ? 'wss' : 'ws',
+      host: url.hostname,
+      clientPort: url.port ? Number(url.port) : isHttps ? 443 : 80,
+    }
+  } catch {
+    return { server }
+  }
+}
 
 function requestUrl(req: IncomingMessage) {
   return new URL(
@@ -102,9 +125,7 @@ async function createDevServer(server: HttpServer) {
     server: {
       middlewareMode: true,
       host,
-      hmr: {
-        server,
-      },
+      hmr: createHmrOptions(server),
     },
   })
 }

@@ -96,7 +96,12 @@ process.on('SIGTERM', async () => {
   process.exit(143)
 })
 
-const child = spawn(tsxBin, ['src/server/index.ts', ...forwardedArgs], {
+const serverArgs =
+  process.env.NODE_ENV === 'production'
+    ? ['src/server/index.ts']
+    : ['watch', '--clear-screen=false', 'src/server/index.ts']
+
+const child = spawn(tsxBin, [...serverArgs, ...forwardedArgs], {
   env: {
     ...process.env,
     MOLDABLE_APP_ID: 'notes',

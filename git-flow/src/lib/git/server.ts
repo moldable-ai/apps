@@ -1,5 +1,13 @@
 import { getAppDataDir, readJson, writeJson } from '@moldable-ai/storage'
 import { spawn } from 'child_process'
+import {
+  accessSync,
+  constants,
+  existsSync,
+  readFileSync,
+  readdirSync,
+} from 'fs'
+import { mkdir, stat } from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import { simpleGit } from 'simple-git'
@@ -14,6 +22,7 @@ const RepoEntrySchema = z.object({
 const SettingsSchema = z.object({
   currentRepoPath: z.string(),
   recentRepos: z.array(RepoEntrySchema),
+  preferredEditorId: z.string().optional(),
 })
 
 type Settings = z.infer<typeof SettingsSchema>
@@ -21,9 +30,63 @@ type Settings = z.infer<typeof SettingsSchema>
 const DEFAULT_SETTINGS: Settings = {
   currentRepoPath: '/Users/rob/moldable',
   recentRepos: [{ name: 'moldable', path: '/Users/rob/moldable' }],
+  preferredEditorId: undefined,
 }
 
 const MAX_GIT_OUTPUT_CHARS = 16000
+
+const CODE_EDITOR_APP_NAMES = [
+  'Cursor',
+  'Visual Studio Code',
+  'Visual Studio Code - Insiders',
+  'Windsurf',
+  'Zed',
+  'Sublime Text',
+  'TextMate',
+  'Nova',
+  'BBEdit',
+  'MacVim',
+  'VSCodium',
+  'Code - OSS',
+  'Xcode',
+  'Android Studio',
+  'IntelliJ IDEA',
+  'WebStorm',
+  'PyCharm',
+  'GoLand',
+  'RubyMine',
+  'CLion',
+  'PhpStorm',
+  'Fleet',
+] as const
+
+type DetectedEditor = {
+  id: string
+  name: string
+  appName: string
+  appPath: string
+  iconPath?: string
+}
+
+async function runProcess(args: string[], cwd?: string) {
+  return new Promise<void>((resolve, reject) => {
+    const child = spawn(args[0], args.slice(1), {
+      cwd,
+      env: process.env,
+      stdio: 'ignore',
+    })
+
+    child.on('error', reject)
+    child.on('close', (code) => {
+      if (code === 0) {
+        resolve()
+        return
+      }
+
+      reject(new Error(`${args[0]} exited with code ${code ?? 'unknown'}`))
+    })
+  })
+}
 
 const GIT_HOOK_ENV_OVERRIDES: Record<string, string> = {
   NEXT_TELEMETRY_DISABLED: '1',
@@ -373,4 +436,206 @@ export async function getDiffForFiles(paths: string[], workspaceId?: string) {
   )
 
   return diffs.filter(Boolean).join('\n\n')
+}
+
+function isExecutableFile(filePath: string) {
+  try {
+    accessSync(filePath, constants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function slugifyAppName(appName: string) {
+  return appName
+    .toLowerCase()
+    .replace(/\.app$/i, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+function getMacApplicationsDirs() {
+  const dirs = ['/Applications']
+  const homeApplications = path.join(os.homedir(), 'Applications')
+
+  if (existsSync(homeApplications)) {
+    dirs.push(homeApplications)
+  }
+
+  return dirs
+}
+
+function resolveAppIconPath(appPath: string) {
+  try {
+    const resourcesDir = path.join(appPath, 'Contents', 'Resources')
+    if (!existsSync(resourcesDir)) return undefined
+
+    const appBaseName = path.basename(appPath, '.app')
+    const candidates = [`${appBaseName}.icns`, 'AppIcon.icns', 'app.icns']
+
+    for (const candidate of candidates) {
+      const iconPath = path.join(resourcesDir, candidate)
+      if (existsSync(iconPath)) return iconPath
+    }
+
+    const infoPlistPath = path.join(appPath, 'Contents', 'Info.plist')
+    if (!existsSync(infoPlistPath)) return undefined
+
+    const plist = readFileSync(infoPlistPath, 'utf8')
+    const iconNameMatch = plist.match(
+      /<key>CFBundleIconFile<\/key>\s*<string>([^<]+)<\/string>/,
+    )
+    const rawIconName = iconNameMatch?.[1]?.trim()
+    if (!rawIconName) return undefined
+
+    const iconFileName = rawIconName.endsWith('.icns')
+      ? rawIconName
+      : `${rawIconName}.icns`
+    const iconPath = path.join(resourcesDir, iconFileName)
+
+    return existsSync(iconPath) ? iconPath : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export async function getEditorIconPngPath(
+  editorId: string,
+  workspaceId?: string,
+) {
+  const editor = getDetectedMacApps().find((item) => item.id === editorId)
+  if (!editor?.iconPath) return undefined
+
+  const iconsDir = path.join(getAppDataDir(workspaceId), 'editor-icons')
+  await mkdir(iconsDir, { recursive: true })
+
+  const pngPath = path.join(iconsDir, `${editor.id}.png`)
+
+  const [sourceStat, pngStat] = await Promise.all([
+    stat(editor.iconPath).catch(() => null),
+    stat(pngPath).catch(() => null),
+  ])
+
+  const needsRefresh =
+    !pngStat ||
+    !sourceStat ||
+    pngStat.mtimeMs < sourceStat.mtimeMs ||
+    pngStat.size === 0
+
+  if (needsRefresh) {
+    await runProcess(
+      ['sips', '-s', 'format', 'png', editor.iconPath, '--out', pngPath],
+      path.dirname(editor.iconPath),
+    )
+  }
+
+  return pngPath
+}
+
+function getDetectedMacApps() {
+  const apps = new Map<string, DetectedEditor>()
+  const allowedNames = new Set<string>(CODE_EDITOR_APP_NAMES)
+
+  for (const appsDir of getMacApplicationsDirs()) {
+    if (!existsSync(appsDir)) continue
+
+    for (const entry of readdirSync(appsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.endsWith('.app')) continue
+
+      const appName = entry.name.replace(/\.app$/i, '')
+      if (!allowedNames.has(appName)) continue
+
+      const appPath = path.join(appsDir, entry.name)
+      const id = slugifyAppName(appName)
+
+      if (!apps.has(id)) {
+        apps.set(id, {
+          id,
+          name: appName,
+          appName,
+          appPath,
+          iconPath: resolveAppIconPath(appPath),
+        })
+      }
+    }
+  }
+
+  return Array.from(apps.values()).sort((left, right) => {
+    const leftPriority = CODE_EDITOR_APP_NAMES.indexOf(
+      left.name as (typeof CODE_EDITOR_APP_NAMES)[number],
+    )
+    const rightPriority = CODE_EDITOR_APP_NAMES.indexOf(
+      right.name as (typeof CODE_EDITOR_APP_NAMES)[number],
+    )
+
+    if (leftPriority !== -1 || rightPriority !== -1) {
+      if (leftPriority === -1) return 1
+      if (rightPriority === -1) return -1
+      return leftPriority - rightPriority
+    }
+
+    return left.name.localeCompare(right.name)
+  })
+}
+
+export async function getDetectedEditors() {
+  return getDetectedMacApps()
+}
+
+export async function setPreferredEditor(
+  editorId: string,
+  workspaceId?: string,
+) {
+  const settings = await getSettings(workspaceId)
+  settings.preferredEditorId = editorId
+  await saveSettings(settings, workspaceId)
+  return { ok: true, preferredEditorId: editorId }
+}
+
+export async function openFileInEditor(
+  relativeFilePath: string,
+  editorId?: string,
+  workspaceId?: string,
+) {
+  const settings = await getSettings(workspaceId)
+  const repoPath = settings.currentRepoPath
+  const fullPath = path.resolve(repoPath, relativeFilePath)
+
+  if (
+    !fullPath.startsWith(path.resolve(repoPath) + path.sep) &&
+    fullPath !== path.resolve(repoPath)
+  ) {
+    throw new Error('File must be inside the current repository.')
+  }
+
+  const editors = await getDetectedEditors()
+  const selectedEditor = editorId
+    ? editors.find((editor) => editor.id === editorId)
+    : editors[0]
+
+  if (!selectedEditor) {
+    throw new Error(
+      'No supported external editor was detected on this machine.',
+    )
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn('open', ['-a', selectedEditor.appPath, fullPath], {
+      cwd: repoPath,
+      env: process.env,
+      detached: true,
+      stdio: 'ignore',
+    })
+
+    child.on('error', reject)
+    child.unref()
+    resolve()
+  })
+
+  return {
+    ok: true,
+    editor: selectedEditor,
+    path: fullPath,
+  }
 }
