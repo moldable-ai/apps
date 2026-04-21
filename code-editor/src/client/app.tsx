@@ -1,9 +1,15 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useProject } from '@/hooks/use-project'
 import { IDELayout } from '@/components/layout'
 import { ProjectSelector } from '@/components/project'
+
+type PendingOpenFile = {
+  nonce: number
+  projectPath: string
+  filePath: string
+}
 
 export default function App() {
   const {
@@ -18,6 +24,37 @@ export default function App() {
     saveCurrentProjectTabs,
     getSavedTabs,
   } = useProject()
+
+  const [pendingOpenFile, setPendingOpenFile] =
+    useState<PendingOpenFile | null>(null)
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type !== 'moldable:open-file') return
+
+      const projectPath =
+        typeof event.data.projectPath === 'string'
+          ? event.data.projectPath
+          : null
+      const filePath =
+        typeof event.data.filePath === 'string' ? event.data.filePath : null
+
+      if (!projectPath || !filePath) return
+
+      setPendingOpenFile({
+        nonce: Date.now(),
+        projectPath,
+        filePath,
+      })
+
+      if (rootPath !== projectPath) {
+        void openProject(projectPath)
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [openProject, rootPath])
 
   const handleSelectProject = useCallback(
     async (
@@ -76,6 +113,12 @@ export default function App() {
         previewUrl={previewUrl}
         savedTabs={savedTabs}
         recentProjects={recentProjects}
+        pendingOpenFile={pendingOpenFile}
+        onPendingOpenFileDone={(nonce) => {
+          setPendingOpenFile((pending) =>
+            pending?.nonce === nonce ? null : pending,
+          )
+        }}
         onSelectProject={handleSelectProject}
         onOpenFolder={handleOpenFolder}
         onCloseProject={handleCloseProject}

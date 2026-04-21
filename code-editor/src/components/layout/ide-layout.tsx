@@ -35,11 +35,19 @@ interface RecentProject {
   lastOpened: string
 }
 
+interface PendingOpenFile {
+  nonce: number
+  projectPath: string
+  filePath: string
+}
+
 interface IDELayoutProps {
   rootPath: string
   previewUrl: string
   savedTabs: SavedTabs | null
   recentProjects: RecentProject[]
+  pendingOpenFile?: PendingOpenFile | null
+  onPendingOpenFileDone?: (nonce: number) => void
   onSelectProject: (
     path: string,
     openFiles: string[],
@@ -56,6 +64,8 @@ export function IDELayout({
   previewUrl,
   savedTabs,
   recentProjects,
+  pendingOpenFile,
+  onPendingOpenFileDone,
   onSelectProject,
   onOpenFolder,
   onCloseProject,
@@ -68,6 +78,7 @@ export function IDELayout({
   const [isBrowserCollapsed, setIsBrowserCollapsed] = useState(false)
   const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null)
   const hasRestoredTabs = useRef(false)
+  const handledPendingOpenFileNonce = useRef<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
   const {
@@ -137,6 +148,17 @@ export function IDELayout({
   useEffect(() => {
     hasRestoredTabs.current = false
   }, [rootPath])
+
+  useEffect(() => {
+    if (!pendingOpenFile || pendingOpenFile.projectPath !== rootPath) return
+    if (handledPendingOpenFileNonce.current === pendingOpenFile.nonce) return
+
+    handledPendingOpenFileNonce.current = pendingOpenFile.nonce
+
+    void openFile(pendingOpenFile.filePath).then(() => {
+      onPendingOpenFileDone?.(pendingOpenFile.nonce)
+    })
+  }, [onPendingOpenFileDone, openFile, pendingOpenFile, rootPath])
 
   // Handle keyboard shortcuts
   // - Cmd/Ctrl+W: Close active tab

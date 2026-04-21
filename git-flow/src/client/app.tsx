@@ -6,6 +6,8 @@ import {
   ArrowUp,
   Ban,
   Binary,
+  ChevronDown,
+  Code2,
   Copy,
   FolderGit,
   FolderOpen,
@@ -25,6 +27,10 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Separator,
   Tooltip,
   TooltipContent,
@@ -71,6 +77,9 @@ interface DetectedEditor {
   name: string
   appName: string
   appPath: string
+  kind?: 'mac-app' | 'moldable-app'
+  moldableAppId?: string
+  icon?: string
   iconPath?: string
 }
 
@@ -87,6 +96,8 @@ interface CommitInput {
   summary: string
   description: string
 }
+
+type PreferredCommitAction = 'commit' | 'commit-and-push'
 
 interface GeneratedCommitMessage {
   summary: string
@@ -118,26 +129,61 @@ function getAppMonogram(name: string) {
   return letters || name.slice(0, 2).toUpperCase()
 }
 
-function AppIcon({ editor }: { editor?: DetectedEditor | null }) {
+function AppIcon({
+  editor,
+  className = 'size-7',
+}: {
+  editor?: DetectedEditor | null
+  className?: string
+}) {
   const [failed, setFailed] = useState(false)
+  const iconSrc = editor?.id
+    ? `/api/git?editorIcon=${encodeURIComponent(editor.id)}&v=2`
+    : undefined
 
-  if (editor?.id && !failed) {
+  useEffect(() => {
+    setFailed(false)
+  }, [iconSrc])
+
+  if (iconSrc && !failed) {
     return (
       <img
-        src={`/api/git?editorIcon=${encodeURIComponent(editor.id)}`}
+        src={iconSrc}
         alt=""
-        className="size-4 rounded-sm object-contain"
+        className={cn(className, 'object-contain')}
         onError={() => setFailed(true)}
       />
     )
   }
 
   if (editor?.name === 'Xcode') {
-    return <Wrench className="size-4" />
+    return <Wrench className={className} />
+  }
+
+  if (editor?.kind === 'moldable-app') {
+    return (
+      <span
+        className={cn(
+          'bg-muted text-muted-foreground flex items-center justify-center rounded-md',
+          className,
+        )}
+      >
+        {editor.icon ? (
+          <span className="text-[15px] leading-none">{editor.icon}</span>
+        ) : (
+          <Code2 className="size-[70%]" />
+        )}
+      </span>
+    )
   }
 
   return (
-    <span className="text-[10px] font-black tracking-tight">
+    <span
+      className={cn(
+        'bg-muted text-muted-foreground flex items-center justify-center rounded-md text-[11px] font-bold tracking-normal',
+        className,
+      )}
+    >
       {getAppMonogram(editor?.name ?? 'App')}
     </span>
   )
@@ -168,6 +214,8 @@ export default function GitFlowPage() {
   const [preferredEditorId, setPreferredEditorId] = useState<string | null>(
     null,
   )
+  const [preferredCommitAction, setPreferredCommitAction] =
+    useState<PreferredCommitAction>('commit')
   const fileFilterInputRef = useRef<HTMLInputElement | null>(null)
 
   // Query for Git data (status, branches, etc)
@@ -201,16 +249,24 @@ export default function GitFlowPage() {
     refetchOnWindowFocus: true,
   })
 
-  const { data: editors = [] } = useQuery<DetectedEditor[]>({
+  const { data: editorData } = useQuery<{
+    editors: DetectedEditor[]
+    preferredEditorId?: string
+    preferredCommitAction?: PreferredCommitAction
+  }>({
     queryKey: ['git-editors', workspaceId],
     queryFn: async () => {
       const res = await fetchWithWorkspace('/api/git?editors=1')
       if (!res.ok) throw new Error('Failed to fetch editors')
-      const json = await res.json()
-      return json.editors ?? []
+      return res.json()
     },
     staleTime: 60_000,
   })
+
+  const editors = useMemo(
+    () => editorData?.editors ?? [],
+    [editorData?.editors],
+  )
 
   // Query for File Diff
   const { data: fileDiff, isLoading: loadingDiff } = useQuery<string | null>({
@@ -445,6 +501,32 @@ export default function GitFlowPage() {
   const handleOpenFileInEditor = async (filePath: string) => {
     try {
       setError(null)
+      const selectedEditor =
+        editors.find((editor) => editor.id === preferredEditorId) ??
+        editors[0] ??
+        null
+
+      if (selectedEditor?.kind === 'moldable-app') {
+        if (!data?.repoPath) {
+          throw new Error('No repository is selected.')
+        }
+
+        const fullPath = filePath.startsWith('/')
+          ? filePath
+          : `${data.repoPath.replace(/\/+$/, '')}/${filePath}`
+
+        sendToMoldable({
+          type: 'moldable:open-app',
+          appId: selectedEditor.moldableAppId ?? 'code-editor',
+          message: {
+            type: 'moldable:open-file',
+            projectPath: data.repoPath,
+            filePath: fullPath,
+          },
+        })
+        return
+      }
+
       const res = await fetchWithWorkspace('/api/git', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -472,10 +554,24 @@ export default function GitFlowPage() {
   }, [data, selectedFile])
 
   useEffect(() => {
+    if (
+      editorData?.preferredEditorId &&
+      editors.some((editor) => editor.id === editorData.preferredEditorId)
+    ) {
+      setPreferredEditorId(editorData.preferredEditorId)
+      return
+    }
+
     if (!preferredEditorId && editors.length > 0) {
       setPreferredEditorId(editors[0].id)
     }
-  }, [editors, preferredEditorId])
+  }, [editorData?.preferredEditorId, editors, preferredEditorId])
+
+  useEffect(() => {
+    if (editorData?.preferredCommitAction) {
+      setPreferredCommitAction(editorData.preferredCommitAction)
+    }
+  }, [editorData?.preferredCommitAction])
 
   useEffect(() => {
     if (!isFilterOpen) return
@@ -536,11 +632,12 @@ export default function GitFlowPage() {
     setSelectedCommit(history?.[0]?.hash ?? null)
   }
 
-  const handleCommit = async () => {
+  const prepareCommitInput = async (): Promise<CommitInput | null> => {
     if (selectedFiles.size === 0) {
       setError('Please select at least one file to commit.')
-      return
+      return null
     }
+
     setError(null)
     generateCommitMessageMutation.reset()
     reviewCodeMutation.reset()
@@ -557,13 +654,31 @@ export default function GitFlowPage() {
         setSummary(commitSummary)
         setDescription(commitDescription)
       } catch {
-        return
+        return null
       }
     }
 
-    commitMutation.mutate({
+    return {
       summary: commitSummary,
       description: commitDescription,
+    }
+  }
+
+  const handleCommit = async () => {
+    const input = await prepareCommitInput()
+    if (!input) return
+
+    commitMutation.mutate(input)
+  }
+
+  const handleCommitAndPush = async () => {
+    const input = await prepareCommitInput()
+    if (!input) return
+
+    commitMutation.mutate(input, {
+      onSuccess: () => {
+        pushMutation.mutate()
+      },
     })
   }
 
@@ -750,6 +865,62 @@ export default function GitFlowPage() {
     editors[0] ??
     null
 
+  const handlePreferredEditorChange = async (editorId: string) => {
+    setPreferredEditorId(editorId)
+
+    try {
+      const res = await fetchWithWorkspace('/api/git', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'setPreferredEditor',
+          editorId,
+        }),
+      })
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => null)
+        throw new Error(json?.error || 'Failed to save preferred editor')
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['git-editors', workspaceId] })
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to save preferred editor',
+      )
+    }
+  }
+
+  const handlePreferredCommitActionChange = async (
+    action: PreferredCommitAction,
+  ) => {
+    setPreferredCommitAction(action)
+
+    try {
+      const res = await fetchWithWorkspace('/api/git', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'setPreferredCommitAction',
+          preferredCommitAction: action,
+        }),
+      })
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => null)
+        throw new Error(json?.error || 'Failed to save preferred commit action')
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['git-editors', workspaceId] })
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to save preferred commit action',
+      )
+    }
+  }
+
   const handlePickFolder = async () => {
     try {
       const selected = await new Promise<string | null>((resolve) => {
@@ -788,6 +959,8 @@ export default function GitFlowPage() {
 
   const hasUnpushedCommits =
     history?.some((commit) => commit.isUnpushed) ?? false
+  const preferredCommitLabel =
+    preferredCommitAction === 'commit-and-push' ? 'Commit & push' : 'Commit'
   const changedFileCount = data?.files?.length ?? 0
   const hasChangedFiles = changedFileCount > 0
   const hasVisibleChangedFiles = visibleChangedFileCount > 0
@@ -832,16 +1005,13 @@ export default function GitFlowPage() {
   return (
     <div className="bg-background text-foreground flex h-screen flex-col overflow-hidden">
       {/* Header */}
-      <header className="bg-muted/30 flex h-12 shrink-0 items-center justify-between border-b px-4 backdrop-blur-md">
-        <div className="flex items-center gap-4 md:gap-6">
+      <header className="bg-muted/30 flex h-12 shrink-0 items-center justify-between border-b pl-2 pr-4 backdrop-blur-md">
+        <div className="flex items-center gap-1.5">
           <div className="flex items-center gap-2">
             <Select value={data?.repoPath} onValueChange={handleRepoChange}>
-              <SelectTrigger className="hover:bg-muted/50 h-10 min-w-[200px] max-w-[320px] border-none bg-transparent shadow-none transition-colors">
+              <SelectTrigger className="hover:bg-muted/35 border-border/60 bg-background [&>svg]:text-muted-foreground h-9 min-w-[200px] max-w-[320px] rounded-[15px] border shadow-sm transition-colors [&>svg]:size-3.5 [&>svg]:opacity-100">
                 <div className="flex flex-col items-start gap-0">
-                  <span className="text-muted-foreground group-hover:text-foreground text-[10px] font-medium uppercase leading-none tracking-tight">
-                    Current Repository
-                  </span>
-                  <div className="mt-0.5 flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5">
                     <FolderGit className="text-foreground size-3.5 shrink-0" />
                     <span className="text-foreground text-sm font-bold leading-none">
                       {data?.repoName || data?.repoPath?.split('/').pop()}
@@ -891,12 +1061,10 @@ export default function GitFlowPage() {
             </Select>
           </div>
 
-          <div className="bg-border/60 h-4 w-px" />
-
           {/* Branch Selector */}
           <div className="flex items-center gap-2">
             <Select value={data?.currentBranch} onValueChange={() => {}}>
-              <SelectTrigger className="bg-background/50 hover:bg-accent h-8 w-[160px] border-none font-medium shadow-none transition-colors">
+              <SelectTrigger className="hover:bg-muted/35 border-border/60 bg-background [&>svg]:text-muted-foreground h-9 w-[160px] rounded-[15px] border font-medium shadow-sm transition-colors [&>svg]:size-3.5 [&>svg]:opacity-100">
                 <div className="flex items-center gap-2">
                   <GitBranch className="text-muted-foreground size-3.5" />
                   <SelectValue placeholder="Select branch" />
@@ -916,46 +1084,41 @@ export default function GitFlowPage() {
             <div className="flex items-center gap-2">
               <Select
                 value={preferredEditorId ?? editors[0]?.id}
-                onValueChange={setPreferredEditorId}
+                onValueChange={handlePreferredEditorChange}
               >
-                <SelectTrigger className="hover:bg-muted/50 border-border/60 bg-background/80 h-10 min-w-[180px] max-w-[220px] rounded-xl border px-2.5 shadow-sm transition-colors">
-                  <div className="flex min-w-0 items-center gap-2 pr-2">
-                    <div className="bg-muted text-foreground border-border/50 flex size-7 shrink-0 items-center justify-center rounded-lg border shadow-sm">
-                      {selectedApp ? (
-                        <AppIcon editor={selectedApp} />
-                      ) : (
-                        <AppWindow className="size-4" />
-                      )}
-                    </div>
-                    <div className="min-w-0 text-left">
-                      <div className="text-muted-foreground text-[10px] font-medium uppercase leading-none tracking-tight">
-                        Editor
-                      </div>
-                      <div className="text-foreground truncate text-sm font-bold leading-none">
-                        {selectedApp?.name ?? 'Choose editor'}
-                      </div>
-                    </div>
+                <SelectTrigger
+                  aria-label="Preferred editor"
+                  className="hover:bg-muted/35 border-border/60 bg-background [&>svg]:text-muted-foreground h-9 w-[68px] rounded-[15px] border px-1.5 shadow-sm transition-colors [&>svg]:size-3.5 [&>svg]:opacity-100"
+                >
+                  <div className="flex min-w-0 flex-1 items-center justify-center pl-1">
+                    {selectedApp ? (
+                      <AppIcon
+                        editor={selectedApp}
+                        className="size-6 rounded-md"
+                      />
+                    ) : (
+                      <AppWindow className="text-muted-foreground size-5" />
+                    )}
                   </div>
                 </SelectTrigger>
-                <SelectContent className="w-[260px] rounded-2xl p-1.5 shadow-xl">
+                <SelectContent
+                  align="end"
+                  className="border-border/70 bg-popover w-[220px] rounded-[14px] p-1 shadow-xl"
+                >
                   {editors.map((editor) => (
                     <SelectItem
                       key={editor.id}
                       value={editor.id}
-                      className="rounded-xl px-2 py-2 pr-8"
+                      className="focus:bg-muted/45 h-11 rounded-[10px] px-2.5 pr-4 text-base font-normal tracking-normal [&>span:first-child]:hidden"
                     >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className="bg-muted text-foreground border-border/50 flex size-8 shrink-0 items-center justify-center rounded-lg border shadow-sm">
-                          <AppIcon editor={editor} />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold">
-                            {editor.name}
-                          </div>
-                          <div className="text-muted-foreground truncate text-[11px]">
-                            {editor.appPath.split('/').slice(-2).join('/')}
-                          </div>
-                        </div>
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <AppIcon
+                          editor={editor}
+                          className="size-6 shrink-0 rounded-md"
+                        />
+                        <span className="truncate leading-none">
+                          {editor.name}
+                        </span>
                       </div>
                     </SelectItem>
                   ))}
@@ -1478,7 +1641,8 @@ export default function GitFlowPage() {
                             selectedFiles.size === 0 ||
                             commitMutation.isPending ||
                             generateCommitMessageMutation.isPending ||
-                            reviewCodeMutation.isPending
+                            reviewCodeMutation.isPending ||
+                            pushMutation.isPending
                           }
                         >
                           {reviewCodeMutation.isPending ? (
@@ -1493,30 +1657,93 @@ export default function GitFlowPage() {
                             </>
                           )}
                         </button>
-                        <button
-                          onClick={handleCommit}
-                          className="bg-primary text-primary-foreground flex w-full cursor-pointer items-center justify-center gap-2 rounded-md py-2 text-xs font-bold shadow-md transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
-                          disabled={
-                            selectedFiles.size === 0 ||
-                            commitMutation.isPending ||
-                            generateCommitMessageMutation.isPending ||
-                            reviewCodeMutation.isPending
-                          }
-                        >
-                          {generateCommitMessageMutation.isPending ? (
-                            <>
-                              <RefreshCw className="size-3 animate-spin" />
-                              Generating message...
-                            </>
-                          ) : commitMutation.isPending ? (
-                            <>
-                              <RefreshCw className="size-3 animate-spin" />
-                              Committing...
-                            </>
-                          ) : (
-                            `Commit ${selectedFiles.size} ${selectedFiles.size === 1 ? 'file' : 'files'}${data?.currentBranch ? ` to ${data.currentBranch}` : ''}`
-                          )}
-                        </button>
+                        <div className="bg-primary text-primary-foreground flex overflow-hidden rounded-md shadow-md">
+                          <button
+                            onClick={
+                              preferredCommitAction === 'commit-and-push'
+                                ? handleCommitAndPush
+                                : handleCommit
+                            }
+                            className="flex flex-1 cursor-pointer items-center justify-center gap-2 py-2 text-xs font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={
+                              selectedFiles.size === 0 ||
+                              commitMutation.isPending ||
+                              generateCommitMessageMutation.isPending ||
+                              reviewCodeMutation.isPending ||
+                              pushMutation.isPending
+                            }
+                          >
+                            {generateCommitMessageMutation.isPending ? (
+                              <>
+                                <RefreshCw className="size-3 animate-spin" />
+                                Generating message...
+                              </>
+                            ) : commitMutation.isPending ? (
+                              <>
+                                <RefreshCw className="size-3 animate-spin" />
+                                Committing...
+                              </>
+                            ) : pushMutation.isPending ? (
+                              <>
+                                <RefreshCw className="size-3 animate-spin" />
+                                Pushing...
+                              </>
+                            ) : (
+                              `${preferredCommitLabel} ${selectedFiles.size} ${selectedFiles.size === 1 ? 'file' : 'files'}${data?.currentBranch ? ` to ${data.currentBranch}` : ''}`
+                            )}
+                          </button>
+                          <div className="bg-primary-foreground/20 my-2 w-px shrink-0" />
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Choose commit action"
+                                className="hover:bg-primary-foreground/10 inline-flex w-10 shrink-0 cursor-pointer items-center justify-center transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                                disabled={
+                                  selectedFiles.size === 0 ||
+                                  commitMutation.isPending ||
+                                  generateCommitMessageMutation.isPending ||
+                                  reviewCodeMutation.isPending ||
+                                  pushMutation.isPending
+                                }
+                              >
+                                <ChevronDown className="size-3.5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  void handlePreferredCommitActionChange(
+                                    'commit',
+                                  )
+                                }
+                              >
+                                <GitCommit className="size-3.5" />
+                                Commit
+                                {preferredCommitAction === 'commit' ? (
+                                  <span className="text-muted-foreground ml-auto text-[11px]">
+                                    Default
+                                  </span>
+                                ) : null}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  void handlePreferredCommitActionChange(
+                                    'commit-and-push',
+                                  )
+                                }
+                              >
+                                <ArrowUp className="size-3.5" />
+                                Commit &amp; push
+                                {preferredCommitAction === 'commit-and-push' ? (
+                                  <span className="text-muted-foreground ml-auto text-[11px]">
+                                    Default
+                                  </span>
+                                ) : null}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     </div>
                   </div>

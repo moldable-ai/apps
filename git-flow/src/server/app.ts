@@ -16,6 +16,7 @@ import {
   getStatus,
   openFileInEditor,
   pushCommits,
+  setPreferredCommitAction,
   setPreferredEditor,
   undoUnpushedCommit,
 } from '../lib/git/server'
@@ -52,11 +53,13 @@ type GitPostBody = {
   hash?: string
   path?: string
   editorId?: string
+  preferredCommitAction?: 'commit' | 'commit-and-push'
 }
 
 type GitEditorsResponse = {
   editors: Awaited<ReturnType<typeof getDetectedEditors>>
   preferredEditorId?: string
+  preferredCommitAction?: 'commit' | 'commit-and-push'
 }
 
 const commitMessageSchema = {
@@ -270,11 +273,16 @@ app.get('/api/git', async (c) => {
     }
 
     if (editors !== undefined) {
-      const detectedEditors = await getDetectedEditors()
-      const settings = await readJson(
-        path.join(getAppDataDir(workspaceId), 'settings.json'),
-        {},
-      ).catch(() => ({}))
+      const detectedEditors = await getDetectedEditors(workspaceId)
+      const settings = (await readJson<{
+        preferredEditorId?: string
+        preferredCommitAction?: 'commit' | 'commit-and-push'
+      }>(path.join(getAppDataDir(workspaceId), 'settings.json'), {}).catch(
+        () => ({}),
+      )) as {
+        preferredEditorId?: string
+        preferredCommitAction?: 'commit' | 'commit-and-push'
+      }
 
       return c.json({
         editors: detectedEditors,
@@ -282,6 +290,10 @@ app.get('/api/git', async (c) => {
           typeof settings?.preferredEditorId === 'string'
             ? settings.preferredEditorId
             : undefined,
+        preferredCommitAction:
+          settings?.preferredCommitAction === 'commit-and-push'
+            ? 'commit-and-push'
+            : 'commit',
       } satisfies GitEditorsResponse)
     }
 
@@ -358,6 +370,16 @@ app.post('/api/git', async (c) => {
 
     if (body.action === 'setPreferredEditor') {
       const result = await setPreferredEditor(body.editorId ?? '', workspaceId)
+      return c.json(result)
+    }
+
+    if (body.action === 'setPreferredCommitAction') {
+      const result = await setPreferredCommitAction(
+        body.preferredCommitAction === 'commit-and-push'
+          ? 'commit-and-push'
+          : 'commit',
+        workspaceId,
+      )
       return c.json(result)
     }
 

@@ -516,7 +516,7 @@ export default function Home() {
                 <Input
                   value={currentEntry.title ?? ''}
                   onChange={(e) => handleTitleChange(e.target.value)}
-                  className="h-8 flex-1 border-none bg-transparent px-0 text-lg font-medium shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+                  className="h-8 flex-1 border-none !bg-transparent px-0 text-lg font-medium shadow-none ring-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0"
                   placeholder="Entry title"
                 />
 
