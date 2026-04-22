@@ -38,6 +38,29 @@ export const app = new Hono()
 
 app.use('/api/*', cors())
 
+const SAFE_CHILD_ENV_KEYS = new Set([
+  'HOME',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'LOGNAME',
+  'PATH',
+  'SHELL',
+  'TMP',
+  'TMPDIR',
+  'USER',
+])
+
+function getSafeChildEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (typeof value === 'string' && SAFE_CHILD_ENV_KEYS.has(key)) {
+      env[key] = value
+    }
+  }
+  return env
+}
+
 app.get('/api/moldable/health', (c) => {
   const portRaw = process.env.MOLDABLE_PORT
   const port = portRaw ? Number(portRaw) : null
@@ -308,7 +331,7 @@ app.post('/api/projects/:id/render', async (c) => {
         cwd: appRoot,
         timeout: 5 * 60 * 1000,
         env: {
-          ...process.env,
+          ...getSafeChildEnv(),
           NODE_ENV: 'production',
         },
       },

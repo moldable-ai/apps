@@ -1,3 +1,4 @@
+import { invokeAivaultJson } from './aivault'
 import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
@@ -227,14 +228,14 @@ export async function callDeepL(
   xml: string,
   sourceLang: string,
   targetLang: string,
-  apiKey: string,
-  apiUrl = 'https://api-free.deepl.com',
 ): Promise<string> {
-  const response = await fetch(`${apiUrl}/v2/translate`, {
+  const data = await invokeAivaultJson<{
+    translations?: Array<{ text?: string }>
+  }>('deepl/translate', {
     method: 'POST',
+    path: '/v2/translate',
     headers: {
-      Authorization: `DeepL-Auth-Key ${apiKey}`,
-      'Content-Type': 'application/json',
+      'content-type': 'application/json',
     },
     body: JSON.stringify({
       text: [xml],
@@ -244,12 +245,6 @@ export async function callDeepL(
     }),
   })
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`DeepL API error: ${response.status} - ${errorText}`)
-  }
-
-  const data = await response.json()
   return data.translations?.[0]?.text || ''
 }
 
@@ -260,8 +255,6 @@ export async function translateMarkdown(
   markdown: string,
   sourceLang: string,
   targetLang: string,
-  apiKey: string,
-  apiUrl?: string,
 ): Promise<string> {
   // Extract translatable blocks
   const extracted = await markdownToTranslatableXml(markdown)
@@ -271,13 +264,7 @@ export async function translateMarkdown(
   }
 
   // Call DeepL
-  const translatedXml = await callDeepL(
-    extracted.xml,
-    sourceLang,
-    targetLang,
-    apiKey,
-    apiUrl,
-  )
+  const translatedXml = await callDeepL(extracted.xml, sourceLang, targetLang)
 
   // Apply translations to the SAME editor instance
   return applyTranslatedXml(

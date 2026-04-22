@@ -24,6 +24,12 @@ export async function loadMeetings(): Promise<Meeting[]> {
       createdAt: new Date(m.createdAt),
       updatedAt: new Date(m.updatedAt),
       endedAt: m.endedAt ? new Date(m.endedAt) : undefined,
+      enhancedAt: m.enhancedAt ? new Date(m.enhancedAt) : undefined,
+      recordingSessions: m.recordingSessions?.map((session) => ({
+        ...session,
+        startedAt: new Date(session.startedAt),
+        endedAt: session.endedAt ? new Date(session.endedAt) : undefined,
+      })),
       segments: m.segments.map((s) => ({
         ...s,
         createdAt: new Date(s.createdAt),
@@ -78,6 +84,12 @@ export async function getMeeting(meetingId: string): Promise<Meeting | null> {
       createdAt: new Date(meeting.createdAt),
       updatedAt: new Date(meeting.updatedAt),
       endedAt: meeting.endedAt ? new Date(meeting.endedAt) : undefined,
+      enhancedAt: meeting.enhancedAt ? new Date(meeting.enhancedAt) : undefined,
+      recordingSessions: meeting.recordingSessions?.map((session) => ({
+        ...session,
+        startedAt: new Date(session.startedAt),
+        endedAt: session.endedAt ? new Date(session.endedAt) : undefined,
+      })),
       segments: meeting.segments.map((s) => ({
         ...s,
         createdAt: new Date(s.createdAt),
@@ -98,7 +110,12 @@ export async function loadSettings(): Promise<MeetingSettings> {
     if (!res.ok) {
       return DEFAULT_SETTINGS
     }
-    return (await res.json()) as MeetingSettings
+    const settings = (await res.json()) as Partial<MeetingSettings>
+    return {
+      ...DEFAULT_SETTINGS,
+      ...settings,
+      mipOptOut: settings.mipOptOut ?? true,
+    }
   } catch {
     return DEFAULT_SETTINGS
   }

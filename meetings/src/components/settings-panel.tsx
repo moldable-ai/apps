@@ -30,6 +30,24 @@ export function SettingsPanel({
         {/* Save Audio Toggle */}
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
+            <Label htmlFor="mip-opt-out">Opt out of model training</Label>
+            <p className="text-muted-foreground text-xs">
+              Ask Deepgram not to use meeting audio or transcripts for model
+              improvement
+            </p>
+          </div>
+          <Switch
+            id="mip-opt-out"
+            checked={settings.mipOptOut !== false}
+            onCheckedChange={(checked: boolean) =>
+              onChange({ ...settings, mipOptOut: checked })
+            }
+            disabled={disabled}
+          />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
             <Label htmlFor="save-audio">Save audio</Label>
             <p className="text-muted-foreground text-xs">
               Save audio recording alongside transcript
@@ -80,17 +98,14 @@ export function SettingsPanel({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="nova-2">Nova 2 (Fast)</SelectItem>
               <SelectItem value="nova-3">Nova 3 (Recommended)</SelectItem>
               <SelectItem value="nova-3-medical">Nova 3 Medical</SelectItem>
             </SelectContent>
           </Select>
           <p className="text-muted-foreground text-xs">
-            {settings.model === 'nova-2'
-              ? 'Fast transcription for general use'
-              : settings.model === 'nova-3'
-                ? 'Most accurate general transcription'
-                : 'Optimized for medical terminology'}
+            {settings.model === 'nova-3'
+              ? 'Most accurate general transcription'
+              : 'Optimized for medical terminology'}
           </p>
         </div>
 

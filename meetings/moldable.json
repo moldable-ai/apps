@@ -10,6 +10,7 @@
   "icon": "🎙️",
   "iconPath": "public/icon.png",
   "widgetSize": "medium",
+  "widgetTint": "violet",
   "category": "productivity",
   "tags": ["meetings", "transcription", "audio", "recording"],
   "moldableDependencies": {
@@ -17,13 +18,15 @@
     "@moldable-ai/editor": "^0.1.5",
     "@moldable-ai/storage": "^0.1.3"
   },
-  "env": [
+  "env": [],
+  "vault": [
     {
       "key": "DEEPGRAM_API_KEY",
       "name": "Deepgram API Key",
       "description": "Powers real-time speech-to-text transcription",
       "url": "https://console.deepgram.com/",
-      "required": true
+      "required": true,
+      "capabilities": ["deepgram/auth-grant"]
     }
   ],
   "upstream": {

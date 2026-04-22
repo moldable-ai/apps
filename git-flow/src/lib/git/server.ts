@@ -63,6 +63,21 @@ const CODE_EDITOR_APP_NAMES = [
 
 const MOLDABLE_CODE_EDITOR_APP_ID = 'code-editor'
 const MOLDABLE_CODE_EDITOR_EDITOR_ID = 'moldable-code-editor'
+const SAFE_CHILD_ENV_KEYS = new Set([
+  'HOME',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'LOGNAME',
+  'PATH',
+  'SHELL',
+  'SSH_AUTH_SOCK',
+  'TERM',
+  'TMP',
+  'TMPDIR',
+  'USER',
+])
+const SAFE_CHILD_ENV_PREFIXES = ['GIT_', 'LC_'] as const
 
 type DetectedEditor = {
   id: string
@@ -85,11 +100,25 @@ type WorkspaceAppConfig = {
   }>
 }
 
+function getSafeChildEnv(): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (
+      typeof value === 'string' &&
+      (SAFE_CHILD_ENV_KEYS.has(key) ||
+        SAFE_CHILD_ENV_PREFIXES.some((prefix) => key.startsWith(prefix)))
+    ) {
+      env[key] = value
+    }
+  }
+  return env
+}
+
 async function runProcess(args: string[], cwd?: string) {
   return new Promise<void>((resolve, reject) => {
     const child = spawn(args[0], args.slice(1), {
       cwd,
-      env: process.env,
+      env: getSafeChildEnv(),
       stdio: 'ignore',
     })
 
@@ -130,12 +159,7 @@ function getGitHookPath() {
 }
 
 function getGitHookEnv() {
-  const env: Record<string, string> = {}
-  for (const [key, value] of Object.entries(process.env)) {
-    if (typeof value === 'string') {
-      env[key] = value
-    }
-  }
+  const env = getSafeChildEnv()
 
   return {
     ...env,
@@ -787,7 +811,7 @@ export async function openFileInEditor(
   await new Promise<void>((resolve, reject) => {
     const child = spawn('open', ['-a', selectedEditor.appPath, fullPath], {
       cwd: repoPath,
-      env: process.env,
+      env: getSafeChildEnv(),
       detached: true,
       stdio: 'ignore',
     })

@@ -3,6 +3,7 @@
  *
  * Data is stored in MOLDABLE_APP_DATA_DIR (or ./data in dev):
  * - meetings/{id}.json - one file per meeting
+ * - templates/{id}.json - one file per custom template
  * - settings.json - user settings
  *
  * Each meeting is stored in its own file to handle long transcripts efficiently.
@@ -17,6 +18,7 @@ import {
 } from '@moldable-ai/storage'
 import type { Meeting, MeetingSettings } from '../types'
 import { DEFAULT_SETTINGS } from '../types'
+import type { MeetingTemplate } from './templates'
 import fs from 'node:fs/promises'
 
 /** Get the meetings directory */
@@ -24,10 +26,21 @@ function getMeetingsDir(workspaceId?: string): string {
   return safePath(getAppDataDir(workspaceId), 'meetings')
 }
 
+/** Get the custom templates directory */
+function getTemplatesDir(workspaceId?: string): string {
+  return safePath(getAppDataDir(workspaceId), 'templates')
+}
+
 /** Get the path to a meeting file */
 function getMeetingPath(id: string, workspaceId?: string): string {
   const safeId = sanitizeId(id)
   return safePath(getMeetingsDir(workspaceId), `${safeId}.json`)
+}
+
+/** Get the path to a custom template file */
+function getTemplatePath(id: string, workspaceId?: string): string {
+  const safeId = sanitizeId(id)
+  return safePath(getTemplatesDir(workspaceId), `${safeId}.json`)
 }
 
 /** Get the path to settings.json */
@@ -42,6 +55,12 @@ function parseMeetingDates(m: Meeting): Meeting {
     createdAt: new Date(m.createdAt),
     updatedAt: new Date(m.updatedAt),
     endedAt: m.endedAt ? new Date(m.endedAt) : undefined,
+    enhancedAt: m.enhancedAt ? new Date(m.enhancedAt) : undefined,
+    recordingSessions: m.recordingSessions?.map((session) => ({
+      ...session,
+      startedAt: new Date(session.startedAt),
+      endedAt: session.endedAt ? new Date(session.endedAt) : undefined,
+    })),
     segments: m.segments.map((s) => ({
       ...s,
       createdAt: new Date(s.createdAt),
@@ -108,6 +127,67 @@ export async function deleteMeeting(
 }
 
 /**
+ * Load all workspace custom templates from filesystem.
+ */
+export async function loadCustomTemplates(
+  workspaceId?: string,
+): Promise<MeetingTemplate[]> {
+  const templatesDir = getTemplatesDir(workspaceId)
+
+  try {
+    await ensureDir(templatesDir)
+    const files = await fs.readdir(templatesDir)
+    const jsonFiles = files.filter((file) => file.endsWith('.json'))
+
+    const templates: MeetingTemplate[] = []
+    for (const file of jsonFiles) {
+      try {
+        const filePath = safePath(templatesDir, file)
+        const data = await fs.readFile(filePath, 'utf-8')
+        const template = JSON.parse(data) as MeetingTemplate
+        if (template.category === 'My Templates') {
+          templates.push(template)
+        }
+      } catch (error) {
+        console.error(`Failed to read template file ${file}:`, error)
+      }
+    }
+
+    return templates.sort((a, b) => a.name.localeCompare(b.name))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Save a workspace custom template.
+ */
+export async function saveCustomTemplate(
+  template: MeetingTemplate,
+  workspaceId?: string,
+): Promise<void> {
+  await ensureDir(getTemplatesDir(workspaceId))
+  await writeJson(getTemplatePath(template.id, workspaceId), {
+    ...template,
+    category: 'My Templates',
+  })
+}
+
+/**
+ * Delete a workspace custom template.
+ */
+export async function deleteCustomTemplate(
+  templateId: string,
+  workspaceId?: string,
+): Promise<void> {
+  try {
+    await fs.unlink(getTemplatePath(templateId, workspaceId))
+  } catch {
+    // File might not exist, that's ok
+  }
+}
+
+/**
  * Get a single meeting by ID
  */
 export async function getMeeting(
@@ -131,10 +211,15 @@ export async function getMeeting(
 export async function loadSettings(
   workspaceId?: string,
 ): Promise<MeetingSettings> {
-  return await readJson<MeetingSettings>(
+  const settings = await readJson<Partial<MeetingSettings>>(
     getSettingsPath(workspaceId),
     DEFAULT_SETTINGS,
   )
+  return {
+    ...DEFAULT_SETTINGS,
+    ...settings,
+    mipOptOut: settings.mipOptOut ?? true,
+  }
 }
 
 /**

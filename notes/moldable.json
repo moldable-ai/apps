@@ -10,6 +10,7 @@
   "icon": "📝",
   "iconPath": "public/icon.png",
   "widgetSize": "medium",
+  "widgetTint": "amber",
   "category": "productivity",
   "tags": ["notes", "markdown", "writing", "keep"],
   "moldableDependencies": {

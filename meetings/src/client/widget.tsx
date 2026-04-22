@@ -26,6 +26,7 @@ export default function MeetingsWidget() {
           createdAt: new Date(m.createdAt),
           updatedAt: new Date(m.updatedAt),
           endedAt: m.endedAt ? new Date(m.endedAt) : undefined,
+          enhancedAt: m.enhancedAt ? new Date(m.enhancedAt) : undefined,
           segments: m.segments.map((s) => ({
             ...s,
             createdAt: new Date(s.createdAt),

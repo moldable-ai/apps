@@ -15,10 +15,7 @@ A simple meeting recorder with real-time transcription powered by Deepgram.
 ## Setup
 
 1. Get a Deepgram API key from [console.deepgram.com](https://console.deepgram.com/)
-2. Add it to your environment variables:
-   ```
-   DEEPGRAM_API_KEY=your_api_key_here
-   ```
+2. Store it in Moldable Settings > Vault as `DEEPGRAM_API_KEY`.
 3. Launch the app from Moldable. The desktop app manages the Vite/Hono
    runtime and passes the active workspace context to API requests.
 

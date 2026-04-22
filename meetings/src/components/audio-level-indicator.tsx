@@ -48,7 +48,7 @@ export const AudioLevelIndicator = memo(function AudioLevelIndicator({
   // Determine bar color based on state
   const getBarStyles = () => {
     if (isRecording && !isPaused) {
-      return 'bg-green-500'
+      return 'bg-primary'
     } else if (isPaused) {
       return 'bg-foreground'
     } else {

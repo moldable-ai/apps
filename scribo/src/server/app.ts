@@ -6,6 +6,7 @@ import {
   sanitizeId,
   writeJson,
 } from '@moldable-ai/storage'
+import { invokeAivaultRaw } from '../lib/aivault'
 import type { Language } from '../lib/languages'
 import {
   applyTranslatedXml,
@@ -14,11 +15,9 @@ import {
 } from '../lib/translation-service'
 import { DEFAULT_VOICE_ID, MULTILINGUAL_MODEL } from '../lib/tts/voice-ids'
 import type { JournalEntry, TranslationCache } from '../lib/types'
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import fs from 'node:fs/promises'
-import { Readable } from 'node:stream'
 import { z } from 'zod'
 
 interface FreeDictionaryLanguage {
@@ -157,18 +156,6 @@ async function deleteEntry(id: string, workspaceId?: string): Promise<void> {
 
 function normalizeLang(code: string): string {
   return code.toLowerCase().split('-')[0] ?? code.toLowerCase()
-}
-
-function streamToReadableStream(stream: unknown): ReadableStream<Uint8Array> {
-  if (stream instanceof ReadableStream) {
-    return stream as ReadableStream<Uint8Array>
-  }
-
-  if (stream instanceof Readable) {
-    return Readable.toWeb(stream) as ReadableStream<Uint8Array>
-  }
-
-  throw new Error('Unsupported audio stream response')
 }
 
 app.get('/api/moldable/health', (c) => {
@@ -339,21 +326,6 @@ app.post('/api/translate', async (c) => {
     }
 
     const { markdown, from, to, cache: existingCache } = parseResult.data
-    const apiKey = process.env.DEEPL_API_KEY
-
-    if (!apiKey) {
-      return c.json(
-        {
-          error:
-            'DEEPL_API_KEY not configured. ' +
-            'Get a free API key at https://www.deepl.com/pro-api ' +
-            '(500,000 chars/month free). ' +
-            'Then add DEEPL_API_KEY=your-key to apps/scribo/.env.local',
-          code: 'MISSING_API_KEY',
-        },
-        503,
-      )
-    }
 
     if (!markdown.trim()) {
       return c.json({
@@ -362,7 +334,6 @@ app.post('/api/translate', async (c) => {
       })
     }
 
-    const apiUrl = process.env.DEEPL_API_URL || 'https://api-free.deepl.com'
     const validCache =
       existingCache &&
       existingCache.sourceLang === from &&
@@ -403,7 +374,7 @@ app.post('/api/translate', async (c) => {
         .map((block, index) => `<block id="${index}">${block.xml}</block>`)
         .join('')
 
-      const translatedXml = await callDeepL(xml, from, to, apiKey, apiUrl)
+      const translatedXml = await callDeepL(xml, from, to)
       const blockRegex = /<block id="(\d+)">([\s\S]*?)<\/block>/g
       translatedBlocksMap = new Map(cachedTranslations)
       let match
@@ -446,7 +417,11 @@ app.post('/api/translate', async (c) => {
     const message =
       error instanceof Error ? error.message : 'Translation failed'
 
-    if (message.includes('DeepL API error')) {
+    if (
+      message.includes('deepl/translate') ||
+      message.includes('CredentialNotFound') ||
+      message.includes('credential')
+    ) {
       return c.json({ error: message }, 502)
     }
 
@@ -463,34 +438,24 @@ app.post('/api/tts', async (c) => {
       return c.json({ error: 'Text is required' }, 400)
     }
 
-    const apiKey = process.env.ELEVENLABS_API_KEY
-    if (!apiKey) {
-      return c.json(
-        {
-          error:
-            'ELEVENLABS_API_KEY not configured. ' +
-            'Get an API key at https://elevenlabs.io and add ELEVENLABS_API_KEY to .env.local',
-        },
-        503,
-      )
-    }
-
     const { text, languageCode } = parseResult.data
-    const elevenlabs = new ElevenLabsClient({ apiKey })
-    const audioStream = await elevenlabs.textToSpeech.convert(
-      DEFAULT_VOICE_ID,
-      {
+    const audio = await invokeAivaultRaw('elevenlabs/text-to-speech', {
+      method: 'POST',
+      path: `/v1/text-to-speech/${DEFAULT_VOICE_ID}?output_format=mp3_44100_128`,
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: {
         text,
-        modelId: MULTILINGUAL_MODEL,
-        outputFormat: 'mp3_44100_128',
-        voiceSettings: {
+        model_id: MULTILINGUAL_MODEL,
+        voice_settings: {
           speed: 0.9,
         },
-        ...(languageCode && { languageCode }),
+        ...(languageCode && { language_code: languageCode }),
       },
-    )
+    })
 
-    return new Response(streamToReadableStream(audioStream), {
+    return new Response(new Uint8Array(audio), {
       headers: {
         'Content-Type': 'audio/mpeg',
         'Cache-Control': 'no-cache',

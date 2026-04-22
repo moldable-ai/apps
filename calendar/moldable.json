@@ -10,11 +10,34 @@
   "icon": "🗓️",
   "iconPath": "public/icon.png",
   "widgetSize": "medium",
+  "widgetTint": "blue",
   "category": "productivity",
   "tags": ["calendar", "schedule", "events", "google"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.6",
     "@moldable-ai/storage": "^0.1.3"
+  },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "calendar.events",
+        "name": "Calendar events",
+        "description": "Allow approved apps to read calendar events in this workspace.",
+        "scopes": [
+          {
+            "id": "events.today",
+            "name": "Today's calendar events",
+            "description": "See event titles, times, and availability for today's schedule in this workspace."
+          },
+          {
+            "id": "events.list",
+            "name": "Calendar events in a date range",
+            "description": "See event titles, start and end times, and availability for a requested date range so the app can show upcoming schedule context."
+          }
+        ]
+      }
+    ]
   },
   "env": [],
   "upstream": {

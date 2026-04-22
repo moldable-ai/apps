@@ -23,5 +23,6 @@
   "version": "0.1.0",
   "visibility": "public",
   "widgetSize": "medium",
+  "widgetTint": "amber",
   "routeName": "hello-moldables"
 }

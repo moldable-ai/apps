@@ -1,11 +1,22 @@
+import { invokeAivaultJson } from './aivault'
 import {
   applyTranslatedXml,
   markdownToTranslatableXml,
   translateMarkdown,
 } from './translation-service'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('./aivault', () => ({
+  invokeAivaultJson: vi.fn(),
+}))
 
 describe('Translation Service', () => {
+  const mockInvokeAivaultJson = vi.mocked(invokeAivaultJson)
+
+  beforeEach(() => {
+    mockInvokeAivaultJson.mockReset()
+  })
+
   describe('markdownToTranslatableXml', () => {
     it('returns null for empty markdown', async () => {
       const result = await markdownToTranslatableXml('')
@@ -157,39 +168,25 @@ describe('Translation Service', () => {
     it('translates with mock DeepL', async () => {
       const markdown = 'Hello world'
 
-      // Mock fetch to intercept and modify the XML
-      const mockFetch = vi
-        .fn()
-        .mockImplementation(async (_url: string, options: { body: string }) => {
-          const body = JSON.parse(options.body)
-          // Echo back the XML with text replaced
-          const translatedXml = body.text[0].replace(
-            />Hello world</,
-            '>Bonjour le monde<',
-          )
-          return {
-            ok: true,
-            json: async () => ({
-              translations: [{ text: translatedXml }],
-            }),
-          }
-        })
-      vi.stubGlobal('fetch', mockFetch)
+      mockInvokeAivaultJson.mockImplementation(async (_capability, request) => {
+        const body = JSON.parse(String(request.body))
+        const translatedXml = body.text[0].replace(
+          />Hello world</,
+          '>Bonjour le monde<',
+        )
+        return {
+          translations: [{ text: translatedXml }],
+        }
+      })
 
-      const result = await translateMarkdown(
-        markdown,
-        'en',
-        'fr',
-        'test-api-key',
-      )
+      const result = await translateMarkdown(markdown, 'en', 'fr')
 
-      // Verify DeepL was called correctly
-      expect(mockFetch).toHaveBeenCalledTimes(1)
-      const call = mockFetch.mock.calls[0] as [string, { body: string }]
-      const [callUrl, callOptions] = call
-      expect(callUrl).toContain('/v2/translate')
+      expect(mockInvokeAivaultJson).toHaveBeenCalledTimes(1)
+      const [capability, request] = mockInvokeAivaultJson.mock.calls[0]!
+      expect(capability).toBe('deepl/translate')
+      expect(request.path).toBe('/v2/translate')
 
-      const body = JSON.parse(callOptions.body)
+      const body = JSON.parse(String(request.body))
       expect(body.source_lang).toBe('EN')
       expect(body.target_lang).toBe('FR')
       expect(body.tag_handling).toBe('xml')
@@ -198,28 +195,19 @@ describe('Translation Service', () => {
 
       // The result should be translated
       expect(result).toBe('Bonjour le monde')
-
-      vi.unstubAllGlobals()
     })
 
     it('returns original markdown when empty', async () => {
-      const result = await translateMarkdown('', 'en', 'fr', 'test-api-key')
+      const result = await translateMarkdown('', 'en', 'fr')
       expect(result).toBe('')
     })
 
-    it('throws on DeepL API error', async () => {
-      const mockFetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 403,
-        text: async () => 'Forbidden',
-      })
-      vi.stubGlobal('fetch', mockFetch)
+    it('throws on aivault invocation error', async () => {
+      mockInvokeAivaultJson.mockRejectedValue(new Error('Forbidden'))
 
-      await expect(
-        translateMarkdown('Hello', 'en', 'fr', 'bad-key'),
-      ).rejects.toThrow('DeepL API error')
-
-      vi.unstubAllGlobals()
+      await expect(translateMarkdown('Hello', 'en', 'fr')).rejects.toThrow(
+        'Forbidden',
+      )
     })
   })
 

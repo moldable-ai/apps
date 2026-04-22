@@ -1,42 +1,22 @@
 'use client'
 
+import { Plus, Settings } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Button, useWorkspace } from '@moldable-ai/ui'
+import { callMoldableApp } from '@/lib/moldable-apps'
+import { DEFAULT_MEETING_TEMPLATE_ID } from '@/lib/templates'
 import {
-  Mic,
-  Monitor,
-  Pause,
-  Play,
-  Settings,
-  Square,
-  Trash2,
-  X,
-} from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+  type EnhancementStatus,
+  MeetingView,
+  type MeetingViewMode,
+} from '@/components/meeting-view'
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-  Button,
-  Collapsible,
-  CollapsibleContent,
-  Input,
-  ScrollArea,
-  cn,
-  useWorkspace,
-} from '@moldable-ai/ui'
-import { formatDuration } from '@/lib/format'
-import { MeetingCard } from '@/components/two-pane-meeting-view'
-import {
-  AudioLevelIndicator,
-  EmptyState,
-  SettingsPanel,
-  TwoPaneMeetingView,
-} from '@/components'
+  type CalendarEvent,
+  type CalendarEventsState,
+  MeetingsList,
+  upcomingCalendarRange,
+} from '@/components/meetings-list'
+import { EmptyState, RecordingDock, SettingsModal } from '@/components'
 import {
   useActiveMeeting,
   useAudioRecorder,
@@ -44,9 +24,28 @@ import {
   useMeetings,
   useSystemAudio,
 } from '@/hooks'
-import type { Meeting, MeetingSettings, TranscriptSegment } from '@/types'
+import type {
+  Meeting,
+  MeetingSettings,
+  RecordingSession,
+  TranscriptSegment,
+} from '@/types'
 import { DEFAULT_SETTINGS } from '@/types'
 import { v4 as uuidv4 } from 'uuid'
+
+function calendarErrorMessage(code: string | undefined, error: unknown) {
+  if (code === 'app_access_required' || code === 'app_access_denied') {
+    return 'Grant calendar access to show upcoming events.'
+  }
+
+  if (code === 'target_app_not_found' || code === 'calendar_not_connected') {
+    return 'Install and authorize the Calendar app first before events can be shown.'
+  }
+
+  return error instanceof Error
+    ? error.message
+    : 'Calendar events are unavailable.'
+}
 
 export default function MeetingsPage() {
   // Workspace
@@ -60,7 +59,13 @@ export default function MeetingsPage() {
   useEffect(() => {
     fetchWithWorkspace('/api/settings')
       .then((res) => res.json())
-      .then(setSettings)
+      .then((loadedSettings: Partial<MeetingSettings>) =>
+        setSettings({
+          ...DEFAULT_SETTINGS,
+          ...loadedSettings,
+          mipOptOut: loadedSettings.mipOptOut ?? true,
+        }),
+      )
       .catch(() => setSettings(DEFAULT_SETTINGS))
   }, [workspaceId, fetchWithWorkspace])
 
@@ -71,6 +76,21 @@ export default function MeetingsPage() {
   const [audioSource, setAudioSource] = useState<'microphone' | 'system'>(
     'microphone',
   )
+  const [enhancement, setEnhancement] = useState<EnhancementStatus | null>(null)
+  const [preferredDetailView, setPreferredDetailView] =
+    useState<MeetingViewMode | null>(null)
+  const [currentInterim, setCurrentInterim] = useState<string | null>(null)
+  const [isMeetingPaused, setIsMeetingPaused] = useState(false)
+  const [isAppendingTranscript, setIsAppendingTranscript] = useState(false)
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEventsState>({
+    status: 'loading',
+    events: [],
+  })
+  const enhancementTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  const activeRecordingSessionRef = useRef<RecordingSession | null>(null)
+  const audioStreamingEnabledRef = useRef(false)
+  const activeDurationBaseRef = useRef(0)
+  const calendarLoadIdRef = useRef(0)
 
   // Hooks
   const { meetings, addMeeting, updateMeeting, deleteMeeting } = useMeetings()
@@ -79,9 +99,16 @@ export default function MeetingsPage() {
     startMeeting,
     addSegment,
     updateDuration,
-    endMeeting,
+    updateActiveMeeting,
     clearMeeting,
   } = useActiveMeeting()
+
+  useEffect(() => {
+    return () => {
+      enhancementTimersRef.current.forEach((timer) => clearTimeout(timer))
+      enhancementTimersRef.current = []
+    }
+  }, [])
 
   // Handle settings changes
   const handleSettingsChange = useCallback(
@@ -96,10 +123,56 @@ export default function MeetingsPage() {
     [fetchWithWorkspace],
   )
 
+  const createRecordingSession = useCallback((): RecordingSession => {
+    const session = {
+      id: uuidv4(),
+      startedAt: new Date(),
+    }
+    activeRecordingSessionRef.current = session
+    return session
+  }, [])
+
+  const upsertRecordingSession = useCallback(
+    (targetMeeting: Meeting, session: RecordingSession): Meeting => {
+      const sessions = targetMeeting.recordingSessions ?? []
+      const nextSessions = sessions.some((item) => item.id === session.id)
+        ? sessions.map((item) => (item.id === session.id ? session : item))
+        : [...sessions, session]
+
+      return {
+        ...targetMeeting,
+        recordingSessions: nextSessions,
+        updatedAt: new Date(),
+      }
+    },
+    [],
+  )
+
+  const finishActiveRecordingSession = useCallback(
+    (targetMeeting: Meeting | null): Meeting | null => {
+      const activeSession = activeRecordingSessionRef.current
+      if (!targetMeeting || !activeSession) return targetMeeting
+
+      const endedAt = new Date()
+      const finishedSession = {
+        ...activeSession,
+        endedAt,
+      }
+
+      activeRecordingSessionRef.current = null
+      return upsertRecordingSession(targetMeeting, finishedSession)
+    },
+    [upsertRecordingSession],
+  )
+
   // Handle new segments from Deepgram
   const handleSegment = useCallback(
     (segment: TranscriptSegment) => {
-      addSegment(segment)
+      setCurrentInterim(null)
+      addSegment({
+        ...segment,
+        recordingSessionId: activeRecordingSessionRef.current?.id,
+      })
     },
     [addSegment],
   )
@@ -108,12 +181,14 @@ export default function MeetingsPage() {
   const deepgram = useDeepgram({
     settings: currentSettings,
     onSegment: handleSegment,
-    onError: (error) => console.error('Deepgram error:', error),
+    onInterim: setCurrentInterim,
+    onError: (error) => console.warn('Deepgram transcription issue:', error),
   })
 
   // System audio hook (for Moldable desktop)
   const systemAudio = useSystemAudio({
     onAudioData: (buffer: ArrayBuffer) => {
+      if (!audioStreamingEnabledRef.current) return
       // Send raw PCM to Deepgram
       deepgram.sendAudio(buffer)
     },
@@ -123,11 +198,13 @@ export default function MeetingsPage() {
   // Audio recorder hook (for browser microphone)
   const audioRecorder = useAudioRecorder({
     onDataAvailable: async (blob) => {
+      if (!audioStreamingEnabledRef.current) return
       const buffer = await blob.arrayBuffer()
+      if (!audioStreamingEnabledRef.current) return
       deepgram.sendAudio(buffer)
     },
     onStateChange: (state) => {
-      updateDuration(state.duration)
+      updateDuration(activeDurationBaseRef.current + state.duration)
     },
     onError: (error) => console.error('Recorder error:', error),
   })
@@ -142,368 +219,611 @@ export default function MeetingsPage() {
     }
   }, [systemAudio.isAvailable])
 
-  // Start a new meeting
-  const handleStartMeeting = useCallback(async () => {
-    const id = uuidv4()
-    const title = `Meeting ${new Date().toLocaleDateString()}`
-    const newMeeting = startMeeting(id, title, currentSettings.saveAudio)
+  const loadCalendarEvents = useCallback(
+    async (options: { requestAccess?: boolean } = {}) => {
+      const loadId = calendarLoadIdRef.current + 1
+      calendarLoadIdRef.current = loadId
 
-    // Add to meetings list immediately so it appears in sidebar
-    addMeeting(newMeeting)
-    setSelectedMeeting(null) // Clear any selection, show active meeting
+      setCalendarEvents((current) => ({
+        status: 'loading',
+        events: current.events,
+      }))
 
-    if (audioSource === 'system' && systemAudio.isAvailable) {
-      // System audio mode - use linear16 encoding for raw PCM
-      console.log('[Meetings] Starting with system audio capture')
-      await deepgram.connect('linear16')
-      await systemAudio.start('systemAudio')
-    } else {
-      // Microphone mode - use webm/opus from browser
-      console.log('[Meetings] Starting with microphone capture')
-      await deepgram.connect('webm')
-      await audioRecorder.start()
+      try {
+        const { timeMin, timeMax } = upcomingCalendarRange()
+        const events = await callMoldableApp<CalendarEvent[]>(
+          'calendar',
+          'events.list',
+          {
+            timeMin,
+            timeMax,
+            includeDeclined: false,
+            maxResults: 25,
+          },
+          {
+            scopes: ['events.list'],
+            timeoutMs: 45_000,
+            requestAccess: options.requestAccess ?? false,
+          },
+        )
+
+        if (calendarLoadIdRef.current === loadId) {
+          setCalendarEvents({ status: 'ready', events })
+        }
+      } catch (error) {
+        if (calendarLoadIdRef.current === loadId) {
+          const code =
+            error instanceof Error && 'code' in error
+              ? (error as Error & { code?: string }).code
+              : undefined
+
+          setCalendarEvents({
+            status: 'error',
+            events: [],
+            message: calendarErrorMessage(code, error),
+            action:
+              code === 'app_access_required' || code === 'app_access_denied'
+                ? 'grant-calendar-access'
+                : undefined,
+          })
+        }
+      }
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (!meeting) {
+      void loadCalendarEvents({ requestAccess: false })
     }
+  }, [loadCalendarEvents, meeting, workspaceId])
+
+  useEffect(() => {
+    function handleAppAccessChanged(event: MessageEvent) {
+      if (event.data?.type !== 'moldable:app-access-changed') return
+
+      const grant = event.data.grant as
+        | {
+            callerAppId?: string
+            targetAppId?: string
+            status?: string
+          }
+        | undefined
+
+      if (
+        grant?.callerAppId !== 'meetings' ||
+        grant?.targetAppId !== 'calendar' ||
+        grant?.status !== 'revoked'
+      ) {
+        return
+      }
+
+      setCalendarEvents({
+        status: 'error',
+        events: [],
+        message: 'Grant calendar access to show upcoming events.',
+        action: 'grant-calendar-access',
+      })
+    }
+
+    window.addEventListener('message', handleAppAccessChanged)
+    return () => window.removeEventListener('message', handleAppAccessChanged)
+  }, [])
+
+  // Start a new meeting
+  const handleStartMeeting = useCallback(
+    async (titleOverride?: unknown) => {
+      const id = uuidv4()
+      const calendarTitle =
+        typeof titleOverride === 'string' ? titleOverride.trim() : ''
+      const title =
+        calendarTitle || `Meeting ${new Date().toLocaleDateString()}`
+      const initialRecordingSession = createRecordingSession()
+      const newMeeting = startMeeting(
+        id,
+        title,
+        currentSettings.saveAudio,
+        initialRecordingSession,
+      )
+
+      // Add to meetings list immediately so it appears in sidebar
+      activeDurationBaseRef.current = 0
+      addMeeting(newMeeting)
+      setSelectedMeeting(null) // Clear any selection, show active meeting
+      setPreferredDetailView(null)
+      setCurrentInterim(null)
+      setIsMeetingPaused(false)
+      setIsAppendingTranscript(false)
+
+      if (audioSource === 'system' && systemAudio.isAvailable) {
+        // System audio mode - use linear16 encoding for raw PCM
+        console.log('[Meetings] Starting with system audio capture')
+        audioStreamingEnabledRef.current = true
+        await deepgram.connect('linear16')
+        await systemAudio.start('systemAudio')
+      } else {
+        // Microphone mode - use webm/opus from browser
+        console.log('[Meetings] Starting with microphone capture')
+        audioStreamingEnabledRef.current = true
+        await deepgram.connect('webm')
+        await audioRecorder.start()
+      }
+    },
+    [
+      startMeeting,
+      currentSettings.saveAudio,
+      deepgram,
+      audioRecorder,
+      systemAudio,
+      audioSource,
+      addMeeting,
+      createRecordingSession,
+    ],
+  )
+
+  const handleResumeExistingMeeting = useCallback(
+    async (targetMeeting: Meeting) => {
+      if (meeting) return
+
+      const nextSession = createRecordingSession()
+      const resumedMeeting = upsertRecordingSession(
+        {
+          ...targetMeeting,
+          endedAt: undefined,
+          updatedAt: new Date(),
+        },
+        nextSession,
+      )
+
+      activeDurationBaseRef.current = targetMeeting.duration
+      updateActiveMeeting(resumedMeeting)
+      updateMeeting(resumedMeeting)
+      setSelectedMeeting(null)
+      setPreferredDetailView('transcript')
+      setCurrentInterim(null)
+      setIsMeetingPaused(false)
+      setIsAppendingTranscript(true)
+      audioStreamingEnabledRef.current = true
+
+      if (audioSource === 'system' && systemAudio.isAvailable) {
+        await deepgram.connect('linear16')
+        await systemAudio.start('systemAudio')
+      } else {
+        await deepgram.connect('webm')
+        await audioRecorder.start()
+      }
+    },
+    [
+      audioRecorder,
+      audioSource,
+      createRecordingSession,
+      deepgram,
+      meeting,
+      systemAudio,
+      updateActiveMeeting,
+      updateMeeting,
+      upsertRecordingSession,
+    ],
+  )
+
+  const handleStopAppendingTranscript = useCallback(async () => {
+    audioStreamingEnabledRef.current = false
+    setIsMeetingPaused(false)
+    setCurrentInterim(null)
+
+    if (audioSource === 'system') {
+      await systemAudio.stop()
+    } else {
+      audioRecorder.stop()
+    }
+    deepgram.disconnect()
+
+    if (meeting) {
+      const completedMeeting = finishActiveRecordingSession(meeting) ?? meeting
+      const stoppedMeeting = {
+        ...completedMeeting,
+        endedAt: new Date(),
+        updatedAt: new Date(),
+      }
+
+      updateMeeting(stoppedMeeting)
+      setSelectedMeeting(stoppedMeeting)
+      setPreferredDetailView('transcript')
+    }
+
+    clearMeeting()
+    activeDurationBaseRef.current = 0
+    setIsAppendingTranscript(false)
   }, [
-    startMeeting,
-    currentSettings.saveAudio,
-    deepgram,
     audioRecorder,
-    systemAudio,
     audioSource,
-    addMeeting,
+    clearMeeting,
+    deepgram,
+    finishActiveRecordingSession,
+    meeting,
+    systemAudio,
+    updateMeeting,
   ])
 
   // Pause recording
-  const handlePause = useCallback(() => {
+  const handlePause = useCallback(async () => {
+    audioStreamingEnabledRef.current = false
+    setIsMeetingPaused(true)
+    setCurrentInterim(null)
+
     if (audioSource === 'system' && systemAudio.isCapturing) {
-      systemAudio.stop()
+      await systemAudio.stop()
     } else {
       audioRecorder.pause()
     }
     deepgram.disconnect()
-  }, [audioRecorder, deepgram, systemAudio, audioSource])
+
+    const updated = finishActiveRecordingSession(meeting)
+    if (updated) {
+      updateActiveMeeting(updated)
+      updateMeeting(updated)
+    }
+  }, [
+    audioRecorder,
+    deepgram,
+    finishActiveRecordingSession,
+    meeting,
+    systemAudio,
+    audioSource,
+    updateActiveMeeting,
+    updateMeeting,
+  ])
 
   // Resume recording
   const handleResume = useCallback(async () => {
+    const nextSession = createRecordingSession()
+    if (meeting) {
+      const updated = upsertRecordingSession(meeting, nextSession)
+      updateActiveMeeting(updated)
+      updateMeeting(updated)
+    }
+
+    setCurrentInterim(null)
+    setIsMeetingPaused(false)
+    audioStreamingEnabledRef.current = true
+
     if (audioSource === 'system' && systemAudio.isAvailable) {
       await deepgram.connect('linear16')
       await systemAudio.start('systemAudio')
     } else {
       await deepgram.connect('webm')
-      audioRecorder.resume()
+      await audioRecorder.resume()
     }
-  }, [deepgram, audioRecorder, systemAudio, audioSource])
+  }, [
+    audioRecorder,
+    audioSource,
+    createRecordingSession,
+    deepgram,
+    meeting,
+    systemAudio,
+    updateActiveMeeting,
+    updateMeeting,
+    upsertRecordingSession,
+  ])
+
+  const runEnhancement = useCallback(
+    async (targetMeeting: Meeting) => {
+      enhancementTimersRef.current.forEach((timer) => clearTimeout(timer))
+      enhancementTimersRef.current = []
+
+      setEnhancement({
+        meetingId: targetMeeting.id,
+        content: '',
+        isEnhancing: true,
+      })
+
+      const templateId =
+        targetMeeting.enhancedTemplateId ?? DEFAULT_MEETING_TEMPLATE_ID
+
+      let enhancedNotes = ''
+      let resolvedTemplateId = templateId
+      try {
+        const response = await fetchWithWorkspace(
+          `/api/meetings/${targetMeeting.id}/enhance`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ meeting: targetMeeting, templateId }),
+          },
+        )
+        const body = (await response.json()) as {
+          markdown?: string
+          templateId?: string
+          error?: string
+        }
+
+        if (!response.ok || typeof body.markdown !== 'string') {
+          throw new Error(body.error || 'Failed to generate enhanced notes')
+        }
+
+        enhancedNotes = body.markdown
+        resolvedTemplateId = body.templateId ?? templateId
+      } catch (error) {
+        console.error('Failed to generate enhanced notes:', error)
+        setEnhancement(null)
+        return
+      }
+
+      const steps = 28
+      const stepMs = 70
+
+      for (let step = 1; step <= steps; step += 1) {
+        const timer = setTimeout(() => {
+          const nextLength = Math.ceil((enhancedNotes.length * step) / steps)
+          const content = enhancedNotes.slice(0, nextLength)
+
+          setEnhancement({
+            meetingId: targetMeeting.id,
+            content,
+            isEnhancing: step < steps,
+          })
+
+          if (step === steps) {
+            const completedMeeting = {
+              ...targetMeeting,
+              enhancedNotes,
+              enhancedTemplateId: resolvedTemplateId,
+              enhancedAt: new Date(),
+              updatedAt: new Date(),
+            }
+
+            updateMeeting(completedMeeting)
+            setSelectedMeeting((current) =>
+              current?.id === completedMeeting.id ? completedMeeting : current,
+            )
+
+            const clearTimer = setTimeout(() => {
+              setEnhancement((current) =>
+                current?.meetingId === completedMeeting.id ? null : current,
+              )
+            }, 1200)
+            enhancementTimersRef.current.push(clearTimer)
+          }
+        }, step * stepMs)
+
+        enhancementTimersRef.current.push(timer)
+      }
+    },
+    [fetchWithWorkspace, updateMeeting],
+  )
 
   // End meeting
   const handleEndMeeting = useCallback(async () => {
+    let audioBlob: Blob | null = null
+    audioStreamingEnabledRef.current = false
+    setIsMeetingPaused(false)
+
     if (audioSource === 'system') {
-      systemAudio.stop()
+      await systemAudio.stop()
     } else {
-      audioRecorder.stop()
+      audioBlob = audioRecorder.stop()
     }
     deepgram.disconnect()
 
     // Save audio if enabled (only for microphone mode currently)
     let audioPath: string | undefined
     if (currentSettings.saveAudio && audioSource === 'microphone') {
-      const audioBlob = audioRecorder.stop()
       if (audioBlob) {
         const url = URL.createObjectURL(audioBlob)
         audioPath = url
       }
     }
 
-    endMeeting(audioPath)
-
     // Update meeting in list and keep it selected
     if (meeting) {
+      const completedMeeting = finishActiveRecordingSession(meeting) ?? meeting
       const endedMeeting = {
-        ...meeting,
+        ...completedMeeting,
         endedAt: new Date(),
+        updatedAt: new Date(),
         audioPath,
       }
       updateMeeting(endedMeeting)
       setSelectedMeeting(endedMeeting)
+      setPreferredDetailView(isAppendingTranscript ? 'transcript' : 'enhanced')
       clearMeeting()
+      activeDurationBaseRef.current = 0
+      setIsAppendingTranscript(false)
+
+      if (!isAppendingTranscript) {
+        void runEnhancement(endedMeeting)
+      }
     }
   }, [
     audioRecorder,
     deepgram,
     currentSettings.saveAudio,
-    endMeeting,
+    finishActiveRecordingSession,
     meeting,
     updateMeeting,
     clearMeeting,
     systemAudio,
     audioSource,
+    runEnhancement,
+    isAppendingTranscript,
   ])
 
   // View a past meeting
   const handleSelectMeeting = useCallback((m: Meeting) => {
     setSelectedMeeting(m)
+    setPreferredDetailView(null)
   }, [])
 
   // Update meeting handler (for notes changes)
   const handleUpdateMeeting = useCallback(
     (updated: Meeting) => {
       updateMeeting(updated)
+      if (meeting?.id === updated.id) {
+        updateActiveMeeting(updated)
+      }
+      if (selectedMeeting?.id === updated.id) {
+        setSelectedMeeting(updated)
+      }
     },
-    [updateMeeting],
+    [meeting?.id, selectedMeeting?.id, updateActiveMeeting, updateMeeting],
   )
 
   // Determine what to show in the main area
   const isRecording = audioRecorder.state.isRecording || systemAudio.isCapturing
-  const isPaused =
-    audioRecorder.state.isPaused ||
-    (audioSource === 'system' && !systemAudio.isCapturing && meeting?.id)
   const hasActiveMeeting = meeting !== null
+  const isPaused = hasActiveMeeting && isMeetingPaused
   const isViewingPastMeeting = selectedMeeting !== null
+  const isDetailOpen = isViewingPastMeeting || hasActiveMeeting
+  const isRecordingSessionActive =
+    hasActiveMeeting && (isRecording || !!isPaused)
+  const transcriptionStatus = deepgram.issue
+    ? {
+        tone:
+          deepgram.issue.code === 'deepgram_permissions' ||
+          deepgram.issue.code === 'deepgram_token_unavailable'
+            ? ('danger' as const)
+            : ('warning' as const),
+        message:
+          deepgram.issue.code === 'deepgram_permissions'
+            ? 'Update Deepgram key to enable transcript.'
+            : deepgram.issue.code === 'deepgram_reconnect_exhausted'
+              ? 'Audio is being saved. Transcript paused.'
+              : deepgram.issue.code === 'deepgram_connection_lost'
+                ? 'Audio is being saved. Reconnecting...'
+                : 'Transcript unavailable. Check Deepgram setup.',
+      }
+    : deepgram.state === 'connecting'
+      ? {
+          tone: 'loading' as const,
+          message: 'Connecting transcript...',
+        }
+      : deepgram.state === 'reconnecting'
+        ? {
+            tone: 'loading' as const,
+            message: 'Audio is being saved. Reconnecting...',
+          }
+        : null
 
   return (
-    <div className="bg-background flex h-screen">
-      {/* Sidebar */}
-      <div className="border-border flex w-64 flex-col border-r">
-        {/* Header: New Meeting + Settings */}
-        <div className="border-border flex h-12 items-center gap-2 border-b px-2">
-          <Button
-            size="sm"
-            onClick={handleStartMeeting}
-            disabled={hasActiveMeeting}
-            className="flex-1 cursor-pointer"
-          >
-            New Meeting
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setShowSettings(!showSettings)}
-            className="size-8 shrink-0 cursor-pointer"
-          >
-            {showSettings ? (
-              <X className="size-4" />
-            ) : (
-              <Settings className="size-4" />
-            )}
-          </Button>
-        </div>
-
-        {/* Settings Panel (collapsible) */}
-        <Collapsible open={showSettings}>
-          <CollapsibleContent>
-            <div className="border-border border-b px-3 py-2">
-              <SettingsPanel
-                settings={currentSettings}
-                onChange={handleSettingsChange}
-              />
-              {/* Audio Source Toggle (only show if in Moldable) */}
-              {systemAudio.isInMoldable && (
-                <div className="border-border mt-3 border-t pt-3">
-                  <label className="mb-2 block text-xs font-medium">
-                    Audio Source
-                  </label>
-                  <div className="flex gap-2">
-                    <Button
-                      variant={
-                        audioSource === 'microphone' ? 'default' : 'outline'
-                      }
-                      size="sm"
-                      onClick={() => setAudioSource('microphone')}
-                      disabled={isRecording}
-                      className="flex-1 cursor-pointer"
-                    >
-                      <Mic className="mr-1.5 size-3.5" />
-                      Mic
-                    </Button>
-                    <Button
-                      variant={audioSource === 'system' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setAudioSource('system')}
-                      disabled={isRecording || !systemAudio.isAvailable}
-                      className="flex-1 cursor-pointer"
-                      title={
-                        !systemAudio.isAvailable
-                          ? 'System audio requires a signed app build'
-                          : undefined
-                      }
-                    >
-                      <Monitor className="mr-1.5 size-3.5" />
-                      System
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-
-        {/* Meeting List */}
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <ScrollArea className="h-full min-h-0 px-2 py-2">
-            {meetings.length === 0 ? (
-              <div className="py-4 text-center">
-                <p className="text-muted-foreground text-xs">No meetings yet</p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {meetings.map((m) => (
-                  <AlertDialog key={m.id}>
-                    <div className="group relative">
-                      <MeetingCard
-                        meeting={m}
-                        isSelected={selectedMeeting?.id === m.id}
-                        onClick={() => handleSelectMeeting(m)}
-                      />
-                      <AlertDialogTrigger asChild>
-                        <button
-                          className={cn(
-                            'absolute right-1.5 top-1.5 flex size-5 cursor-pointer items-center justify-center rounded-sm opacity-0 transition-opacity group-hover:opacity-100',
-                            selectedMeeting?.id === m.id
-                              ? 'text-primary-foreground hover:bg-primary-foreground/20'
-                              : 'text-muted-foreground hover:bg-destructive/10 hover:text-destructive',
-                          )}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Trash2 className="size-3" />
-                        </button>
-                      </AlertDialogTrigger>
-                    </div>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete meeting?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This will permanently delete &quot;
-                          {m.title || 'Untitled meeting'}&quot;. This action
-                          cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          onClick={() => {
-                            deleteMeeting(m.id)
-                            if (selectedMeeting?.id === m.id) {
-                              setSelectedMeeting(null)
-                            }
-                          }}
-                          className="text-destructive-foreground bg-destructive hover:bg-destructive/90"
-                        >
-                          Delete
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Active Meeting Header with Recording Controls */}
-        {hasActiveMeeting && (
-          <div className="border-border flex h-12 shrink-0 items-center justify-between border-b px-4">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium">{meeting.title}</span>
-              {audioSource === 'system' && (
-                <span className="bg-muted text-muted-foreground flex items-center gap-1 rounded px-2 py-0.5 text-xs">
-                  <Monitor className="size-3" />
-                  System
-                </span>
-              )}
-            </div>
-
-            {/* Recording Controls */}
-            <div className="flex items-center gap-3">
-              {/* Audio Level + Duration */}
-              <div className="flex items-center gap-2">
-                <AudioLevelIndicator
-                  level={audioRecorder.state.audioLevel}
-                  isRecording={isRecording}
-                  isPaused={!!isPaused}
-                />
-                <span className="text-muted-foreground font-mono text-xs tabular-nums">
-                  {formatDuration(
-                    audioSource === 'system'
-                      ? meeting.duration
-                      : audioRecorder.state.duration,
-                  )}
-                </span>
-              </div>
-
-              {/* Pause/Resume */}
+    <div className="bg-background flex h-screen flex-col">
+      {!isDetailOpen && (
+        <div className="shrink-0 px-5 py-3">
+          <div className="mx-auto flex w-full max-w-[44rem] justify-end gap-1">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleStartMeeting}
+              disabled={hasActiveMeeting}
+              className="text-muted-foreground hover:bg-muted hover:text-foreground h-8 cursor-pointer rounded-full px-3"
+            >
+              <Plus className="mr-1.5 size-4" />
+              New meeting
+            </Button>
+            <div className="ml-2">
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={isPaused ? handleResume : handlePause}
-                className="size-8 cursor-pointer"
+                onClick={() => setShowSettings(true)}
+                className="text-muted-foreground hover:bg-muted hover:text-foreground size-8 shrink-0 cursor-pointer rounded-full"
+                title="Settings"
               >
-                {isPaused ? (
-                  <Play className="size-4" />
-                ) : (
-                  <Pause className="size-4" />
-                )}
-              </Button>
-
-              {/* End Meeting */}
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleEndMeeting}
-                className="cursor-pointer gap-1.5"
-              >
-                <Square className="size-3" fill="currentColor" />
-                End
+                <Settings className="size-4" />
               </Button>
             </div>
           </div>
-        )}
-
-        {/* Content Area */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {isViewingPastMeeting ? (
-            // Viewing a past meeting - show header with title + two pane view
-            <div className="flex h-full flex-col overflow-hidden">
-              {/* Past Meeting Header */}
-              <div className="border-border flex h-12 shrink-0 items-center border-b px-4">
-                <Input
-                  value={selectedMeeting.title || 'Untitled meeting'}
-                  onChange={(e) => {
-                    const updated = {
-                      ...selectedMeeting,
-                      title: e.target.value,
-                    }
-                    setSelectedMeeting(updated)
-                    updateMeeting(updated)
-                  }}
-                  className="h-8 w-80 border-none bg-transparent px-0 text-sm font-medium shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-                  placeholder="Meeting title"
-                />
-              </div>
-              {/* Two pane view */}
-              <TwoPaneMeetingView
-                meeting={selectedMeeting}
-                isActive={false}
-                onUpdateMeeting={(updated) => {
-                  setSelectedMeeting(updated)
-                  handleUpdateMeeting(updated)
-                }}
-              />
-            </div>
-          ) : hasActiveMeeting ? (
-            // Active recording - two pane view with live transcript
-            <TwoPaneMeetingView
-              meeting={meeting}
-              isActive={isRecording}
-              onUpdateMeeting={handleUpdateMeeting}
-            />
-          ) : (
-            // Empty state
-            <EmptyState />
-          )}
         </div>
+      )}
+
+      <SettingsModal
+        open={showSettings}
+        onOpenChange={setShowSettings}
+        settings={currentSettings}
+        onSettingsChange={handleSettingsChange}
+        audioSource={audioSource}
+        onAudioSourceChange={setAudioSource}
+        showAudioSource={systemAudio.isInMoldable}
+        systemAudioAvailable={systemAudio.isAvailable}
+        recordingActive={isRecording}
+      />
+
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {isViewingPastMeeting ? (
+          <MeetingView
+            meeting={selectedMeeting}
+            isActive={false}
+            preferredView={preferredDetailView ?? undefined}
+            enhancement={enhancement}
+            currentInterim={null}
+            currentRecordingSessionId={null}
+            onBack={() => {
+              setSelectedMeeting(null)
+              setPreferredDetailView(null)
+            }}
+            onMoveToTrash={() => {
+              deleteMeeting(selectedMeeting.id)
+              setSelectedMeeting(null)
+              setPreferredDetailView(null)
+            }}
+            onResumeRecording={() =>
+              void handleResumeExistingMeeting(selectedMeeting)
+            }
+            onUpdateMeeting={(updated) => {
+              setSelectedMeeting(updated)
+              handleUpdateMeeting(updated)
+            }}
+          />
+        ) : hasActiveMeeting ? (
+          <MeetingView
+            meeting={meeting}
+            isActive={isRecording}
+            isPaused={!!isPaused}
+            backDisabled
+            preferredView={preferredDetailView ?? undefined}
+            enhancement={enhancement}
+            currentInterim={currentInterim}
+            currentRecordingSessionId={activeRecordingSessionRef.current?.id}
+            onBack={() => {
+              setSelectedMeeting(null)
+              setPreferredDetailView(null)
+            }}
+            onUpdateMeeting={handleUpdateMeeting}
+            onResumeRecording={isAppendingTranscript ? handleResume : undefined}
+            onPauseRecording={
+              isAppendingTranscript ? handleStopAppendingTranscript : undefined
+            }
+          />
+        ) : meetings.length > 0 ? (
+          <MeetingsList
+            meetings={meetings}
+            calendarEvents={calendarEvents}
+            onStartEvent={(event) =>
+              void handleStartMeeting(event.title || 'Calendar meeting')
+            }
+            onGrantCalendarAccess={() =>
+              void loadCalendarEvents({ requestAccess: true })
+            }
+            onSelectMeeting={handleSelectMeeting}
+            onDeleteMeeting={deleteMeeting}
+          />
+        ) : (
+          <EmptyState onStart={handleStartMeeting} />
+        )}
       </div>
+      {hasActiveMeeting && !isAppendingTranscript && (
+        <RecordingDock
+          isRecording={isRecordingSessionActive}
+          isPaused={!!isPaused}
+          duration={meeting.duration}
+          audioLevel={audioRecorder.state.audioLevel}
+          isEnhancing={Boolean(enhancement?.isEnhancing)}
+          transcriptionStatus={transcriptionStatus}
+          onStart={handleStartMeeting}
+          onPause={handlePause}
+          onResume={handleResume}
+          onStop={handleEndMeeting}
+          disabled={!hasActiveMeeting}
+        />
+      )}
     </div>
   )
 }

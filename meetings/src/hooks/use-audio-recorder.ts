@@ -64,10 +64,12 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
   const audioContextRef = useRef<AudioContext | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const startTimeRef = useRef<number>(0)
-  const pausedDurationRef = useRef<number>(0)
+  const accumulatedDurationRef = useRef<number>(0)
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const levelIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const chunksRef = useRef<Blob[]>([])
+  const recorderGenerationRef = useRef(0)
+  const liveRecorderGenerationRef = useRef(0)
 
   const updateState = useCallback(
     (updates: Partial<AudioRecorderState>) => {
@@ -85,7 +87,8 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
 
     durationIntervalRef.current = setInterval(() => {
       const elapsed =
-        (Date.now() - startTimeRef.current) / 1000 + pausedDurationRef.current
+        (Date.now() - startTimeRef.current) / 1000 +
+        accumulatedDurationRef.current
       updateState({ duration: elapsed })
     }, 100)
   }, [updateState])
@@ -119,8 +122,17 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
     }
   }, [])
 
-  const start = useCallback(async () => {
-    try {
+  const cleanupMediaResources = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+
+    void audioContextRef.current?.close()
+    audioContextRef.current = null
+    analyserRef.current = null
+  }, [])
+
+  const startRecorder = useCallback(
+    async (resetSession: boolean) => {
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -160,6 +172,10 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
       mimeTypeRef.current = mediaRecorder.mimeType || mimeType || 'audio/webm'
       console.log('[AudioRecorder] Actual MIME type:', mimeTypeRef.current)
 
+      const recorderGeneration = recorderGenerationRef.current + 1
+      recorderGenerationRef.current = recorderGeneration
+      liveRecorderGenerationRef.current = recorderGeneration
+
       let chunkCount = 0
       mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
@@ -170,7 +186,9 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
             )
           }
           chunksRef.current.push(event.data)
-          onDataAvailable?.(event.data)
+          if (liveRecorderGenerationRef.current === recorderGeneration) {
+            onDataAvailable?.(event.data)
+          }
         }
       }
 
@@ -179,12 +197,14 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
       }
 
       mediaRecorderRef.current = mediaRecorder
-      chunksRef.current = []
 
-      // Start recording
+      if (resetSession) {
+        chunksRef.current = []
+        accumulatedDurationRef.current = 0
+      }
+
       mediaRecorder.start(timeslice)
       startTimeRef.current = Date.now()
-      pausedDurationRef.current = 0
 
       startDurationTimer()
       startLevelMonitoring()
@@ -192,64 +212,81 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
       updateState({
         isRecording: true,
         isPaused: false,
-        duration: 0,
+        duration: accumulatedDurationRef.current,
         audioLevel: 0,
       })
+    },
+    [
+      getSupportedMimeType,
+      onDataAvailable,
+      onError,
+      timeslice,
+      startDurationTimer,
+      startLevelMonitoring,
+      updateState,
+    ],
+  )
+
+  const start = useCallback(async () => {
+    try {
+      await startRecorder(true)
     } catch (error) {
       onError?.(error as Error)
     }
-  }, [
-    getSupportedMimeType,
-    onDataAvailable,
-    onError,
-    timeslice,
-    startDurationTimer,
-    startLevelMonitoring,
-    updateState,
-  ])
+  }, [onError, startRecorder])
 
   const pause = useCallback(() => {
     if (mediaRecorderRef.current?.state === 'recording') {
-      mediaRecorderRef.current.pause()
-      pausedDurationRef.current += (Date.now() - startTimeRef.current) / 1000
+      accumulatedDurationRef.current +=
+        (Date.now() - startTimeRef.current) / 1000
       stopDurationTimer()
       stopLevelMonitoring()
-      updateState({ isPaused: true, audioLevel: 0 })
+      liveRecorderGenerationRef.current = 0
+      mediaRecorderRef.current.stop()
+      mediaRecorderRef.current = null
+      cleanupMediaResources()
+      updateState({
+        isRecording: true,
+        isPaused: true,
+        duration: accumulatedDurationRef.current,
+        audioLevel: 0,
+      })
     }
-  }, [stopDurationTimer, stopLevelMonitoring, updateState])
+  }, [
+    cleanupMediaResources,
+    stopDurationTimer,
+    stopLevelMonitoring,
+    updateState,
+  ])
 
-  const resume = useCallback(() => {
-    if (mediaRecorderRef.current?.state === 'paused') {
-      mediaRecorderRef.current.resume()
-      startTimeRef.current = Date.now()
-      startDurationTimer()
-      startLevelMonitoring()
-      updateState({ isPaused: false })
+  const resume = useCallback(async () => {
+    if (state.isPaused) {
+      try {
+        await startRecorder(false)
+      } catch (error) {
+        onError?.(error as Error)
+      }
     }
-  }, [startDurationTimer, startLevelMonitoring, updateState])
+  }, [onError, startRecorder, state.isPaused])
 
   const stop = useCallback((): Blob | null => {
     stopDurationTimer()
     stopLevelMonitoring()
 
     if (mediaRecorderRef.current?.state !== 'inactive') {
+      liveRecorderGenerationRef.current = 0
       mediaRecorderRef.current?.stop()
     }
 
-    // Cleanup stream
-    streamRef.current?.getTracks().forEach((track) => track.stop())
-    streamRef.current = null
-
-    // Cleanup audio context
-    audioContextRef.current?.close()
-    audioContextRef.current = null
-    analyserRef.current = null
+    mediaRecorderRef.current = null
+    cleanupMediaResources()
 
     updateState({
       isRecording: false,
       isPaused: false,
       audioLevel: 0,
     })
+    accumulatedDurationRef.current = 0
 
     // Return recorded audio
     if (chunksRef.current.length > 0) {
@@ -261,7 +298,12 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
     }
 
     return null
-  }, [stopDurationTimer, stopLevelMonitoring, updateState])
+  }, [
+    cleanupMediaResources,
+    stopDurationTimer,
+    stopLevelMonitoring,
+    updateState,
+  ])
 
   const cleanup = useCallback(() => {
     stop()

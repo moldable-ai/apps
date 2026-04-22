@@ -35,13 +35,13 @@ export function RecordingControls({
         {isRecording && !isPaused && (
           <>
             <div
-              className="absolute inset-0 rounded-full bg-red-500/20 transition-transform duration-100"
+              className="bg-destructive/20 absolute inset-0 rounded-full transition-transform duration-100"
               style={{
                 transform: `scale(${1 + audioLevel * 0.3})`,
               }}
             />
             <div
-              className="absolute inset-4 rounded-full bg-red-500/30 transition-transform duration-100"
+              className="bg-destructive/30 absolute inset-4 rounded-full transition-transform duration-100"
               style={{
                 transform: `scale(${1 + audioLevel * 0.2})`,
               }}
@@ -57,20 +57,20 @@ export function RecordingControls({
             'relative z-10 flex h-20 w-20 items-center justify-center rounded-full transition-all',
             isRecording
               ? isPaused
-                ? 'bg-amber-500 hover:bg-amber-600'
-                : 'bg-red-500 hover:bg-red-600'
+                ? 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                : 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
               : 'bg-primary hover:bg-primary/90',
             disabled && 'cursor-not-allowed opacity-50',
           )}
         >
           {isRecording ? (
             isPaused ? (
-              <Play className="h-8 w-8 text-white" fill="white" />
+              <Play className="h-8 w-8" fill="currentColor" />
             ) : (
-              <Pause className="h-8 w-8 text-white" fill="white" />
+              <Pause className="h-8 w-8" fill="currentColor" />
             )
           ) : (
-            <Mic className="h-8 w-8 text-white" />
+            <Mic className="text-primary-foreground h-8 w-8" />
           )}
         </button>
       </div>

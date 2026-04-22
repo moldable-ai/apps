@@ -10,6 +10,7 @@
   "icon": "🛠️",
   "iconPath": "public/icon.png",
   "widgetSize": "medium",
+  "widgetTint": "amber",
   "routeName": "git-flow",
   "category": "developer",
   "tags": ["git", "version-control", "developer", "code"],

@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useState } from 'react'
 import { useWorkspace } from '@moldable-ai/ui'
-import type { Meeting, TranscriptSegment } from '@/types'
+import type { Meeting, RecordingSession, TranscriptSegment } from '@/types'
 
 export function useMeetings() {
   const queryClient = useQueryClient()
@@ -28,6 +28,12 @@ export function useMeetings() {
         createdAt: new Date(m.createdAt),
         updatedAt: new Date(m.updatedAt),
         endedAt: m.endedAt ? new Date(m.endedAt) : undefined,
+        enhancedAt: m.enhancedAt ? new Date(m.enhancedAt) : undefined,
+        recordingSessions: m.recordingSessions?.map((session) => ({
+          ...session,
+          startedAt: new Date(session.startedAt),
+          endedAt: session.endedAt ? new Date(session.endedAt) : undefined,
+        })),
         segments: m.segments.map((s) => ({
           ...s,
           createdAt: new Date(s.createdAt),
@@ -97,6 +103,14 @@ export function useMeetings() {
         createdAt: new Date(meeting.createdAt),
         updatedAt: new Date(meeting.updatedAt),
         endedAt: meeting.endedAt ? new Date(meeting.endedAt) : undefined,
+        enhancedAt: meeting.enhancedAt
+          ? new Date(meeting.enhancedAt)
+          : undefined,
+        recordingSessions: meeting.recordingSessions?.map((session) => ({
+          ...session,
+          startedAt: new Date(session.startedAt),
+          endedAt: session.endedAt ? new Date(session.endedAt) : undefined,
+        })),
         segments: meeting.segments.map((s) => ({
           ...s,
           createdAt: new Date(s.createdAt),
@@ -122,7 +136,12 @@ export function useActiveMeeting() {
   const [meeting, setMeeting] = useState<Meeting | null>(null)
 
   const startMeeting = useCallback(
-    (id: string, title: string, saveAudio: boolean) => {
+    (
+      id: string,
+      title: string,
+      saveAudio: boolean,
+      initialRecordingSession?: RecordingSession,
+    ) => {
       const newMeeting: Meeting = {
         id,
         title,
@@ -130,6 +149,9 @@ export function useActiveMeeting() {
         updatedAt: new Date(),
         duration: 0,
         segments: [],
+        recordingSessions: initialRecordingSession
+          ? [initialRecordingSession]
+          : [],
         saveAudio,
       }
       setMeeting(newMeeting)
@@ -182,6 +204,10 @@ export function useActiveMeeting() {
     [fetchWithWorkspace],
   )
 
+  const updateActiveMeeting = useCallback((meetingUpdate: Meeting) => {
+    setMeeting(meetingUpdate)
+  }, [])
+
   const endMeeting = useCallback(
     (audioPath?: string) => {
       setMeeting((prev) => {
@@ -213,6 +239,7 @@ export function useActiveMeeting() {
     addSegment,
     updateDuration,
     updateTitle,
+    updateActiveMeeting,
     endMeeting,
     clearMeeting,
   }

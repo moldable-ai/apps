@@ -640,16 +640,11 @@ export default function Home() {
                               </a>
                             </li>
                             <li>
-                              Create{' '}
+                              Add{' '}
                               <code className="bg-warning/20 rounded px-1">
-                                apps/scribo/.env.local
-                              </code>
-                            </li>
-                            <li>
-                              Add:{' '}
-                              <code className="bg-warning/20 rounded px-1">
-                                DEEPL_API_KEY=your-key
-                              </code>
+                                DEEPL_API_KEY
+                              </code>{' '}
+                              in Moldable Settings &gt; Vault
                             </li>
                             <li>Restart the app</li>
                           </ol>
