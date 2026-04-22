@@ -468,6 +468,12 @@ export default function GitFlowPage() {
     },
   })
 
+  const repositoryControlsDisabled =
+    commitMutation.isPending ||
+    pushMutation.isPending ||
+    undoMutation.isPending ||
+    repoMutation.isPending
+
   const filteredFiles = useMemo(() => {
     const files = data?.files ?? []
     const filter = fileFilter.trim().toLowerCase()
@@ -847,6 +853,8 @@ export default function GitFlowPage() {
   }
 
   const handleRepoChange = (repoPath: string) => {
+    if (repositoryControlsDisabled) return
+
     setError(null)
     setCodeReview(null)
     repoMutation.mutate(repoPath)
@@ -933,6 +941,8 @@ export default function GitFlowPage() {
   }
 
   const handlePickFolder = async () => {
+    if (repositoryControlsDisabled) return
+
     try {
       const selected = await new Promise<string | null>((resolve) => {
         const requestId = crypto.randomUUID()
@@ -1019,8 +1029,17 @@ export default function GitFlowPage() {
       <header className="bg-muted/30 flex h-12 shrink-0 items-center justify-between border-b pl-2 pr-4 backdrop-blur-md">
         <div className="flex items-center gap-1.5">
           <div className="flex items-center gap-2">
-            <Select value={data?.repoPath} onValueChange={handleRepoChange}>
-              <SelectTrigger className="hover:bg-muted/35 border-border/60 bg-background [&>svg]:text-muted-foreground h-9 min-w-[200px] max-w-[320px] rounded-[15px] border shadow-sm transition-colors [&>svg]:size-3.5 [&>svg]:opacity-100">
+            <Select
+              value={data?.repoPath}
+              onValueChange={handleRepoChange}
+              disabled={repositoryControlsDisabled}
+            >
+              <SelectTrigger
+                className={cn(
+                  'hover:bg-muted/35 border-border/60 bg-background [&>svg]:text-muted-foreground h-9 min-w-[200px] max-w-[320px] rounded-[15px] border shadow-sm transition-colors [&>svg]:size-3.5 [&>svg]:opacity-100',
+                  repositoryControlsDisabled && 'cursor-not-allowed opacity-60',
+                )}
+              >
                 <div className="flex flex-col items-start gap-0">
                   <div className="flex items-center gap-1.5">
                     <FolderGit className="text-foreground size-3.5 shrink-0" />
@@ -1041,7 +1060,8 @@ export default function GitFlowPage() {
                 <div className="bg-muted/10 border-b p-1">
                   <button
                     onClick={handlePickFolder}
-                    className="text-muted-foreground hover:bg-accent hover:text-foreground flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-[11px] font-bold transition-colors"
+                    disabled={repositoryControlsDisabled}
+                    className="text-muted-foreground hover:bg-accent hover:text-foreground flex w-full cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-[11px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <FolderOpen className="size-3.5" />
                     Open Local Repository...
@@ -1074,8 +1094,17 @@ export default function GitFlowPage() {
 
           {/* Branch Selector */}
           <div className="flex items-center gap-2">
-            <Select value={data?.currentBranch} onValueChange={() => {}}>
-              <SelectTrigger className="hover:bg-muted/35 border-border/60 bg-background [&>svg]:text-muted-foreground h-9 w-[160px] rounded-[15px] border font-medium shadow-sm transition-colors [&>svg]:size-3.5 [&>svg]:opacity-100">
+            <Select
+              value={data?.currentBranch}
+              onValueChange={() => {}}
+              disabled={repositoryControlsDisabled}
+            >
+              <SelectTrigger
+                className={cn(
+                  'hover:bg-muted/35 border-border/60 bg-background [&>svg]:text-muted-foreground h-9 w-[160px] rounded-[15px] border font-medium shadow-sm transition-colors [&>svg]:size-3.5 [&>svg]:opacity-100',
+                  repositoryControlsDisabled && 'cursor-not-allowed opacity-60',
+                )}
+              >
                 <div className="flex items-center gap-2">
                   <GitBranch className="text-muted-foreground size-3.5" />
                   <SelectValue placeholder="Select branch" />
@@ -1142,7 +1171,7 @@ export default function GitFlowPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => pushMutation.mutate()}
-            disabled={pushMutation.isPending || !hasUnpushedCommits}
+            disabled={repositoryControlsDisabled || !hasUnpushedCommits}
             title={hasUnpushedCommits ? 'Push to Remote' : 'No commits to push'}
             className="hover:bg-primary/10 text-primary flex h-8 cursor-pointer items-center gap-2 rounded-md px-3 text-xs font-bold transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -1159,7 +1188,8 @@ export default function GitFlowPage() {
               <TooltipTrigger asChild>
                 <button
                   onClick={() => fetchData()}
-                  className="hover:bg-accent text-muted-foreground flex size-8 cursor-pointer items-center justify-center rounded-md transition-all active:scale-95"
+                  disabled={repositoryControlsDisabled || loading}
+                  className="hover:bg-accent text-muted-foreground flex size-8 cursor-pointer items-center justify-center rounded-md transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Refresh status"
                 >
                   <RefreshCw
