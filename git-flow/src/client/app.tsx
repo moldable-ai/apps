@@ -37,6 +37,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
   sendToMoldable,
+  useMoldableCommands,
   useWorkspace,
 } from '@moldable-ai/ui'
 import { cn } from '@/lib/utils'
@@ -850,6 +851,16 @@ export default function GitFlowPage() {
     setCodeReview(null)
     repoMutation.mutate(repoPath)
   }
+
+  useMoldableCommands({
+    'switch-repository': (payload) => {
+      const repoPath = (payload as { repoPath?: unknown } | null)?.repoPath
+
+      if (typeof repoPath === 'string') {
+        handleRepoChange(repoPath)
+      }
+    },
+  })
 
   const handleReviewCode = () => {
     if (selectedFiles.size === 0) {

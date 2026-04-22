@@ -124,6 +124,27 @@ export const app = new Hono()
 
 app.use('/api/*', cors())
 
+app.get('/api/moldable/commands', async (c) => {
+  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const repos = await getRecentRepos(workspaceId)
+
+  return c.json({
+    commands: repos.map((repo) => ({
+      id: `switch-repository:${encodeURIComponent(repo.path)}`,
+      label: repo.name,
+      description: repo.path,
+      icon: 'folder-git',
+      status: repo.isDirty ? 'modified' : undefined,
+      group: 'Repositories',
+      action: {
+        type: 'message',
+        command: 'switch-repository',
+        payload: { repoPath: repo.path },
+      },
+    })),
+  })
+})
+
 async function generateCommitMessage(paths: string[], workspaceId?: string) {
   if (!Array.isArray(paths) || paths.length === 0) {
     throw new Error('At least one selected file is required.')
