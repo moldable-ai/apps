@@ -5,7 +5,7 @@
   "description": "A Google Keep-style note taking app with pinning and markdown support",
   "runtime": "vite_hono",
   "author": "Moldable Team",
-  "license": "MIT",
+  "license": "FSL-1.1-ALv2",
   "repository": "moldable-ai/apps",
   "icon": "📝",
   "iconPath": "public/icon.png",

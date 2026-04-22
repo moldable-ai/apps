@@ -77,7 +77,7 @@ app-name/
   "visibility": "public",
   "description": "What the app does",
   "author": "Your Name",
-  "license": "MIT",
+  "license": "FSL-1.1-ALv2",
   "repository": "moldable-ai/apps",
   "icon": "📦",
   "iconPath": "public/icon.png",
@@ -157,7 +157,7 @@ This preserves local dependencies, lockfiles, and Moldable runtime metadata.
 
 ## License
 
-[MIT](LICENSE)
+[FSL-1.1-ALv2](LICENSE)
 
 ---
 

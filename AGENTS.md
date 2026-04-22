@@ -43,7 +43,7 @@ app-name/
   "visibility": "public" | "private",
   "description": "What the app does",
   "author": "Moldable Team",
-  "license": "MIT",
+  "license": "FSL-1.1-ALv2",
   "repository": "moldable-ai/apps",
   "icon": "📦",
   "iconPath": "public/icon.png",

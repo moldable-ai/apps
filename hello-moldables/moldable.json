@@ -5,7 +5,7 @@
   "description": "Welcome to Moldable! Learn how to build and modify apps with AI.",
   "env": [],
   "icon": "👋",
-  "license": "MIT",
+  "license": "FSL-1.1-ALv2",
   "modified": false,
   "runtime": "vite_hono",
   "moldableDependencies": {

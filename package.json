@@ -24,7 +24,7 @@
     "type": "git",
     "url": "https://github.com/moldable-ai/apps.git"
   },
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "devDependencies": {
     "@eslint/js": "^9.28.0",
     "@trivago/prettier-plugin-sort-imports": "5.2.2",

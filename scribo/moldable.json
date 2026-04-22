@@ -5,7 +5,7 @@
   "description": "Language learning journal with AI-powered translations",
   "runtime": "vite_hono",
   "author": "Moldable Team",
-  "license": "MIT",
+  "license": "FSL-1.1-ALv2",
   "repository": "moldable-ai/apps",
   "icon": "📓",
   "iconPath": "public/icon.png",

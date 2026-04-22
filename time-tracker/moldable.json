@@ -5,7 +5,7 @@
   "description": "Track time for work projects with weekly views and export",
   "runtime": "vite_hono",
   "author": "",
-  "license": "MIT",
+  "license": "FSL-1.1-ALv2",
   "icon": "⏱️",
   "iconPath": "public/icon.png",
   "widgetSize": "medium",

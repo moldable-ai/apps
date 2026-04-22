@@ -5,7 +5,7 @@
   "visibility": "public",
   "description": "Record, transcribe, and summarize meetings with real-time transcription",
   "author": "Moldable Team",
-  "license": "MIT",
+  "license": "FSL-1.1-ALv2",
   "repository": "moldable-ai/apps",
   "icon": "🎙️",
   "iconPath": "public/icon.png",
