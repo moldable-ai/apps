@@ -16,6 +16,173 @@
     "@moldable-ai/ui": "^0.2.6",
     "@moldable-ai/storage": "^0.1.3"
   },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "time-tracker.time",
+        "name": "Time tracking",
+        "description": "Read and manage time tracker projects, entries, timer state, and summaries.",
+        "scopes": [
+          {
+            "id": "time.projects.list",
+            "name": "List projects",
+            "description": "List time tracking projects.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": { "type": "string" },
+                "includeArchived": { "type": "boolean" },
+                "limit": { "type": "number", "minimum": 1, "maximum": 500 }
+              }
+            }
+          },
+          {
+            "id": "time.projects.create",
+            "name": "Create project",
+            "description": "Create a time tracking project.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "color": { "type": "string" }
+              },
+              "required": ["name"]
+            }
+          },
+          {
+            "id": "time.projects.update",
+            "name": "Update project",
+            "description": "Update a project name, color, or archived state.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "color": { "type": "string" },
+                "archived": { "type": "boolean" }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "time.entries.list",
+            "name": "List entries",
+            "description": "List time entries filtered by date range, project, or text.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "startDate": { "type": "string", "description": "YYYY-MM-DD" },
+                "endDate": { "type": "string", "description": "YYYY-MM-DD" },
+                "projectId": { "type": "string" },
+                "query": { "type": "string" },
+                "limit": { "type": "number", "minimum": 1, "maximum": 500 }
+              }
+            }
+          },
+          {
+            "id": "time.entries.create",
+            "name": "Create entry",
+            "description": "Create a manual time entry.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "projectId": { "type": "string" },
+                "description": { "type": "string" },
+                "startTime": {
+                  "type": "string",
+                  "description": "ISO datetime"
+                },
+                "endTime": { "type": "string", "description": "ISO datetime" },
+                "duration": {
+                  "type": "number",
+                  "description": "Duration in seconds."
+                }
+              },
+              "required": ["projectId", "startTime"]
+            }
+          },
+          {
+            "id": "time.entries.update",
+            "name": "Update entry",
+            "description": "Update a time entry.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "projectId": { "type": "string" },
+                "description": { "type": "string" },
+                "startTime": { "type": "string" },
+                "endTime": { "type": "string" },
+                "duration": { "type": "number" }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "time.entries.delete",
+            "name": "Delete entry",
+            "description": "Delete a time entry.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "time.timer.get",
+            "name": "Get timer",
+            "description": "Get current timer state."
+          },
+          {
+            "id": "time.timer.start",
+            "name": "Start timer",
+            "description": "Start the active timer.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "projectId": { "type": "string" },
+                "description": { "type": "string" }
+              },
+              "required": ["projectId"]
+            }
+          },
+          {
+            "id": "time.timer.update",
+            "name": "Update timer",
+            "description": "Update running timer project or description.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "projectId": { "type": "string" },
+                "description": { "type": "string" }
+              }
+            }
+          },
+          {
+            "id": "time.timer.stop",
+            "name": "Stop timer",
+            "description": "Stop the active timer and create a time entry."
+          },
+          {
+            "id": "time.summary",
+            "name": "Time summary",
+            "description": "Summarize tracked time by project over an optional date range.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "startDate": { "type": "string", "description": "YYYY-MM-DD" },
+                "endDate": { "type": "string", "description": "YYYY-MM-DD" },
+                "projectId": { "type": "string" }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
   "env": [],
   "routeName": "time-tracker"
 }

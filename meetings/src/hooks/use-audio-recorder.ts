@@ -14,10 +14,17 @@ export interface UseAudioRecorderOptions {
   onStateChange?: (state: AudioRecorderState) => void
   onError?: (error: Error) => void
   timeslice?: number
+  keepChunks?: boolean
 }
 
 export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
-  const { onDataAvailable, onStateChange, onError, timeslice = 250 } = options
+  const {
+    onDataAvailable,
+    onStateChange,
+    onError,
+    timeslice = 250,
+    keepChunks = true,
+  } = options
 
   const [state, setState] = useState<AudioRecorderState>({
     isRecording: false,
@@ -131,6 +138,43 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
     analyserRef.current = null
   }, [])
 
+  const createBlobFromChunks = useCallback((): Blob | null => {
+    if (chunksRef.current.length === 0) return null
+
+    const blob = new Blob(chunksRef.current, {
+      type: mimeTypeRef.current,
+    })
+    chunksRef.current = []
+    return blob
+  }, [])
+
+  const stopRecorderForBlob = useCallback(async (): Promise<Blob | null> => {
+    const recorder = mediaRecorderRef.current
+    if (!recorder) return createBlobFromChunks()
+
+    return new Promise<Blob | null>((resolve) => {
+      const previousOnStop = recorder.onstop
+      recorder.onstop = (event) => {
+        previousOnStop?.call(recorder, event)
+        liveRecorderGenerationRef.current = 0
+        resolve(createBlobFromChunks())
+      }
+
+      if (recorder.state === 'inactive') {
+        liveRecorderGenerationRef.current = 0
+        resolve(createBlobFromChunks())
+        return
+      }
+
+      try {
+        recorder.requestData()
+      } catch {
+        // Some browsers do not allow requestData this close to stop.
+      }
+      recorder.stop()
+    })
+  }, [createBlobFromChunks])
+
   const startRecorder = useCallback(
     async (resetSession: boolean) => {
       // Request microphone access
@@ -185,7 +229,9 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
               `[AudioRecorder] 🎤 Chunk #${chunkCount}: ${event.data.size} bytes, type: ${event.data.type}`,
             )
           }
-          chunksRef.current.push(event.data)
+          if (keepChunks) {
+            chunksRef.current.push(event.data)
+          }
           if (liveRecorderGenerationRef.current === recorderGeneration) {
             onDataAvailable?.(event.data)
           }
@@ -218,6 +264,7 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
     },
     [
       getSupportedMimeType,
+      keepChunks,
       onDataAvailable,
       onError,
       timeslice,
@@ -235,14 +282,13 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
     }
   }, [onError, startRecorder])
 
-  const pause = useCallback(() => {
+  const pause = useCallback(async (): Promise<Blob | null> => {
     if (mediaRecorderRef.current?.state === 'recording') {
       accumulatedDurationRef.current +=
         (Date.now() - startTimeRef.current) / 1000
       stopDurationTimer()
       stopLevelMonitoring()
-      liveRecorderGenerationRef.current = 0
-      mediaRecorderRef.current.stop()
+      const blob = await stopRecorderForBlob()
       mediaRecorderRef.current = null
       cleanupMediaResources()
       updateState({
@@ -251,32 +297,35 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
         duration: accumulatedDurationRef.current,
         audioLevel: 0,
       })
+      return blob
     }
+    return null
   }, [
     cleanupMediaResources,
+    stopRecorderForBlob,
     stopDurationTimer,
     stopLevelMonitoring,
     updateState,
   ])
 
-  const resume = useCallback(async () => {
-    if (state.isPaused) {
-      try {
-        await startRecorder(false)
-      } catch (error) {
-        onError?.(error as Error)
+  const resume = useCallback(
+    async (resetSession = false) => {
+      if (state.isPaused) {
+        try {
+          await startRecorder(resetSession)
+        } catch (error) {
+          onError?.(error as Error)
+        }
       }
-    }
-  }, [onError, startRecorder, state.isPaused])
+    },
+    [onError, startRecorder, state.isPaused],
+  )
 
-  const stop = useCallback((): Blob | null => {
+  const stop = useCallback(async (): Promise<Blob | null> => {
     stopDurationTimer()
     stopLevelMonitoring()
 
-    if (mediaRecorderRef.current?.state !== 'inactive') {
-      liveRecorderGenerationRef.current = 0
-      mediaRecorderRef.current?.stop()
-    }
+    const blob = await stopRecorderForBlob()
 
     mediaRecorderRef.current = null
     cleanupMediaResources()
@@ -287,26 +336,17 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
       audioLevel: 0,
     })
     accumulatedDurationRef.current = 0
-
-    // Return recorded audio
-    if (chunksRef.current.length > 0) {
-      const blob = new Blob(chunksRef.current, {
-        type: mimeTypeRef.current,
-      })
-      chunksRef.current = []
-      return blob
-    }
-
-    return null
+    return blob
   }, [
     cleanupMediaResources,
+    stopRecorderForBlob,
     stopDurationTimer,
     stopLevelMonitoring,
     updateState,
   ])
 
   const cleanup = useCallback(() => {
-    stop()
+    void stop()
     mediaRecorderRef.current = null
   }, [stop])
 

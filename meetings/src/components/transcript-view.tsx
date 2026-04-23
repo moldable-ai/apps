@@ -4,9 +4,11 @@ import { Loader2, Play, Square } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button, cn } from '@moldable-ai/ui'
 import { formatDuration, formatTimestamp } from '@/lib/format'
+import { SessionAudioPlayer } from './session-audio-player'
 import type { RecordingSession, TranscriptSegment } from '@/types'
 
 interface TranscriptViewProps {
+  meetingId: string
   segments: TranscriptSegment[]
   recordingSessions?: RecordingSession[]
   currentInterim?: string | null
@@ -27,6 +29,7 @@ type TranscriptSessionGroup = {
   sessionNumber: number
   startedAt?: Date
   endedAt?: Date
+  audioPath?: string
   segments: TranscriptSegment[]
 }
 
@@ -46,6 +49,7 @@ function formatSessionTime(date?: Date): string {
 }
 
 export function TranscriptView({
+  meetingId,
   segments,
   recordingSessions = [],
   currentInterim,
@@ -97,6 +101,7 @@ export function TranscriptView({
       sessionNumber: index + 1,
       startedAt: session.startedAt,
       endedAt: session.endedAt,
+      audioPath: session.audioPath,
       segments: [...(segmentsBySession.get(session.id) ?? [])].sort(
         (a, b) => a.startTime - b.startTime,
       ),
@@ -206,6 +211,13 @@ export function TranscriptView({
                         - {formatDuration(sessionDuration)}
                       </span>
                     )}
+                    {session.audioPath ? (
+                      <SessionAudioPlayer
+                        meetingId={meetingId}
+                        sessionId={session.id}
+                        className="ml-1"
+                      />
+                    ) : null}
                     {isLive && showInterimInSession && (
                       <span className="text-muted-foreground/80 inline-flex items-center gap-1">
                         <Loader2 className="size-3 animate-spin" />

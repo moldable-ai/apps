@@ -31,6 +31,7 @@ import {
   useWorkspace,
 } from '@moldable-ai/ui'
 import { formatRelativeTime } from '@/lib/format'
+import { normalizeGeneratedMarkdown } from '@/lib/markdown'
 import {
   DEFAULT_MEETING_TEMPLATE_ID,
   MEETING_TEMPLATES,
@@ -120,7 +121,7 @@ export function MeetingView({
   )
   const [manualNotes, setManualNotes] = useState(meeting.notes || '')
   const [enhancedNotes, setEnhancedNotes] = useState(
-    meeting.enhancedNotes || '',
+    normalizeGeneratedMarkdown(meeting.enhancedNotes || ''),
   )
   const [titleDraft, setTitleDraft] = useState(meeting.title || '')
   const [isSaving, setIsSaving] = useState(false)
@@ -135,6 +136,9 @@ export function MeetingView({
   const [generatingTemplateId, setGeneratingTemplateId] = useState<
     string | null
   >(null)
+  const [localEnhancement, setLocalEnhancement] =
+    useState<EnhancementStatus | null>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
   const previousMeetingIdRef = useRef(meeting.id)
   const wasEnhancingRef = useRef(false)
 
@@ -146,7 +150,11 @@ export function MeetingView({
   const hasGeneratedEnhancedNotes = hasGeneratedEnhancedDraft(meeting)
 
   const activeEnhancement =
-    enhancement && enhancement.meetingId === meeting.id ? enhancement : null
+    localEnhancement && localEnhancement.meetingId === meeting.id
+      ? localEnhancement
+      : enhancement && enhancement.meetingId === meeting.id
+        ? enhancement
+        : null
 
   useEffect(() => {
     if (preferredView) {
@@ -159,10 +167,11 @@ export function MeetingView({
       previousMeetingIdRef.current = meeting.id
       setActiveView(getInitialView(meeting))
       setLastSaved(null)
+      setLocalEnhancement(null)
     }
 
     setManualNotes(meeting.notes || '')
-    setEnhancedNotes(meeting.enhancedNotes || '')
+    setEnhancedNotes(normalizeGeneratedMarkdown(meeting.enhancedNotes || ''))
     setTitleDraft(meeting.title || '')
     setSelectedTemplateId(
       meeting.enhancedTemplateId ?? DEFAULT_MEETING_TEMPLATE_ID,
@@ -193,7 +202,7 @@ export function MeetingView({
   useEffect(() => {
     if (activeEnhancement?.isEnhancing) {
       wasEnhancingRef.current = true
-      setActiveView('manual')
+      setActiveView('enhanced')
       return
     }
 
@@ -248,8 +257,9 @@ export function MeetingView({
 
   const participant = getPrimaryParticipant(titleDraft)
   const enhancementContent = activeEnhancement?.content ?? ''
+  const originalEnhancementNotes = enhancedNotes || manualNotes
   const showEnhancingEditor = Boolean(
-    activeView === 'manual' &&
+    activeView === 'enhanced' &&
       activeEnhancement &&
       (activeEnhancement.isEnhancing || enhancementContent),
   )
@@ -293,37 +303,83 @@ export function MeetingView({
       setSelectedTemplateId(template.id)
       setActiveView('enhanced')
       setIsMenuOpen(false)
+      setLocalEnhancement({
+        meetingId: meeting.id,
+        content: '',
+        isEnhancing: true,
+      })
 
+      let nextEnhancedNotes = ''
       try {
         const response = await fetchWithWorkspace(
-          `/api/meetings/${meeting.id}/enhance`,
+          `/api/meetings/${meeting.id}/enhance/stream`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ meeting, template }),
           },
         )
-        const body = (await response.json()) as {
-          markdown?: string
-          error?: string
-        }
 
-        if (!response.ok || typeof body.markdown !== 'string') {
+        if (!response.ok) {
+          const body = (await response.json().catch(() => ({}))) as {
+            error?: string
+          }
           throw new Error(body.error || 'Failed to generate enhanced notes')
         }
 
+        if (!response.body) {
+          throw new Error('Enhanced notes stream did not include a body')
+        }
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
+
+          nextEnhancedNotes += decoder.decode(value, { stream: true })
+          setLocalEnhancement({
+            meetingId: meeting.id,
+            content: normalizeGeneratedMarkdown(nextEnhancedNotes),
+            isEnhancing: true,
+          })
+        }
+
+        nextEnhancedNotes += decoder.decode()
+        nextEnhancedNotes = normalizeGeneratedMarkdown(nextEnhancedNotes)
+
+        if (!nextEnhancedNotes) {
+          throw new Error('AI response did not include enhanced notes.')
+        }
+
+        setLocalEnhancement({
+          meetingId: meeting.id,
+          content: nextEnhancedNotes,
+          isEnhancing: false,
+        })
+
         const updatedMeeting = {
           ...meeting,
-          enhancedNotes: body.markdown,
+          enhancedNotes: nextEnhancedNotes,
           enhancedTemplateId: template.id,
           enhancedAt: new Date(),
           updatedAt: new Date(),
         }
 
-        setEnhancedNotes(body.markdown)
+        setEnhancedNotes(nextEnhancedNotes)
         await persistMeeting(updatedMeeting)
+
+        window.setTimeout(() => {
+          setLocalEnhancement((current) =>
+            current?.meetingId === meeting.id && !current.isEnhancing
+              ? null
+              : current,
+          )
+        }, 1200)
       } catch (error) {
         console.error('Failed to generate enhanced notes:', error)
+        setLocalEnhancement(null)
       } finally {
         setGeneratingTemplateId(null)
       }
@@ -459,7 +515,10 @@ export function MeetingView({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-6 pb-[var(--chat-safe-padding)] sm:px-10 lg:px-16">
+      <div
+        ref={scrollContainerRef}
+        className="min-h-0 flex-1 overflow-auto px-6 pb-[var(--chat-safe-padding)] sm:px-10 lg:px-16"
+      >
         <div className="mx-auto min-h-full w-full max-w-[44rem] pt-[54px]">
           <header className="mb-8">
             {onBack ? (
@@ -495,10 +554,12 @@ export function MeetingView({
 
           {showEnhancingEditor ? (
             <EnhancingEditor
-              originalNotes={manualNotes}
+              key="enhancing-editor"
+              originalNotes={originalEnhancementNotes}
               enhancedContent={enhancementContent}
               isEnhancing={Boolean(activeEnhancement?.isEnhancing)}
               className="min-h-full"
+              scrollContainer={scrollContainerRef.current}
             />
           ) : activeView === 'manual' ? (
             <MarkdownEditor
@@ -520,7 +581,7 @@ export function MeetingView({
                 minHeight="100%"
                 maxHeight="none"
                 className="meetings-document-editor"
-                contentClassName="meetings-document-content"
+                contentClassName="meetings-document-content meetings-enhanced-document-content"
                 hideMarkdownHint
               />
             ) : (
@@ -537,6 +598,7 @@ export function MeetingView({
             )
           ) : (
             <TranscriptView
+              meetingId={meeting.id}
               segments={meeting.segments}
               recordingSessions={meeting.recordingSessions}
               isLive={isActive}

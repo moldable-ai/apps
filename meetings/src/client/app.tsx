@@ -3,6 +3,7 @@
 import { Plus, Settings } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button, useWorkspace } from '@moldable-ai/ui'
+import { normalizeGeneratedMarkdown } from '@/lib/markdown'
 import { callMoldableApp } from '@/lib/moldable-apps'
 import { DEFAULT_MEETING_TEMPLATE_ID } from '@/lib/templates'
 import {
@@ -88,8 +89,11 @@ export default function MeetingsPage() {
   })
   const enhancementTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   const activeRecordingSessionRef = useRef<RecordingSession | null>(null)
+  const activeMeetingIdRef = useRef<string | null>(null)
   const audioStreamingEnabledRef = useRef(false)
   const activeDurationBaseRef = useRef(0)
+  const audioPersistQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const activeAudioContentTypeRef = useRef<string | null>(null)
   const calendarLoadIdRef = useRef(0)
 
   // Hooks
@@ -165,6 +169,105 @@ export default function MeetingsPage() {
     [upsertRecordingSession],
   )
 
+  const resetAudioSessionPersistence = useCallback(() => {
+    activeAudioContentTypeRef.current = null
+  }, [])
+
+  const attachAudioToRecordingSession = useCallback(
+    (
+      targetMeeting: Meeting,
+      sessionId: string,
+      audioPath: string,
+      audioMimeType: string,
+    ): Meeting => ({
+      ...targetMeeting,
+      recordingSessions: targetMeeting.recordingSessions?.map((session) =>
+        session.id === sessionId
+          ? { ...session, audioPath, audioMimeType }
+          : session,
+      ),
+      updatedAt: new Date(),
+    }),
+    [],
+  )
+
+  const enqueueAudioChunkPersist = useCallback(
+    async (
+      meetingId: string,
+      sessionId: string,
+      chunk: Blob | ArrayBuffer,
+      contentType: string,
+    ) => {
+      if (!currentSettings.saveAudio) return
+
+      activeAudioContentTypeRef.current = contentType
+      const body =
+        chunk instanceof Blob ? chunk : new Blob([chunk], { type: contentType })
+
+      audioPersistQueueRef.current = audioPersistQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          if (body.size === 0) return
+          const response = await fetchWithWorkspace(
+            `/api/meetings/${meetingId}/audio/${sessionId}/chunk`,
+            {
+              method: 'POST',
+              headers: { 'content-type': contentType },
+              body,
+            },
+          )
+
+          if (!response.ok) {
+            throw new Error(`Audio chunk upload failed: ${response.status}`)
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to persist meeting audio chunk:', error)
+        })
+    },
+    [currentSettings.saveAudio, fetchWithWorkspace],
+  )
+
+  const finalizeSessionAudio = useCallback(
+    async (
+      meetingId: string,
+      sessionId: string,
+    ): Promise<{ audioPath: string; audioMimeType: string } | null> => {
+      if (!currentSettings.saveAudio || !activeAudioContentTypeRef.current) {
+        return null
+      }
+
+      await audioPersistQueueRef.current.catch(() => undefined)
+
+      try {
+        const response = await fetchWithWorkspace(
+          `/api/meetings/${meetingId}/audio/${sessionId}/finalize`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contentType: activeAudioContentTypeRef.current,
+            }),
+          },
+        )
+
+        if (response.status === 404) return null
+        if (!response.ok) {
+          throw new Error(`Audio finalize failed: ${response.status}`)
+        }
+
+        return (await response.json()) as {
+          audioPath: string
+          audioMimeType: string
+        }
+      } catch (error) {
+        console.error('Failed to finalize meeting audio:', error)
+        return null
+      }
+    },
+    [currentSettings.saveAudio, fetchWithWorkspace],
+  )
+
   // Handle new segments from Deepgram
   const handleSegment = useCallback(
     (segment: TranscriptSegment) => {
@@ -189,6 +292,14 @@ export default function MeetingsPage() {
   const systemAudio = useSystemAudio({
     onAudioData: (buffer: ArrayBuffer) => {
       if (!audioStreamingEnabledRef.current) return
+      if (activeRecordingSessionRef.current && activeMeetingIdRef.current) {
+        void enqueueAudioChunkPersist(
+          activeMeetingIdRef.current,
+          activeRecordingSessionRef.current.id,
+          buffer.slice(0),
+          'audio/l16;rate=48000;channels=1',
+        )
+      }
       // Send raw PCM to Deepgram
       deepgram.sendAudio(buffer)
     },
@@ -198,6 +309,15 @@ export default function MeetingsPage() {
   // Audio recorder hook (for browser microphone)
   const audioRecorder = useAudioRecorder({
     onDataAvailable: async (blob) => {
+      if (activeRecordingSessionRef.current && activeMeetingIdRef.current) {
+        void enqueueAudioChunkPersist(
+          activeMeetingIdRef.current,
+          activeRecordingSessionRef.current.id,
+          blob,
+          blob.type || 'audio/webm',
+        )
+      }
+
       if (!audioStreamingEnabledRef.current) return
       const buffer = await blob.arrayBuffer()
       if (!audioStreamingEnabledRef.current) return
@@ -206,6 +326,7 @@ export default function MeetingsPage() {
     onStateChange: (state) => {
       updateDuration(activeDurationBaseRef.current + state.duration)
     },
+    keepChunks: false,
     onError: (error) => console.error('Recorder error:', error),
   })
 
@@ -319,21 +440,18 @@ export default function MeetingsPage() {
       const title =
         calendarTitle || `Meeting ${new Date().toLocaleDateString()}`
       const initialRecordingSession = createRecordingSession()
-      const newMeeting = startMeeting(
-        id,
-        title,
-        currentSettings.saveAudio,
-        initialRecordingSession,
-      )
+      const newMeeting = startMeeting(id, title, initialRecordingSession)
 
       // Add to meetings list immediately so it appears in sidebar
       activeDurationBaseRef.current = 0
+      activeMeetingIdRef.current = newMeeting.id
       addMeeting(newMeeting)
       setSelectedMeeting(null) // Clear any selection, show active meeting
       setPreferredDetailView(null)
       setCurrentInterim(null)
       setIsMeetingPaused(false)
       setIsAppendingTranscript(false)
+      resetAudioSessionPersistence()
 
       if (audioSource === 'system' && systemAudio.isAvailable) {
         // System audio mode - use linear16 encoding for raw PCM
@@ -351,13 +469,13 @@ export default function MeetingsPage() {
     },
     [
       startMeeting,
-      currentSettings.saveAudio,
       deepgram,
       audioRecorder,
       systemAudio,
       audioSource,
       addMeeting,
       createRecordingSession,
+      resetAudioSessionPersistence,
     ],
   )
 
@@ -376,6 +494,7 @@ export default function MeetingsPage() {
       )
 
       activeDurationBaseRef.current = targetMeeting.duration
+      activeMeetingIdRef.current = resumedMeeting.id
       updateActiveMeeting(resumedMeeting)
       updateMeeting(resumedMeeting)
       setSelectedMeeting(null)
@@ -383,6 +502,7 @@ export default function MeetingsPage() {
       setCurrentInterim(null)
       setIsMeetingPaused(false)
       setIsAppendingTranscript(true)
+      resetAudioSessionPersistence()
       audioStreamingEnabledRef.current = true
 
       if (audioSource === 'system' && systemAudio.isAvailable) {
@@ -399,6 +519,7 @@ export default function MeetingsPage() {
       createRecordingSession,
       deepgram,
       meeting,
+      resetAudioSessionPersistence,
       systemAudio,
       updateActiveMeeting,
       updateMeeting,
@@ -407,6 +528,8 @@ export default function MeetingsPage() {
   )
 
   const handleStopAppendingTranscript = useCallback(async () => {
+    const sessionId = activeRecordingSessionRef.current?.id
+
     audioStreamingEnabledRef.current = false
     setIsMeetingPaused(false)
     setCurrentInterim(null)
@@ -414,16 +537,31 @@ export default function MeetingsPage() {
     if (audioSource === 'system') {
       await systemAudio.stop()
     } else {
-      audioRecorder.stop()
+      await audioRecorder.stop()
     }
     deepgram.disconnect()
 
     if (meeting) {
       const completedMeeting = finishActiveRecordingSession(meeting) ?? meeting
-      const stoppedMeeting = {
+      let stoppedMeeting: Meeting = {
         ...completedMeeting,
         endedAt: new Date(),
         updatedAt: new Date(),
+      }
+
+      if (sessionId) {
+        const savedAudio = await finalizeSessionAudio(
+          stoppedMeeting.id,
+          sessionId,
+        )
+        if (savedAudio) {
+          stoppedMeeting = attachAudioToRecordingSession(
+            stoppedMeeting,
+            sessionId,
+            savedAudio.audioPath,
+            savedAudio.audioMimeType,
+          )
+        }
       }
 
       updateMeeting(stoppedMeeting)
@@ -433,13 +571,16 @@ export default function MeetingsPage() {
 
     clearMeeting()
     activeDurationBaseRef.current = 0
+    activeMeetingIdRef.current = null
     setIsAppendingTranscript(false)
   }, [
+    attachAudioToRecordingSession,
     audioRecorder,
     audioSource,
     clearMeeting,
     deepgram,
     finishActiveRecordingSession,
+    finalizeSessionAudio,
     meeting,
     systemAudio,
     updateMeeting,
@@ -447,6 +588,8 @@ export default function MeetingsPage() {
 
   // Pause recording
   const handlePause = useCallback(async () => {
+    const sessionId = activeRecordingSessionRef.current?.id
+
     audioStreamingEnabledRef.current = false
     setIsMeetingPaused(true)
     setCurrentInterim(null)
@@ -454,19 +597,33 @@ export default function MeetingsPage() {
     if (audioSource === 'system' && systemAudio.isCapturing) {
       await systemAudio.stop()
     } else {
-      audioRecorder.pause()
+      await audioRecorder.pause()
     }
     deepgram.disconnect()
 
     const updated = finishActiveRecordingSession(meeting)
     if (updated) {
-      updateActiveMeeting(updated)
-      updateMeeting(updated)
+      let nextMeeting = updated
+      if (sessionId) {
+        const savedAudio = await finalizeSessionAudio(nextMeeting.id, sessionId)
+        if (savedAudio) {
+          nextMeeting = attachAudioToRecordingSession(
+            nextMeeting,
+            sessionId,
+            savedAudio.audioPath,
+            savedAudio.audioMimeType,
+          )
+        }
+      }
+      updateActiveMeeting(nextMeeting)
+      updateMeeting(nextMeeting)
     }
   }, [
+    attachAudioToRecordingSession,
     audioRecorder,
     deepgram,
     finishActiveRecordingSession,
+    finalizeSessionAudio,
     meeting,
     systemAudio,
     audioSource,
@@ -479,12 +636,14 @@ export default function MeetingsPage() {
     const nextSession = createRecordingSession()
     if (meeting) {
       const updated = upsertRecordingSession(meeting, nextSession)
+      activeMeetingIdRef.current = updated.id
       updateActiveMeeting(updated)
       updateMeeting(updated)
     }
 
     setCurrentInterim(null)
     setIsMeetingPaused(false)
+    resetAudioSessionPersistence()
     audioStreamingEnabledRef.current = true
 
     if (audioSource === 'system' && systemAudio.isAvailable) {
@@ -492,7 +651,7 @@ export default function MeetingsPage() {
       await systemAudio.start('systemAudio')
     } else {
       await deepgram.connect('webm')
-      await audioRecorder.resume()
+      await audioRecorder.resume(true)
     }
   }, [
     audioRecorder,
@@ -500,6 +659,7 @@ export default function MeetingsPage() {
     createRecordingSession,
     deepgram,
     meeting,
+    resetAudioSessionPersistence,
     systemAudio,
     updateActiveMeeting,
     updateMeeting,
@@ -521,113 +681,126 @@ export default function MeetingsPage() {
         targetMeeting.enhancedTemplateId ?? DEFAULT_MEETING_TEMPLATE_ID
 
       let enhancedNotes = ''
-      let resolvedTemplateId = templateId
       try {
         const response = await fetchWithWorkspace(
-          `/api/meetings/${targetMeeting.id}/enhance`,
+          `/api/meetings/${targetMeeting.id}/enhance/stream`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ meeting: targetMeeting, templateId }),
           },
         )
-        const body = (await response.json()) as {
-          markdown?: string
-          templateId?: string
-          error?: string
-        }
 
-        if (!response.ok || typeof body.markdown !== 'string') {
+        if (!response.ok) {
+          const body = (await response.json().catch(() => ({}))) as {
+            error?: string
+          }
           throw new Error(body.error || 'Failed to generate enhanced notes')
         }
 
-        enhancedNotes = body.markdown
-        resolvedTemplateId = body.templateId ?? templateId
+        if (!response.body) {
+          throw new Error('Enhanced notes stream did not include a body')
+        }
+
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+
+        while (true) {
+          const { value, done } = await reader.read()
+          if (done) break
+
+          enhancedNotes += decoder.decode(value, { stream: true })
+          setEnhancement({
+            meetingId: targetMeeting.id,
+            content: normalizeGeneratedMarkdown(enhancedNotes),
+            isEnhancing: true,
+          })
+        }
+
+        enhancedNotes += decoder.decode()
+        enhancedNotes = normalizeGeneratedMarkdown(enhancedNotes)
+
+        if (!enhancedNotes) {
+          throw new Error('AI response did not include enhanced notes.')
+        }
       } catch (error) {
         console.error('Failed to generate enhanced notes:', error)
         setEnhancement(null)
         return
       }
 
-      const steps = 28
-      const stepMs = 70
+      setEnhancement({
+        meetingId: targetMeeting.id,
+        content: enhancedNotes,
+        isEnhancing: false,
+      })
 
-      for (let step = 1; step <= steps; step += 1) {
-        const timer = setTimeout(() => {
-          const nextLength = Math.ceil((enhancedNotes.length * step) / steps)
-          const content = enhancedNotes.slice(0, nextLength)
-
-          setEnhancement({
-            meetingId: targetMeeting.id,
-            content,
-            isEnhancing: step < steps,
-          })
-
-          if (step === steps) {
-            const completedMeeting = {
-              ...targetMeeting,
-              enhancedNotes,
-              enhancedTemplateId: resolvedTemplateId,
-              enhancedAt: new Date(),
-              updatedAt: new Date(),
-            }
-
-            updateMeeting(completedMeeting)
-            setSelectedMeeting((current) =>
-              current?.id === completedMeeting.id ? completedMeeting : current,
-            )
-
-            const clearTimer = setTimeout(() => {
-              setEnhancement((current) =>
-                current?.meetingId === completedMeeting.id ? null : current,
-              )
-            }, 1200)
-            enhancementTimersRef.current.push(clearTimer)
-          }
-        }, step * stepMs)
-
-        enhancementTimersRef.current.push(timer)
+      const completedMeeting = {
+        ...targetMeeting,
+        enhancedNotes,
+        enhancedTemplateId: templateId,
+        enhancedAt: new Date(),
+        updatedAt: new Date(),
       }
+
+      updateMeeting(completedMeeting)
+      setSelectedMeeting((current) =>
+        current?.id === completedMeeting.id ? completedMeeting : current,
+      )
+
+      const clearTimer = setTimeout(() => {
+        setEnhancement((current) =>
+          current?.meetingId === completedMeeting.id ? null : current,
+        )
+      }, 1200)
+      enhancementTimersRef.current.push(clearTimer)
     },
     [fetchWithWorkspace, updateMeeting],
   )
 
   // End meeting
   const handleEndMeeting = useCallback(async () => {
-    let audioBlob: Blob | null = null
+    const sessionId = activeRecordingSessionRef.current?.id
     audioStreamingEnabledRef.current = false
     setIsMeetingPaused(false)
 
     if (audioSource === 'system') {
       await systemAudio.stop()
     } else {
-      audioBlob = audioRecorder.stop()
+      await audioRecorder.stop()
     }
     deepgram.disconnect()
-
-    // Save audio if enabled (only for microphone mode currently)
-    let audioPath: string | undefined
-    if (currentSettings.saveAudio && audioSource === 'microphone') {
-      if (audioBlob) {
-        const url = URL.createObjectURL(audioBlob)
-        audioPath = url
-      }
-    }
 
     // Update meeting in list and keep it selected
     if (meeting) {
       const completedMeeting = finishActiveRecordingSession(meeting) ?? meeting
-      const endedMeeting = {
+      let endedMeeting: Meeting = {
         ...completedMeeting,
         endedAt: new Date(),
         updatedAt: new Date(),
-        audioPath,
       }
+
+      if (sessionId) {
+        const savedAudio = await finalizeSessionAudio(
+          endedMeeting.id,
+          sessionId,
+        )
+        if (savedAudio) {
+          endedMeeting = attachAudioToRecordingSession(
+            endedMeeting,
+            sessionId,
+            savedAudio.audioPath,
+            savedAudio.audioMimeType,
+          )
+        }
+      }
+
       updateMeeting(endedMeeting)
       setSelectedMeeting(endedMeeting)
       setPreferredDetailView(isAppendingTranscript ? 'transcript' : 'enhanced')
       clearMeeting()
       activeDurationBaseRef.current = 0
+      activeMeetingIdRef.current = null
       setIsAppendingTranscript(false)
 
       if (!isAppendingTranscript) {
@@ -635,10 +808,11 @@ export default function MeetingsPage() {
       }
     }
   }, [
+    attachAudioToRecordingSession,
     audioRecorder,
     deepgram,
-    currentSettings.saveAudio,
     finishActiveRecordingSession,
+    finalizeSessionAudio,
     meeting,
     updateMeeting,
     clearMeeting,

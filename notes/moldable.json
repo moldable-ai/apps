@@ -18,6 +18,108 @@
     "@moldable-ai/editor": "^0.1.5",
     "@moldable-ai/storage": "^0.1.3"
   },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "notes.notes",
+        "name": "Notes",
+        "description": "Read and manage notes in the active workspace.",
+        "scopes": [
+          {
+            "id": "notes.list",
+            "name": "List notes",
+            "description": "List notes with optional archive, deleted, label, and text filters.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": { "type": "string" },
+                "includeArchived": { "type": "boolean" },
+                "includeDeleted": { "type": "boolean" },
+                "includeContent": { "type": "boolean" },
+                "label": { "type": "string" },
+                "limit": { "type": "number", "minimum": 1, "maximum": 200 }
+              }
+            }
+          },
+          {
+            "id": "notes.search",
+            "name": "Search notes",
+            "description": "Search note titles, content, and labels.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": { "type": "string" },
+                "includeArchived": { "type": "boolean" },
+                "includeDeleted": { "type": "boolean" },
+                "includeContent": { "type": "boolean" },
+                "limit": { "type": "number", "minimum": 1, "maximum": 200 }
+              }
+            }
+          },
+          {
+            "id": "notes.get",
+            "name": "Get note",
+            "description": "Get one note by ID, including full content.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "notes.create",
+            "name": "Create note",
+            "description": "Create a new note.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "title": { "type": "string" },
+                "content": { "type": "string" },
+                "labels": { "type": "array", "items": { "type": "string" } },
+                "isPinned": { "type": "boolean" },
+                "isArchived": { "type": "boolean" },
+                "color": { "type": "string" }
+              }
+            }
+          },
+          {
+            "id": "notes.update",
+            "name": "Update note",
+            "description": "Update note content, title, labels, pin/archive/deleted state, or color.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "title": { "type": "string" },
+                "content": { "type": "string" },
+                "labels": { "type": "array", "items": { "type": "string" } },
+                "isPinned": { "type": "boolean" },
+                "isArchived": { "type": "boolean" },
+                "isDeleted": { "type": "boolean" },
+                "color": { "type": "string" }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "notes.delete",
+            "name": "Delete note",
+            "description": "Move one note to deleted state.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" }
+              },
+              "required": ["id"]
+            }
+          }
+        ]
+      }
+    ]
+  },
   "env": [],
   "upstream": {
     "repo": "moldable-ai/apps",

@@ -26,28 +26,27 @@ export const MEETING_TEMPLATES: MeetingTemplate[] = [
     name: 'General meeting',
     icon: '📝',
     category: 'Core',
-    description: 'A concise summary, decisions, and action items.',
-    context: 'Use this for most internal meetings and project conversations.',
+    description: 'Granola-style notes organized around the actual topics.',
+    context:
+      "Use this for most meetings. Let the conversation decide the shape: preserve the user's notes as priority signals, add useful transcript context, and avoid empty boilerplate sections.",
+    writingStyle: 'direct',
     sections: [
       {
-        id: 'summary',
-        title: 'Summary',
-        prompt: 'A short paragraph that captures the outcome of the meeting.',
-      },
-      {
-        id: 'key-points',
-        title: 'Key Points',
-        prompt: 'The main topics, updates, and useful details.',
-      },
-      {
-        id: 'decisions',
-        title: 'Decisions',
-        prompt: 'Decisions made or options narrowed during the discussion.',
+        id: 'topics',
+        title: 'Topics',
+        prompt:
+          'Create content-specific sections from the meeting. Prefer 3-7 natural headings that name the actual topic, decision, problem, proposal, or theme. Under each heading, use dense bullets with useful context, rationale, constraints, names, numbers, dates, decisions, risks, and close paraphrases. Do not use generic headings like Summary, Notes, Key points, or Discussion when a more specific heading is possible.',
+        format: 'list',
+        length: 'detailed',
+        required: true,
       },
       {
         id: 'actions',
-        title: 'Action Items',
-        prompt: 'Follow-ups, owners, and next steps.',
+        title: 'Next steps',
+        prompt:
+          'End with this section only when there are real follow-ups, owners, deadlines, promised materials, or topics to revisit. If the owner is unknown, say so rather than guessing.',
+        format: 'list',
+        length: 'standard',
       },
     ],
   },

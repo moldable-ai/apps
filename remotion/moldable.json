@@ -17,6 +17,104 @@
     "@moldable-ai/ui": "^0.2.6",
     "@moldable-ai/storage": "^0.1.3"
   },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "remotion.projects",
+        "name": "Remotion projects",
+        "description": "Read and manage Remotion video projects and composition code.",
+        "scopes": [
+          {
+            "id": "remotion.projects.list",
+            "name": "List projects",
+            "description": "List Remotion project metadata.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": { "type": "string" },
+                "limit": { "type": "number", "minimum": 1, "maximum": 500 }
+              }
+            }
+          },
+          {
+            "id": "remotion.projects.get",
+            "name": "Get project",
+            "description": "Get one Remotion project including composition code.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "remotion.projects.create",
+            "name": "Create project",
+            "description": "Create a Remotion project.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "description": { "type": "string" },
+                "width": { "type": "number" },
+                "height": { "type": "number" },
+                "fps": { "type": "number" },
+                "durationInFrames": { "type": "number" },
+                "autoDuration": { "type": "boolean" },
+                "compositionCode": { "type": "string" }
+              }
+            }
+          },
+          {
+            "id": "remotion.projects.update",
+            "name": "Update project",
+            "description": "Update Remotion project metadata or composition code.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "description": { "type": "string" },
+                "width": { "type": "number" },
+                "height": { "type": "number" },
+                "fps": { "type": "number" },
+                "durationInFrames": { "type": "number" },
+                "autoDuration": { "type": "boolean" },
+                "compositionCode": { "type": "string" }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "remotion.projects.delete",
+            "name": "Delete project",
+            "description": "Delete a Remotion project.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "remotion.projects.code",
+            "name": "Get project code",
+            "description": "Get the composition code for one project.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" }
+              },
+              "required": ["id"]
+            }
+          }
+        ]
+      }
+    ]
+  },
   "env": [],
   "routeName": "remotion"
 }

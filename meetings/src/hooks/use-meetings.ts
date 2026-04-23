@@ -136,12 +136,7 @@ export function useActiveMeeting() {
   const [meeting, setMeeting] = useState<Meeting | null>(null)
 
   const startMeeting = useCallback(
-    (
-      id: string,
-      title: string,
-      saveAudio: boolean,
-      initialRecordingSession?: RecordingSession,
-    ) => {
+    (id: string, title: string, initialRecordingSession?: RecordingSession) => {
       const newMeeting: Meeting = {
         id,
         title,
@@ -152,7 +147,6 @@ export function useActiveMeeting() {
         recordingSessions: initialRecordingSession
           ? [initialRecordingSession]
           : [],
-        saveAudio,
       }
       setMeeting(newMeeting)
       return newMeeting
@@ -208,27 +202,6 @@ export function useActiveMeeting() {
     setMeeting(meetingUpdate)
   }, [])
 
-  const endMeeting = useCallback(
-    (audioPath?: string) => {
-      setMeeting((prev) => {
-        if (!prev) return prev
-        const ended: Meeting = {
-          ...prev,
-          endedAt: new Date(),
-          updatedAt: new Date(),
-          audioPath,
-        }
-        fetchWithWorkspace('/api/meetings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(ended),
-        })
-        return ended
-      })
-    },
-    [fetchWithWorkspace],
-  )
-
   const clearMeeting = useCallback(() => {
     setMeeting(null)
   }, [])
@@ -240,7 +213,6 @@ export function useActiveMeeting() {
     updateDuration,
     updateTitle,
     updateActiveMeeting,
-    endMeeting,
     clearMeeting,
   }
 }

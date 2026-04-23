@@ -89,6 +89,37 @@ const TtsRequestSchema = z.object({
   languageCode: z.string().optional(),
 })
 
+const rpcRequestSchema = z.object({
+  method: z.string(),
+  params: z.unknown().optional(),
+})
+
+const entriesListParamsSchema = z
+  .object({
+    query: z.string().optional(),
+    sourceLanguage: z.string().optional(),
+    targetLanguage: z.string().optional(),
+    includeTranslation: z.boolean().optional(),
+    limit: z.number().int().min(1).max(200).optional(),
+  })
+  .optional()
+
+const entryGetParamsSchema = z.object({
+  id: z.string().min(1),
+})
+
+const entryCreateParamsSchema = z.object({
+  title: z.string().optional(),
+  content: z.string().optional(),
+  translation: z.string().optional(),
+  sourceLanguage: z.string().optional(),
+  targetLanguage: z.string().optional(),
+})
+
+const entryUpdateParamsSchema = entryCreateParamsSchema.partial().extend({
+  id: z.string().min(1),
+})
+
 export const app = new Hono()
 
 app.use('/api/*', cors())
@@ -100,6 +131,13 @@ function getEntriesDir(workspaceId?: string): string {
 function getEntryPath(id: string, workspaceId?: string): string {
   const safeId = sanitizeId(id)
   return safePath(getEntriesDir(workspaceId), `${safeId}.json`)
+}
+
+function getRpcWorkspaceId(request: Request): string | undefined {
+  return (
+    request.headers.get('x-moldable-workspace-id') ??
+    getWorkspaceFromRequest(request)
+  )
 }
 
 async function loadEntries(workspaceId?: string): Promise<JournalEntry[]> {
@@ -156,6 +194,52 @@ async function deleteEntry(id: string, workspaceId?: string): Promise<void> {
 
 function normalizeLang(code: string): string {
   return code.toLowerCase().split('-')[0] ?? code.toLowerCase()
+}
+
+function summarizeEntry(entry: JournalEntry, includeTranslation = false) {
+  return {
+    ...entry,
+    content:
+      entry.content.length > 600
+        ? `${entry.content.slice(0, 600)}...`
+        : entry.content,
+    translation: includeTranslation
+      ? entry.translation
+      : entry.translation.length > 600
+        ? `${entry.translation.slice(0, 600)}...`
+        : entry.translation,
+  }
+}
+
+function filterEntries(
+  entries: JournalEntry[],
+  params: z.infer<typeof entriesListParamsSchema>,
+) {
+  let result = [...entries]
+
+  if (params?.sourceLanguage) {
+    result = result.filter(
+      (entry) => entry.sourceLanguage === params.sourceLanguage,
+    )
+  }
+  if (params?.targetLanguage) {
+    result = result.filter(
+      (entry) => entry.targetLanguage === params.targetLanguage,
+    )
+  }
+  if (params?.query?.trim()) {
+    const query = params.query.toLowerCase()
+    result = result.filter((entry) =>
+      [entry.title, entry.content, entry.translation]
+        .join('\n')
+        .toLowerCase()
+        .includes(query),
+    )
+  }
+
+  return result
+    .slice(0, params?.limit ?? 100)
+    .map((entry) => summarizeEntry(entry, params?.includeTranslation))
 }
 
 app.get('/api/moldable/health', (c) => {
@@ -465,5 +549,166 @@ app.post('/api/tts', async (c) => {
   } catch (error) {
     console.error('TTS error:', error)
     return c.json({ error: 'Failed to generate speech' }, 500)
+  }
+})
+
+app.post('/api/moldable/rpc', async (c) => {
+  const workspaceId = getRpcWorkspaceId(c.req.raw)
+
+  try {
+    const body = rpcRequestSchema.parse(await c.req.json())
+    const entries = await loadEntries(workspaceId)
+
+    if (
+      body.method === 'scribo.entries.list' ||
+      body.method === 'scribo.entries.search'
+    ) {
+      const params = entriesListParamsSchema.parse(body.params)
+      return c.json({ ok: true, result: filterEntries(entries, params) })
+    }
+
+    if (body.method === 'scribo.entries.get') {
+      const params = entryGetParamsSchema.parse(body.params)
+      const entry = entries.find((item) => item.id === params.id)
+
+      if (!entry) {
+        return c.json(
+          {
+            ok: false,
+            error: {
+              code: 'entry_not_found',
+              message: `Entry ${params.id} was not found.`,
+            },
+          },
+          404,
+        )
+      }
+
+      return c.json({ ok: true, result: entry })
+    }
+
+    if (body.method === 'scribo.entries.create') {
+      const params = entryCreateParamsSchema.parse(body.params)
+      const now = new Date()
+      const entry: JournalEntry = {
+        id: crypto.randomUUID(),
+        title: params.title ?? 'Untitled',
+        content: params.content ?? '',
+        translation: params.translation ?? '',
+        sourceLanguage: (params.sourceLanguage ?? 'en') as Language,
+        targetLanguage: (params.targetLanguage ?? 'fr') as Language,
+        createdAt: now,
+        updatedAt: now,
+      }
+      await saveEntry(entry, workspaceId)
+      return c.json({ ok: true, result: entry })
+    }
+
+    if (body.method === 'scribo.entries.update') {
+      const params = entryUpdateParamsSchema.parse(body.params)
+      const entry = entries.find((item) => item.id === params.id)
+
+      if (!entry) {
+        return c.json(
+          {
+            ok: false,
+            error: {
+              code: 'entry_not_found',
+              message: `Entry ${params.id} was not found.`,
+            },
+          },
+          404,
+        )
+      }
+
+      const updated: JournalEntry = {
+        ...entry,
+        ...('title' in params ? { title: params.title } : {}),
+        ...('content' in params ? { content: params.content } : {}),
+        ...('translation' in params ? { translation: params.translation } : {}),
+        ...('sourceLanguage' in params
+          ? { sourceLanguage: params.sourceLanguage as Language }
+          : {}),
+        ...('targetLanguage' in params
+          ? { targetLanguage: params.targetLanguage as Language }
+          : {}),
+        updatedAt: new Date(),
+      }
+      await saveEntry(updated, workspaceId)
+      return c.json({ ok: true, result: updated })
+    }
+
+    if (body.method === 'scribo.entries.delete') {
+      const params = entryGetParamsSchema.parse(body.params)
+      await deleteEntry(params.id, workspaceId)
+      return c.json({ ok: true, result: { deleted: true, id: params.id } })
+    }
+
+    if (body.method === 'scribo.translate') {
+      const params = TranslateRequestSchema.parse(body.params)
+      const response = await app.request('/api/translate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(params),
+      })
+      const result = await response.json()
+      if (!response.ok) {
+        return c.json(
+          {
+            ok: false,
+            error: {
+              code: 'translation_failed',
+              message:
+                typeof result?.error === 'string'
+                  ? result.error
+                  : 'Translation failed.',
+              detail: result,
+            },
+          },
+          response.status as 400 | 500 | 502,
+        )
+      }
+      return c.json({ ok: true, result })
+    }
+
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'method_not_found',
+          message: `Scribo does not expose ${body.method}.`,
+        },
+      },
+      404,
+    )
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json(
+        {
+          ok: false,
+          error: {
+            code: 'invalid_params',
+            message: 'Scribo received invalid RPC parameters.',
+            detail: error.flatten(),
+          },
+        },
+        400,
+      )
+    }
+
+    console.error('Scribo RPC failed:', error)
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'scribo_rpc_failed',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Scribo could not complete the request.',
+        },
+      },
+      500,
+    )
   }
 })

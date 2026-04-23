@@ -38,6 +38,14 @@ export const app = new Hono()
 
 app.use('/api/*', cors())
 
+type RpcRequest = {
+  method?: unknown
+  params?: unknown
+}
+
+type RpcParams = Record<string, unknown>
+type RpcStatus = 400 | 404 | 500
+
 const SAFE_CHILD_ENV_KEYS = new Set([
   'HOME',
   'LANG',
@@ -59,6 +67,42 @@ function getSafeChildEnv(): NodeJS.ProcessEnv {
     }
   }
   return env
+}
+
+function getRpcWorkspaceId(request: Request): string | undefined {
+  return (
+    request.headers.get('x-moldable-workspace-id') ??
+    getWorkspaceFromRequest(request)
+  )
+}
+
+function asParams(value: unknown): RpcParams {
+  return value && typeof value === 'object' ? (value as RpcParams) : {}
+}
+
+function stringParam(params: RpcParams, key: string): string | undefined {
+  const value = params[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+function numberParam(params: RpcParams, key: string): number | undefined {
+  const value = params[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function booleanParam(params: RpcParams, key: string): boolean | undefined {
+  const value = params[key]
+  return typeof value === 'boolean' ? value : undefined
+}
+
+function rpcError(code: string, message: string, status: RpcStatus = 400) {
+  return {
+    body: {
+      ok: false,
+      error: { code, message },
+    },
+    status,
+  }
 }
 
 app.get('/api/moldable/health', (c) => {
@@ -349,5 +393,220 @@ app.post('/api/projects/:id/render', async (c) => {
     const errorMessage = error instanceof Error ? error.message : String(error)
     console.error('Render error:', errorMessage)
     return c.json({ error: 'Export failed', details: errorMessage }, 500)
+  }
+})
+
+app.post('/api/moldable/rpc', async (c) => {
+  const workspaceId = getRpcWorkspaceId(c.req.raw)
+
+  try {
+    const body = (await c.req.json()) as RpcRequest
+    const method = typeof body.method === 'string' ? body.method : ''
+    const params = asParams(body.params)
+
+    if (!method) {
+      const error = rpcError('invalid_request', 'method is required')
+      return c.json(error.body, error.status)
+    }
+
+    if (method === 'remotion.projects.list') {
+      const projectIds = await readProjectIndex(workspaceId)
+      const projects: ProjectMetadata[] = []
+      const query = stringParam(params, 'query')?.toLowerCase()
+      const limit = Math.max(
+        1,
+        Math.min(numberParam(params, 'limit') ?? 100, 500),
+      )
+
+      for (const id of projectIds) {
+        const metadata = await readProjectMetadata(workspaceId, id)
+        if (metadata) {
+          projects.push(metadata)
+        }
+      }
+
+      const filtered = projects
+        .filter((project) =>
+          query
+            ? `${project.name}\n${project.description}`
+                .toLowerCase()
+                .includes(query)
+            : true,
+        )
+        .sort(
+          (a, b) =>
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+        )
+        .slice(0, limit)
+
+      return c.json({ ok: true, result: filtered })
+    }
+
+    if (method === 'remotion.projects.get') {
+      const id = stringParam(params, 'id')
+      if (!id) {
+        const error = rpcError('invalid_params', 'id is required')
+        return c.json(error.body, error.status)
+      }
+      const project = await readProject(workspaceId, id)
+      if (!project) {
+        const error = rpcError(
+          'project_not_found',
+          'Project was not found',
+          404,
+        )
+        return c.json(error.body, error.status)
+      }
+      return c.json({ ok: true, result: project })
+    }
+
+    if (method === 'remotion.projects.create') {
+      const now = new Date().toISOString()
+      const projectId = uuidv4()
+      const metadata: ProjectMetadata = {
+        id: projectId,
+        name: stringParam(params, 'name') ?? 'Untitled Project',
+        description: stringParam(params, 'description') ?? '',
+        createdAt: now,
+        updatedAt: now,
+        width: numberParam(params, 'width') ?? 1920,
+        height: numberParam(params, 'height') ?? 1080,
+        fps: numberParam(params, 'fps') ?? 30,
+        durationInFrames: numberParam(params, 'durationInFrames') ?? 450,
+        autoDuration: booleanParam(params, 'autoDuration') ?? false,
+      }
+      const compositionCode =
+        stringParam(params, 'compositionCode') ?? DEFAULT_COMPOSITION_CODE
+
+      await ensureDir(getProjectsDir(workspaceId))
+      await writeProject(workspaceId, { ...metadata, compositionCode })
+      const projectIds = await readProjectIndex(workspaceId)
+      await writeProjectIndex(workspaceId, [...projectIds, projectId])
+      return c.json({ ok: true, result: { ...metadata, compositionCode } })
+    }
+
+    if (method === 'remotion.projects.update') {
+      const id = stringParam(params, 'id')
+      if (!id) {
+        const error = rpcError('invalid_params', 'id is required')
+        return c.json(error.body, error.status)
+      }
+      const existing = await readProjectMetadata(workspaceId, id)
+      if (!existing) {
+        const error = rpcError(
+          'project_not_found',
+          'Project was not found',
+          404,
+        )
+        return c.json(error.body, error.status)
+      }
+
+      const updatedMetadata: ProjectMetadata = {
+        ...existing,
+        ...(stringParam(params, 'name') !== undefined
+          ? { name: stringParam(params, 'name')! }
+          : {}),
+        ...(stringParam(params, 'description') !== undefined
+          ? { description: stringParam(params, 'description')! }
+          : {}),
+        ...(numberParam(params, 'width') !== undefined
+          ? { width: numberParam(params, 'width')! }
+          : {}),
+        ...(numberParam(params, 'height') !== undefined
+          ? { height: numberParam(params, 'height')! }
+          : {}),
+        ...(numberParam(params, 'fps') !== undefined
+          ? { fps: numberParam(params, 'fps')! }
+          : {}),
+        ...(numberParam(params, 'durationInFrames') !== undefined
+          ? { durationInFrames: numberParam(params, 'durationInFrames')! }
+          : {}),
+        ...(booleanParam(params, 'autoDuration') !== undefined
+          ? { autoDuration: booleanParam(params, 'autoDuration')! }
+          : {}),
+        updatedAt: new Date().toISOString(),
+      }
+      await writeProjectMetadata(workspaceId, id, updatedMetadata)
+
+      const compositionCode = stringParam(params, 'compositionCode')
+      if (compositionCode !== undefined) {
+        await writeCompositionCode(workspaceId, id, compositionCode)
+      }
+
+      return c.json({
+        ok: true,
+        result: await readProject(workspaceId, id),
+      })
+    }
+
+    if (method === 'remotion.projects.delete') {
+      const id = stringParam(params, 'id')
+      if (!id) {
+        const error = rpcError('invalid_params', 'id is required')
+        return c.json(error.body, error.status)
+      }
+      const existing = await readProjectMetadata(workspaceId, id)
+      if (!existing) {
+        const error = rpcError(
+          'project_not_found',
+          'Project was not found',
+          404,
+        )
+        return c.json(error.body, error.status)
+      }
+      await rm(getProjectDir(workspaceId, id), { recursive: true, force: true })
+      const projectIds = await readProjectIndex(workspaceId)
+      await writeProjectIndex(
+        workspaceId,
+        projectIds.filter((projectId) => projectId !== id),
+      )
+      return c.json({ ok: true, result: { deleted: true, id } })
+    }
+
+    if (method === 'remotion.projects.code') {
+      const id = stringParam(params, 'id')
+      if (!id) {
+        const error = rpcError('invalid_params', 'id is required')
+        return c.json(error.body, error.status)
+      }
+      const metadata = await readProjectMetadata(workspaceId, id)
+      if (!metadata) {
+        const error = rpcError(
+          'project_not_found',
+          'Project was not found',
+          404,
+        )
+        return c.json(error.body, error.status)
+      }
+      const compositionPath = getCompositionPath(workspaceId, id)
+      const code = await readFile(compositionPath, 'utf-8').catch(() => '')
+      return c.json({ ok: true, result: { id, path: compositionPath, code } })
+    }
+
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'method_not_found',
+          message: `Remotion does not expose ${method}.`,
+        },
+      },
+      404,
+    )
+  } catch (error) {
+    console.error('Remotion RPC failed:', error)
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'remotion_rpc_failed',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Remotion could not complete the request.',
+        },
+      },
+      500,
+    )
   }
 })

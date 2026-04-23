@@ -38,8 +38,21 @@ const eventsListParamsSchema = z
     onlyFuture: z.boolean().optional(),
     includeDeclined: z.boolean().optional(),
     maxResults: z.number().int().min(1).max(2500).optional(),
+    query: z.string().optional(),
   })
   .optional()
+
+const upcomingEventsParamsSchema = z
+  .object({
+    days: z.number().int().min(1).max(90).optional(),
+    includeDeclined: z.boolean().optional(),
+    maxResults: z.number().int().min(1).max(2500).optional(),
+  })
+  .optional()
+
+const eventGetParamsSchema = z.object({
+  id: z.string().min(1),
+})
 
 function mapGoogleEvent(event: calendar_v3.Schema$Event): CalendarEvent {
   return {
@@ -100,6 +113,44 @@ async function fetchCalendarEvents(
   return (response.data.items ?? [])
     .filter((event) => options.includeDeclined || event.status !== 'cancelled')
     .map(mapGoogleEvent)
+}
+
+async function fetchCalendarList(workspaceId: string) {
+  const auth = await getOAuth2Client(workspaceId)
+
+  if (
+    !auth.credentials ||
+    (!auth.credentials.access_token && !auth.credentials.refresh_token)
+  ) {
+    const error = new Error('Calendar is not connected')
+    error.name = 'CalendarNotConnected'
+    throw error
+  }
+
+  const calendar = google.calendar({ version: 'v3', auth })
+  const response = await calendar.calendarList.list()
+
+  return (response.data.items ?? []).map((item) => ({
+    id: item.id,
+    summary: item.summary,
+    description: item.description,
+    primary: item.primary,
+    accessRole: item.accessRole,
+    backgroundColor: item.backgroundColor,
+    foregroundColor: item.foregroundColor,
+  }))
+}
+
+function filterEventsByQuery(events: CalendarEvent[], query?: string) {
+  if (!query?.trim()) return events
+  const normalized = query.toLowerCase()
+  return events.filter((event) =>
+    [event.title, event.location, event.status]
+      .filter(Boolean)
+      .join('\n')
+      .toLowerCase()
+      .includes(normalized),
+  )
 }
 
 function todayRange(onlyFuture = true) {
@@ -292,10 +343,28 @@ app.post('/api/moldable/rpc', async (c) => {
         maxResults: params?.maxResults,
       })
 
+      return c.json({
+        ok: true,
+        result: filterEventsByQuery(events, params?.query),
+      })
+    }
+
+    if (body.method === 'events.upcoming') {
+      const upcomingParams = upcomingEventsParamsSchema.parse(body.params)
+      const now = new Date()
+      const end = new Date(now)
+      end.setDate(end.getDate() + (upcomingParams?.days ?? 7))
+      const events = await fetchCalendarEvents(workspaceId, {
+        timeMin: now.toISOString(),
+        timeMax: end.toISOString(),
+        includeDeclined: upcomingParams?.includeDeclined,
+        maxResults: upcomingParams?.maxResults,
+      })
+
       return c.json({ ok: true, result: events })
     }
 
-    if (body.method === 'events.list') {
+    if (body.method === 'events.list' || body.method === 'events.search') {
       const events = await fetchCalendarEvents(workspaceId, {
         timeMin: params?.timeMin,
         timeMax: params?.timeMax,
@@ -303,7 +372,50 @@ app.post('/api/moldable/rpc', async (c) => {
         maxResults: params?.maxResults,
       })
 
-      return c.json({ ok: true, result: events })
+      return c.json({
+        ok: true,
+        result: filterEventsByQuery(events, params?.query),
+      })
+    }
+
+    if (body.method === 'events.get') {
+      const eventParams = eventGetParamsSchema.parse(body.params)
+      const events = await fetchCalendarEvents(workspaceId)
+      const event = events.find((item) => item.id === eventParams.id)
+
+      if (!event) {
+        return c.json(
+          {
+            ok: false,
+            error: {
+              code: 'event_not_found',
+              message: `Calendar event ${eventParams.id} was not found.`,
+            },
+          },
+          404,
+        )
+      }
+
+      return c.json({ ok: true, result: event })
+    }
+
+    if (body.method === 'calendar.status') {
+      try {
+        await fetchCalendarEvents(workspaceId, { maxResults: 1 })
+        return c.json({ ok: true, result: { connected: true } })
+      } catch (error) {
+        if (error instanceof Error && error.name === 'CalendarNotConnected') {
+          return c.json({ ok: true, result: { connected: false } })
+        }
+        throw error
+      }
+    }
+
+    if (body.method === 'calendars.list') {
+      return c.json({
+        ok: true,
+        result: await fetchCalendarList(workspaceId),
+      })
     }
 
     return c.json(

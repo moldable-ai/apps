@@ -35,6 +35,14 @@ interface Preferences {
   [key: string]: unknown
 }
 
+type RpcRequest = {
+  method?: unknown
+  params?: unknown
+}
+
+type RpcParams = Record<string, unknown>
+type RpcStatus = 400 | 404 | 500
+
 const DEFAULT_CONFIG: ProjectConfig = {
   rootPath: null,
   recentProjects: [],
@@ -55,6 +63,42 @@ function getConfigPath(workspaceId?: string): string {
 
 function getPreferencesPath(workspaceId?: string): string {
   return safePath(getAppDataDir(workspaceId), PREFERENCES_FILE)
+}
+
+function getRpcWorkspaceId(request: Request): string | undefined {
+  return (
+    request.headers.get('x-moldable-workspace-id') ??
+    getWorkspaceFromRequest(request)
+  )
+}
+
+function asParams(value: unknown): RpcParams {
+  return value && typeof value === 'object' ? (value as RpcParams) : {}
+}
+
+function stringParam(params: RpcParams, key: string): string | undefined {
+  const value = params[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+function numberParam(params: RpcParams, key: string): number | undefined {
+  const value = params[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function booleanParam(params: RpcParams, key: string): boolean | undefined {
+  const value = params[key]
+  return typeof value === 'boolean' ? value : undefined
+}
+
+function rpcError(code: string, message: string, status: RpcStatus = 400) {
+  return {
+    body: {
+      ok: false,
+      error: { code, message },
+    },
+    status,
+  }
 }
 
 async function getGitignore(projectRoot: string): Promise<Ignore | null> {
@@ -398,5 +442,183 @@ app.post('/api/write', async (c) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     return c.json({ error: message }, 500)
+  }
+})
+
+app.post('/api/moldable/rpc', async (c) => {
+  const workspaceId = getRpcWorkspaceId(c.req.raw)
+
+  try {
+    const body = (await c.req.json()) as RpcRequest
+    const method = typeof body.method === 'string' ? body.method : ''
+    const params = asParams(body.params)
+
+    if (!method) {
+      const error = rpcError('invalid_request', 'method is required')
+      return c.json(error.body, error.status)
+    }
+
+    if (method === 'code.project.get') {
+      const config = await readJson<ProjectConfig>(
+        getConfigPath(workspaceId),
+        DEFAULT_CONFIG,
+      )
+      return c.json({ ok: true, result: config })
+    }
+
+    if (method === 'code.project.recent') {
+      const config = await readJson<ProjectConfig>(
+        getConfigPath(workspaceId),
+        DEFAULT_CONFIG,
+      )
+      return c.json({ ok: true, result: config.recentProjects })
+    }
+
+    if (method === 'code.project.set') {
+      const rootPath = stringParam(params, 'rootPath') ?? null
+      const previewUrl = stringParam(params, 'previewUrl')
+      const configPath = getConfigPath(workspaceId)
+      const existingConfig = await readJson<ProjectConfig>(
+        configPath,
+        DEFAULT_CONFIG,
+      )
+      const updated: ProjectConfig = {
+        ...existingConfig,
+        rootPath,
+        ...(previewUrl ? { previewUrl } : {}),
+      }
+      await writeJson(configPath, updated)
+      return c.json({ ok: true, result: updated })
+    }
+
+    if (method === 'code.preferences.get') {
+      const prefs = await readJson<Preferences>(
+        getPreferencesPath(workspaceId),
+        {},
+      )
+      return c.json({ ok: true, result: prefs })
+    }
+
+    if (method === 'code.files.search') {
+      const config = await readJson<ProjectConfig>(
+        getConfigPath(workspaceId),
+        DEFAULT_CONFIG,
+      )
+      const root = stringParam(params, 'root') ?? config.rootPath
+      if (!root) {
+        const error = rpcError(
+          'root_required',
+          'root or current project is required',
+        )
+        return c.json(error.body, error.status)
+      }
+
+      const ignorePatterns = await getGitignorePatterns(root)
+      ignorePatterns.push('**/.DS_Store')
+      const files = await fg(stringParam(params, 'pattern') ?? '**/*', {
+        cwd: root,
+        ignore: ignorePatterns,
+        onlyFiles: true,
+        absolute: true,
+        followSymbolicLinks: false,
+      })
+      const query = stringParam(params, 'query')?.toLowerCase()
+      const limit = Math.max(
+        1,
+        Math.min(numberParam(params, 'limit') ?? 100, 500),
+      )
+      const results = files
+        .map((filePath) => ({
+          path: filePath,
+          name: path.basename(filePath),
+          relativePath: path.relative(root, filePath),
+        }))
+        .filter((item) =>
+          query
+            ? `${item.name}\n${item.relativePath}`.toLowerCase().includes(query)
+            : true,
+        )
+        .slice(0, limit)
+
+      return c.json({ ok: true, result: results })
+    }
+
+    if (method === 'code.files.read') {
+      const filePath = stringParam(params, 'path')
+      if (!filePath) {
+        const error = rpcError('path_required', 'path is required')
+        return c.json(error.body, error.status)
+      }
+
+      const content = await fs.readFile(filePath, 'utf-8')
+      const maxChars = Math.max(
+        1,
+        Math.min(numberParam(params, 'maxChars') ?? 20000, 100000),
+      )
+      return c.json({
+        ok: true,
+        result: {
+          path: filePath,
+          content: content.slice(0, maxChars),
+          truncated: content.length > maxChars,
+        },
+      })
+    }
+
+    if (method === 'code.files.list') {
+      const dirPath = stringParam(params, 'path')
+      if (!dirPath) {
+        const error = rpcError('path_required', 'path is required')
+        return c.json(error.body, error.status)
+      }
+
+      const root = stringParam(params, 'root') ?? dirPath
+      const gitignore = await getGitignore(root)
+      const entries = await fs.readdir(dirPath, { withFileTypes: true })
+      const includeHidden = booleanParam(params, 'includeHidden') ?? true
+      const files = entries
+        .filter((entry) => includeHidden || !entry.name.startsWith('.'))
+        .filter((entry) => entry.name !== '.DS_Store')
+        .map((entry) => {
+          const fullPath = path.join(dirPath, entry.name)
+          const relativePath = path.relative(root, fullPath)
+          const matchPath = entry.isDirectory()
+            ? `${relativePath}/`
+            : relativePath
+          return {
+            name: entry.name,
+            path: fullPath,
+            isDirectory: entry.isDirectory(),
+            isDimmed: gitignore?.ignores(matchPath) ?? false,
+          }
+        })
+      return c.json({ ok: true, result: files })
+    }
+
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'method_not_found',
+          message: `Code does not expose ${method}.`,
+        },
+      },
+      404,
+    )
+  } catch (error) {
+    console.error('Code RPC failed:', error)
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'code_rpc_failed',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Code could not complete the request.',
+        },
+      },
+      500,
+    )
   }
 })

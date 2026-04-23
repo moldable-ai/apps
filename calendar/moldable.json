@@ -28,12 +28,102 @@
           {
             "id": "events.today",
             "name": "Today's calendar events",
-            "description": "See event titles, times, and availability for today's schedule in this workspace."
+            "description": "See event titles, times, and availability for today's schedule in this workspace.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "onlyFuture": { "type": "boolean" },
+                "includeDeclined": { "type": "boolean" },
+                "maxResults": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 2500
+                },
+                "query": { "type": "string" }
+              }
+            }
+          },
+          {
+            "id": "events.upcoming",
+            "name": "Upcoming calendar events",
+            "description": "See upcoming events over the next N days.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "days": { "type": "number", "minimum": 1, "maximum": 90 },
+                "includeDeclined": { "type": "boolean" },
+                "maxResults": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 2500
+                }
+              }
+            }
           },
           {
             "id": "events.list",
             "name": "Calendar events in a date range",
-            "description": "See event titles, start and end times, and availability for a requested date range so the app can show upcoming schedule context."
+            "description": "See event titles, start and end times, and availability for a requested date range so the app can show upcoming schedule context.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "timeMin": {
+                  "type": "string",
+                  "description": "ISO datetime lower bound."
+                },
+                "timeMax": {
+                  "type": "string",
+                  "description": "ISO datetime upper bound."
+                },
+                "includeDeclined": { "type": "boolean" },
+                "maxResults": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 2500
+                },
+                "query": { "type": "string" }
+              }
+            }
+          },
+          {
+            "id": "events.search",
+            "name": "Search calendar events",
+            "description": "Search calendar event title, location, and status within an optional date range.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": { "type": "string" },
+                "timeMin": { "type": "string" },
+                "timeMax": { "type": "string" },
+                "maxResults": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 2500
+                }
+              }
+            }
+          },
+          {
+            "id": "events.get",
+            "name": "Get calendar event",
+            "description": "Get one calendar event by ID from the default event window.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "calendar.status",
+            "name": "Calendar connection status",
+            "description": "Check whether Calendar is connected in this workspace."
+          },
+          {
+            "id": "calendars.list",
+            "name": "List calendars",
+            "description": "List Google calendars available to the connected account."
           }
         ]
       }

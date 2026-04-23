@@ -16,6 +16,81 @@
     "@moldable-ai/ui": "^0.2.6",
     "@moldable-ai/storage": "^0.1.3"
   },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "affirmations.content",
+        "name": "Affirmations",
+        "description": "Read affirmation categories, affirmation text, random affirmations, and favorites.",
+        "scopes": [
+          {
+            "id": "affirmations.categories",
+            "name": "List categories",
+            "description": "List affirmation categories."
+          },
+          {
+            "id": "affirmations.list",
+            "name": "List affirmations",
+            "description": "List affirmations, optionally filtered by category or text.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "categoryId": { "type": "string" },
+                "query": { "type": "string" },
+                "limit": { "type": "number", "minimum": 1, "maximum": 200 }
+              }
+            }
+          },
+          {
+            "id": "affirmations.search",
+            "name": "Search affirmations",
+            "description": "Search affirmation text.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": { "type": "string" },
+                "categoryId": { "type": "string" },
+                "limit": { "type": "number", "minimum": 1, "maximum": 200 }
+              }
+            }
+          },
+          {
+            "id": "affirmations.random",
+            "name": "Random affirmation",
+            "description": "Return one random affirmation, optionally constrained by category or query.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "categoryId": { "type": "string" },
+                "query": { "type": "string" }
+              }
+            }
+          },
+          {
+            "id": "affirmations.favorites.list",
+            "name": "List favorites",
+            "description": "List favorite affirmations in this workspace."
+          },
+          {
+            "id": "affirmations.favorites.update",
+            "name": "Update favorites",
+            "description": "Replace the favorite affirmations list.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "favorites": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              },
+              "required": ["favorites"]
+            }
+          }
+        ]
+      }
+    ]
+  },
   "env": [],
   "routeName": "affirmations"
 }

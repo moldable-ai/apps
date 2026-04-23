@@ -62,6 +62,14 @@ type GitEditorsResponse = {
   preferredCommitAction?: 'commit' | 'commit-and-push'
 }
 
+type RpcRequest = {
+  method?: unknown
+  params?: unknown
+}
+
+type RpcParams = Record<string, unknown>
+type RpcStatus = 400 | 404 | 500
+
 const commitMessageSchema = {
   type: 'object',
   additionalProperties: false,
@@ -124,6 +132,44 @@ export const app = new Hono()
 
 app.use('/api/*', cors())
 
+function getRpcWorkspaceId(request: Request): string | undefined {
+  return (
+    request.headers.get('x-moldable-workspace-id') ??
+    getWorkspaceFromRequest(request)
+  )
+}
+
+function asParams(value: unknown): RpcParams {
+  return value && typeof value === 'object' ? (value as RpcParams) : {}
+}
+
+function stringParam(params: RpcParams, key: string): string | undefined {
+  const value = params[key]
+  return typeof value === 'string' ? value : undefined
+}
+
+function stringArrayParam(params: RpcParams, key: string): string[] {
+  const value = params[key]
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
+}
+
+function numberParam(params: RpcParams, key: string): number | undefined {
+  const value = params[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function rpcError(code: string, message: string, status: RpcStatus = 400) {
+  return {
+    body: {
+      ok: false,
+      error: { code, message },
+    },
+    status,
+  }
+}
+
 app.get('/api/moldable/commands', async (c) => {
   const workspaceId = getWorkspaceFromRequest(c.req.raw)
   const repos = await getRecentRepos(workspaceId)
@@ -133,8 +179,14 @@ app.get('/api/moldable/commands', async (c) => {
       id: `switch-repository:${encodeURIComponent(repo.path)}`,
       label: repo.name,
       description: repo.path,
-      icon: 'folder-git',
-      status: repo.isDirty ? 'modified' : undefined,
+      icon: 'folder',
+      indicator: repo.isDirty
+        ? {
+            type: 'dot',
+            label: 'Has uncommitted changes',
+            color: 'var(--primary)',
+          }
+        : undefined,
       group: 'Repositories',
       action: {
         type: 'message',
@@ -416,6 +468,127 @@ app.post('/api/git', async (c) => {
         error: error instanceof Error ? error.message : 'Action failed',
       },
       400,
+    )
+  }
+})
+
+app.post('/api/moldable/rpc', async (c) => {
+  const workspaceId = getRpcWorkspaceId(c.req.raw)
+
+  try {
+    const body = (await c.req.json()) as RpcRequest
+    const method = typeof body.method === 'string' ? body.method : ''
+    const params = asParams(body.params)
+    const repoPath = stringParam(params, 'repoPath')
+
+    if (!method) {
+      const error = rpcError('invalid_request', 'method is required')
+      return c.json(error.body, error.status)
+    }
+
+    if (method === 'git.status') {
+      const [status, repos] = await Promise.all([
+        getStatus(repoPath, workspaceId),
+        getRecentRepos(workspaceId),
+      ])
+      return c.json({ ok: true, result: { ...status, recentRepos: repos } })
+    }
+
+    if (method === 'git.repos.list') {
+      return c.json({ ok: true, result: await getRecentRepos(workspaceId) })
+    }
+
+    if (method === 'git.repo.set') {
+      const path = stringParam(params, 'path')
+      if (!path) {
+        const error = rpcError('invalid_params', 'path is required')
+        return c.json(error.body, error.status)
+      }
+      const status = await addRepo(path, workspaceId)
+      return c.json({ ok: true, result: status })
+    }
+
+    if (method === 'git.diff') {
+      const filePath = stringParam(params, 'filePath')
+      const maxChars = numberParam(params, 'maxChars') ?? MAX_REVIEW_DIFF_CHARS
+      const diff = await getDiff(repoPath, filePath, workspaceId)
+      return c.json({
+        ok: true,
+        result: {
+          diff: truncateDiff(diff, maxChars),
+          truncated: diff.length > maxChars,
+        },
+      })
+    }
+
+    if (method === 'git.commitDiff') {
+      const hash = stringParam(params, 'hash')
+      if (!hash) {
+        const error = rpcError('invalid_params', 'hash is required')
+        return c.json(error.body, error.status)
+      }
+      const maxChars = numberParam(params, 'maxChars') ?? MAX_REVIEW_DIFF_CHARS
+      const diff = await getCommitDiff(hash, repoPath, workspaceId)
+      return c.json({
+        ok: true,
+        result: {
+          diff: truncateDiff(diff, maxChars),
+          truncated: diff.length > maxChars,
+        },
+      })
+    }
+
+    if (method === 'git.history') {
+      const history = await getHistory(repoPath, workspaceId)
+      const limit = numberParam(params, 'limit') ?? 50
+      return c.json({ ok: true, result: history.slice(0, limit) })
+    }
+
+    if (method === 'git.generateCommitMessage') {
+      const result = await generateCommitMessage(
+        stringArrayParam(params, 'paths'),
+        workspaceId,
+      )
+      return c.json({ ok: true, result })
+    }
+
+    if (method === 'git.reviewCode') {
+      const result = await reviewCode(
+        stringArrayParam(params, 'paths'),
+        workspaceId,
+      )
+      return c.json({ ok: true, result })
+    }
+
+    if (method === 'git.editors.list') {
+      const editors = await getDetectedEditors(workspaceId)
+      return c.json({ ok: true, result: editors })
+    }
+
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'method_not_found',
+          message: `Git does not expose ${method}.`,
+        },
+      },
+      404,
+    )
+  } catch (error) {
+    console.error('Git RPC failed:', error)
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'git_rpc_failed',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Git could not complete the request.',
+        },
+      },
+      500,
     )
   }
 })

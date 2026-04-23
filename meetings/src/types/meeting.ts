@@ -15,6 +15,8 @@ export interface RecordingSession {
   id: string
   startedAt: Date
   endedAt?: Date
+  audioPath?: string
+  audioMimeType?: string
 }
 
 export interface Meeting {
@@ -26,8 +28,6 @@ export interface Meeting {
   duration: number // in seconds
   segments: TranscriptSegment[]
   recordingSessions?: RecordingSession[]
-  audioPath?: string // path to saved audio file
-  saveAudio: boolean
   notes?: string // User's notes (markdown)
   enhancedNotes?: string // Generated structured notes (markdown)
   enhancedTemplateId?: string // Template used for the current enhanced note

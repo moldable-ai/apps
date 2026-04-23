@@ -26,6 +26,11 @@ function getMeetingsDir(workspaceId?: string): string {
   return safePath(getAppDataDir(workspaceId), 'meetings')
 }
 
+/** Get the meeting audio directory */
+function getAudioDir(workspaceId?: string): string {
+  return safePath(getAppDataDir(workspaceId), 'audio')
+}
+
 /** Get the custom templates directory */
 function getTemplatesDir(workspaceId?: string): string {
   return safePath(getAppDataDir(workspaceId), 'templates')
@@ -35,6 +40,65 @@ function getTemplatesDir(workspaceId?: string): string {
 function getMeetingPath(id: string, workspaceId?: string): string {
   const safeId = sanitizeId(id)
   return safePath(getMeetingsDir(workspaceId), `${safeId}.json`)
+}
+
+function getAudioExtension(contentType: string): string {
+  if (contentType.includes('audio/l16')) return 'wav'
+  if (contentType.includes('audio/wav')) return 'wav'
+  if (contentType.includes('audio/mp4')) return 'm4a'
+  if (contentType.includes('audio/ogg')) return 'ogg'
+  return 'webm'
+}
+
+function getAudioMimeType(contentType: string): string {
+  if (contentType.includes('audio/l16')) return 'audio/wav'
+  return contentType
+}
+
+function inferAudioMimeType(audioPath: string): string {
+  if (audioPath.endsWith('.wav')) return 'audio/wav'
+  if (audioPath.endsWith('.m4a')) return 'audio/mp4'
+  if (audioPath.endsWith('.ogg')) return 'audio/ogg'
+  return 'audio/webm'
+}
+
+function isPcm16ContentType(contentType: string): boolean {
+  return contentType.includes('audio/l16')
+}
+
+function getAudioFileName(
+  meetingId: string,
+  sessionId: string,
+  contentType: string,
+): string {
+  return `${sanitizeId(meetingId)}-${sanitizeId(sessionId)}.${getAudioExtension(contentType)}`
+}
+
+function createWavHeader(dataByteLength: number): Buffer {
+  const header = Buffer.alloc(44)
+  header.write('RIFF', 0)
+  header.writeUInt32LE(36 + dataByteLength, 4)
+  header.write('WAVE', 8)
+  header.write('fmt ', 12)
+  header.writeUInt32LE(16, 16)
+  header.writeUInt16LE(1, 20)
+  header.writeUInt16LE(1, 22)
+  header.writeUInt32LE(48000, 24)
+  header.writeUInt32LE(48000 * 2, 28)
+  header.writeUInt16LE(2, 32)
+  header.writeUInt16LE(16, 34)
+  header.write('data', 36)
+  header.writeUInt32LE(dataByteLength, 40)
+  return header
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath)
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** Get the path to a custom template file */
@@ -111,6 +175,131 @@ export async function saveMeeting(
   await writeJson(getMeetingPath(meeting.id, workspaceId), meeting)
 }
 
+export async function saveMeetingAudio({
+  meetingId,
+  sessionId,
+  contentType,
+  data,
+  workspaceId,
+}: {
+  meetingId: string
+  sessionId: string
+  contentType: string
+  data: Buffer
+  workspaceId?: string
+}): Promise<{ audioPath: string; audioMimeType: string }> {
+  await ensureDir(getAudioDir(workspaceId))
+
+  const fileName = `${sanitizeId(meetingId)}-${sanitizeId(sessionId)}-${Date.now()}.${getAudioExtension(contentType)}`
+  const filePath = safePath(getAudioDir(workspaceId), fileName)
+  await fs.writeFile(filePath, data)
+
+  return {
+    audioPath: `audio/${fileName}`,
+    audioMimeType: contentType,
+  }
+}
+
+export async function appendMeetingAudioChunk({
+  meetingId,
+  sessionId,
+  contentType,
+  data,
+  workspaceId,
+}: {
+  meetingId: string
+  sessionId: string
+  contentType: string
+  data: Buffer
+  workspaceId?: string
+}): Promise<{ audioPath: string; audioMimeType: string }> {
+  await ensureDir(getAudioDir(workspaceId))
+
+  const fileName = getAudioFileName(meetingId, sessionId, contentType)
+  const filePath = safePath(getAudioDir(workspaceId), fileName)
+
+  if (isPcm16ContentType(contentType) && !(await pathExists(filePath))) {
+    await fs.writeFile(filePath, createWavHeader(0))
+  }
+
+  await fs.appendFile(filePath, data)
+
+  return {
+    audioPath: `audio/${fileName}`,
+    audioMimeType: getAudioMimeType(contentType),
+  }
+}
+
+export async function finalizeMeetingAudio({
+  meetingId,
+  sessionId,
+  contentType,
+  workspaceId,
+}: {
+  meetingId: string
+  sessionId: string
+  contentType: string
+  workspaceId?: string
+}): Promise<{ audioPath: string; audioMimeType: string } | null> {
+  const fileName = getAudioFileName(meetingId, sessionId, contentType)
+  const filePath = safePath(getAudioDir(workspaceId), fileName)
+
+  if (!(await pathExists(filePath))) return null
+
+  if (isPcm16ContentType(contentType)) {
+    const stat = await fs.stat(filePath)
+    const dataByteLength = Math.max(0, stat.size - 44)
+    const file = await fs.open(filePath, 'r+')
+    try {
+      await file.write(createWavHeader(dataByteLength), 0, 44, 0)
+    } finally {
+      await file.close()
+    }
+  }
+
+  return {
+    audioPath: `audio/${fileName}`,
+    audioMimeType: getAudioMimeType(contentType),
+  }
+}
+
+export async function getMeetingAudioAsset({
+  meetingId,
+  sessionId,
+  workspaceId,
+}: {
+  meetingId: string
+  sessionId: string
+  workspaceId?: string
+}): Promise<{
+  filePath: string
+  audioMimeType: string
+  size: number
+} | null> {
+  const meeting = await getMeeting(meetingId, workspaceId)
+  const session = meeting?.recordingSessions?.find(
+    (item) => item.id === sessionId,
+  )
+  const audioPath = session?.audioPath
+
+  if (!session || !audioPath?.startsWith('audio/')) return null
+
+  const filePath = safePath(getAppDataDir(workspaceId), audioPath)
+
+  try {
+    const stat = await fs.stat(filePath)
+    if (!stat.isFile() || stat.size === 0) return null
+
+    return {
+      filePath,
+      audioMimeType: session.audioMimeType ?? inferAudioMimeType(audioPath),
+      size: stat.size,
+    }
+  } catch {
+    return null
+  }
+}
+
 /**
  * Delete a meeting
  */
@@ -118,11 +307,27 @@ export async function deleteMeeting(
   meetingId: string,
   workspaceId?: string,
 ): Promise<void> {
+  const meeting = await getMeeting(meetingId, workspaceId)
   try {
     const filePath = getMeetingPath(meetingId, workspaceId)
     await fs.unlink(filePath)
   } catch {
     // File might not exist, that's ok
+  }
+
+  const audioPaths = new Set(
+    [
+      ...(meeting?.recordingSessions?.map((session) => session.audioPath) ??
+        []),
+    ].filter((path): path is string => Boolean(path?.startsWith('audio/'))),
+  )
+
+  for (const audioPath of audioPaths) {
+    try {
+      await fs.unlink(safePath(getAppDataDir(workspaceId), audioPath))
+    } catch {
+      // File might not exist, that's ok
+    }
   }
 }
 

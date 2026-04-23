@@ -17,6 +17,137 @@
     "@moldable-ai/ui": "^0.1.0",
     "@moldable-ai/storage": "^0.1.0"
   },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "todo.tasks",
+        "name": "Todo tasks",
+        "description": "Read and manage Todo tasks in the active workspace.",
+        "scopes": [
+          {
+            "id": "todos.list",
+            "name": "List todos",
+            "description": "List todos with optional filters for text, priority, due date, and completion status.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": { "type": "string" },
+                "includeCompleted": { "type": "boolean" },
+                "priority": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high"]
+                },
+                "dueBefore": {
+                  "type": "string",
+                  "description": "ISO date or datetime."
+                },
+                "dueAfter": {
+                  "type": "string",
+                  "description": "ISO date or datetime."
+                },
+                "limit": { "type": "number", "minimum": 1, "maximum": 200 }
+              }
+            }
+          },
+          {
+            "id": "todos.search",
+            "name": "Search todos",
+            "description": "Search todos by title with the same filters as list.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": { "type": "string" },
+                "includeCompleted": { "type": "boolean" },
+                "priority": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high"]
+                },
+                "limit": { "type": "number", "minimum": 1, "maximum": 200 }
+              }
+            }
+          },
+          {
+            "id": "todos.get",
+            "name": "Get todo",
+            "description": "Get one todo by ID.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "todos.create",
+            "name": "Create todo",
+            "description": "Create a new todo.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "title": { "type": "string" },
+                "priority": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high"]
+                },
+                "dueDate": {
+                  "type": ["string", "null"],
+                  "description": "ISO date or datetime."
+                },
+                "completed": { "type": "boolean" }
+              },
+              "required": ["title"]
+            }
+          },
+          {
+            "id": "todos.update",
+            "name": "Update todo",
+            "description": "Update todo title, priority, due date, or completion state.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "title": { "type": "string" },
+                "completed": { "type": "boolean" },
+                "priority": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high"]
+                },
+                "dueDate": { "type": ["string", "null"] }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "todos.complete",
+            "name": "Complete todo",
+            "description": "Mark a todo complete or active.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "completed": { "type": "boolean" }
+              },
+              "required": ["id", "completed"]
+            }
+          },
+          {
+            "id": "todos.delete",
+            "name": "Delete todo",
+            "description": "Delete one todo by ID.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" }
+              },
+              "required": ["id"]
+            }
+          }
+        ]
+      }
+    ]
+  },
   "env": [],
   "commands": "dynamic",
   "upstream": {
