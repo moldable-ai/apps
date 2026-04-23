@@ -18,8 +18,8 @@
   "author": "",
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
-    "@moldable-ai/storage": "^0.1.3",
-    "@moldable-ai/ui": "^0.2.6",
+    "@moldable-ai/storage": "^0.1.4",
+    "@moldable-ai/ui": "^0.2.7",
     "@radix-ui/react-checkbox": "^1.3.3",
     "@radix-ui/react-select": "^2.2.6",
     "@tanstack/react-query": "^5.99.2",
@@ -36,7 +36,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@moldable-ai/typescript-config": "0.1.2",
+    "@moldable-ai/typescript-config": "0.1.3",
     "@tailwindcss/typography": "^0.5.19",
     "@tailwindcss/vite": "^4.2.2",
     "@types/node": "^25.6.0",
@@ -47,7 +47,7 @@
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.4",
-    "@moldable-ai/eslint-config": "0.1.3",
+    "@moldable-ai/eslint-config": "0.1.4",
     "eslint": "^9.39.2"
   }
 }
