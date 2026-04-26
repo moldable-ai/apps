@@ -1,6 +1,6 @@
 {
   "name": "Meetings",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Record, transcribe, and summarize meetings with real-time transcription",

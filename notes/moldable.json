@@ -1,6 +1,6 @@
 {
   "name": "Notes",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "visibility": "public",
   "description": "A Google Keep-style note taking app with pinning and markdown support",
   "runtime": "vite_hono",

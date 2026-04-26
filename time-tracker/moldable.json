@@ -1,6 +1,6 @@
 {
   "name": "Time Tracker",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "visibility": "public",
   "description": "Track time for work projects with weekly views and export",
   "runtime": "vite_hono",
