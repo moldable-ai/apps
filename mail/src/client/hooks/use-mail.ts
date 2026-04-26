@@ -46,7 +46,10 @@ export function useMailStatus() {
 
   return useQuery({
     queryKey: ['mail-status', workspaceId],
-    initialData: () => readCachedValue<MailStatus>(statusCacheKey),
+    initialData: () => {
+      const cached = readCachedValue<MailStatus>(statusCacheKey)
+      return cached?.authenticated ? cached : undefined
+    },
     queryFn: async () => {
       const res = await fetchWithWorkspace('/api/status')
       if (!res.ok) throw new Error('Failed to load Gmail status')

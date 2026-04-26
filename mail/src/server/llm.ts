@@ -16,7 +16,7 @@ interface StreamAppTextOptions {
 function getAppLlmConfig() {
   const aiServerUrl =
     process.env.MOLDABLE_AI_SERVER_URL || 'http://127.0.0.1:39200'
-  const appId = process.env.MOLDABLE_APP_ID || 'emails'
+  const appId = process.env.MOLDABLE_APP_ID || 'mail'
   const appToken = process.env.MOLDABLE_APP_TOKEN
 
   if (!appToken) {

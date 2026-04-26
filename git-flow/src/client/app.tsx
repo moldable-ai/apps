@@ -1133,7 +1133,7 @@ export default function GitFlowPage() {
         <div className="flex items-center gap-1.5">
           <div className="flex items-center gap-2">
             <Select
-              value={data?.repoPath}
+              value={data?.repoPath || undefined}
               onValueChange={handleRepoChange}
               disabled={repositoryControlsDisabled}
             >
@@ -1198,9 +1198,9 @@ export default function GitFlowPage() {
           {/* Branch Selector */}
           <div className="flex items-center gap-2">
             <Select
-              value={data?.currentBranch}
+              value={data?.currentBranch || undefined}
               onValueChange={() => {}}
-              disabled={repositoryControlsDisabled}
+              disabled={repositoryControlsDisabled || !data?.repoPath}
             >
               <SelectTrigger
                 className={cn(

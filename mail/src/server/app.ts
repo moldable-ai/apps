@@ -26,6 +26,7 @@ import {
   listMessages,
   modifyMessageLabels,
   sendMessage,
+  startGmailTokenKeepalive,
   unsubscribeAndArchive,
 } from './gmail-service'
 import { Hono } from 'hono'
@@ -183,7 +184,7 @@ function authSuccessHtml() {
           <p style="color: #a1a1aa;">You can close this window.</p>
           <script>
             if (window.opener) {
-              window.opener.postMessage({ type: 'oauth-success', appId: 'emails' }, '*');
+              window.opener.postMessage({ type: 'oauth-success', appId: 'mail' }, '*');
               setTimeout(() => window.close(), 700);
             }
           </script>
@@ -227,7 +228,7 @@ function authFailureHtml(message: string) {
 app.get('/api/moldable/health', (c) => {
   return c.json(
     {
-      appId: process.env.MOLDABLE_APP_ID ?? 'emails',
+      appId: process.env.MOLDABLE_APP_ID ?? 'mail',
       port: Number(process.env.MOLDABLE_PORT ?? process.env.PORT ?? 0) || null,
       status: 'ok',
       ts: Date.now(),
@@ -363,15 +364,14 @@ app.get('/api/status', async (c) => {
       return c.json({ authenticated: false, profile: null })
     }
 
+    startGmailTokenKeepalive(workspaceId)
+
     try {
       return c.json({
         authenticated: true,
         profile: await getProfile(workspaceId),
       })
     } catch (error) {
-      if (isAuthError(error)) {
-        return c.json({ authenticated: false, profile: null })
-      }
       console.warn('Gmail profile lookup failed:', error)
       return c.json({ authenticated: true, profile: null })
     }

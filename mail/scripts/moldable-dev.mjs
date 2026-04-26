@@ -120,7 +120,7 @@ const serverArgs =
 child = spawn(tsxBin, [...serverArgs, ...forwardedArgs], {
   env: {
     ...process.env,
-    MOLDABLE_APP_ID: 'emails',
+    MOLDABLE_APP_ID: 'mail',
     ...(port ? { MOLDABLE_PORT: port, PORT: port } : {}),
   },
   stdio: 'inherit',

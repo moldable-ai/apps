@@ -25,8 +25,8 @@ const RepoEntrySchema = z.object({
 })
 
 const SettingsSchema = z.object({
-  currentRepoPath: z.string(),
-  recentRepos: z.array(RepoEntrySchema),
+  currentRepoPath: z.string().default(''),
+  recentRepos: z.array(RepoEntrySchema).default([]),
   preferredEditorId: z.string().optional(),
   preferredCommitAction: z.enum(['commit', 'commit-and-push']).optional(),
 })
@@ -34,8 +34,8 @@ const SettingsSchema = z.object({
 type Settings = z.infer<typeof SettingsSchema>
 
 const DEFAULT_SETTINGS: Settings = {
-  currentRepoPath: '/Users/rob/moldable',
-  recentRepos: [{ name: 'moldable', path: '/Users/rob/moldable' }],
+  currentRepoPath: '',
+  recentRepos: [],
   preferredEditorId: undefined,
   preferredCommitAction: 'commit',
 }
@@ -188,6 +188,19 @@ function formatGitFailure(args: string[], stdout: string, stderr: string) {
   return output ? `${prefix}\n\n${output}` : prefix
 }
 
+function resolveRepoPath(repoPath?: string, currentRepoPath?: string) {
+  const pathToUse = repoPath || currentRepoPath || ''
+  return pathToUse.trim() || null
+}
+
+function requireRepoPath(repoPath?: string | null) {
+  if (!repoPath) {
+    throw new Error('No repository selected.')
+  }
+
+  return repoPath
+}
+
 async function runGit(args: string[], cwd: string) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn('git', args, {
@@ -291,7 +304,19 @@ export async function addRepo(repoPath: string, workspaceId?: string) {
 
 export async function getStatus(repoPath?: string, workspaceId?: string) {
   const settings = await getSettings(workspaceId)
-  const pathToUse = repoPath || settings.currentRepoPath
+  const pathToUse = resolveRepoPath(repoPath, settings.currentRepoPath)
+
+  if (!pathToUse) {
+    return {
+      currentBranch: '',
+      branches: [],
+      files: [],
+      isClean: true,
+      repoName: 'Select Repository',
+      repoPath: '',
+    }
+  }
+
   const g = simpleGit(pathToUse)
 
   try {
@@ -326,18 +351,21 @@ export async function commitFiles(
   workspaceId?: string,
 ) {
   const settings = await getSettings(workspaceId)
+  const repoPath = requireRepoPath(
+    resolveRepoPath(undefined, settings.currentRepoPath),
+  )
 
   try {
     // 1. Stage only the selected files
-    await runGit(['add', '--', ...paths], settings.currentRepoPath)
+    await runGit(['add', '--', ...paths], repoPath)
 
     // 2. Commit with summary and description
     const commitArgs = ['commit', '-m', summary]
     if (description) {
       commitArgs.push('-m', description)
     }
-    await runGit(commitArgs, settings.currentRepoPath)
-    const result = await runGit(['rev-parse', 'HEAD'], settings.currentRepoPath)
+    await runGit(commitArgs, repoPath)
+    const result = await runGit(['rev-parse', 'HEAD'], repoPath)
 
     return { success: true, commit: result.stdout.trim() }
   } catch (err) {
@@ -350,7 +378,9 @@ export async function commitFiles(
 
 export async function pushCommits(workspaceId?: string) {
   const settings = await getSettings(workspaceId)
-  const repoPath = settings.currentRepoPath
+  const repoPath = requireRepoPath(
+    resolveRepoPath(undefined, settings.currentRepoPath),
+  )
   const g = simpleGit(repoPath)
 
   try {
@@ -400,7 +430,10 @@ export async function pushCommits(workspaceId?: string) {
 
 export async function undoUnpushedCommit(hash: string, workspaceId?: string) {
   const settings = await getSettings(workspaceId)
-  const g = simpleGit(settings.currentRepoPath)
+  const repoPath = requireRepoPath(
+    resolveRepoPath(undefined, settings.currentRepoPath),
+  )
+  const g = simpleGit(repoPath)
 
   const log = await g.log({ maxCount: 1 })
   if (log.latest?.hash !== hash) {
@@ -422,7 +455,8 @@ export async function undoUnpushedCommit(hash: string, workspaceId?: string) {
 
 export async function getHistory(repoPath?: string, workspaceId?: string) {
   const settings = await getSettings(workspaceId)
-  const pathToUse = repoPath || settings.currentRepoPath
+  const pathToUse = resolveRepoPath(repoPath, settings.currentRepoPath)
+  if (!pathToUse) return []
   const g = simpleGit(pathToUse)
 
   try {
@@ -457,7 +491,8 @@ export async function getCommitDiff(
   workspaceId?: string,
 ) {
   const settings = await getSettings(workspaceId)
-  const pathToUse = repoPath || settings.currentRepoPath
+  const pathToUse = resolveRepoPath(repoPath, settings.currentRepoPath)
+  if (!pathToUse) return 'No repository selected.'
   const g = simpleGit(pathToUse)
 
   try {
@@ -475,7 +510,8 @@ export async function getDiff(
   workspaceId?: string,
 ) {
   const settings = await getSettings(workspaceId)
-  const pathToUse = repoPath || settings.currentRepoPath
+  const pathToUse = resolveRepoPath(repoPath, settings.currentRepoPath)
+  if (!pathToUse) return ''
   const g = simpleGit(pathToUse)
 
   // If a specific file is requested, get diff for that file only
@@ -564,7 +600,9 @@ function escapeGitignorePath(relativeFilePath: string) {
 
 export async function discardChanges(paths: string[], workspaceId?: string) {
   const settings = await getSettings(workspaceId)
-  const repoPath = settings.currentRepoPath
+  const repoPath = requireRepoPath(
+    resolveRepoPath(undefined, settings.currentRepoPath),
+  )
   const pathsToDiscard = uniqueRepoRelativePaths(repoPath, paths)
 
   if (pathsToDiscard.length === 0) {
@@ -605,7 +643,9 @@ export async function addFileToGitignore(
   workspaceId?: string,
 ) {
   const settings = await getSettings(workspaceId)
-  const repoPath = settings.currentRepoPath
+  const repoPath = requireRepoPath(
+    resolveRepoPath(undefined, settings.currentRepoPath),
+  )
   const normalizedPath = normalizeRepoRelativePath(repoPath, relativeFilePath)
   const gitignorePath = path.join(repoPath, '.gitignore')
   const pattern = `/${escapeGitignorePath(normalizedPath)}`
@@ -926,7 +966,9 @@ export async function openFileInEditor(
   workspaceId?: string,
 ) {
   const settings = await getSettings(workspaceId)
-  const repoPath = settings.currentRepoPath
+  const repoPath = requireRepoPath(
+    resolveRepoPath(undefined, settings.currentRepoPath),
+  )
   const fullPath = path.resolve(repoPath, relativeFilePath)
 
   if (

@@ -113,6 +113,10 @@ export interface MailContact {
 const detailWarmups = new Map<string, Promise<MailMessageDetail>>()
 const contactsWarmups = new Map<string, Promise<MailContact[]>>()
 const contactsScopeWarnings = new Set<string>()
+const gmailTokenKeepalives = new Map<string, ReturnType<typeof setInterval>>()
+
+const GMAIL_TOKEN_KEEPALIVE_INTERVAL_MS = 55 * 60 * 1000
+const GMAIL_TOKEN_KEEPALIVE_INITIAL_DELAY_MS = 30 * 1000
 
 function detailWarmupKey(workspaceId: string, id: string) {
   return `${workspaceId}:${id}`
@@ -668,6 +672,28 @@ export async function getProfile(workspaceId: string) {
   return gmailJson<MailProfile>(workspaceId, 'google-gmail/profile', {
     path: gmailPath('/profile'),
   })
+}
+
+async function keepGmailTokenFresh(workspaceId: string) {
+  if (!(await isAuthenticated(workspaceId))) return
+  await getProfile(workspaceId)
+}
+
+export function startGmailTokenKeepalive(workspaceId: string) {
+  if (gmailTokenKeepalives.has(workspaceId)) return
+
+  const refresh = () => {
+    void keepGmailTokenFresh(workspaceId).catch((error) => {
+      if (isAuthError(error)) return
+      console.warn('Failed to refresh Gmail token in background:', error)
+    })
+  }
+
+  const timeout = setTimeout(refresh, GMAIL_TOKEN_KEEPALIVE_INITIAL_DELAY_MS)
+  const interval = setInterval(refresh, GMAIL_TOKEN_KEEPALIVE_INTERVAL_MS)
+  gmailTokenKeepalives.set(workspaceId, interval)
+  interval.unref?.()
+  timeout.unref?.()
 }
 
 export async function getLabels(workspaceId: string) {

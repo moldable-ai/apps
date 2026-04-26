@@ -807,7 +807,7 @@ export function App() {
     window.parent.postMessage(
       {
         type: 'moldable:set-app-commands',
-        appId: 'emails',
+        appId: 'mail',
         commands: mailCommands,
       },
       '*',

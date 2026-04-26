@@ -89,6 +89,6 @@
     ]
   },
   "env": [],
-  "routeName": "emails",
+  "routeName": "mail",
   "iconPath": "public/icon.svg"
 }
