@@ -7,7 +7,7 @@
   "author": "",
   "license": "FSL-1.1-ALv2",
   "icon": "⏱️",
-  "iconPath": "public/icon.png",
+  "iconPath": "public/icon.svg",
   "widgetSize": "medium",
   "widgetTint": "graphite",
   "category": "custom",
@@ -31,9 +31,17 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "query": { "type": "string" },
-                "includeArchived": { "type": "boolean" },
-                "limit": { "type": "number", "minimum": 1, "maximum": 500 }
+                "query": {
+                  "type": "string"
+                },
+                "includeArchived": {
+                  "type": "boolean"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500
+                }
               }
             }
           },
@@ -44,8 +52,12 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "name": { "type": "string" },
-                "color": { "type": "string" }
+                "name": {
+                  "type": "string"
+                },
+                "color": {
+                  "type": "string"
+                }
               },
               "required": ["name"]
             }
@@ -57,10 +69,18 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "name": { "type": "string" },
-                "color": { "type": "string" },
-                "archived": { "type": "boolean" }
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "color": {
+                  "type": "string"
+                },
+                "archived": {
+                  "type": "boolean"
+                }
               },
               "required": ["id"]
             }
@@ -72,11 +92,25 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "startDate": { "type": "string", "description": "YYYY-MM-DD" },
-                "endDate": { "type": "string", "description": "YYYY-MM-DD" },
-                "projectId": { "type": "string" },
-                "query": { "type": "string" },
-                "limit": { "type": "number", "minimum": 1, "maximum": 500 }
+                "startDate": {
+                  "type": "string",
+                  "description": "YYYY-MM-DD"
+                },
+                "endDate": {
+                  "type": "string",
+                  "description": "YYYY-MM-DD"
+                },
+                "projectId": {
+                  "type": "string"
+                },
+                "query": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500
+                }
               }
             }
           },
@@ -87,13 +121,20 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "projectId": { "type": "string" },
-                "description": { "type": "string" },
+                "projectId": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
                 "startTime": {
                   "type": "string",
                   "description": "ISO datetime"
                 },
-                "endTime": { "type": "string", "description": "ISO datetime" },
+                "endTime": {
+                  "type": "string",
+                  "description": "ISO datetime"
+                },
                 "duration": {
                   "type": "number",
                   "description": "Duration in seconds."
@@ -109,12 +150,24 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "projectId": { "type": "string" },
-                "description": { "type": "string" },
-                "startTime": { "type": "string" },
-                "endTime": { "type": "string" },
-                "duration": { "type": "number" }
+                "id": {
+                  "type": "string"
+                },
+                "projectId": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "startTime": {
+                  "type": "string"
+                },
+                "endTime": {
+                  "type": "string"
+                },
+                "duration": {
+                  "type": "number"
+                }
               },
               "required": ["id"]
             }
@@ -126,7 +179,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" }
+                "id": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }
@@ -143,8 +198,12 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "projectId": { "type": "string" },
-                "description": { "type": "string" }
+                "projectId": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
               },
               "required": ["projectId"]
             }
@@ -156,8 +215,12 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "projectId": { "type": "string" },
-                "description": { "type": "string" }
+                "projectId": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -173,9 +236,17 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "startDate": { "type": "string", "description": "YYYY-MM-DD" },
-                "endDate": { "type": "string", "description": "YYYY-MM-DD" },
-                "projectId": { "type": "string" }
+                "startDate": {
+                  "type": "string",
+                  "description": "YYYY-MM-DD"
+                },
+                "endDate": {
+                  "type": "string",
+                  "description": "YYYY-MM-DD"
+                },
+                "projectId": {
+                  "type": "string"
+                }
               }
             }
           }

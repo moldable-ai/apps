@@ -1,0 +1,254 @@
+@import 'tailwindcss';
+@import '@moldable-ai/ui/styles';
+@import '@moldable-ai/editor/styles';
+
+@source './**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/editor/dist/**/*.{js,jsx,ts,tsx}';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif:
+    'New York', 'Cambria', 'Palatino', Georgia, 'Times New Roman', serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .emails-dock {
+    animation: emails-dock-enter 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .emails-fade-in {
+    animation: emails-fade-in 260ms ease-out;
+  }
+
+  .emails-reader-view {
+    will-change: transform, opacity;
+  }
+
+  .emails-reader-pop-in {
+    animation: emails-reader-pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .emails-reader-pop-out {
+    animation: emails-reader-pop-out 110ms cubic-bezier(0.32, 0, 0.67, 0)
+      forwards;
+    pointer-events: none;
+  }
+
+  .emails-dashed-separator {
+    position: relative;
+  }
+
+  .emails-dashed-separator::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: var(--emails-dash-inset, 1.25rem);
+    height: 1px;
+    background-image: repeating-linear-gradient(
+      to right,
+      color-mix(in oklch, var(--border) 72%, transparent) 0 5.25px,
+      transparent 5.25px 10.5px
+    );
+    pointer-events: none;
+  }
+
+  .emails-dashed-separator:last-child::after {
+    display: none;
+  }
+
+  .emails-serif {
+    font-family: var(--font-serif);
+    letter-spacing: 0;
+  }
+
+  .emails-subject-input {
+    font-family: var(--font-sans);
+    letter-spacing: 0;
+  }
+
+  .emails-document {
+    @apply text-foreground/90;
+  }
+
+  .emails-document-body {
+    @apply text-[1.0625rem] leading-[1.75];
+  }
+
+  .emails-document-body p {
+    @apply my-3;
+  }
+
+  .emails-document-body a {
+    @apply text-primary underline underline-offset-[3px];
+    text-decoration-thickness: 1px;
+  }
+
+  .emails-document-body a:hover {
+    @apply text-primary/80;
+  }
+
+  .emails-document-body blockquote {
+    @apply border-border text-muted-foreground border-l-2 pl-4;
+  }
+
+  .emails-document-body ul,
+  .emails-document-body ol {
+    @apply my-3 pl-6;
+  }
+
+  .emails-document-body li {
+    @apply my-1.5;
+  }
+
+  .emails-search-input {
+    @apply bg-muted/40 ring-0 transition-colors;
+  }
+
+  .emails-search-input:focus-visible {
+    @apply bg-background;
+  }
+
+  .emails-row-unread-dot {
+    background: var(--primary);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 12%, transparent);
+  }
+
+  .emails-briefing-body :is(p, ul, ol, li) {
+    color: var(--foreground);
+  }
+
+  .emails-briefing-body p {
+    @apply my-1.5 text-[14.5px] leading-[1.65];
+  }
+
+  .emails-briefing-body p:first-child {
+    @apply mt-0;
+  }
+
+  .emails-briefing-body p:last-child {
+    @apply mb-0;
+  }
+
+  .emails-briefing-body ul,
+  .emails-briefing-body ol {
+    @apply my-2 pl-5 text-[14.5px] leading-[1.6];
+    list-style-position: outside;
+  }
+
+  .emails-briefing-body ul {
+    list-style-type: disc;
+  }
+
+  .emails-briefing-body ol {
+    list-style-type: decimal;
+  }
+
+  .emails-briefing-body li {
+    @apply my-1 pl-1;
+  }
+
+  .emails-briefing-body li::marker {
+    color: color-mix(in oklch, var(--muted-foreground) 70%, transparent);
+  }
+
+  .emails-briefing-body li > p {
+    @apply my-0;
+  }
+
+  .emails-briefing-body strong {
+    @apply text-foreground font-semibold;
+  }
+
+  .emails-briefing-body a {
+    @apply text-primary underline-offset-[3px] hover:underline;
+  }
+
+  .emails-briefing-caret {
+    display: inline-block;
+    width: 0.45em;
+    height: 1em;
+    margin-left: 2px;
+    vertical-align: -0.18em;
+    background: color-mix(in oklch, var(--foreground) 55%, transparent);
+    border-radius: 1px;
+    animation: emails-briefing-caret 900ms steps(2, end) infinite;
+  }
+}
+
+@keyframes emails-briefing-caret {
+  0%,
+  50% {
+    opacity: 0.85;
+  }
+  51%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes emails-dock-enter {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes emails-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes emails-reader-pop-in {
+  from {
+    opacity: 0;
+    transform: translateX(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes emails-reader-pop-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emails-reader-pop-in,
+  .emails-reader-pop-out {
+    animation: none;
+  }
+}

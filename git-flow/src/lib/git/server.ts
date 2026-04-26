@@ -1,7 +1,15 @@
 import { getAppDataDir, readJson, writeJson } from '@moldable-ai/storage'
 import { execFile, spawn } from 'child_process'
 import { accessSync, constants, existsSync, readdirSync } from 'fs'
-import { copyFile, mkdir, mkdtemp, rm, stat } from 'fs/promises'
+import {
+  appendFile,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+} from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import { simpleGit } from 'simple-git'
@@ -342,10 +350,48 @@ export async function commitFiles(
 
 export async function pushCommits(workspaceId?: string) {
   const settings = await getSettings(workspaceId)
-  const g = simpleGit(settings.currentRepoPath)
+  const repoPath = settings.currentRepoPath
+  const g = simpleGit(repoPath)
+
   try {
-    const result = await g.push()
-    return { success: true, result }
+    const currentBranch = (await g.revparse(['--abbrev-ref', 'HEAD'])).trim()
+
+    if (!currentBranch || currentBranch === 'HEAD') {
+      throw new Error('Cannot push while HEAD is detached.')
+    }
+
+    const upstream = await g
+      .revparse(['--abbrev-ref', '--symbolic-full-name', '@{u}'])
+      .then((value) => value.trim())
+      .catch(() => null)
+
+    if (upstream) {
+      const result = await g.push()
+      return { success: true, result, upstreamSet: false }
+    }
+
+    const remotes = await g.getRemotes(true)
+    if (remotes.length === 0) {
+      throw new Error(
+        'No Git remotes are configured for this repository. Add a remote before pushing.',
+      )
+    }
+
+    const preferredRemote =
+      remotes.find((remote) => remote.name === 'origin') ?? remotes[0]
+
+    const result = await runGit(
+      ['push', '--set-upstream', preferredRemote.name, currentBranch],
+      repoPath,
+    )
+
+    return {
+      success: true,
+      result,
+      upstreamSet: true,
+      remote: preferredRemote.name,
+      branch: currentBranch,
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Git push failed'
     throw new Error(message)
@@ -477,6 +523,103 @@ export async function getDiffForFiles(paths: string[], workspaceId?: string) {
   )
 
   return diffs.filter(Boolean).join('\n\n')
+}
+
+function normalizeRepoRelativePath(repoPath: string, relativeFilePath: string) {
+  if (!relativeFilePath.trim() || path.isAbsolute(relativeFilePath)) {
+    throw new Error('File must be inside the current repository.')
+  }
+
+  const repoRoot = path.resolve(repoPath)
+  const fullPath = path.resolve(repoRoot, relativeFilePath)
+
+  if (!fullPath.startsWith(repoRoot + path.sep) && fullPath !== repoRoot) {
+    throw new Error('File must be inside the current repository.')
+  }
+
+  const normalizedPath = path.relative(repoRoot, fullPath)
+  if (!normalizedPath || normalizedPath.startsWith('..')) {
+    throw new Error('File must be inside the current repository.')
+  }
+
+  return normalizedPath.split(path.sep).join('/')
+}
+
+function uniqueRepoRelativePaths(repoPath: string, paths: string[]) {
+  return Array.from(
+    new Set(
+      paths
+        .filter((filePath) => typeof filePath === 'string')
+        .map((filePath) => normalizeRepoRelativePath(repoPath, filePath)),
+    ),
+  )
+}
+
+function escapeGitignorePath(relativeFilePath: string) {
+  return relativeFilePath
+    .split('/')
+    .map((segment) => segment.replace(/[\\[\]*?]/g, '\\$&'))
+    .join('/')
+}
+
+export async function discardChanges(paths: string[], workspaceId?: string) {
+  const settings = await getSettings(workspaceId)
+  const repoPath = settings.currentRepoPath
+  const pathsToDiscard = uniqueRepoRelativePaths(repoPath, paths)
+
+  if (pathsToDiscard.length === 0) {
+    throw new Error('At least one file is required.')
+  }
+
+  for (const filePath of pathsToDiscard) {
+    let restoredFromHead = false
+    let restoreError: unknown
+
+    try {
+      await runGit(
+        ['restore', '--source=HEAD', '--staged', '--worktree', '--', filePath],
+        repoPath,
+      )
+      restoredFromHead = true
+    } catch (error) {
+      restoreError = error
+      await runGit(['restore', '--staged', '--', filePath], repoPath).catch(
+        () => undefined,
+      )
+    }
+
+    try {
+      await runGit(['clean', '-fd', '--', filePath], repoPath)
+    } catch (cleanError) {
+      if (!restoredFromHead) {
+        throw restoreError instanceof Error ? restoreError : cleanError
+      }
+    }
+  }
+
+  return { ok: true, paths: pathsToDiscard }
+}
+
+export async function addFileToGitignore(
+  relativeFilePath: string,
+  workspaceId?: string,
+) {
+  const settings = await getSettings(workspaceId)
+  const repoPath = settings.currentRepoPath
+  const normalizedPath = normalizeRepoRelativePath(repoPath, relativeFilePath)
+  const gitignorePath = path.join(repoPath, '.gitignore')
+  const pattern = `/${escapeGitignorePath(normalizedPath)}`
+  const existing = await readFile(gitignorePath, 'utf8').catch(() => '')
+  const existingLines = existing.split(/\r?\n/)
+
+  if (existingLines.includes(pattern)) {
+    return { ok: true, path: normalizedPath, alreadyIgnored: true }
+  }
+
+  const prefix = existing.length > 0 && !existing.endsWith('\n') ? '\n' : ''
+  await appendFile(gitignorePath, `${prefix}${pattern}\n`, 'utf8')
+
+  return { ok: true, path: normalizedPath, alreadyIgnored: false }
 }
 
 function isExecutableFile(filePath: string) {

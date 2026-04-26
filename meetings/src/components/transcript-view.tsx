@@ -48,6 +48,24 @@ function formatSessionTime(date?: Date): string {
   })
 }
 
+function getSpeakerKey(segment?: TranscriptSegment): string {
+  if (!segment) return 'unknown'
+  if (segment.speakerId !== undefined) return `speaker-${segment.speakerId}`
+  return segment.speaker?.trim() || 'unknown'
+}
+
+function getSpeakerLabel(segment: TranscriptSegment): string | null {
+  if (segment.speaker?.trim()) return segment.speaker.trim()
+  if (segment.speakerId !== undefined) return `Speaker ${segment.speakerId + 1}`
+  return null
+}
+
+function isRightAlignedSpeaker(segment?: TranscriptSegment): boolean {
+  if (!segment) return false
+  if (segment.speakerId !== undefined) return segment.speakerId % 2 === 1
+  return /\b2\b/.test(segment.speaker ?? '')
+}
+
 export function TranscriptView({
   meetingId,
   segments,
@@ -227,27 +245,68 @@ export function TranscriptView({
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  {session.segments.map((segment) => (
-                    <div key={segment.id} className="flex items-start gap-3">
-                      <span className="text-muted-foreground mt-0.5 shrink-0 font-mono text-xs leading-relaxed">
-                        {formatTimestamp(
-                          Math.max(0, segment.startTime - firstSegmentStart),
+                <div className="space-y-1.5">
+                  {session.segments.map((segment, index) => {
+                    const previousSegment = session.segments[index - 1]
+                    const sameSpeakerAsPrevious =
+                      getSpeakerKey(previousSegment) === getSpeakerKey(segment)
+                    const alignRight = isRightAlignedSpeaker(segment)
+                    const speakerLabel = getSpeakerLabel(segment)
+                    const timestamp = formatTimestamp(
+                      Math.max(0, segment.startTime - firstSegmentStart),
+                    )
+
+                    return (
+                      <div
+                        key={segment.id}
+                        className={cn(
+                          'flex w-full',
+                          alignRight ? 'justify-end' : 'justify-start',
+                          sameSpeakerAsPrevious ? 'pt-0.5' : 'pt-4',
                         )}
-                      </span>
-                      <div className="text-foreground flex-1 text-sm leading-relaxed">
-                        {segment.text}
+                      >
+                        <div
+                          className={cn(
+                            'flex max-w-[min(78%,42rem)] flex-col gap-1',
+                            alignRight ? 'items-end' : 'items-start',
+                          )}
+                        >
+                          {!sameSpeakerAsPrevious ? (
+                            <div
+                              className={cn(
+                                'text-muted-foreground/65 px-1 text-[11px] font-medium',
+                                alignRight ? 'text-right' : 'text-left',
+                              )}
+                            >
+                              {speakerLabel ? `${speakerLabel} · ` : ''}
+                              {timestamp}
+                            </div>
+                          ) : null}
+                          <div
+                            className={cn(
+                              'text-foreground break-words rounded-2xl px-3.5 py-2.5 text-[15px] leading-[1.45] shadow-sm',
+                              alignRight
+                                ? 'bg-primary/15 rounded-br-md'
+                                : 'bg-muted rounded-bl-md',
+                            )}
+                          >
+                            {segment.text}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
 
                   {showInterimInSession && (
-                    <div className="flex items-start gap-3">
-                      <span className="text-muted-foreground/70 mt-0.5 shrink-0 font-mono text-xs leading-relaxed">
-                        --:--
-                      </span>
-                      <div className="text-muted-foreground flex-1 text-sm italic leading-relaxed">
-                        {currentInterim}
+                    <div className="flex w-full justify-start pt-4">
+                      <div className="flex max-w-[min(78%,42rem)] flex-col items-start gap-1">
+                        <div className="text-muted-foreground/65 inline-flex items-center gap-1 px-1 text-[11px] font-medium">
+                          <Loader2 className="size-3 animate-spin" />
+                          Live
+                        </div>
+                        <div className="bg-muted/60 text-muted-foreground break-words rounded-2xl rounded-bl-md px-3.5 py-2.5 text-[15px] italic leading-[1.45] shadow-sm">
+                          {currentInterim}
+                        </div>
                       </div>
                     </div>
                   )}

@@ -8,7 +8,7 @@
   "license": "FSL-1.1-ALv2",
   "repository": "moldable-ai/apps",
   "icon": "📝",
-  "iconPath": "public/icon.png",
+  "iconPath": "public/icon.svg",
   "widgetSize": "medium",
   "widgetTint": "amber",
   "category": "productivity",
@@ -33,12 +33,26 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "query": { "type": "string" },
-                "includeArchived": { "type": "boolean" },
-                "includeDeleted": { "type": "boolean" },
-                "includeContent": { "type": "boolean" },
-                "label": { "type": "string" },
-                "limit": { "type": "number", "minimum": 1, "maximum": 200 }
+                "query": {
+                  "type": "string"
+                },
+                "includeArchived": {
+                  "type": "boolean"
+                },
+                "includeDeleted": {
+                  "type": "boolean"
+                },
+                "includeContent": {
+                  "type": "boolean"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200
+                }
               }
             }
           },
@@ -49,11 +63,23 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "query": { "type": "string" },
-                "includeArchived": { "type": "boolean" },
-                "includeDeleted": { "type": "boolean" },
-                "includeContent": { "type": "boolean" },
-                "limit": { "type": "number", "minimum": 1, "maximum": 200 }
+                "query": {
+                  "type": "string"
+                },
+                "includeArchived": {
+                  "type": "boolean"
+                },
+                "includeDeleted": {
+                  "type": "boolean"
+                },
+                "includeContent": {
+                  "type": "boolean"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200
+                }
               }
             }
           },
@@ -64,7 +90,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" }
+                "id": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }
@@ -76,12 +104,27 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "title": { "type": "string" },
-                "content": { "type": "string" },
-                "labels": { "type": "array", "items": { "type": "string" } },
-                "isPinned": { "type": "boolean" },
-                "isArchived": { "type": "boolean" },
-                "color": { "type": "string" }
+                "title": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "isPinned": {
+                  "type": "boolean"
+                },
+                "isArchived": {
+                  "type": "boolean"
+                },
+                "color": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -92,14 +135,33 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "title": { "type": "string" },
-                "content": { "type": "string" },
-                "labels": { "type": "array", "items": { "type": "string" } },
-                "isPinned": { "type": "boolean" },
-                "isArchived": { "type": "boolean" },
-                "isDeleted": { "type": "boolean" },
-                "color": { "type": "string" }
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "isPinned": {
+                  "type": "boolean"
+                },
+                "isArchived": {
+                  "type": "boolean"
+                },
+                "isDeleted": {
+                  "type": "boolean"
+                },
+                "color": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }
@@ -111,7 +173,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" }
+                "id": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }

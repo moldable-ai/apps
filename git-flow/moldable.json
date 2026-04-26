@@ -8,7 +8,7 @@
   "license": "FSL-1.1-ALv2",
   "repository": "moldable-ai/apps",
   "icon": "🛠️",
-  "iconPath": "public/icon.png",
+  "iconPath": "public/icon.svg",
   "widgetSize": "medium",
   "widgetTint": "amber",
   "routeName": "git-flow",
@@ -33,7 +33,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "repoPath": { "type": "string" }
+                "repoPath": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -49,7 +51,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "path": { "type": "string" }
+                "path": {
+                  "type": "string"
+                }
               },
               "required": ["path"]
             }
@@ -61,9 +65,15 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "repoPath": { "type": "string" },
-                "filePath": { "type": "string" },
-                "maxChars": { "type": "number" }
+                "repoPath": {
+                  "type": "string"
+                },
+                "filePath": {
+                  "type": "string"
+                },
+                "maxChars": {
+                  "type": "number"
+                }
               }
             }
           },
@@ -74,9 +84,15 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "hash": { "type": "string" },
-                "repoPath": { "type": "string" },
-                "maxChars": { "type": "number" }
+                "hash": {
+                  "type": "string"
+                },
+                "repoPath": {
+                  "type": "string"
+                },
+                "maxChars": {
+                  "type": "number"
+                }
               },
               "required": ["hash"]
             }
@@ -88,8 +104,12 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "repoPath": { "type": "string" },
-                "limit": { "type": "number" }
+                "repoPath": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number"
+                }
               }
             }
           },
@@ -100,7 +120,12 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "paths": { "type": "array", "items": { "type": "string" } }
+                "paths": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
               },
               "required": ["paths"]
             }
@@ -112,7 +137,12 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "paths": { "type": "array", "items": { "type": "string" } }
+                "paths": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
               },
               "required": ["paths"]
             }

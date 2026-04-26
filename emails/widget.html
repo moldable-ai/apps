@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mail Widget</title>
+    <script>
+      ;(function () {
+        var params = new URLSearchParams(window.location.search)
+        var theme = params.get('theme')
+        if (!theme) theme = localStorage.getItem('moldable-theme')
+        if (theme === 'system' || !theme) {
+          theme = window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light'
+        }
+        document.documentElement.classList.add(theme)
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/client/widget-main.tsx"></script>
+  </body>
+</html>

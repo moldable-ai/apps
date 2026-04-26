@@ -31,6 +31,8 @@ if (!fsSync.existsSync(tsxBin)) {
 
 const instancesFile = path.join(process.cwd(), '.moldable.instances.json')
 let myPid = null
+let child = null
+let shuttingDown = false
 
 async function readInstances() {
   try {
@@ -71,7 +73,17 @@ async function cleanup() {
   }
 }
 
+function terminateChild(signal = 'SIGTERM') {
+  if (!child?.pid || child.killed) return
+  try {
+    child.kill(signal)
+  } catch {
+    // Ignore shutdown races.
+  }
+}
+
 process.on('exit', () => {
+  terminateChild()
   if (myPid) {
     try {
       const content = fsSync.readFileSync(instancesFile, 'utf8')
@@ -88,10 +100,14 @@ process.on('exit', () => {
   }
 })
 process.on('SIGINT', async () => {
+  shuttingDown = true
+  terminateChild('SIGINT')
   await cleanup()
   process.exit(130)
 })
 process.on('SIGTERM', async () => {
+  shuttingDown = true
+  terminateChild('SIGTERM')
   await cleanup()
   process.exit(143)
 })
@@ -101,7 +117,7 @@ const serverArgs =
     ? ['src/server/index.ts']
     : ['watch', '--clear-screen=false', 'src/server/index.ts']
 
-const child = spawn(tsxBin, [...serverArgs, ...forwardedArgs], {
+child = spawn(tsxBin, [...serverArgs, ...forwardedArgs], {
   env: {
     ...process.env,
     MOLDABLE_APP_ID: 'affirmations',
@@ -117,6 +133,6 @@ if (child.pid) {
 
 child.on('exit', async (code, signal) => {
   await cleanup()
-  if (signal) process.kill(process.pid, signal)
+  if (signal && !shuttingDown) process.kill(process.pid, signal)
   process.exit(code ?? 0)
 })

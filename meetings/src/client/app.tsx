@@ -48,6 +48,8 @@ function calendarErrorMessage(code: string | undefined, error: unknown) {
     : 'Calendar events are unavailable.'
 }
 
+type AudioSource = 'microphone' | 'both' | 'system'
+
 export default function MeetingsPage() {
   // Workspace
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
@@ -74,9 +76,7 @@ export default function MeetingsPage() {
   const currentSettings = settings ?? DEFAULT_SETTINGS
 
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null)
-  const [audioSource, setAudioSource] = useState<'microphone' | 'system'>(
-    'microphone',
-  )
+  const [audioSource, setAudioSource] = useState<AudioSource>('microphone')
   const [enhancement, setEnhancement] = useState<EnhancementStatus | null>(null)
   const [preferredDetailView, setPreferredDetailView] =
     useState<MeetingViewMode | null>(null)
@@ -95,6 +95,17 @@ export default function MeetingsPage() {
   const audioPersistQueueRef = useRef<Promise<void>>(Promise.resolve())
   const activeAudioContentTypeRef = useRef<string | null>(null)
   const calendarLoadIdRef = useRef(0)
+  const activeCaptureSourceRef = useRef<AudioSource | null>(null)
+  const previousSystemCapturingRef = useRef(false)
+  const appendTranscriptActivatedAtRef = useRef<number | null>(null)
+  const nativeCaptureStartedAtRef = useRef<number | null>(null)
+  const nativeDurationIntervalRef = useRef<ReturnType<
+    typeof setInterval
+  > | null>(null)
+  const hasLoggedFirstNativeAudioChunkRef = useRef(false)
+  const deepgramSendAudioRef = useRef<
+    ((data: ArrayBuffer | Blob) => void) | null
+  >(null)
 
   // Hooks
   const { meetings, addMeeting, updateMeeting, deleteMeeting } = useMeetings()
@@ -268,6 +279,27 @@ export default function MeetingsPage() {
     [currentSettings.saveAudio, fetchWithWorkspace],
   )
 
+  const stopNativeDurationTimer = useCallback(() => {
+    if (nativeDurationIntervalRef.current) {
+      clearInterval(nativeDurationIntervalRef.current)
+      nativeDurationIntervalRef.current = null
+    }
+    nativeCaptureStartedAtRef.current = null
+  }, [])
+
+  const startNativeDurationTimer = useCallback(() => {
+    if (nativeDurationIntervalRef.current) return
+
+    nativeCaptureStartedAtRef.current = Date.now()
+    nativeDurationIntervalRef.current = setInterval(() => {
+      if (nativeCaptureStartedAtRef.current === null) return
+      updateDuration(
+        activeDurationBaseRef.current +
+          (Date.now() - nativeCaptureStartedAtRef.current) / 1000,
+      )
+    }, 100)
+  }, [updateDuration])
+
   // Handle new segments from Deepgram
   const handleSegment = useCallback(
     (segment: TranscriptSegment) => {
@@ -288,10 +320,25 @@ export default function MeetingsPage() {
     onError: (error) => console.warn('Deepgram transcription issue:', error),
   })
 
+  useEffect(() => {
+    deepgramSendAudioRef.current = deepgram.sendAudio
+  }, [deepgram.sendAudio])
+
   // System audio hook (for Moldable desktop)
   const systemAudio = useSystemAudio({
     onAudioData: (buffer: ArrayBuffer) => {
+      if (!hasLoggedFirstNativeAudioChunkRef.current) {
+        hasLoggedFirstNativeAudioChunkRef.current = true
+        console.log('[Meetings] Received first native audio chunk', {
+          byteLength: buffer.byteLength,
+          meetingId: activeMeetingIdRef.current,
+          sessionId: activeRecordingSessionRef.current?.id ?? null,
+          activeCaptureSource: activeCaptureSourceRef.current,
+          audioStreamingEnabled: audioStreamingEnabledRef.current,
+        })
+      }
       if (!audioStreamingEnabledRef.current) return
+
       if (activeRecordingSessionRef.current && activeMeetingIdRef.current) {
         void enqueueAudioChunkPersist(
           activeMeetingIdRef.current,
@@ -303,7 +350,27 @@ export default function MeetingsPage() {
       // Send raw PCM to Deepgram
       deepgram.sendAudio(buffer)
     },
-    onError: (error: Error) => console.error('System audio error:', error),
+    onError: (error: Error) =>
+      console.error('[Meetings] System audio error:', error, {
+        meetingId: activeMeetingIdRef.current,
+        sessionId: activeRecordingSessionRef.current?.id ?? null,
+        activeCaptureSource: activeCaptureSourceRef.current,
+        audioStreamingEnabled: audioStreamingEnabledRef.current,
+      }),
+    onStateChange: (isCapturing: boolean) => {
+      console.log('[Meetings] System audio capture state changed', {
+        isCapturing,
+        meetingId: activeMeetingIdRef.current,
+        sessionId: activeRecordingSessionRef.current?.id ?? null,
+        activeCaptureSource: activeCaptureSourceRef.current,
+        audioStreamingEnabled: audioStreamingEnabledRef.current,
+      })
+      if (isCapturing) {
+        startNativeDurationTimer()
+        return
+      }
+      stopNativeDurationTimer()
+    },
   })
 
   // Audio recorder hook (for browser microphone)
@@ -330,15 +397,166 @@ export default function MeetingsPage() {
     onError: (error) => console.error('Recorder error:', error),
   })
 
-  // Auto-select system audio if available
+  const startPreferredCapture = useCallback(
+    async (selectedSource: AudioSource, options: { resume?: boolean } = {}) => {
+      const useBlendedCapture =
+        selectedSource === 'both' && systemAudio.isAvailable
+      const useSystemOnlyNativeCapture =
+        selectedSource === 'system' && systemAudio.isAvailable
+
+      if (useBlendedCapture) {
+        console.log(
+          '[Meetings] Starting native blended capture with system audio + microphone sidecar',
+        )
+        audioStreamingEnabledRef.current = true
+        hasLoggedFirstNativeAudioChunkRef.current = false
+        stopNativeDurationTimer()
+        activeCaptureSourceRef.current = 'both'
+        await deepgram.connect('linear16')
+
+        const started = await systemAudio.start('both')
+        if (started) {
+          return 'both'
+        }
+
+        console.warn(
+          '[Meetings] Native blended capture failed, falling back to microphone-only capture',
+        )
+        activeCaptureSourceRef.current = null
+        deepgram.disconnect()
+        audioStreamingEnabledRef.current = false
+      }
+
+      if (useSystemOnlyNativeCapture) {
+        console.log(`[Meetings] Starting ${selectedSource} native capture`)
+        audioStreamingEnabledRef.current = true
+        hasLoggedFirstNativeAudioChunkRef.current = false
+        stopNativeDurationTimer()
+        await deepgram.connect('linear16')
+
+        const started = await systemAudio.start('systemAudio')
+        if (started) {
+          activeCaptureSourceRef.current = selectedSource
+          return selectedSource
+        }
+
+        console.warn(
+          `[Meetings] Native ${selectedSource} capture failed, falling back to microphone`,
+        )
+        deepgram.disconnect()
+      }
+
+      console.log('[Meetings] Starting with microphone capture')
+      audioStreamingEnabledRef.current = true
+      await deepgram.connect('webm')
+      if (options.resume) {
+        await audioRecorder.resume(true)
+      } else {
+        await audioRecorder.start()
+      }
+      activeCaptureSourceRef.current = 'microphone'
+      return 'microphone'
+    },
+    [audioRecorder, deepgram, stopNativeDurationTimer, systemAudio],
+  )
+
+  const stopActiveCapture = useCallback(
+    async (options: { pause?: boolean; reason?: string } = {}) => {
+      const activeSource = activeCaptureSourceRef.current
+      const usingNativeCapture =
+        activeSource === 'both' || activeSource === 'system'
+      const stopContext = {
+        reason: options.reason ?? 'unspecified',
+        pause: options.pause ?? false,
+        activeSource,
+        meetingId: activeMeetingIdRef.current,
+        sessionId: activeRecordingSessionRef.current?.id ?? null,
+        isMeetingPaused,
+        isAppendingTranscript,
+        deepgramState: deepgram.state,
+        deepgramIssue: deepgram.issue?.code ?? null,
+        audioStreamingEnabled: audioStreamingEnabledRef.current,
+        stack:
+          new Error().stack
+            ?.split('\n')
+            .slice(1, 5)
+            .map((line) => line.trim())
+            .join(' | ') ?? 'no-stack',
+      }
+
+      console.log('[Meetings] stopActiveCapture', {
+        ...stopContext,
+      })
+
+      if (activeSource === 'both') {
+        await systemAudio.stop(JSON.stringify(stopContext))
+      } else if (usingNativeCapture) {
+        await systemAudio.stop(JSON.stringify(stopContext))
+      } else if (options.pause) {
+        await audioRecorder.pause()
+      } else {
+        await audioRecorder.stop()
+      }
+
+      activeCaptureSourceRef.current = null
+      stopNativeDurationTimer()
+    },
+    [
+      audioRecorder,
+      deepgram.issue?.code,
+      deepgram.state,
+      isAppendingTranscript,
+      isMeetingPaused,
+      stopNativeDurationTimer,
+      systemAudio,
+    ],
+  )
+
+  useEffect(() => {
+    return () => {
+      stopNativeDurationTimer()
+    }
+  }, [stopNativeDurationTimer])
+
+  // Auto-select mixed capture if available
   useEffect(() => {
     if (systemAudio.isAvailable) {
-      setAudioSource('system')
+      setAudioSource('both')
       console.log(
-        '[Meetings] System audio available in Moldable, using as default',
+        '[Meetings] Native audio available in Moldable, using blended capture by default',
       )
     }
   }, [systemAudio.isAvailable])
+
+  useEffect(() => {
+    const wasCapturing = previousSystemCapturingRef.current
+    const isCapturing = systemAudio.isCapturing
+
+    if (
+      wasCapturing &&
+      !isCapturing &&
+      activeCaptureSourceRef.current !== null &&
+      activeCaptureSourceRef.current !== 'microphone' &&
+      activeMeetingIdRef.current &&
+      !isMeetingPaused
+    ) {
+      console.warn('[Meetings] Native capture stopped unexpectedly', {
+        meetingId: activeMeetingIdRef.current,
+        sessionId: activeRecordingSessionRef.current?.id ?? null,
+        activeCaptureSource: activeCaptureSourceRef.current,
+        deepgramState: deepgram.state,
+        deepgramIssue: deepgram.issue?.code ?? null,
+        audioStreamingEnabled: audioStreamingEnabledRef.current,
+      })
+    }
+
+    previousSystemCapturingRef.current = isCapturing
+  }, [
+    deepgram.issue?.code,
+    deepgram.state,
+    isMeetingPaused,
+    systemAudio.isCapturing,
+  ])
 
   const loadCalendarEvents = useCallback(
     async (options: { requestAccess?: boolean } = {}) => {
@@ -451,31 +669,18 @@ export default function MeetingsPage() {
       setCurrentInterim(null)
       setIsMeetingPaused(false)
       setIsAppendingTranscript(false)
+      appendTranscriptActivatedAtRef.current = null
       resetAudioSessionPersistence()
 
-      if (audioSource === 'system' && systemAudio.isAvailable) {
-        // System audio mode - use linear16 encoding for raw PCM
-        console.log('[Meetings] Starting with system audio capture')
-        audioStreamingEnabledRef.current = true
-        await deepgram.connect('linear16')
-        await systemAudio.start('systemAudio')
-      } else {
-        // Microphone mode - use webm/opus from browser
-        console.log('[Meetings] Starting with microphone capture')
-        audioStreamingEnabledRef.current = true
-        await deepgram.connect('webm')
-        await audioRecorder.start()
-      }
+      await startPreferredCapture(audioSource)
     },
     [
-      startMeeting,
-      deepgram,
-      audioRecorder,
-      systemAudio,
-      audioSource,
       addMeeting,
       createRecordingSession,
       resetAudioSessionPersistence,
+      audioSource,
+      startMeeting,
+      startPreferredCapture,
     ],
   )
 
@@ -501,26 +706,19 @@ export default function MeetingsPage() {
       setPreferredDetailView('transcript')
       setCurrentInterim(null)
       setIsMeetingPaused(false)
-      setIsAppendingTranscript(true)
+      setIsAppendingTranscript(false)
+      appendTranscriptActivatedAtRef.current = null
       resetAudioSessionPersistence()
-      audioStreamingEnabledRef.current = true
-
-      if (audioSource === 'system' && systemAudio.isAvailable) {
-        await deepgram.connect('linear16')
-        await systemAudio.start('systemAudio')
-      } else {
-        await deepgram.connect('webm')
-        await audioRecorder.start()
-      }
+      await startPreferredCapture(audioSource)
+      appendTranscriptActivatedAtRef.current = Date.now()
+      setIsAppendingTranscript(true)
     },
     [
-      audioRecorder,
       audioSource,
       createRecordingSession,
-      deepgram,
       meeting,
       resetAudioSessionPersistence,
-      systemAudio,
+      startPreferredCapture,
       updateActiveMeeting,
       updateMeeting,
       upsertRecordingSession,
@@ -528,17 +726,26 @@ export default function MeetingsPage() {
   )
 
   const handleStopAppendingTranscript = useCallback(async () => {
+    const activatedAt = appendTranscriptActivatedAtRef.current
+    if (activatedAt && Date.now() - activatedAt < 1500) {
+      console.warn(
+        '[Meetings] Ignoring immediate stop-appending-transcript click after resume',
+        {
+          elapsedMs: Date.now() - activatedAt,
+          meetingId: activeMeetingIdRef.current,
+          sessionId: activeRecordingSessionRef.current?.id ?? null,
+        },
+      )
+      return
+    }
+
     const sessionId = activeRecordingSessionRef.current?.id
 
     audioStreamingEnabledRef.current = false
     setIsMeetingPaused(false)
     setCurrentInterim(null)
 
-    if (audioSource === 'system') {
-      await systemAudio.stop()
-    } else {
-      await audioRecorder.stop()
-    }
+    await stopActiveCapture({ reason: 'stop-appending-transcript' })
     deepgram.disconnect()
 
     if (meeting) {
@@ -572,17 +779,16 @@ export default function MeetingsPage() {
     clearMeeting()
     activeDurationBaseRef.current = 0
     activeMeetingIdRef.current = null
+    appendTranscriptActivatedAtRef.current = null
     setIsAppendingTranscript(false)
   }, [
     attachAudioToRecordingSession,
-    audioRecorder,
-    audioSource,
     clearMeeting,
     deepgram,
     finishActiveRecordingSession,
     finalizeSessionAudio,
     meeting,
-    systemAudio,
+    stopActiveCapture,
     updateMeeting,
   ])
 
@@ -593,12 +799,12 @@ export default function MeetingsPage() {
     audioStreamingEnabledRef.current = false
     setIsMeetingPaused(true)
     setCurrentInterim(null)
+    appendTranscriptActivatedAtRef.current = null
 
-    if (audioSource === 'system' && systemAudio.isCapturing) {
-      await systemAudio.stop()
-    } else {
-      await audioRecorder.pause()
-    }
+    await stopActiveCapture({
+      pause: true,
+      reason: 'pause-recording',
+    })
     deepgram.disconnect()
 
     const updated = finishActiveRecordingSession(meeting)
@@ -615,18 +821,17 @@ export default function MeetingsPage() {
           )
         }
       }
+      activeDurationBaseRef.current = nextMeeting.duration
       updateActiveMeeting(nextMeeting)
       updateMeeting(nextMeeting)
     }
   }, [
     attachAudioToRecordingSession,
-    audioRecorder,
     deepgram,
     finishActiveRecordingSession,
     finalizeSessionAudio,
     meeting,
-    systemAudio,
-    audioSource,
+    stopActiveCapture,
     updateActiveMeeting,
     updateMeeting,
   ])
@@ -636,6 +841,7 @@ export default function MeetingsPage() {
     const nextSession = createRecordingSession()
     if (meeting) {
       const updated = upsertRecordingSession(meeting, nextSession)
+      activeDurationBaseRef.current = updated.duration
       activeMeetingIdRef.current = updated.id
       updateActiveMeeting(updated)
       updateMeeting(updated)
@@ -643,24 +849,15 @@ export default function MeetingsPage() {
 
     setCurrentInterim(null)
     setIsMeetingPaused(false)
+    appendTranscriptActivatedAtRef.current = Date.now()
     resetAudioSessionPersistence()
-    audioStreamingEnabledRef.current = true
-
-    if (audioSource === 'system' && systemAudio.isAvailable) {
-      await deepgram.connect('linear16')
-      await systemAudio.start('systemAudio')
-    } else {
-      await deepgram.connect('webm')
-      await audioRecorder.resume(true)
-    }
+    await startPreferredCapture(audioSource, { resume: true })
   }, [
-    audioRecorder,
     audioSource,
     createRecordingSession,
-    deepgram,
     meeting,
     resetAudioSessionPersistence,
-    systemAudio,
+    startPreferredCapture,
     updateActiveMeeting,
     updateMeeting,
     upsertRecordingSession,
@@ -763,12 +960,9 @@ export default function MeetingsPage() {
     const sessionId = activeRecordingSessionRef.current?.id
     audioStreamingEnabledRef.current = false
     setIsMeetingPaused(false)
+    appendTranscriptActivatedAtRef.current = null
 
-    if (audioSource === 'system') {
-      await systemAudio.stop()
-    } else {
-      await audioRecorder.stop()
-    }
+    await stopActiveCapture({ reason: 'end-meeting' })
     deepgram.disconnect()
 
     // Update meeting in list and keep it selected
@@ -809,17 +1003,15 @@ export default function MeetingsPage() {
     }
   }, [
     attachAudioToRecordingSession,
-    audioRecorder,
     deepgram,
     finishActiveRecordingSession,
     finalizeSessionAudio,
     meeting,
     updateMeeting,
     clearMeeting,
-    systemAudio,
-    audioSource,
     runEnhancement,
     isAppendingTranscript,
+    stopActiveCapture,
   ])
 
   // View a past meeting
@@ -844,6 +1036,10 @@ export default function MeetingsPage() {
 
   // Determine what to show in the main area
   const isRecording = audioRecorder.state.isRecording || systemAudio.isCapturing
+  const recordingAudioLevel =
+    activeCaptureSourceRef.current === 'both'
+      ? 0
+      : audioRecorder.state.audioLevel
   const hasActiveMeeting = meeting !== null
   const isPaused = hasActiveMeeting && isMeetingPaused
   const isViewingPastMeeting = selectedMeeting !== null
@@ -988,7 +1184,7 @@ export default function MeetingsPage() {
           isRecording={isRecordingSessionActive}
           isPaused={!!isPaused}
           duration={meeting.duration}
-          audioLevel={audioRecorder.state.audioLevel}
+          audioLevel={recordingAudioLevel}
           isEnhancing={Boolean(enhancement?.isEnhancing)}
           transcriptionStatus={transcriptionStatus}
           onStart={handleStartMeeting}

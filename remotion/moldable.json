@@ -7,7 +7,7 @@
   "author": "",
   "license": "FSL-1.1-ALv2",
   "icon": "🎬",
-  "iconPath": "public/icon.png",
+  "iconPath": "public/icon.svg",
   "widgetSize": "large",
   "widgetTint": "cyan",
   "category": "custom",
@@ -32,8 +32,14 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "query": { "type": "string" },
-                "limit": { "type": "number", "minimum": 1, "maximum": 500 }
+                "query": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500
+                }
               }
             }
           },
@@ -44,7 +50,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" }
+                "id": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }
@@ -56,14 +64,30 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "name": { "type": "string" },
-                "description": { "type": "string" },
-                "width": { "type": "number" },
-                "height": { "type": "number" },
-                "fps": { "type": "number" },
-                "durationInFrames": { "type": "number" },
-                "autoDuration": { "type": "boolean" },
-                "compositionCode": { "type": "string" }
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "width": {
+                  "type": "number"
+                },
+                "height": {
+                  "type": "number"
+                },
+                "fps": {
+                  "type": "number"
+                },
+                "durationInFrames": {
+                  "type": "number"
+                },
+                "autoDuration": {
+                  "type": "boolean"
+                },
+                "compositionCode": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -74,15 +98,33 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "name": { "type": "string" },
-                "description": { "type": "string" },
-                "width": { "type": "number" },
-                "height": { "type": "number" },
-                "fps": { "type": "number" },
-                "durationInFrames": { "type": "number" },
-                "autoDuration": { "type": "boolean" },
-                "compositionCode": { "type": "string" }
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "width": {
+                  "type": "number"
+                },
+                "height": {
+                  "type": "number"
+                },
+                "fps": {
+                  "type": "number"
+                },
+                "durationInFrames": {
+                  "type": "number"
+                },
+                "autoDuration": {
+                  "type": "boolean"
+                },
+                "compositionCode": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }
@@ -94,7 +136,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" }
+                "id": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }
@@ -106,7 +150,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" }
+                "id": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }

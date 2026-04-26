@@ -5,8 +5,12 @@ import {
   safePath,
   writeJson,
 } from '@moldable-ai/storage'
-import crypto from 'crypto'
-import { google } from 'googleapis'
+import {
+  deleteWorkspaceSecret,
+  findWorkspaceSecret,
+  upsertWorkspaceSecret,
+} from '../aivault'
+import crypto from 'node:crypto'
 
 // Token type for Google OAuth
 interface GoogleTokens {
@@ -15,19 +19,28 @@ interface GoogleTokens {
   expiry_date?: number
   token_type?: string
   scope?: string
+  expires_in?: number
+}
+
+interface BrokerTokenResponse {
+  ok?: boolean
+  tokens?: GoogleTokens
+  error?: {
+    code?: string
+    message?: string
+  }
 }
 
 interface PKCEState {
   code_verifier: string
   created_at: number
+  state: string
   workspace_id?: string
 }
 
-// Moldable's OAuth credentials for Google Calendar
-// Desktop application type - credentials expected to be in binary
-const CLIENT_ID =
+const DEFAULT_CLIENT_ID =
   '41613180648-695hpsmivjfsi02vkge9k713j3un09i4.apps.googleusercontent.com'
-const CLIENT_SECRET = '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'
+const CALENDAR_VAULT_SECRET_NAME = 'GOOGLE_CALENDAR_OAUTH'
 
 const SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
@@ -42,6 +55,23 @@ function getRedirectUri(): string {
   return `http://localhost:${port}/api/auth/callback`
 }
 
+function getClientCredentials() {
+  return {
+    clientId:
+      process.env.CALENDAR_GOOGLE_CLIENT_ID ??
+      process.env.GOOGLE_CLIENT_ID ??
+      DEFAULT_CLIENT_ID,
+  }
+}
+
+function getBrokerUrl() {
+  return (
+    process.env.GOOGLE_OAUTH_BROKER_URL ??
+    process.env.MOLDABLE_AUTH_URL ??
+    'https://auth.moldable.sh'
+  ).replace(/\/+$/, '')
+}
+
 // Generate PKCE code verifier (random string)
 function generateCodeVerifier(): string {
   return crypto.randomBytes(32).toString('base64url')
@@ -52,58 +82,44 @@ function generateCodeChallenge(verifier: string): string {
   return crypto.createHash('sha256').update(verifier).digest('base64url')
 }
 
-export async function getOAuth2Client(workspaceId?: string) {
-  const oauth2Client = new google.auth.OAuth2(
-    CLIENT_ID,
-    CLIENT_SECRET,
-    getRedirectUri(),
-  )
+function generateOAuthState(): string {
+  return crypto.randomBytes(32).toString('base64url')
+}
 
-  // Try to load existing tokens
-  const dataDir = getAppDataDir(workspaceId)
-  const tokenPath = safePath(dataDir, 'tokens.json')
-  const tokens = await readJson<GoogleTokens | null>(tokenPath, null)
-  if (tokens) {
-    oauth2Client.setCredentials(tokens)
-  }
-
-  return oauth2Client
+function tokenPath(workspaceId?: string) {
+  return safePath(getAppDataDir(workspaceId), 'tokens.json')
 }
 
 export async function getAuthUrl(workspaceId?: string) {
-  const oauth2Client = new google.auth.OAuth2(
-    CLIENT_ID,
-    CLIENT_SECRET,
-    getRedirectUri(),
-  )
-
-  // Generate PKCE values
+  const { clientId } = getClientCredentials()
   const codeVerifier = generateCodeVerifier()
   const codeChallenge = generateCodeChallenge(codeVerifier)
-
-  // Store the code verifier temporarily (needed for token exchange)
-  // Note: Store PKCE state in default app data dir (not workspace-specific)
-  // because the OAuth callback won't have workspace context
+  const state = generateOAuthState()
   const dataDir = getAppDataDir()
   const pkcePath = safePath(dataDir, 'pkce-state.json')
+
   await ensureDir(dataDir)
   await writeJson(pkcePath, {
     code_verifier: codeVerifier,
     created_at: Date.now(),
+    state,
     workspace_id: workspaceId,
   } satisfies PKCEState)
 
-  // Generate auth URL with PKCE
-  return oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: SCOPES,
-    prompt: 'consent',
-    code_challenge_method: 'S256' as const,
-    code_challenge: codeChallenge,
-  } as Parameters<typeof oauth2Client.generateAuthUrl>[0])
+  const url = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+  url.searchParams.set('client_id', clientId)
+  url.searchParams.set('redirect_uri', getRedirectUri())
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('scope', SCOPES.join(' '))
+  url.searchParams.set('access_type', 'offline')
+  url.searchParams.set('prompt', 'consent')
+  url.searchParams.set('state', state)
+  url.searchParams.set('code_challenge_method', 'S256')
+  url.searchParams.set('code_challenge', codeChallenge)
+  return url.toString()
 }
 
-export async function saveTokens(code: string) {
+export async function saveTokens(code: string, state: string | undefined) {
   // Load the PKCE code verifier from default data dir (stored there by getAuthUrl)
   const defaultDataDir = getAppDataDir()
   const pkcePath = safePath(defaultDataDir, 'pkce-state.json')
@@ -118,54 +134,88 @@ export async function saveTokens(code: string) {
     throw new Error('PKCE state expired - please try authenticating again')
   }
 
-  const oauth2Client = new google.auth.OAuth2(
-    CLIENT_ID,
-    CLIENT_SECRET,
-    getRedirectUri(),
-  )
+  if (!state || state !== pkceState.state) {
+    throw new Error('OAuth state mismatch - please try authenticating again')
+  }
 
-  // Exchange code for tokens with PKCE verifier
-  console.log('Token exchange params:', {
-    code: code.substring(0, 20) + '...',
-    codeVerifier: pkceState.code_verifier.substring(0, 20) + '...',
-    redirect_uri: getRedirectUri(),
-  })
-
-  try {
-    const { tokens } = await oauth2Client.getToken({
+  const { clientId } = getClientCredentials()
+  const response = await fetch(`${getBrokerUrl()}/api/google/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      clientId,
       code,
       codeVerifier: pkceState.code_verifier,
-      redirect_uri: getRedirectUri(),
-    })
+      redirectUri: getRedirectUri(),
+    }),
+  })
+  const brokerResponse = (await response.json()) as BrokerTokenResponse
+  const tokens = brokerResponse.tokens
 
-    // Save tokens to workspace-specific location (using workspace from PKCE state)
-    const workspaceDataDir = getAppDataDir(pkceState.workspace_id)
-    const tokenPath = safePath(workspaceDataDir, 'tokens.json')
-    await ensureDir(workspaceDataDir)
-    await writeJson(tokenPath, tokens)
-
-    // Clean up PKCE state
-    await writeJson(pkcePath, null)
-
-    return tokens
-  } catch (error: unknown) {
-    // Log detailed error for debugging
-    const gaxiosError = error as { response?: { data?: unknown } }
-    console.error('Token exchange failed:', gaxiosError.response?.data || error)
-    throw error
+  if (!response.ok || !tokens) {
+    throw new Error(
+      brokerResponse.error?.message ??
+        brokerResponse.error?.code ??
+        'Google token exchange failed',
+    )
   }
+
+  if (!tokens.refresh_token) {
+    throw new Error(
+      'Google did not return a refresh token. Please reconnect Calendar.',
+    )
+  }
+
+  const workspaceId = pkceState.workspace_id ?? 'personal'
+  await upsertWorkspaceSecret(
+    workspaceId,
+    CALENDAR_VAULT_SECRET_NAME,
+    toVaultOAuthPayload(tokens),
+  )
+  await writeJson(pkcePath, null)
+
+  return tokens
 }
 
 export async function isAuthenticated(workspaceId?: string): Promise<boolean> {
-  const dataDir = getAppDataDir(workspaceId)
-  const tokenPath = safePath(dataDir, 'tokens.json')
-  const tokens = await readJson<GoogleTokens | null>(tokenPath, null)
-  return tokens !== null && !!tokens.access_token
+  const id = workspaceId ?? 'personal'
+  await migrateLegacyTokensToVault(id)
+  return !!(await findWorkspaceSecret(id, CALENDAR_VAULT_SECRET_NAME))
 }
 
 export async function clearTokens(workspaceId?: string): Promise<void> {
+  const id = workspaceId ?? 'personal'
+  await deleteWorkspaceSecret(id, CALENDAR_VAULT_SECRET_NAME)
   const dataDir = getAppDataDir(workspaceId)
-  const tokenPath = safePath(dataDir, 'tokens.json')
   await ensureDir(dataDir)
-  await writeJson(tokenPath, null)
+  await writeJson(tokenPath(workspaceId), null)
+}
+
+function toVaultOAuthPayload(tokens: GoogleTokens) {
+  const { clientId } = getClientCredentials()
+  const accessTokenExpiresAtMs =
+    tokens.expiry_date ??
+    (tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : undefined)
+
+  return JSON.stringify({
+    clientId,
+    refreshToken: tokens.refresh_token ?? '',
+    accessToken: tokens.access_token ?? null,
+    accessTokenExpiresAtMs: accessTokenExpiresAtMs ?? 0,
+  })
+}
+
+async function migrateLegacyTokensToVault(workspaceId: string) {
+  const legacyTokens = await readJson<GoogleTokens | null>(
+    tokenPath(workspaceId),
+    null,
+  )
+  if (!legacyTokens?.refresh_token) return
+
+  await upsertWorkspaceSecret(
+    workspaceId,
+    CALENDAR_VAULT_SECRET_NAME,
+    toVaultOAuthPayload(legacyTokens),
+  )
+  await writeJson(tokenPath(workspaceId), null)
 }

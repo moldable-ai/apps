@@ -1,23 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-
-// Tauri types
-declare global {
-  interface Window {
-    __TAURI__?: {
-      core: {
-        invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>
-      }
-      event: {
-        listen: <T>(
-          event: string,
-          handler: (event: { payload: T }) => void,
-        ) => Promise<() => void>
-      }
-    }
-  }
-}
+import { isInMoldable, sendToMoldable } from '@moldable-ai/ui'
 
 export interface UseSystemAudioOptions {
   onAudioData?: (data: ArrayBuffer) => void
@@ -27,118 +11,188 @@ export interface UseSystemAudioOptions {
 
 export type CaptureMode = 'microphone' | 'systemAudio' | 'both'
 
+interface SystemAudioRequestMessage {
+  type: 'moldable:system-audio-request'
+  requestId: string
+  action: 'availability' | 'start' | 'stop'
+  mode?: number
+  sampleRate?: number
+  channels?: number
+  reason?: string
+}
+
+interface SystemAudioResponseMessage {
+  type: 'moldable:system-audio-response'
+  requestId: string
+  ok: boolean
+  result?: {
+    available?: boolean
+    started?: boolean
+    stopped?: boolean
+  }
+  error?: {
+    code?: string
+    message?: string
+  }
+}
+
+interface SystemAudioEventMessage {
+  type: 'moldable:system-audio-event'
+  event: 'started' | 'stopped' | 'data' | 'error'
+  payload?: string
+}
+
+function makeRequestId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return `system-audio-${crypto.randomUUID()}`
+  }
+
+  return `system-audio-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function decodeBase64Audio(base64: string): ArrayBuffer {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+
+  return bytes.buffer
+}
+
+function requestSystemAudio(
+  message: Omit<SystemAudioRequestMessage, 'type' | 'requestId'>,
+) {
+  return new Promise<SystemAudioResponseMessage>((resolve, reject) => {
+    if (!isInMoldable()) {
+      reject(new Error('System audio is only available inside Moldable.'))
+      return
+    }
+
+    const requestId = makeRequestId()
+    console.log('[SystemAudio] Sending request', { requestId, ...message })
+    const timeout = window.setTimeout(() => {
+      window.removeEventListener('message', handleResponse)
+      reject(new Error('System audio request timed out.'))
+    }, 30_000)
+
+    function handleResponse(event: MessageEvent) {
+      if (event.data?.type !== 'moldable:system-audio-response') return
+      if (event.data?.requestId !== requestId) return
+
+      window.clearTimeout(timeout)
+      window.removeEventListener('message', handleResponse)
+      console.log('[SystemAudio] Received response', event.data)
+      resolve(event.data as SystemAudioResponseMessage)
+    }
+
+    window.addEventListener('message', handleResponse)
+    sendToMoldable({
+      type: 'moldable:system-audio-request',
+      requestId,
+      ...message,
+    } satisfies SystemAudioRequestMessage)
+  })
+}
+
 /**
- * Hook to capture system audio via Moldable's native audio capture.
- * Only works when running inside the Moldable desktop app.
+ * Hook to capture native system audio through the Moldable desktop bridge.
  */
 export function useSystemAudio(options: UseSystemAudioOptions = {}) {
   const { onAudioData, onError, onStateChange } = options
 
-  const [isAvailable, setIsAvailable] = useState(false)
-  const [isCapturing, setIsCapturing] = useState(false)
-  const [isInMoldable, setIsInMoldable] = useState(false)
+  const [available, setAvailable] = useState(false)
+  const [capturing, setCapturing] = useState(false)
+  const [runningInMoldable, setRunningInMoldable] = useState(false)
 
-  const unlistenersRef = useRef<Array<() => void>>([])
+  const onAudioDataRef = useRef(onAudioData)
+  const onErrorRef = useRef(onError)
+  const onStateChangeRef = useRef(onStateChange)
 
-  // Check if running in Moldable and if system audio is available
+  onAudioDataRef.current = onAudioData
+  onErrorRef.current = onError
+  onStateChangeRef.current = onStateChange
+
   useEffect(() => {
-    const checkAvailability = async () => {
-      const tauri = window.__TAURI__
-      if (!tauri) {
-        setIsInMoldable(false)
-        setIsAvailable(false)
-        return
-      }
+    const insideMoldable = isInMoldable()
+    setRunningInMoldable(insideMoldable)
 
-      setIsInMoldable(true)
-
-      try {
-        const available = await tauri.core.invoke<boolean>(
-          'is_system_audio_available',
-        )
-        setIsAvailable(available)
-        console.log('[SystemAudio] Available:', available)
-      } catch (e) {
-        console.error('[SystemAudio] Failed to check availability:', e)
-        setIsAvailable(false)
-      }
+    if (!insideMoldable) {
+      setAvailable(false)
+      return
     }
 
-    checkAvailability()
+    requestSystemAudio({ action: 'availability' })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(
+            response.error?.message ||
+              'Failed to check system audio availability.',
+          )
+        }
+
+        setAvailable(response.result?.available === true)
+      })
+      .catch((error) => {
+        console.error('[SystemAudio] Failed to check availability:', error)
+        setAvailable(false)
+      })
   }, [])
 
-  // Setup event listeners
   useEffect(() => {
-    const tauri = window.__TAURI__
-    if (!tauri || !isInMoldable) return
+    if (!runningInMoldable) return
 
-    const setupListeners = async () => {
-      // Listen for audio data
-      const unlistenData = await tauri.event.listen<string>(
-        'audio-capture-data',
-        (event) => {
-          try {
-            // Decode base64 to ArrayBuffer (Int16 PCM data)
-            const base64 = event.payload
-            const binary = atob(base64)
-            const bytes = new Uint8Array(binary.length)
-            for (let i = 0; i < binary.length; i++) {
-              bytes[i] = binary.charCodeAt(i)
-            }
-            onAudioData?.(bytes.buffer)
-          } catch (e) {
-            console.error('[SystemAudio] Failed to decode audio data:', e)
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type !== 'moldable:system-audio-event') return
+
+      const message = event.data as SystemAudioEventMessage
+      if (message.event !== 'data') {
+        console.log('[SystemAudio] Received event', message)
+      }
+
+      switch (message.event) {
+        case 'started':
+          setCapturing(true)
+          onStateChangeRef.current?.(true)
+          break
+        case 'stopped':
+          setCapturing(false)
+          if (message.payload) {
+            console.warn(
+              '[SystemAudio] Capture stopped reason:',
+              message.payload,
+            )
           }
-        },
-      )
-      unlistenersRef.current.push(unlistenData)
-
-      // Listen for started event
-      const unlistenStarted = await tauri.event.listen(
-        'audio-capture-started',
-        () => {
-          console.log('[SystemAudio] Capture started')
-          setIsCapturing(true)
-          onStateChange?.(true)
-        },
-      )
-      unlistenersRef.current.push(unlistenStarted)
-
-      // Listen for stopped event
-      const unlistenStopped = await tauri.event.listen(
-        'audio-capture-stopped',
-        () => {
-          console.log('[SystemAudio] Capture stopped')
-          setIsCapturing(false)
-          onStateChange?.(false)
-        },
-      )
-      unlistenersRef.current.push(unlistenStopped)
-
-      // Listen for errors
-      const unlistenError = await tauri.event.listen<string>(
-        'audio-capture-error',
-        (event) => {
-          console.error('[SystemAudio] Error:', event.payload)
-          onError?.(new Error(event.payload))
-        },
-      )
-      unlistenersRef.current.push(unlistenError)
+          onStateChangeRef.current?.(false)
+          break
+        case 'data':
+          if (message.payload) {
+            try {
+              onAudioDataRef.current?.(decodeBase64Audio(message.payload))
+            } catch (error) {
+              console.error('[SystemAudio] Failed to decode audio data:', error)
+            }
+          }
+          break
+        case 'error': {
+          const error = new Error(
+            message.payload || 'System audio capture failed.',
+          )
+          onErrorRef.current?.(error)
+          break
+        }
+      }
     }
 
-    setupListeners()
-
-    return () => {
-      unlistenersRef.current.forEach((unlisten) => unlisten())
-      unlistenersRef.current = []
-    }
-  }, [isInMoldable, onAudioData, onError, onStateChange])
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [runningInMoldable])
 
   const start = useCallback(
     async (mode: CaptureMode = 'systemAudio') => {
-      const tauri = window.__TAURI__
-      if (!tauri || !isAvailable) {
-        onError?.(new Error('System audio capture not available'))
+      if (!runningInMoldable || !available) {
+        onErrorRef.current?.(new Error('System audio capture not available'))
         return false
       }
 
@@ -149,46 +203,57 @@ export function useSystemAudio(options: UseSystemAudioOptions = {}) {
       }
 
       try {
-        console.log('[SystemAudio] Starting capture, mode:', mode)
-        const result = await tauri.core.invoke<boolean>('start_audio_capture', {
+        const response = await requestSystemAudio({
+          action: 'start',
           mode: modeMap[mode],
-          sampleRate: 48000,
+          sampleRate: 48_000,
           channels: 1,
         })
-        return result
-      } catch (e) {
-        console.error('[SystemAudio] Failed to start:', e)
-        onError?.(e as Error)
+
+        if (!response.ok) {
+          throw new Error(
+            response.error?.message || 'Failed to start system audio capture.',
+          )
+        }
+
+        return response.result?.started === true
+      } catch (error) {
+        console.error('[SystemAudio] Failed to start:', error)
+        onErrorRef.current?.(error as Error)
         return false
       }
     },
-    [isAvailable, onError],
+    [available, runningInMoldable],
   )
 
-  const stop = useCallback(async () => {
-    const tauri = window.__TAURI__
-    if (!tauri) return false
+  const stop = useCallback(
+    async (reason?: string) => {
+      if (!runningInMoldable) return false
 
-    try {
-      console.log('[SystemAudio] Stopping capture')
-      const result = await tauri.core.invoke<boolean>('stop_audio_capture')
-      return result
-    } catch (e) {
-      console.error('[SystemAudio] Failed to stop:', e)
-      return false
-    }
-  }, [])
+      try {
+        const response = await requestSystemAudio({ action: 'stop', reason })
+
+        if (!response.ok) {
+          throw new Error(
+            response.error?.message || 'Failed to stop system audio capture.',
+          )
+        }
+
+        return response.result?.stopped === true
+      } catch (error) {
+        console.error('[SystemAudio] Failed to stop:', error)
+        onErrorRef.current?.(error as Error)
+        return false
+      }
+    },
+    [runningInMoldable],
+  )
 
   return {
-    /** Whether running inside Moldable desktop app */
-    isInMoldable,
-    /** Whether system audio capture is available (macOS 14.2+) */
-    isAvailable,
-    /** Whether currently capturing */
-    isCapturing,
-    /** Start capturing audio */
+    isInMoldable: runningInMoldable,
+    isAvailable: available,
+    isCapturing: capturing,
     start,
-    /** Stop capturing audio */
     stop,
   }
 }

@@ -8,7 +8,7 @@
   "license": "FSL-1.1-ALv2",
   "repository": "moldable-ai/apps",
   "icon": "🎙️",
-  "iconPath": "public/icon.png",
+  "iconPath": "public/icon.svg",
   "widgetSize": "medium",
   "widgetTint": "violet",
   "category": "productivity",
@@ -102,11 +102,21 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "title": { "type": "string" },
-                "notes": { "type": "string" },
-                "enhancedNotes": { "type": "string" },
-                "enhancedTemplateId": { "type": "string" }
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "notes": {
+                  "type": "string"
+                },
+                "enhancedNotes": {
+                  "type": "string"
+                },
+                "enhancedTemplateId": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }
@@ -118,7 +128,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" }
+                "id": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }
@@ -135,7 +147,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" }
+                "id": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }
@@ -147,11 +161,21 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "name": { "type": "string" },
-                "icon": { "type": "string" },
-                "description": { "type": "string" },
-                "context": { "type": "string" },
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "icon": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "context": {
+                  "type": "string"
+                },
                 "writingStyle": {
                   "type": "string",
                   "enum": ["direct", "narrative", "objective"]
@@ -161,9 +185,15 @@
                   "items": {
                     "type": "object",
                     "properties": {
-                      "id": { "type": "string" },
-                      "title": { "type": "string" },
-                      "prompt": { "type": "string" },
+                      "id": {
+                        "type": "string"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "prompt": {
+                        "type": "string"
+                      },
                       "format": {
                         "type": "string",
                         "enum": ["paragraph", "list"]
@@ -172,7 +202,9 @@
                         "type": "string",
                         "enum": ["concise", "standard", "detailed"]
                       },
-                      "required": { "type": "boolean" }
+                      "required": {
+                        "type": "boolean"
+                      }
                     },
                     "required": ["id", "title", "prompt"]
                   }
@@ -188,7 +220,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" }
+                "id": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }
@@ -205,14 +239,22 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "saveAudio": { "type": "boolean" },
+                "saveAudio": {
+                  "type": "boolean"
+                },
                 "model": {
                   "type": "string",
                   "enum": ["nova-3", "nova-3-medical"]
                 },
-                "language": { "type": "string" },
-                "enableDiarization": { "type": "boolean" },
-                "mipOptOut": { "type": "boolean" }
+                "language": {
+                  "type": "string"
+                },
+                "enableDiarization": {
+                  "type": "boolean"
+                },
+                "mipOptOut": {
+                  "type": "boolean"
+                }
               }
             }
           },
@@ -223,9 +265,15 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "templateId": { "type": "string" },
-                "save": { "type": "boolean" }
+                "id": {
+                  "type": "string"
+                },
+                "templateId": {
+                  "type": "string"
+                },
+                "save": {
+                  "type": "boolean"
+                }
               },
               "required": ["id"]
             }

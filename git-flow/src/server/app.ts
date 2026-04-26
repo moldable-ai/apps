@@ -4,8 +4,10 @@ import {
   readJson,
 } from '@moldable-ai/storage'
 import {
+  addFileToGitignore,
   addRepo,
   commitFiles,
+  discardChanges,
   getCommitDiff,
   getDetectedEditors,
   getDiff,
@@ -438,6 +440,16 @@ app.post('/api/git', async (c) => {
         body.editorId,
         workspaceId,
       )
+      return c.json(result)
+    }
+
+    if (body.action === 'discardChanges') {
+      const result = await discardChanges(body.paths ?? [], workspaceId)
+      return c.json(result)
+    }
+
+    if (body.action === 'addToGitignore') {
+      const result = await addFileToGitignore(body.path ?? '', workspaceId)
       return c.json(result)
     }
 

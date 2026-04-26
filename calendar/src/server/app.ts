@@ -1,11 +1,12 @@
 import { getWorkspaceFromRequest } from '@moldable-ai/storage'
+import { invokeAivaultJson } from '../lib/aivault'
 import {
   clearTokens,
   getAuthUrl,
-  getOAuth2Client,
+  isAuthenticated,
   saveTokens,
 } from '../lib/calendar/google-auth'
-import { calendar_v3, google } from 'googleapis'
+import type { calendar_v3 } from 'googleapis'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
@@ -24,6 +25,14 @@ interface CalendarEvent {
   link: string | null | undefined
   status: string | null | undefined
   colorId: string | null | undefined
+}
+
+interface CalendarListResponse {
+  items?: calendar_v3.Schema$CalendarListEntry[]
+}
+
+interface EventListResponse {
+  items?: calendar_v3.Schema$Event[]
 }
 
 const rpcRequestSchema = z.object({
@@ -77,18 +86,12 @@ async function fetchCalendarEvents(
     maxResults?: number
   } = {},
 ): Promise<CalendarEvent[]> {
-  const auth = await getOAuth2Client(workspaceId)
-
-  if (
-    !auth.credentials ||
-    (!auth.credentials.access_token && !auth.credentials.refresh_token)
-  ) {
+  if (!(await isAuthenticated(workspaceId))) {
     const error = new Error('Calendar is not connected')
     error.name = 'CalendarNotConnected'
     throw error
   }
 
-  const calendar = google.calendar({ version: 'v3', auth })
   const now = new Date()
   const defaultMin = new Date(
     now.getFullYear(),
@@ -101,36 +104,44 @@ async function fetchCalendarEvents(
     0,
   ).toISOString()
 
-  const response = await calendar.events.list({
-    calendarId: 'primary',
-    timeMin: options.timeMin || defaultMin,
-    timeMax: options.timeMax || defaultMax,
-    singleEvents: true,
-    orderBy: 'startTime',
-    maxResults: options.maxResults ?? 2500,
-  })
+  const params = new URLSearchParams()
+  appendParam(params, 'timeMin', options.timeMin || defaultMin)
+  appendParam(params, 'timeMax', options.timeMax || defaultMax)
+  appendParam(params, 'singleEvents', true)
+  appendParam(params, 'orderBy', 'startTime')
+  appendParam(params, 'maxResults', options.maxResults ?? 2500)
 
-  return (response.data.items ?? [])
+  const response = await invokeAivaultJson<EventListResponse>(
+    workspaceId,
+    'google-calendar/events',
+    {
+      method: 'GET',
+      path: calendarPath('/calendars/primary/events', params),
+    },
+  )
+
+  return (response.items ?? [])
     .filter((event) => options.includeDeclined || event.status !== 'cancelled')
     .map(mapGoogleEvent)
 }
 
 async function fetchCalendarList(workspaceId: string) {
-  const auth = await getOAuth2Client(workspaceId)
-
-  if (
-    !auth.credentials ||
-    (!auth.credentials.access_token && !auth.credentials.refresh_token)
-  ) {
+  if (!(await isAuthenticated(workspaceId))) {
     const error = new Error('Calendar is not connected')
     error.name = 'CalendarNotConnected'
     throw error
   }
 
-  const calendar = google.calendar({ version: 'v3', auth })
-  const response = await calendar.calendarList.list()
+  const response = await invokeAivaultJson<CalendarListResponse>(
+    workspaceId,
+    'google-calendar/lists',
+    {
+      method: 'GET',
+      path: calendarPath('/users/me/calendarList'),
+    },
+  )
 
-  return (response.data.items ?? []).map((item) => ({
+  return (response.items ?? []).map((item) => ({
     id: item.id,
     summary: item.summary,
     description: item.description,
@@ -139,6 +150,46 @@ async function fetchCalendarList(workspaceId: string) {
     backgroundColor: item.backgroundColor,
     foregroundColor: item.foregroundColor,
   }))
+}
+
+function calendarPath(pathname: string, params?: URLSearchParams) {
+  const query = rawQuery(params)
+  return `/calendar/v3${pathname}${query ? `?${query}` : ''}`
+}
+
+function rawQuery(params?: URLSearchParams) {
+  if (!params) return ''
+  return Array.from(params.entries())
+    .map(([name, value]) => `${name}=${value}`)
+    .join('&')
+}
+
+function appendParam(
+  params: URLSearchParams,
+  name: string,
+  value: string | number | boolean | undefined,
+) {
+  if (value === undefined || value === '') return
+  params.append(name, String(value))
+}
+
+function isCalendarAuthError(error: unknown) {
+  const candidate = error as {
+    code?: number
+    status?: number
+    response?: { status?: number }
+    message?: string
+  }
+  const message = candidate.message ?? ''
+
+  return (
+    candidate.code === 401 ||
+    candidate.status === 401 ||
+    candidate.response?.status === 401 ||
+    message.includes('client_secret is missing') ||
+    message.includes('invalid_grant') ||
+    message.includes('oauth2 token endpoint returned 400')
+  )
 }
 
 function filterEventsByQuery(events: CalendarEvent[], query?: string) {
@@ -259,13 +310,14 @@ app.get('/api/auth/login', async (c) => {
 
 app.get('/api/auth/callback', async (c) => {
   const code = c.req.query('code')
+  const state = c.req.query('state')
 
   if (!code) {
     return c.json({ error: 'No code provided' }, 400)
   }
 
   try {
-    await saveTokens(code)
+    await saveTokens(code, state)
     return c.html(authSuccessHtml())
   } catch (error) {
     console.error('Auth error:', error)
@@ -304,11 +356,7 @@ app.get('/api/events', async (c) => {
       return c.json({ events: [], authenticated: false }, 401)
     }
 
-    if (
-      errorMessage.includes('Missing') ||
-      errorCode === 401 ||
-      errorStatus === 401
-    ) {
+    if (errorMessage.includes('Missing') || isCalendarAuthError(error)) {
       return c.json({ events: [], authenticated: false }, 401)
     }
 
@@ -404,7 +452,10 @@ app.post('/api/moldable/rpc', async (c) => {
         await fetchCalendarEvents(workspaceId, { maxResults: 1 })
         return c.json({ ok: true, result: { connected: true } })
       } catch (error) {
-        if (error instanceof Error && error.name === 'CalendarNotConnected') {
+        if (
+          (error instanceof Error && error.name === 'CalendarNotConnected') ||
+          isCalendarAuthError(error)
+        ) {
           return c.json({ ok: true, result: { connected: false } })
         }
         throw error
@@ -429,7 +480,10 @@ app.post('/api/moldable/rpc', async (c) => {
       404,
     )
   } catch (error) {
-    if (error instanceof Error && error.name === 'CalendarNotConnected') {
+    if (
+      (error instanceof Error && error.name === 'CalendarNotConnected') ||
+      isCalendarAuthError(error)
+    ) {
       return c.json({
         ok: false,
         error: {

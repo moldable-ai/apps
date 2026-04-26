@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   ScrollArea,
+  Skeleton,
   cn,
 } from '@moldable-ai/ui'
 import { MeetingCard } from './meeting-card'
@@ -53,6 +54,9 @@ interface MeetingsListProps {
   onSelectMeeting: (meeting: Meeting) => void
   onDeleteMeeting: (meetingId: string) => void
 }
+
+const UPCOMING_EVENTS_LOADING_HEIGHT = 'h-[220px]'
+const UPCOMING_EVENTS_SKELETON_ROWS = [0, 1, 2]
 
 function getDateKey(date: Date) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
@@ -292,12 +296,7 @@ function UpcomingEvents({
       </h2>
       <div className="border-border/70 bg-muted/35 dark:bg-muted/25 overflow-hidden rounded-2xl border">
         {state.status === 'loading' ? (
-          <UpcomingStatusRow
-            label={todayLabel}
-            isToday
-            icon={CalendarDays}
-            message="Checking Calendar..."
-          />
+          <UpcomingEventsSkeleton />
         ) : state.status === 'error' ? (
           <UpcomingStatusRow
             label={todayLabel}
@@ -320,6 +319,39 @@ function UpcomingEvents({
         )}
       </div>
     </section>
+  )
+}
+
+function UpcomingEventsSkeleton() {
+  return (
+    <div
+      className={cn(UPCOMING_EVENTS_LOADING_HEIGHT, 'overflow-hidden')}
+      aria-busy="true"
+      aria-label="Loading upcoming events"
+    >
+      <span className="sr-only">Loading upcoming events</span>
+      {UPCOMING_EVENTS_SKELETON_ROWS.map((row) => (
+        <div
+          key={row}
+          className="meetings-dashed-separator grid h-[73.333px] grid-cols-[132px_1fr]"
+        >
+          <div className="flex items-start gap-2 px-5 py-4">
+            <Skeleton className="bg-foreground/10 h-8 w-9 rounded-md" />
+            <div className="space-y-1 pt-1">
+              <Skeleton className="bg-foreground/10 h-3 w-12 rounded-sm" />
+              <Skeleton className="bg-foreground/10 h-3 w-9 rounded-sm" />
+            </div>
+          </div>
+          <div className="flex items-center gap-6 px-7 py-4">
+            <Skeleton className="bg-primary/30 h-8 w-[3px] rounded-full" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <Skeleton className="bg-foreground/10 h-4 w-2/5 rounded-sm" />
+              <Skeleton className="bg-foreground/10 h-3 w-1/4 rounded-sm" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 

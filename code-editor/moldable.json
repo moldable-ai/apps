@@ -7,7 +7,7 @@
   "author": "",
   "license": "FSL-1.1-ALv2",
   "icon": "💻",
-  "iconPath": "public/icon.png",
+  "iconPath": "public/icon.svg",
   "widgetSize": "medium",
   "widgetTint": "violet",
   "category": "custom",
@@ -41,8 +41,12 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "rootPath": { "type": "string" },
-                "previewUrl": { "type": "string" }
+                "rootPath": {
+                  "type": "string"
+                },
+                "previewUrl": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -58,13 +62,21 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "root": { "type": "string" },
+                "root": {
+                  "type": "string"
+                },
                 "pattern": {
                   "type": "string",
                   "description": "fast-glob pattern. Defaults to **/*."
                 },
-                "query": { "type": "string" },
-                "limit": { "type": "number", "minimum": 1, "maximum": 500 }
+                "query": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500
+                }
               }
             }
           },
@@ -75,9 +87,15 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "path": { "type": "string" },
-                "root": { "type": "string" },
-                "includeHidden": { "type": "boolean" }
+                "path": {
+                  "type": "string"
+                },
+                "root": {
+                  "type": "string"
+                },
+                "includeHidden": {
+                  "type": "boolean"
+                }
               },
               "required": ["path"]
             }
@@ -89,7 +107,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "path": { "type": "string" },
+                "path": {
+                  "type": "string"
+                },
                 "maxChars": {
                   "type": "number",
                   "minimum": 1,

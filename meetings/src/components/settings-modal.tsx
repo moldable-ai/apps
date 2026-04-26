@@ -29,7 +29,7 @@ import { getDeepgramLanguageDescription } from '@/lib/deepgram-language-options'
 import { DeepgramLanguageSelector } from './deepgram-language-selector'
 import type { MeetingSettings } from '@/types'
 
-type AudioSource = 'microphone' | 'system'
+type AudioSource = 'microphone' | 'both' | 'system'
 
 interface SettingsModalProps {
   open: boolean
@@ -97,7 +97,7 @@ export function SettingsModal({
                       : 'Choose what Meetings listens to when a meeting starts'
                   }
                 >
-                  <div className="border-border bg-muted/35 dark:bg-muted/25 grid w-56 grid-cols-2 rounded-full border p-0.5">
+                  <div className="border-border bg-muted/35 dark:bg-muted/25 grid w-80 grid-cols-3 rounded-full border p-0.5">
                     <Button
                       type="button"
                       size="sm"
@@ -118,10 +118,30 @@ export function SettingsModal({
                       size="sm"
                       variant="ghost"
                       disabled={recordingActive || !systemAudioAvailable}
+                      onClick={() => onAudioSourceChange('both')}
+                      title={
+                        !systemAudioAvailable
+                          ? 'Mixed audio requires native system capture in Moldable desktop'
+                          : undefined
+                      }
+                      className={cn(
+                        'text-muted-foreground hover:bg-background/80 hover:text-foreground h-7 cursor-pointer rounded-full px-2.5 text-xs font-medium shadow-none disabled:cursor-not-allowed',
+                        audioSource === 'both' &&
+                          'bg-background text-foreground hover:bg-background shadow-sm',
+                      )}
+                    >
+                      <Waves className="mr-1.5 size-3.5" />
+                      Blend
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      disabled={recordingActive || !systemAudioAvailable}
                       onClick={() => onAudioSourceChange('system')}
                       title={
                         !systemAudioAvailable
-                          ? 'System audio requires a signed app build'
+                          ? 'System audio requires native system capture in Moldable desktop'
                           : undefined
                       }
                       className={cn(

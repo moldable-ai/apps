@@ -1,0 +1,20 @@
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { ThemeProvider, WidgetLayout, WorkspaceProvider } from '@moldable-ai/ui'
+import './globals.css'
+import { QueryProvider } from './query-provider'
+import { Widget } from './widget'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <ThemeProvider>
+      <WorkspaceProvider>
+        <QueryProvider>
+          <WidgetLayout>
+            <Widget />
+          </WidgetLayout>
+        </QueryProvider>
+      </WorkspaceProvider>
+    </ThemeProvider>
+  </StrictMode>,
+)

@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Code2,
   Copy,
+  FilePlus,
   FolderGit,
   FolderOpen,
   GitBranch,
@@ -22,11 +23,17 @@ import {
   Search,
   ShieldAlert,
   Terminal,
+  Trash2,
   Wrench,
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -474,6 +481,63 @@ export default function GitFlowPage() {
     undoMutation.isPending ||
     repoMutation.isPending
 
+  const discardChangesMutation = useMutation({
+    mutationFn: async (paths: string[]) => {
+      const res = await fetchWithWorkspace('/api/git', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'discardChanges',
+          paths,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to discard changes')
+      }
+      return { json, paths }
+    },
+    onSuccess: ({ paths }) => {
+      setCodeReview(null)
+      setSelectedFiles((previous) => {
+        const next = new Set(previous)
+        paths.forEach((filePath) => next.delete(filePath))
+        return next
+      })
+      if (selectedFile && paths.includes(selectedFile)) {
+        setSelectedFile(null)
+      }
+      queryClient.invalidateQueries({ queryKey: ['git-status', workspaceId] })
+    },
+    onError: (err: Error) => {
+      setError(err.message)
+    },
+  })
+
+  const addToGitignoreMutation = useMutation({
+    mutationFn: async (filePath: string) => {
+      const res = await fetchWithWorkspace('/api/git', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'addToGitignore',
+          path: filePath,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to add file to .gitignore')
+      }
+      return json
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['git-status', workspaceId] })
+    },
+    onError: (err: Error) => {
+      setError(err.message)
+    },
+  })
+
   const filteredFiles = useMemo(() => {
     const files = data?.files ?? []
     const filter = fileFilter.trim().toLowerCase()
@@ -550,6 +614,45 @@ export default function GitFlowPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to open file')
     }
+  }
+
+  const getContextActionPaths = (filePath: string) => {
+    if (selectedFiles.has(filePath)) {
+      return Array.from(selectedFiles)
+    }
+
+    return [filePath]
+  }
+
+  const handleDiscardChanges = (filePath: string) => {
+    const paths = getContextActionPaths(filePath)
+    const fileLabel = paths.length === 1 ? 'this file' : `${paths.length} files`
+    const confirmed = window.confirm(
+      `Discard changes to ${fileLabel}? This cannot be undone.`,
+    )
+
+    if (!confirmed) return
+
+    setError(null)
+    discardChangesMutation.mutate(paths)
+  }
+
+  const handleAddToGitignore = (filePath: string) => {
+    setError(null)
+    addToGitignoreMutation.mutate(filePath)
+  }
+
+  const handleRevealInFinder = (filePath: string) => {
+    if (!data?.repoPath) return
+
+    const fullPath = filePath.startsWith('/')
+      ? filePath
+      : `${data.repoPath.replace(/\/+$/, '')}/${filePath}`
+
+    sendToMoldable({
+      type: 'moldable:show-in-folder',
+      path: fullPath,
+    })
   }
 
   // Auto-select first file on initial load
@@ -1584,52 +1687,115 @@ export default function GitFlowPage() {
                     </div>
                   ) : (
                     <div className="space-y-0.5">
-                      {filteredFiles.map((file) => (
-                        <div
-                          key={file.path}
-                          onClick={() => handleFileSelect(file.path)}
-                          className={cn(
-                            'group flex w-full cursor-pointer items-center gap-3 rounded-md p-2 text-left transition-all',
-                            selectedFile === file.path
-                              ? 'bg-primary/10 shadow-sm'
-                              : 'hover:bg-accent/40',
-                          )}
-                        >
-                          <div
-                            className="flex items-center"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Checkbox
-                              checked={selectedFiles.has(file.path)}
-                              onCheckedChange={() => toggleFile(file.path)}
-                            />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-2">
-                              <span
-                                className={cn(
-                                  'truncate text-xs font-medium tracking-tight opacity-70 transition-opacity group-hover:opacity-100',
-                                  selectedFile === file.path
-                                    ? 'text-primary opacity-100'
-                                    : 'text-muted-foreground',
-                                )}
-                              >
-                                {file.path}
-                              </span>
+                      {filteredFiles.map((file) => {
+                        const discardCount = selectedFiles.has(file.path)
+                          ? selectedFiles.size
+                          : 1
+
+                        return (
+                          <ContextMenu key={file.path}>
+                            <ContextMenuTrigger asChild>
                               <div
+                                onClick={() => handleFileSelect(file.path)}
+                                onContextMenu={() =>
+                                  handleFileSelect(file.path)
+                                }
                                 className={cn(
-                                  'shrink-0 rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase',
-                                  file.index === '?'
-                                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                                    : 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+                                  'group flex w-full cursor-pointer items-center gap-3 rounded-md p-2 text-left transition-all',
+                                  selectedFile === file.path
+                                    ? 'bg-primary/10 shadow-sm'
+                                    : 'hover:bg-accent/40',
                                 )}
                               >
-                                {file.index === '?' ? 'U' : 'M'}
+                                <div
+                                  className="flex items-center"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Checkbox
+                                    checked={selectedFiles.has(file.path)}
+                                    onCheckedChange={() =>
+                                      toggleFile(file.path)
+                                    }
+                                  />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span
+                                      className={cn(
+                                        'truncate text-xs font-medium tracking-tight opacity-70 transition-opacity group-hover:opacity-100',
+                                        selectedFile === file.path
+                                          ? 'text-primary opacity-100'
+                                          : 'text-muted-foreground',
+                                      )}
+                                    >
+                                      {file.path}
+                                    </span>
+                                    <div
+                                      className={cn(
+                                        'shrink-0 rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase',
+                                        file.index === '?'
+                                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                                          : 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+                                      )}
+                                    >
+                                      {file.index === '?' ? 'U' : 'M'}
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+                            </ContextMenuTrigger>
+                            <ContextMenuContent className="border-border/60 bg-popover/95 w-64 rounded-xl p-1.5 shadow-2xl backdrop-blur">
+                              <ContextMenuItem
+                                variant="destructive"
+                                disabled={discardChangesMutation.isPending}
+                                onSelect={() => handleDiscardChanges(file.path)}
+                                className="cursor-pointer rounded-lg py-2 text-[13px] font-semibold"
+                              >
+                                <Trash2 className="size-4" />
+                                Discard changes
+                                {discardCount > 1 ? (
+                                  <span className="text-muted-foreground ml-auto text-[11px]">
+                                    {discardCount}
+                                  </span>
+                                ) : null}
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                disabled={addToGitignoreMutation.isPending}
+                                onSelect={() => handleAddToGitignore(file.path)}
+                                className="cursor-pointer rounded-lg py-2 text-[13px] font-semibold"
+                              >
+                                <FilePlus className="size-4" />
+                                Add file to .gitignore
+                              </ContextMenuItem>
+                              <ContextMenuSeparator />
+                              <ContextMenuItem
+                                onSelect={() => handleRevealInFinder(file.path)}
+                                className="cursor-pointer rounded-lg py-2 text-[13px] font-semibold"
+                              >
+                                <FolderOpen className="size-4" />
+                                Reveal in Finder
+                              </ContextMenuItem>
+                              <ContextMenuItem
+                                disabled={editors.length === 0}
+                                onSelect={() =>
+                                  void handleOpenFileInEditor(file.path)
+                                }
+                                className="cursor-pointer rounded-lg py-2 text-[13px] font-semibold"
+                              >
+                                {selectedApp ? (
+                                  <AppIcon
+                                    editor={selectedApp}
+                                    className="size-4 rounded-[4px]"
+                                  />
+                                ) : (
+                                  <Code2 className="size-4" />
+                                )}
+                                Open in chosen editor
+                              </ContextMenuItem>
+                            </ContextMenuContent>
+                          </ContextMenu>
+                        )
+                      })}
                     </div>
                   )}
                 </div>

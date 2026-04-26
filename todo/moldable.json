@@ -8,7 +8,7 @@
   "license": "FSL-1.1-ALv2",
   "repository": "moldable-ai/apps",
   "icon": "✅",
-  "iconPath": "public/icon.png",
+  "iconPath": "public/icon.svg",
   "widgetSize": "small",
   "widgetTint": "blue",
   "category": "productivity",
@@ -32,8 +32,12 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "query": { "type": "string" },
-                "includeCompleted": { "type": "boolean" },
+                "query": {
+                  "type": "string"
+                },
+                "includeCompleted": {
+                  "type": "boolean"
+                },
                 "priority": {
                   "type": "string",
                   "enum": ["low", "medium", "high"]
@@ -46,7 +50,11 @@
                   "type": "string",
                   "description": "ISO date or datetime."
                 },
-                "limit": { "type": "number", "minimum": 1, "maximum": 200 }
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200
+                }
               }
             }
           },
@@ -57,13 +65,21 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "query": { "type": "string" },
-                "includeCompleted": { "type": "boolean" },
+                "query": {
+                  "type": "string"
+                },
+                "includeCompleted": {
+                  "type": "boolean"
+                },
                 "priority": {
                   "type": "string",
                   "enum": ["low", "medium", "high"]
                 },
-                "limit": { "type": "number", "minimum": 1, "maximum": 200 }
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200
+                }
               }
             }
           },
@@ -74,7 +90,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" }
+                "id": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }
@@ -86,7 +104,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "title": { "type": "string" },
+                "title": {
+                  "type": "string"
+                },
                 "priority": {
                   "type": "string",
                   "enum": ["low", "medium", "high"]
@@ -95,7 +115,9 @@
                   "type": ["string", "null"],
                   "description": "ISO date or datetime."
                 },
-                "completed": { "type": "boolean" }
+                "completed": {
+                  "type": "boolean"
+                }
               },
               "required": ["title"]
             }
@@ -107,14 +129,22 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "title": { "type": "string" },
-                "completed": { "type": "boolean" },
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "completed": {
+                  "type": "boolean"
+                },
                 "priority": {
                   "type": "string",
                   "enum": ["low", "medium", "high"]
                 },
-                "dueDate": { "type": ["string", "null"] }
+                "dueDate": {
+                  "type": ["string", "null"]
+                }
               },
               "required": ["id"]
             }
@@ -126,8 +156,12 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "completed": { "type": "boolean" }
+                "id": {
+                  "type": "string"
+                },
+                "completed": {
+                  "type": "boolean"
+                }
               },
               "required": ["id", "completed"]
             }
@@ -139,7 +173,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" }
+                "id": {
+                  "type": "string"
+                }
               },
               "required": ["id"]
             }
