@@ -90,5 +90,5 @@
   },
   "env": [],
   "routeName": "mail",
-  "iconPath": "public/icon.svg"
+  "iconPath": "public/icon.png"
 }

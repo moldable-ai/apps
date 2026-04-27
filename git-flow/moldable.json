@@ -8,7 +8,7 @@
   "license": "FSL-1.1-ALv2",
   "repository": "moldable-ai/apps",
   "icon": "🛠️",
-  "iconPath": "public/icon.svg",
+  "iconPath": "public/icon.png",
   "widgetSize": "medium",
   "widgetTint": "amber",
   "routeName": "git-flow",
