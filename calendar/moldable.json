@@ -1,6 +1,6 @@
 {
   "name": "Calendar",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Integrated calendar with Google Calendar connection",

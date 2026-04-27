@@ -1,6 +1,6 @@
 {
   "name": "Scribo Languages",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "visibility": "public",
   "description": "Language learning journal with AI-powered translations",
   "runtime": "vite_hono",

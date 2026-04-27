@@ -1,6 +1,6 @@
 {
   "name": "Daily Affirmations",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "visibility": "public",
   "description": "A soothing, daily affirmation app to improve mental health and positivity.",
   "runtime": "vite_hono",

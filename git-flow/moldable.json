@@ -1,6 +1,6 @@
 {
   "name": "Git",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "visibility": "public",
   "description": "Simple Git client for branch management, staging, and diffing",
   "runtime": "vite_hono",

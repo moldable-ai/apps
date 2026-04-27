@@ -1,6 +1,6 @@
 {
   "name": "Mail",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Fast Gmail client for triage, search, reading, and sending email",

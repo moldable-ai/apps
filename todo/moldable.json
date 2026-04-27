@@ -1,6 +1,6 @@
 {
   "name": "Todo",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Simple task management with quick add and completion tracking",
