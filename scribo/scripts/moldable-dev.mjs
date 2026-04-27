@@ -59,7 +59,7 @@ async function registerInstance(pid, port) {
 
 async function unregisterInstance(pid) {
   const instances = await readInstances()
-  const filtered = instances.filter((instance) => instance.pid !== pid)
+  const filtered = instances.filter((i) => i.pid !== pid)
   if (filtered.length === 0) {
     await fs.unlink(instancesFile).catch(() => {})
   } else {
@@ -76,9 +76,17 @@ async function cleanup() {
 function terminateChild(signal = 'SIGTERM') {
   if (!child?.pid || child.killed) return
   try {
-    child.kill(signal)
+    if (process.platform === 'win32') {
+      child.kill(signal)
+    } else {
+      process.kill(-child.pid, signal)
+    }
   } catch {
-    // Ignore shutdown races.
+    try {
+      child.kill(signal)
+    } catch {
+      // Ignore shutdown races.
+    }
   }
 }
 
@@ -88,14 +96,14 @@ process.on('exit', () => {
     try {
       const content = fsSync.readFileSync(instancesFile, 'utf8')
       const instances = JSON.parse(content)
-      const filtered = instances.filter((instance) => instance.pid !== myPid)
+      const filtered = instances.filter((i) => i.pid !== myPid)
       if (filtered.length === 0) {
         fsSync.unlinkSync(instancesFile)
       } else {
         fsSync.writeFileSync(instancesFile, JSON.stringify(filtered, null, 2))
       }
     } catch {
-      // Ignore cleanup errors on exit.
+      // Ignore cleanup errors on exit
     }
   }
 })
@@ -123,6 +131,7 @@ child = spawn(tsxBin, [...serverArgs, ...forwardedArgs], {
     MOLDABLE_APP_ID: 'scribo',
     ...(port ? { MOLDABLE_PORT: port, PORT: port } : {}),
   },
+  detached: process.platform !== 'win32',
   stdio: 'inherit',
 })
 

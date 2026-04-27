@@ -76,9 +76,17 @@ async function cleanup() {
 function terminateChild(signal = 'SIGTERM') {
   if (!child?.pid || child.killed) return
   try {
-    child.kill(signal)
+    if (process.platform === 'win32') {
+      child.kill(signal)
+    } else {
+      process.kill(-child.pid, signal)
+    }
   } catch {
-    // Ignore shutdown races.
+    try {
+      child.kill(signal)
+    } catch {
+      // Ignore shutdown races.
+    }
   }
 }
 
@@ -123,6 +131,7 @@ child = spawn(tsxBin, [...serverArgs, ...forwardedArgs], {
     MOLDABLE_APP_ID: 'affirmations',
     ...(port ? { MOLDABLE_PORT: port, PORT: port } : {}),
   },
+  detached: process.platform !== 'win32',
   stdio: 'inherit',
 })
 

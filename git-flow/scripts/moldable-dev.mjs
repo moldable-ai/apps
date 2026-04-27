@@ -76,9 +76,17 @@ async function cleanup() {
 function terminateChild(signal = 'SIGTERM') {
   if (!child?.pid || child.killed) return
   try {
-    child.kill(signal)
+    if (process.platform === 'win32') {
+      child.kill(signal)
+    } else {
+      process.kill(-child.pid, signal)
+    }
   } catch {
-    // Ignore shutdown races.
+    try {
+      child.kill(signal)
+    } catch {
+      // Ignore shutdown races.
+    }
   }
 }
 
@@ -86,7 +94,8 @@ process.on('exit', () => {
   terminateChild()
   if (myPid) {
     try {
-      const instances = JSON.parse(fsSync.readFileSync(instancesFile, 'utf8'))
+      const content = fsSync.readFileSync(instancesFile, 'utf8')
+      const instances = JSON.parse(content)
       const filtered = instances.filter((i) => i.pid !== myPid)
       if (filtered.length === 0) {
         fsSync.unlinkSync(instancesFile)
@@ -94,7 +103,7 @@ process.on('exit', () => {
         fsSync.writeFileSync(instancesFile, JSON.stringify(filtered, null, 2))
       }
     } catch {
-      // Ignore cleanup errors.
+      // Ignore cleanup errors on exit
     }
   }
 })
@@ -122,6 +131,7 @@ child = spawn(tsxBin, [...serverArgs, ...forwardedArgs], {
     MOLDABLE_APP_ID: 'git-flow',
     ...(port ? { MOLDABLE_PORT: port, PORT: port } : {}),
   },
+  detached: process.platform !== 'win32',
   stdio: 'inherit',
 })
 

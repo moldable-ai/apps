@@ -107,8 +107,6 @@ export default function FullPage() {
       return data.events as CalendarEvent[]
     },
     retry: false,
-    refetchInterval: authenticated ? false : 2000,
-    refetchIntervalInBackground: true,
   })
 
   const events = useMemo(() => eventsData || [], [eventsData])
