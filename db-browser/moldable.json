@@ -1,0 +1,186 @@
+{
+  "name": "DB Browser",
+  "version": "0.1.0",
+  "aliases": ["database", "postgres"],
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "Connect to PostgreSQL databases and browse schemas, tables, and read-only query results",
+  "author": "",
+  "license": "MIT",
+  "icon": "🗄️",
+  "iconPath": "public/icon.png",
+  "widgetSize": "large",
+  "category": "custom",
+  "tags": [],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.8",
+    "@moldable-ai/storage": "^0.1.4"
+  },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "db.browser",
+        "name": "Database browser",
+        "description": "Read database metadata, run bounded read-only queries, and manage saved SQL editor tabs through DB Browser without exposing credentials.",
+        "scopes": [
+          {
+            "id": "db.connections.list",
+            "name": "List connections",
+            "description": "List saved database connections and DB Browser preferences without returning credentials."
+          },
+          {
+            "id": "db.context.get",
+            "name": "Get database context",
+            "description": "Get saved connections, the active connection, schema metadata, and saved SQL tabs for query assistance.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": { "type": "string" },
+                "includeSchema": { "type": "boolean" },
+                "includeSqlWorkspace": { "type": "boolean" }
+              }
+            }
+          },
+          {
+            "id": "db.schema.list",
+            "name": "List schema",
+            "description": "List schemas, tables, and views for a saved connection.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": { "type": "string" }
+              }
+            }
+          },
+          {
+            "id": "db.schema.search",
+            "name": "Search schema",
+            "description": "Search schema, table, and view names for a saved connection.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": { "type": "string" },
+                "query": { "type": "string" },
+                "limit": { "type": "number", "minimum": 1, "maximum": 100 }
+              },
+              "required": ["query"]
+            }
+          },
+          {
+            "id": "db.schema.describe",
+            "name": "Describe table",
+            "description": "Describe columns for a table or view.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": { "type": "string" },
+                "schema": { "type": "string" },
+                "table": { "type": "string" }
+              },
+              "required": ["schema", "table"]
+            }
+          },
+          {
+            "id": "db.query.explain",
+            "name": "Explain query",
+            "description": "Run EXPLAIN for one read-only SQL statement through DB Browser and aivault.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": { "type": "string" },
+                "sql": { "type": "string" }
+              },
+              "required": ["sql"]
+            }
+          },
+          {
+            "id": "db.query.runReadonly",
+            "name": "Run read-only query",
+            "description": "Run one bounded read-only SQL statement through DB Browser and aivault.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": { "type": "string" },
+                "sql": { "type": "string" }
+              },
+              "required": ["sql"]
+            }
+          },
+          {
+            "id": "db.sqlTabs.list",
+            "name": "List SQL tabs",
+            "description": "List saved SQL editor tabs for a connection.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": { "type": "string" }
+              }
+            }
+          },
+          {
+            "id": "db.sqlTabs.create",
+            "name": "Create SQL tab",
+            "description": "Create a saved SQL editor tab, optionally selecting it in DB Browser.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": { "type": "string" },
+                "title": { "type": "string" },
+                "sql": { "type": "string" },
+                "select": { "type": "boolean" }
+              }
+            }
+          },
+          {
+            "id": "db.sqlTabs.update",
+            "name": "Update SQL tab",
+            "description": "Update the title or SQL for a saved SQL editor tab.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": { "type": "string" },
+                "tabId": { "type": "string" },
+                "title": { "type": "string" },
+                "sql": { "type": "string" },
+                "select": { "type": "boolean" }
+              },
+              "required": ["tabId"]
+            }
+          },
+          {
+            "id": "db.sqlTabs.edit",
+            "name": "Edit SQL tab",
+            "description": "Perform surgical exact string replacement in a saved SQL editor tab. Mirrors chat file editing: oldString must be unique unless replaceAll is true. Defaults to the active SQL tab when tabId is omitted.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": { "type": "string" },
+                "tabId": { "type": "string" },
+                "oldString": { "type": "string" },
+                "newString": { "type": "string" },
+                "replaceAll": { "type": "boolean" },
+                "select": { "type": "boolean" }
+              },
+              "required": ["oldString", "newString"]
+            }
+          },
+          {
+            "id": "db.sqlTabs.select",
+            "name": "Select SQL tab",
+            "description": "Mark a saved SQL editor tab as selected for a connection.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": { "type": "string" },
+                "tabId": { "type": "string" }
+              },
+              "required": ["tabId"]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "env": []
+}

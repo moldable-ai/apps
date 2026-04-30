@@ -1,6 +1,7 @@
 {
   "name": "Remotion",
   "version": "0.1.2",
+  "aliases": ["video", "render"],
   "visibility": "public",
   "description": "Create programmatic videos with Remotion - manage projects, preview compositions, and render videos",
   "runtime": "vite_hono",

@@ -120,6 +120,47 @@ function rewriteReleaseDependencies(appPath) {
   }
 }
 
+function preserveTargetManifestVersion(targetApp) {
+  const targetManifest = readAppManifest(targetApp)
+  return targetManifest?.version
+}
+
+function preserveTargetPackageVersion(targetApp) {
+  const packageJsonPath = join(targetApp, 'package.json')
+  if (!existsSync(packageJsonPath)) return undefined
+
+  try {
+    const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+    return pkg.version
+  } catch {
+    return undefined
+  }
+}
+
+function restoreTargetManifestVersion(targetApp, version) {
+  if (!version) return
+
+  const manifestPath = join(targetApp, 'moldable.json')
+  const manifest = readAppManifest(targetApp)
+  if (!manifest || manifest.version === version) return
+
+  manifest.version = version
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+}
+
+function restoreTargetPackageVersion(targetApp, version) {
+  if (!version) return
+
+  const packageJsonPath = join(targetApp, 'package.json')
+  if (!existsSync(packageJsonPath)) return
+
+  const pkg = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+  if (pkg.version === version) return
+
+  pkg.version = version
+  writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`)
+}
+
 function copyApp(appId) {
   const sourceApp = join(SOURCE_DIR, appId)
   const targetApp = join(TARGET_DIR, appId)
@@ -142,6 +183,9 @@ function copyApp(appId) {
     )
   }
 
+  const targetVersion = preserveTargetManifestVersion(targetApp)
+  const targetPackageVersion = preserveTargetPackageVersion(targetApp)
+
   // Remove existing target if it exists
   if (existsSync(targetApp)) {
     console.log(`   Removing existing ${appId}...`)
@@ -157,6 +201,8 @@ function copyApp(appId) {
   })
 
   rewriteReleaseDependencies(targetApp)
+  restoreTargetManifestVersion(targetApp, targetVersion)
+  restoreTargetPackageVersion(targetApp, targetPackageVersion)
 
   console.log(`   ✅ Done`)
   return true

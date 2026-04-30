@@ -1,6 +1,7 @@
 {
   "name": "Code",
   "version": "0.1.2",
+  "aliases": ["editor", "ide"],
   "visibility": "public",
   "description": "A lightweight, VS Code-like IDE for exploring and editing local codebases with integrated AI context and browser preview.",
   "runtime": "vite_hono",
