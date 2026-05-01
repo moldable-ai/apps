@@ -210,6 +210,7 @@ export async function upsertPostgresCredential({
   connectionUrl,
   host,
   port,
+  maxPolicyMode,
 }: {
   workspaceId: string
   credentialId: string
@@ -217,6 +218,7 @@ export async function upsertPostgresCredential({
   connectionUrl: string
   host: string
   port: number
+  maxPolicyMode?: string
 }): Promise<void> {
   const secretIdValue = await upsertWorkspaceSecret(
     workspaceId,
@@ -242,6 +244,8 @@ export async function upsertPostgresCredential({
     ...aivaultContextArgs(workspaceId),
     '--host',
     `${host}:${port}`,
+    '--max-policy-mode',
+    maxPolicyMode ?? 'read-only',
   ])
 }
 

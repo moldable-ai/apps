@@ -1,10 +1,13 @@
 import { readJson, safePath, sanitizeId, writeJson } from '@moldable-ai/storage'
 import type {
   ConnectionInput,
+  ConnectionPolicyMode,
   ConnectionSummary,
   ConnectionTestResponse,
   DbBrowserPreferences,
   ExplorerSchema,
+  ImportRowsResponse,
+  QueryExportResponse,
   QueryHistoryItem,
   QueryResultResponse,
   SqlEditorTab,
@@ -18,7 +21,9 @@ import {
   upsertPostgresCredential,
 } from './aivault'
 import { randomUUID } from 'node:crypto'
-import { rm } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 
 interface StoredConnection {
   id: string
@@ -31,6 +36,7 @@ interface StoredConnection {
   ssl: boolean
   color?: string | null
   environment?: string | null
+  policyMode?: ConnectionPolicyMode
   credentialId?: string
   secretName?: string
   passwordSecretName?: string
@@ -63,6 +69,46 @@ interface AivaultQueryResult {
   executionMs?: number
   execution_ms?: number
   command?: string
+  readOnly?: boolean
+  read_only?: boolean
+}
+
+interface AivaultExecuteResult {
+  columns?: string[]
+  rows?: Record<string, unknown>[]
+  rowCount?: number
+  row_count?: number
+  affectedRows?: number
+  affected_rows?: number
+  maxAffectedRows?: number
+  max_affected_rows?: number
+  executionMs?: number
+  execution_ms?: number
+  command?: string
+  readOnly?: boolean
+  read_only?: boolean
+  admin?: boolean
+}
+
+interface AivaultExportResult {
+  content: string
+  format?: string
+  bytes?: number
+  rowCount?: number
+  row_count?: number
+  executionMs?: number
+  execution_ms?: number
+}
+
+interface AivaultImportResult {
+  affectedRows?: number
+  affected_rows?: number
+  rowCount?: number
+  row_count?: number
+  sourceBytes?: number
+  source_bytes?: number
+  executionMs?: number
+  execution_ms?: number
 }
 
 interface AivaultPreviewResult extends AivaultQueryResult {
@@ -82,6 +128,14 @@ const MAX_QUERY_HISTORY_ITEMS = 200
 const DEFAULT_SQL_EDITOR_HEIGHT = 128
 const MIN_SQL_EDITOR_HEIGHT = 96
 const MAX_SQL_EDITOR_HEIGHT = 520
+const DEFAULT_QUERY_TIMEOUT_MS = 5_000
+const MIN_QUERY_TIMEOUT_MS = 1_000
+const MAX_QUERY_TIMEOUT_MS = 30_000
+const DEFAULT_EXPORT_LIMIT = 1_000
+const MAX_EXPORT_BYTES = 10_485_760
+const MAX_IMPORT_BYTES = 10_485_760
+const DEFAULT_IMPORT_MAX_ROWS = 1_000
+const MAX_IMPORT_ROWS = 10_000
 const EXPLORER_QUERY = `
   SELECT
     table_schema AS schema_name,
@@ -158,6 +212,41 @@ function normalizeSqlEditorHeight(value: unknown) {
   )
 }
 
+function normalizeQueryTimeoutMs(value: unknown) {
+  const timeout =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number(value.trim())
+        : Number.NaN
+
+  if (!Number.isFinite(timeout)) return DEFAULT_QUERY_TIMEOUT_MS
+
+  return Math.max(
+    MIN_QUERY_TIMEOUT_MS,
+    Math.min(MAX_QUERY_TIMEOUT_MS, Math.round(timeout)),
+  )
+}
+
+function aivaultTimeoutBody(timeoutMs?: number) {
+  return timeoutMs ? { timeoutMs: normalizeQueryTimeoutMs(timeoutMs) } : {}
+}
+
+function aivaultReadOnlyPolicyBody() {
+  return { policyMode: 'read-only' }
+}
+
+function aivaultVaultRoot() {
+  return (
+    process.env.AIVAULT_DIR?.trim() ||
+    join(homedir(), '.aivault', 'data', 'vault')
+  )
+}
+
+function aivaultPolicyMode(connection: Pick<StoredConnection, 'policyMode'>) {
+  return normalizeConnectionPolicyMode(connection.policyMode)
+}
+
 function normalizePreferences(value: unknown): DbBrowserPreferences {
   const body =
     value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
@@ -165,6 +254,7 @@ function normalizePreferences(value: unknown): DbBrowserPreferences {
   return {
     sqlEditorHeight: normalizeSqlEditorHeight(body.sqlEditorHeight),
     activeConnectionId: normalizeOptionalString(body.activeConnectionId),
+    queryTimeoutMs: normalizeQueryTimeoutMs(body.queryTimeoutMs),
   }
 }
 
@@ -307,6 +397,97 @@ function normalizeConnectionEnvironment(value: unknown): string | null {
   return allowed.has(normalized) ? normalized : null
 }
 
+function normalizeConnectionPolicyMode(value: unknown): ConnectionPolicyMode {
+  const normalized = normalizeOptionalString(value)?.toLowerCase()
+  if (normalized === 'write' || normalized === 'admin') return normalized
+  return 'read-only'
+}
+
+function normalizeDataFormat(value: unknown): 'csv' | 'jsonl' {
+  const normalized = normalizeOptionalString(value)?.toLowerCase()
+  return normalized === 'csv' ? 'csv' : 'jsonl'
+}
+
+function normalizePositiveInteger(
+  value: unknown,
+  fallback: number,
+  min: number,
+  max: number,
+) {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number(value.trim())
+        : Number.NaN
+
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(min, Math.min(max, Math.round(parsed)))
+}
+
+function normalizeImportColumns(value: unknown): string[] {
+  const columns = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',')
+      : []
+
+  const seen = new Set<string>()
+  const normalized = columns
+    .map((column) => asTrimmedString(column))
+    .filter(Boolean)
+    .filter((column) => {
+      const key = column.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+
+  if (normalized.length === 0) {
+    throw new Error('Import columns are required')
+  }
+
+  return normalized
+}
+
+function normalizeSourceContent(value: unknown) {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error('Import file content is required')
+  }
+  if (Buffer.byteLength(value, 'utf8') > MAX_IMPORT_BYTES) {
+    throw new Error(`Import file must be ${MAX_IMPORT_BYTES} bytes or smaller`)
+  }
+  return value
+}
+
+function safeImportFilename(format: 'csv' | 'jsonl') {
+  return `db-browser-${Date.now()}-${randomUUID()}.${format}`
+}
+
+async function writeTemporaryImportSource(
+  sourceContent: string,
+  format: 'csv' | 'jsonl',
+) {
+  const importRoot = join(aivaultVaultRoot(), 'postgres', 'imports')
+  await mkdir(importRoot, { recursive: true, mode: 0o700 })
+  const sourcePath = join(importRoot, safeImportFilename(format))
+  await writeFile(sourcePath, sourceContent, { mode: 0o600 })
+  return sourcePath
+}
+
+function exportFilename(value: unknown, format: 'csv' | 'jsonl') {
+  const base = asTrimmedString(value)
+    .replaceAll(/[/\\:]/g, '-')
+    .replaceAll(/[^\w .-]/g, '_')
+    .trim()
+    .replace(/^\.+/, '')
+  const fallback = `query-export-${new Date().toISOString().slice(0, 19).replaceAll(':', '')}`
+  const filename = base || fallback
+  return filename.toLowerCase().endsWith(`.${format}`)
+    ? filename
+    : `${filename}.${format}`
+}
+
 function toPort(value: unknown): number {
   const port =
     typeof value === 'number'
@@ -362,6 +543,7 @@ export function parseConnectionInput(value: unknown): ConnectionInput {
     ssl: asBoolean(body.ssl),
     color: normalizeConnectionColor(body.color),
     environment: normalizeConnectionEnvironment(body.environment),
+    policyMode: normalizeConnectionPolicyMode(body.policyMode),
   }
 }
 
@@ -422,6 +604,7 @@ async function migrateLegacyPasswords(
       connectionUrl: buildPostgresUrl(connection, connection.password),
       host: connection.host,
       port: connection.port,
+      maxPolicyMode: normalizeConnectionPolicyMode(connection.policyMode),
     })
 
     migrated.push({
@@ -454,6 +637,7 @@ function toSummary(connection: StoredConnection): ConnectionSummary {
     ssl: connection.ssl,
     color: connection.color ?? null,
     environment: connection.environment ?? null,
+    policyMode: normalizeConnectionPolicyMode(connection.policyMode),
     createdAt: connection.createdAt,
     updatedAt: connection.updatedAt,
   }
@@ -665,6 +849,109 @@ function normalizeReadOnlySql(rawSql: string): string {
   }
 
   return withoutTrailingSemicolons
+}
+
+type SqlExecutionKind = 'read-only' | 'write' | 'admin'
+
+function normalizeSingleSql(rawSql: string): string {
+  const trimmed = stripLeadingSqlComments(rawSql).trim()
+  if (!trimmed) throw new Error('SQL query is required')
+
+  const withoutTrailingSemicolons = trimmed.replace(/;+$/g, '').trim()
+  if (!withoutTrailingSemicolons) {
+    throw new Error('SQL query is required')
+  }
+
+  if (containsSemicolonOutsideSqlSyntax(withoutTrailingSemicolons)) {
+    throw new Error('Only a single statement can be executed at a time')
+  }
+
+  return withoutTrailingSemicolons
+}
+
+function firstSqlKeyword(sql: string) {
+  return sql.match(/^[a-z]+/i)?.[0].toLowerCase() ?? ''
+}
+
+function sqlTokens(sql: string) {
+  return sql.match(/[a-z_]+/gi)?.map((token) => token.toLowerCase()) ?? []
+}
+
+function withStatementKind(sql: string): SqlExecutionKind | null {
+  const tokens = sqlTokens(sql)
+  if (tokens[0] !== 'with') return null
+  if (
+    tokens.some(
+      (token) => token === 'insert' || token === 'update' || token === 'delete',
+    )
+  ) {
+    return 'write'
+  }
+  if (
+    tokens.some((token) =>
+      new Set([
+        'create',
+        'alter',
+        'drop',
+        'truncate',
+        'grant',
+        'revoke',
+        'vacuum',
+        'analyze',
+        'reindex',
+        'refresh',
+        'comment',
+      ]).has(token),
+    )
+  ) {
+    return 'admin'
+  }
+  return null
+}
+
+function classifySqlExecution(rawSql: string): {
+  sql: string
+  kind: SqlExecutionKind
+} {
+  const sql = normalizeSingleSql(rawSql)
+  const firstKeyword = firstSqlKeyword(sql)
+
+  const withKind = withStatementKind(sql)
+  if (withKind) {
+    return { sql, kind: withKind }
+  }
+
+  if (
+    new Set(['select', 'with', 'show', 'explain', 'values']).has(firstKeyword)
+  ) {
+    return { sql: normalizeReadOnlySql(rawSql), kind: 'read-only' }
+  }
+
+  if (new Set(['insert', 'update', 'delete']).has(firstKeyword)) {
+    return { sql, kind: 'write' }
+  }
+
+  if (
+    new Set([
+      'create',
+      'alter',
+      'drop',
+      'truncate',
+      'grant',
+      'revoke',
+      'vacuum',
+      'analyze',
+      'reindex',
+      'refresh',
+      'comment',
+    ]).has(firstKeyword)
+  ) {
+    return { sql, kind: 'admin' }
+  }
+
+  throw new Error(
+    'SQL mode only allows read-only statements, writes, and admin statements',
+  )
 }
 
 export async function listConnections(
@@ -1019,6 +1306,7 @@ export async function saveConnection(
     connectionUrl: buildPostgresUrl(input, input.password),
     host: input.host,
     port: input.port,
+    maxPolicyMode: input.policyMode,
   })
 
   const nextConnection: StoredConnection = {
@@ -1032,6 +1320,7 @@ export async function saveConnection(
     ssl: input.ssl,
     color: input.color,
     environment: input.environment,
+    policyMode: input.policyMode,
     credentialId,
     secretName,
     createdAt: now,
@@ -1090,6 +1379,7 @@ export async function updateConnection(
       connectionUrl: buildPostgresUrl(input, input.password),
       host: input.host,
       port: input.port,
+      maxPolicyMode: input.policyMode,
     })
   }
 
@@ -1103,6 +1393,7 @@ export async function updateConnection(
     ssl: input.ssl,
     color: input.color,
     environment: input.environment,
+    policyMode: input.policyMode,
     credentialId:
       credentialChanged || passwordProvided
         ? credentialId
@@ -1175,13 +1466,19 @@ export async function testConnection(
       connectionUrl: buildPostgresUrl(input, input.password),
       host: input.host,
       port: input.port,
+      maxPolicyMode: input.policyMode,
     })
 
     const result = await invokePostgresCapability<{
       database?: string
       user?: string
       version?: string
-    }>(workspaceId, credentialId, 'postgres/test-connection', {})
+    }>(
+      workspaceId,
+      credentialId,
+      'postgres/test-connection',
+      aivaultReadOnlyPolicyBody(),
+    )
 
     return {
       database: result.database ?? input.database,
@@ -1219,7 +1516,12 @@ export async function testSavedConnection(
       database?: string
       user?: string
       version?: string
-    }>(workspaceId, credentialId, 'postgres/test-connection', {})
+    }>(
+      workspaceId,
+      credentialId,
+      'postgres/test-connection',
+      aivaultReadOnlyPolicyBody(),
+    )
 
     return {
       database: result.database ?? connection.database,
@@ -1241,8 +1543,9 @@ export async function getExplorer(
   workspaceId: string,
   dataDir: string,
   connectionId: string,
+  timeoutMs?: number,
 ): Promise<ExplorerSchema[]> {
-  const { credentialId } = await getConnectionCredential(
+  const { connection, credentialId } = await getConnectionCredential(
     workspaceId,
     dataDir,
     connectionId,
@@ -1251,7 +1554,12 @@ export async function getExplorer(
     workspaceId,
     credentialId,
     'postgres/query',
-    { sql: EXPLORER_QUERY, limit: 1000 },
+    {
+      sql: EXPLORER_QUERY,
+      limit: 1000,
+      ...aivaultTimeoutBody(timeoutMs),
+      ...aivaultReadOnlyPolicyBody(),
+    },
   )
   const schemaMap = new Map<string, ExplorerSchema>()
 
@@ -1282,12 +1590,13 @@ export async function describeTable(
   connectionId: string,
   schema: string,
   table: string,
+  timeoutMs?: number,
 ): Promise<{
   schema: string
   table: string
   columns: Array<{ name: string; dataType: string; nullable: boolean }>
 }> {
-  const { credentialId } = await getConnectionCredential(
+  const { connection, credentialId } = await getConnectionCredential(
     workspaceId,
     dataDir,
     connectionId,
@@ -1304,6 +1613,8 @@ export async function describeTable(
   }>(workspaceId, credentialId, 'postgres/describe-table', {
     schema: normalizedSchema,
     table: normalizedTable,
+    ...aivaultTimeoutBody(timeoutMs),
+    ...aivaultReadOnlyPolicyBody(),
   })
 
   return {
@@ -1360,6 +1671,7 @@ export async function previewTable(
   table: string,
   limit: number,
   offset: number,
+  timeoutMs?: number,
 ): Promise<TablePreviewResponse> {
   const normalizedSchema = asTrimmedString(schema)
   const normalizedTable = asTrimmedString(table)
@@ -1374,13 +1686,14 @@ export async function previewTable(
     connectionId,
     normalizedSchema,
     normalizedTable,
+    timeoutMs,
   )
 
   if (!described.columns.length) {
     throw new Error('Table not found')
   }
 
-  const { credentialId } = await getConnectionCredential(
+  const { connection, credentialId } = await getConnectionCredential(
     workspaceId,
     dataDir,
     connectionId,
@@ -1394,6 +1707,8 @@ export async function previewTable(
       table: normalizedTable,
       limit: limit + 1,
       offset,
+      ...aivaultTimeoutBody(timeoutMs),
+      ...aivaultReadOnlyPolicyBody(),
     },
   )
   const normalizedRows = normalizeRows(preview.rows)
@@ -1416,8 +1731,9 @@ export async function runReadOnlyQuery(
   dataDir: string,
   connectionId: string,
   rawSql: string,
+  timeoutMs?: number,
 ): Promise<QueryResultResponse> {
-  const { credentialId } = await getConnectionCredential(
+  const { connection, credentialId } = await getConnectionCredential(
     workspaceId,
     dataDir,
     connectionId,
@@ -1427,7 +1743,12 @@ export async function runReadOnlyQuery(
     workspaceId,
     credentialId,
     'postgres/query',
-    { sql, limit: 1000 },
+    {
+      sql,
+      limit: 1000,
+      ...aivaultTimeoutBody(timeoutMs),
+      ...aivaultReadOnlyPolicyBody(),
+    },
   )
   const rows = normalizeRows(result.rows)
 
@@ -1437,5 +1758,186 @@ export async function runReadOnlyQuery(
     rowCount: result.rowCount ?? result.row_count ?? rows.length,
     executionMs: result.executionMs ?? result.execution_ms ?? 0,
     command: result.command ?? 'SELECT',
+    readOnly: result.readOnly ?? result.read_only ?? true,
+  }
+}
+
+export async function exportReadOnlyQuery(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+  rawSql: string,
+  options: {
+    format?: unknown
+    filename?: unknown
+    timeoutMs?: number
+  } = {},
+): Promise<QueryExportResponse> {
+  const { credentialId } = await getConnectionCredential(
+    workspaceId,
+    dataDir,
+    connectionId,
+  )
+  const format = normalizeDataFormat(options.format)
+  const sql = normalizeReadOnlySql(rawSql)
+  const result = await invokePostgresCapability<AivaultExportResult>(
+    workspaceId,
+    credentialId,
+    'postgres/export-query',
+    {
+      sql,
+      format,
+      limit: DEFAULT_EXPORT_LIMIT,
+      maxExportBytes: MAX_EXPORT_BYTES,
+      ...aivaultTimeoutBody(options.timeoutMs),
+      ...aivaultReadOnlyPolicyBody(),
+    },
+  )
+
+  return {
+    filename: exportFilename(options.filename, format),
+    format,
+    content: result.content,
+    bytes: result.bytes ?? Buffer.byteLength(result.content, 'utf8'),
+    rowCount: result.rowCount ?? result.row_count ?? 0,
+    executionMs: result.executionMs ?? result.execution_ms ?? 0,
+  }
+}
+
+export async function importRows(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+  value: unknown,
+  timeoutMs?: number,
+): Promise<ImportRowsResponse> {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Import details are required')
+  }
+  const body = value as Record<string, unknown>
+  const schema = asTrimmedString(body.schema)
+  const table = asTrimmedString(body.table)
+  if (!schema || !table) {
+    throw new Error('Schema and table are required')
+  }
+
+  const { connection, credentialId } = await getConnectionCredential(
+    workspaceId,
+    dataDir,
+    connectionId,
+  )
+  const policyMode = aivaultPolicyMode(connection)
+  if (policyMode === 'read-only') {
+    throw new Error(
+      'This connection is read-only. Enable write access before importing rows.',
+    )
+  }
+
+  const format = normalizeDataFormat(body.format)
+  const sourceContent = normalizeSourceContent(body.sourceContent)
+  const sourcePath = await writeTemporaryImportSource(sourceContent, format)
+  const maxRows = normalizePositiveInteger(
+    body.maxRows,
+    DEFAULT_IMPORT_MAX_ROWS,
+    1,
+    MAX_IMPORT_ROWS,
+  )
+
+  try {
+    const result = await invokePostgresCapability<AivaultImportResult>(
+      workspaceId,
+      credentialId,
+      'postgres/import-rows',
+      {
+        policyMode,
+        schema,
+        table,
+        columns: normalizeImportColumns(body.columns),
+        format,
+        sourcePath,
+        maxRows,
+        maxImportBytes: MAX_IMPORT_BYTES,
+        ...aivaultTimeoutBody(timeoutMs),
+      },
+    )
+
+    return {
+      affectedRows: result.affectedRows ?? result.affected_rows ?? 0,
+      rowCount: result.rowCount ?? result.row_count ?? 0,
+      sourceBytes: result.sourceBytes ?? result.source_bytes ?? 0,
+      executionMs: result.executionMs ?? result.execution_ms ?? 0,
+    }
+  } finally {
+    await rm(sourcePath, { force: true }).catch(() => undefined)
+  }
+}
+
+export async function runSqlStatement(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+  rawSql: string,
+  options: {
+    timeoutMs?: number
+  } = {},
+): Promise<QueryResultResponse> {
+  const { connection, credentialId } = await getConnectionCredential(
+    workspaceId,
+    dataDir,
+    connectionId,
+  )
+  const classified = classifySqlExecution(rawSql)
+
+  if (classified.kind === 'read-only') {
+    return runReadOnlyQuery(
+      workspaceId,
+      dataDir,
+      connectionId,
+      classified.sql,
+      options.timeoutMs,
+    )
+  }
+
+  const policyMode = aivaultPolicyMode(connection)
+  if (classified.kind === 'write' && policyMode === 'read-only') {
+    throw new Error(
+      'This connection is read-only. Enable write access in connection settings.',
+    )
+  }
+  if (classified.kind === 'admin' && policyMode !== 'admin') {
+    throw new Error('This connection is not allowed to run admin statements.')
+  }
+
+  const result = await invokePostgresCapability<AivaultExecuteResult>(
+    workspaceId,
+    credentialId,
+    classified.kind === 'write' ? 'postgres/execute' : 'postgres/admin',
+    {
+      sql: classified.sql,
+      policyMode,
+      maxAffectedRows: 100,
+      ...aivaultTimeoutBody(options.timeoutMs),
+    },
+  )
+  const affectedRows = result.affectedRows ?? result.affected_rows ?? 0
+  const rows = Array.isArray(result.rows) ? result.rows : []
+  const columns = Array.isArray(result.columns)
+    ? result.columns.filter(
+        (column): column is string => typeof column === 'string',
+      )
+    : Object.keys(rows[0] ?? {})
+  const rowCount = result.rowCount ?? result.row_count ?? affectedRows
+
+  return {
+    columns,
+    rows,
+    rowCount,
+    affectedRows,
+    maxAffectedRows: result.maxAffectedRows ?? result.max_affected_rows,
+    executionMs: result.executionMs ?? result.execution_ms ?? 0,
+    command:
+      result.command ?? (classified.kind === 'write' ? 'WRITE' : 'ADMIN'),
+    readOnly: result.readOnly ?? result.read_only ?? false,
+    admin: Boolean(result.admin),
   }
 }

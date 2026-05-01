@@ -1,0 +1,131 @@
+@import 'tailwindcss';
+@import '@moldable-ai/ui/styles';
+@source './**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';
+
+@theme {
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground overflow-hidden;
+  }
+}
+
+@layer components {
+  .image-generation-loading {
+    background:
+      radial-gradient(
+        circle at 18% 16%,
+        color-mix(in oklab, var(--primary) 14%, transparent),
+        transparent 28%
+      ),
+      radial-gradient(
+        circle at 84% 78%,
+        color-mix(in oklab, var(--foreground) 9%, transparent),
+        transparent 30%
+      ),
+      color-mix(in oklab, var(--muted) 82%, var(--background));
+  }
+
+  .image-generation-loading::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent);
+    border-radius: inherit;
+    pointer-events: none;
+  }
+
+  .image-generation-dots {
+    background-image: radial-gradient(
+      circle,
+      color-mix(in oklab, var(--foreground) 24%, transparent) 1px,
+      transparent 1.5px
+    );
+    background-size: 18px 18px;
+    mask-image: linear-gradient(
+      135deg,
+      transparent 0%,
+      black 28%,
+      black 74%,
+      transparent 100%
+    );
+    opacity: 0.34;
+    animation: image-dots-drift 4.8s linear infinite;
+  }
+
+  .image-generation-sheen {
+    background: linear-gradient(
+      118deg,
+      transparent 0%,
+      transparent 30%,
+      color-mix(in oklab, var(--background) 70%, transparent) 46%,
+      color-mix(in oklab, var(--foreground) 9%, transparent) 52%,
+      transparent 68%,
+      transparent 100%
+    );
+    transform: translateX(-72%);
+    animation: image-sheen-sweep 2.7s ease-in-out infinite;
+  }
+
+  [data-slot='dialog-overlay'] {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 160ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 360ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+}
+
+@keyframes image-dots-drift {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: 36px 54px;
+  }
+}
+
+@keyframes image-sheen-sweep {
+  0% {
+    transform: translateX(-72%);
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 0.75;
+  }
+
+  58% {
+    opacity: 0.55;
+  }
+
+  100% {
+    transform: translateX(72%);
+    opacity: 0;
+  }
+}

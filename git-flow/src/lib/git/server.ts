@@ -1,5 +1,6 @@
 import { getAppDataDir, readJson, writeJson } from '@moldable-ai/storage'
 import { execFile, spawn } from 'child_process'
+import { createHash } from 'crypto'
 import { accessSync, constants, existsSync, readdirSync } from 'fs'
 import {
   appendFile,
@@ -24,6 +25,22 @@ const RepoEntrySchema = z.object({
   isDirty: z.boolean().optional(),
 })
 
+const GithubCommitSchema = z.object({
+  sha: z.string(),
+  author: z
+    .object({
+      avatar_url: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+})
+
+const GithubUserSchema = z.object({
+  login: z.string().optional(),
+  email: z.string().nullable().optional(),
+  avatar_url: z.string().nullable().optional(),
+})
+
 const SettingsSchema = z.object({
   currentRepoPath: z.string().default(''),
   recentRepos: z.array(RepoEntrySchema).default([]),
@@ -41,6 +58,18 @@ const DEFAULT_SETTINGS: Settings = {
 }
 
 const MAX_GIT_OUTPUT_CHARS = 16000
+const MAX_IMAGE_PREVIEW_BYTES = 25 * 1024 * 1024
+const GITHUB_AVATAR_CACHE_TTL_MS = 5 * 60 * 1000
+const IMAGE_MIME_TYPES: Record<string, string> = {
+  '.apng': 'image/apng',
+  '.avif': 'image/avif',
+  '.gif': 'image/gif',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.webp': 'image/webp',
+}
 
 const CODE_EDITOR_APP_NAMES = [
   'Cursor',
@@ -107,6 +136,28 @@ type WorkspaceAppConfig = {
     path?: string
   }>
 }
+
+type GithubRemote = {
+  owner: string
+  repo: string
+}
+
+type GithubUserProfile = {
+  login?: string
+  email?: string | null
+  avatarUrl?: string | null
+}
+
+type HistoryOptions = {
+  offset?: number
+  limit?: number
+}
+
+const githubCommitAvatarCache = new Map<
+  string,
+  { expiresAt: number; avatarsByHash: Map<string, string> }
+>()
+let githubUserProfilePromise: Promise<GithubUserProfile | undefined> | undefined
 
 function getSafeChildEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {}
@@ -186,6 +237,252 @@ function formatGitFailure(args: string[], stdout: string, stderr: string) {
   const output = [stdout.trim(), stderr.trim()].filter(Boolean).join('\n\n')
   const prefix = `git ${args.join(' ')} failed`
   return output ? `${prefix}\n\n${output}` : prefix
+}
+
+function getImageMimeType(filePath: string) {
+  return IMAGE_MIME_TYPES[path.extname(filePath).toLowerCase()]
+}
+
+function isDeletedStatus(status?: string) {
+  return status?.includes('D') === true || status === 'deleted'
+}
+
+function resolveRepoFilePath(repoPath: string, filePath: string) {
+  if (path.isAbsolute(filePath)) {
+    throw new Error('Image preview path must be relative to the repository.')
+  }
+
+  const resolvedRepoPath = path.resolve(repoPath)
+  const resolvedFilePath = path.resolve(resolvedRepoPath, filePath)
+  const relativePath = path.relative(resolvedRepoPath, resolvedFilePath)
+
+  if (
+    relativePath.startsWith('..') ||
+    path.isAbsolute(relativePath) ||
+    relativePath === ''
+  ) {
+    throw new Error('Image preview path is outside the repository.')
+  }
+
+  return resolvedFilePath
+}
+
+async function runGitBuffer(args: string[], cwd: string) {
+  return new Promise<Buffer>((resolve, reject) => {
+    const child = spawn('git', args, {
+      cwd,
+      env: getGitHookEnv() as NodeJS.ProcessEnv,
+      windowsHide: true,
+    })
+
+    const chunks: Buffer[] = []
+    let byteLength = 0
+    let stderr = ''
+
+    child.stdin.end()
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      byteLength += chunk.byteLength
+      if (byteLength > MAX_IMAGE_PREVIEW_BYTES) {
+        child.kill()
+        reject(new Error('Image preview is too large.'))
+        return
+      }
+      chunks.push(chunk)
+    })
+
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr = appendCappedOutput(stderr, chunk.toString('utf8'))
+    })
+
+    child.on('error', reject)
+    child.on('close', (code, signal) => {
+      if (code === 0) {
+        resolve(Buffer.concat(chunks))
+        return
+      }
+
+      reject(
+        new Error(
+          signal
+            ? `git ${args.join(' ')} was terminated by ${signal}.`
+            : formatGitFailure(args, '', stderr),
+        ),
+      )
+    })
+  })
+}
+
+function getGravatarAvatarUrl(email?: string) {
+  const normalizedEmail = email?.trim().toLowerCase()
+  if (!normalizedEmail) return undefined
+
+  const hash = createHash('md5').update(normalizedEmail).digest('hex')
+  return `https://www.gravatar.com/avatar/${hash}?s=48&d=404`
+}
+
+function getGithubNoReplyAvatarUrl(email?: string) {
+  const normalizedEmail = email?.trim().toLowerCase()
+  if (!normalizedEmail) return undefined
+
+  const match = normalizedEmail.match(
+    /^(?:\d+\+)?([a-z0-9-]+)@users\.noreply\.github\.com$/,
+  )
+  if (!match?.[1]) return undefined
+
+  return `https://github.com/${match[1]}.png?size=48`
+}
+
+function parseGithubRemoteUrl(remoteUrl: string): GithubRemote | undefined {
+  const trimmed = remoteUrl.trim()
+  const patterns = [
+    /^https:\/\/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/,
+    /^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/,
+    /^ssh:\/\/git@github\.com\/([^/]+)\/(.+?)(?:\.git)?$/,
+  ]
+
+  for (const pattern of patterns) {
+    const match = trimmed.match(pattern)
+    if (match?.[1] && match[2]) {
+      return {
+        owner: match[1],
+        repo: match[2],
+      }
+    }
+  }
+
+  return undefined
+}
+
+async function getGithubRemote(g: ReturnType<typeof simpleGit>) {
+  const remoteUrl = await g
+    .raw(['remote', 'get-url', 'origin'])
+    .catch(() => undefined)
+  return remoteUrl ? parseGithubRemoteUrl(remoteUrl) : undefined
+}
+
+async function getGithubUserProfile() {
+  githubUserProfilePromise ??= execFileAsync('gh', ['api', 'user'], {
+    encoding: 'utf8',
+    timeout: 2000,
+  })
+    .then(({ stdout }) => {
+      const parsed = GithubUserSchema.safeParse(JSON.parse(stdout))
+      if (!parsed.success) return undefined
+
+      return {
+        login: parsed.data.login,
+        email: parsed.data.email,
+        avatarUrl: parsed.data.avatar_url,
+      } satisfies GithubUserProfile
+    })
+    .catch(() => undefined)
+
+  return githubUserProfilePromise
+}
+
+function getGithubUserAvatarUrl(
+  commit: { author_email?: string; author_name?: string },
+  githubUser?: GithubUserProfile,
+) {
+  const avatarUrl = githubUser?.avatarUrl
+  const normalizedCommitEmail = commit.author_email?.trim().toLowerCase()
+  const normalizedGithubEmail = githubUser?.email?.trim().toLowerCase()
+
+  if (!avatarUrl || !normalizedCommitEmail) return undefined
+
+  if (
+    normalizedGithubEmail &&
+    normalizedCommitEmail === normalizedGithubEmail
+  ) {
+    return avatarUrl
+  }
+
+  const login = githubUser?.login?.trim().toLowerCase()
+  if (
+    login &&
+    normalizedCommitEmail.endsWith('@users.noreply.github.com') &&
+    normalizedCommitEmail.includes(login)
+  ) {
+    return avatarUrl
+  }
+
+  return undefined
+}
+
+async function getGithubCommitAvatars(
+  g: ReturnType<typeof simpleGit>,
+  branchName: string,
+  offset: number,
+  limit: number,
+) {
+  const remote = await getGithubRemote(g)
+  if (!remote || !branchName) return new Map<string, string>()
+
+  const githubPageSize = 100
+  const startPage = Math.floor(offset / githubPageSize) + 1
+  const endPage =
+    Math.floor((offset + Math.max(limit - 1, 0)) / githubPageSize) + 1
+  const cacheKey = `${remote.owner}/${remote.repo}:${branchName}:${startPage}:${endPage}`
+  const cached = githubCommitAvatarCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.avatarsByHash
+  }
+
+  try {
+    const avatarsByHash = new Map<string, string>()
+    for (let page = startPage; page <= endPage; page += 1) {
+      const url = new URL(
+        `https://api.github.com/repos/${remote.owner}/${remote.repo}/commits`,
+      )
+      url.searchParams.set('sha', branchName)
+      url.searchParams.set('per_page', String(githubPageSize))
+      url.searchParams.set('page', String(page))
+
+      const response = await fetch(url, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'Moldable Git Flow',
+        },
+        signal: AbortSignal.timeout(2500),
+      })
+
+      if (!response.ok) continue
+
+      const parsed = z
+        .array(GithubCommitSchema)
+        .safeParse(await response.json())
+      if (!parsed.success) continue
+
+      for (const commit of parsed.data) {
+        if (commit.author?.avatar_url) {
+          avatarsByHash.set(commit.sha, commit.author.avatar_url)
+        }
+      }
+    }
+
+    githubCommitAvatarCache.set(cacheKey, {
+      expiresAt: Date.now() + GITHUB_AVATAR_CACHE_TTL_MS,
+      avatarsByHash,
+    })
+
+    return avatarsByHash
+  } catch {
+    return new Map<string, string>()
+  }
+}
+
+function getCommitAuthorAvatarUrl(
+  commit: { hash?: string; author_email?: string; author_name?: string },
+  githubAvatarsByHash: Map<string, string>,
+  githubUser?: GithubUserProfile,
+) {
+  return (
+    (commit.hash ? githubAvatarsByHash.get(commit.hash) : undefined) ??
+    getGithubNoReplyAvatarUrl(commit.author_email) ??
+    getGithubUserAvatarUrl(commit, githubUser) ??
+    getGravatarAvatarUrl(commit.author_email)
+  )
 }
 
 function resolveRepoPath(repoPath?: string, currentRepoPath?: string) {
@@ -453,20 +750,27 @@ export async function undoUnpushedCommit(hash: string, workspaceId?: string) {
   return { success: true }
 }
 
-export async function getHistory(repoPath?: string, workspaceId?: string) {
+export async function getHistory(
+  repoPath?: string,
+  workspaceId?: string,
+  options: HistoryOptions = {},
+) {
   const settings = await getSettings(workspaceId)
   const pathToUse = resolveRepoPath(repoPath, settings.currentRepoPath)
   if (!pathToUse) return []
   const g = simpleGit(pathToUse)
+  const offset = Math.max(0, options.offset ?? 0)
+  const limit = Math.min(Math.max(1, options.limit ?? 50), 101)
 
   try {
-    const [log, status] = await Promise.all([
-      g.log({ maxCount: 50 }),
+    const [log, upstream, branchView] = await Promise.all([
+      g.log([`--max-count=${limit}`, `--skip=${offset}`]),
       g.revparse(['--abbrev-ref', '@{u}']).catch(() => null),
+      g.branch().catch(() => null),
     ])
 
     let unpushedHashes: string[] = []
-    if (status) {
+    if (upstream) {
       // Get hashes that are in local but not in remote
       const ahead = await g.log(['@{u}..HEAD'])
       unpushedHashes = ahead.all.map((c) => c.hash)
@@ -475,8 +779,18 @@ export async function getHistory(repoPath?: string, workspaceId?: string) {
       unpushedHashes = log.all.map((c) => c.hash)
     }
 
+    const [githubAvatarsByHash, githubUser] = await Promise.all([
+      getGithubCommitAvatars(g, branchView?.current ?? '', offset, limit),
+      getGithubUserProfile(),
+    ])
+
     return log.all.map((commit) => ({
       ...commit,
+      avatarUrl: getCommitAuthorAvatarUrl(
+        commit,
+        githubAvatarsByHash,
+        githubUser,
+      ),
       isUnpushed: unpushedHashes.includes(commit.hash),
     }))
   } catch (error) {
@@ -489,6 +803,7 @@ export async function getCommitDiff(
   hash: string,
   repoPath?: string,
   workspaceId?: string,
+  filePath?: string,
 ) {
   const settings = await getSettings(workspaceId)
   const pathToUse = resolveRepoPath(repoPath, settings.currentRepoPath)
@@ -496,12 +811,102 @@ export async function getCommitDiff(
   const g = simpleGit(pathToUse)
 
   try {
+    if (filePath) {
+      return await g.show([
+        '--format=',
+        '--no-ext-diff',
+        '--find-renames',
+        hash,
+        '--',
+        filePath,
+      ])
+    }
+
     // Show stats and the diff for the specific commit
     return await g.show([hash])
   } catch (error) {
     console.error('Git show error:', error)
     return 'Failed to load commit diff'
   }
+}
+
+export async function getCommitFiles(
+  hash: string,
+  repoPath?: string,
+  workspaceId?: string,
+) {
+  const settings = await getSettings(workspaceId)
+  const pathToUse = resolveRepoPath(repoPath, settings.currentRepoPath)
+  if (!pathToUse) return []
+  const g = simpleGit(pathToUse)
+
+  try {
+    const output = await g.raw([
+      'diff-tree',
+      '--no-commit-id',
+      '--name-status',
+      '-r',
+      '-M',
+      '--root',
+      hash,
+    ])
+
+    return output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [status, firstPath, secondPath] = line.split('\t')
+        const isRename = status.startsWith('R') || status.startsWith('C')
+
+        return {
+          path: isRename && secondPath ? secondPath : firstPath,
+          oldPath: isRename ? firstPath : undefined,
+          status,
+        }
+      })
+      .filter((file) => Boolean(file.path))
+  } catch (error) {
+    console.error('Git commit files error:', error)
+    return []
+  }
+}
+
+export async function getImagePreview(
+  filePath: string,
+  workspaceId?: string,
+  options: { hash?: string; status?: string; repoPath?: string } = {},
+) {
+  const mimeType = getImageMimeType(filePath)
+  if (!mimeType) {
+    throw new Error('Unsupported image file type.')
+  }
+
+  const settings = await getSettings(workspaceId)
+  const pathToUse = requireRepoPath(
+    resolveRepoPath(options.repoPath, settings.currentRepoPath),
+  )
+  const gitPath = filePath.replace(/\\/g, '/')
+
+  if (options.hash) {
+    const treeish = isDeletedStatus(options.status)
+      ? `${options.hash}^:${gitPath}`
+      : `${options.hash}:${gitPath}`
+    const buffer = await runGitBuffer(['show', treeish], pathToUse)
+    return { buffer, mimeType }
+  }
+
+  const resolvedFilePath = resolveRepoFilePath(pathToUse, filePath)
+  if (existsSync(resolvedFilePath) && !isDeletedStatus(options.status)) {
+    const imageStat = await stat(resolvedFilePath)
+    if (imageStat.size > MAX_IMAGE_PREVIEW_BYTES) {
+      throw new Error('Image preview is too large.')
+    }
+    return { buffer: await readFile(resolvedFilePath), mimeType }
+  }
+
+  const buffer = await runGitBuffer(['show', `HEAD:${gitPath}`], pathToUse)
+  return { buffer, mimeType }
 }
 
 export async function getDiff(

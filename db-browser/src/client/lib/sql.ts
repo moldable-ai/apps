@@ -27,6 +27,10 @@ export const CONNECTION_ENVIRONMENTS = [
   'production',
 ] as const
 
+export const CONNECTION_POLICY_MODES = ['read-only', 'write', 'admin'] as const
+
+export type SqlExecutionKind = 'read-only' | 'write' | 'admin'
+
 export function blankConnectionForm(): ConnectionFormState {
   return {
     connectionUrl: '',
@@ -39,6 +43,7 @@ export function blankConnectionForm(): ConnectionFormState {
     ssl: false,
     color: CONNECTION_COLORS[0],
     environment: null,
+    policyMode: 'read-only',
   }
 }
 
@@ -50,6 +55,36 @@ export function ensureSqlTerminator(sql: string) {
   const trimmedEnd = sql.trimEnd()
   if (!trimmedEnd) return ''
   return trimmedEnd.endsWith(';') ? trimmedEnd : `${trimmedEnd};`
+}
+
+export function sqlExecutionKind(sql: string): SqlExecutionKind {
+  const trimmed = sql.trim().replace(/;+$/g, '').trim()
+  const firstKeyword = trimmed.match(/^[a-z]+/i)?.[0].toLowerCase()
+  if (!firstKeyword) return 'read-only'
+  if (
+    firstKeyword === 'insert' ||
+    firstKeyword === 'update' ||
+    firstKeyword === 'delete'
+  ) {
+    return 'write'
+  }
+  if (
+    [
+      'create',
+      'alter',
+      'drop',
+      'truncate',
+      'grant',
+      'revoke',
+      'vacuum',
+      'analyze',
+      'reindex',
+      'refresh',
+    ].includes(firstKeyword)
+  ) {
+    return 'admin'
+  }
+  return 'read-only'
 }
 
 export async function formatSql(sql: string) {
@@ -97,6 +132,7 @@ export function parsePostgresConnectionUrl(
   const name = url.searchParams.get('name')?.trim()
   const rawColor = url.searchParams.get('statusColor')?.trim()
   const rawEnvironment = url.searchParams.get('env')?.trim().toLowerCase()
+  const rawPolicyMode = url.searchParams.get('policyMode')?.trim().toLowerCase()
   const color = rawColor
     ? `#${rawColor.replace(/^#/, '').slice(0, 6)}`
     : CONNECTION_COLORS[0]
@@ -109,6 +145,13 @@ export function parsePostgresConnectionUrl(
       : ['localhost', '127.0.0.1', '::1'].includes(url.hostname)
         ? 'local'
         : null
+  const policyMode =
+    rawPolicyMode &&
+    CONNECTION_POLICY_MODES.includes(
+      rawPolicyMode as (typeof CONNECTION_POLICY_MODES)[number],
+    )
+      ? (rawPolicyMode as (typeof CONNECTION_POLICY_MODES)[number])
+      : 'read-only'
 
   return {
     connectionUrl: trimmed,
@@ -125,6 +168,7 @@ export function parsePostgresConnectionUrl(
       (tlsMode !== null && tlsMode !== '' && tlsMode !== '0'),
     color,
     environment,
+    policyMode,
   }
 }
 
@@ -147,6 +191,7 @@ export function buildPostgresConnectionUrl(form: ConnectionFormState) {
       .replace(/^#/, '')
       .toUpperCase(),
     env: form.environment ?? '',
+    policyMode: form.policyMode ?? 'read-only',
     name: form.name,
     tLSMode: form.ssl ? '1' : '0',
     usePrivateKey: 'false',
@@ -170,5 +215,6 @@ export function connectionPayload(form: ConnectionFormState) {
     ssl: form.ssl,
     color: form.color,
     environment: form.environment,
+    policyMode: form.policyMode,
   }
 }

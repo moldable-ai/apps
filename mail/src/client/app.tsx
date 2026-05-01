@@ -78,6 +78,14 @@ function currentHistoryState() {
     : {}
 }
 
+function commandAction(command: string) {
+  return {
+    type: 'message' as const,
+    command,
+    payload: { command },
+  }
+}
+
 const MAIL_BASE_COMMANDS = [
   {
     id: 'mail.compose',
@@ -85,7 +93,7 @@ const MAIL_BASE_COMMANDS = [
     description: 'Start a new message',
     icon: 'pen-line',
     group: 'Mail',
-    action: { type: 'message', command: 'mail.compose' },
+    action: commandAction('mail.compose'),
   },
   {
     id: 'mail.search',
@@ -93,7 +101,7 @@ const MAIL_BASE_COMMANDS = [
     description: 'Focus the mail search field',
     icon: 'search',
     group: 'Mail',
-    action: { type: 'message', command: 'mail.search' },
+    action: commandAction('mail.search'),
   },
   {
     id: 'mail.refresh',
@@ -101,42 +109,42 @@ const MAIL_BASE_COMMANDS = [
     description: 'Fetch the latest messages',
     icon: 'refresh-cw',
     group: 'Mail',
-    action: { type: 'message', command: 'mail.refresh' },
+    action: commandAction('mail.refresh'),
   },
   {
     id: 'mail.open-inbox',
     label: 'Open Inbox',
     icon: 'folder',
     group: 'Folders',
-    action: { type: 'message', command: 'mail.open-inbox' },
+    action: commandAction('mail.open-inbox'),
   },
   {
     id: 'mail.open-sent',
     label: 'Open Sent',
     icon: 'send',
     group: 'Folders',
-    action: { type: 'message', command: 'mail.open-sent' },
+    action: commandAction('mail.open-sent'),
   },
   {
     id: 'mail.open-all',
     label: 'Open All Mail',
     icon: 'archive',
     group: 'Folders',
-    action: { type: 'message', command: 'mail.open-all' },
+    action: commandAction('mail.open-all'),
   },
   {
     id: 'mail.open-spam',
     label: 'Open Spam',
     icon: 'ban',
     group: 'Folders',
-    action: { type: 'message', command: 'mail.open-spam' },
+    action: commandAction('mail.open-spam'),
   },
   {
     id: 'mail.open-trash',
     label: 'Open Trash',
     icon: 'trash-2',
     group: 'Folders',
-    action: { type: 'message', command: 'mail.open-trash' },
+    action: commandAction('mail.open-trash'),
   },
 ] satisfies AppCommand[]
 
@@ -146,7 +154,7 @@ const MAIL_DRAFTS_COMMAND = {
   description: 'Show saved local drafts',
   icon: 'file-text',
   group: 'Folders',
-  action: { type: 'message', command: 'mail.open-drafts' },
+  action: commandAction('mail.open-drafts'),
 } satisfies AppCommand
 
 const MAIL_SNOOZED_COMMAND = {
@@ -155,7 +163,7 @@ const MAIL_SNOOZED_COMMAND = {
   description: 'Show snoozed messages',
   icon: 'clock',
   group: 'Folders',
-  action: { type: 'message', command: 'mail.open-snoozed' },
+  action: commandAction('mail.open-snoozed'),
 } satisfies AppCommand
 
 const MAIL_DETAIL_COMMANDS = [
@@ -165,7 +173,7 @@ const MAIL_DETAIL_COMMANDS = [
     description: 'Reply to the open email',
     icon: 'reply',
     group: 'Email Actions',
-    action: { type: 'message', command: 'mail.reply' },
+    action: commandAction('mail.reply'),
   },
   {
     id: 'mail.archive',
@@ -173,7 +181,7 @@ const MAIL_DETAIL_COMMANDS = [
     description: 'Archive the open email',
     icon: 'archive',
     group: 'Email Actions',
-    action: { type: 'message', command: 'mail.archive' },
+    action: commandAction('mail.archive'),
   },
   {
     id: 'mail.trash',
@@ -181,7 +189,7 @@ const MAIL_DETAIL_COMMANDS = [
     description: 'Move the open email to Trash',
     icon: 'trash-2',
     group: 'Email Actions',
-    action: { type: 'message', command: 'mail.trash' },
+    action: commandAction('mail.trash'),
   },
   {
     id: 'mail.spam',
@@ -189,7 +197,7 @@ const MAIL_DETAIL_COMMANDS = [
     description: 'Move the open email to Spam',
     icon: 'ban',
     group: 'Email Actions',
-    action: { type: 'message', command: 'mail.spam' },
+    action: commandAction('mail.spam'),
   },
   {
     id: 'mail.toggle-read',
@@ -197,7 +205,7 @@ const MAIL_DETAIL_COMMANDS = [
     description: 'Toggle read state for the open email',
     icon: 'mail',
     group: 'Email Actions',
-    action: { type: 'message', command: 'mail.toggle-read' },
+    action: commandAction('mail.toggle-read'),
   },
   {
     id: 'mail.toggle-star',
@@ -205,7 +213,7 @@ const MAIL_DETAIL_COMMANDS = [
     description: 'Toggle starred state for the open email',
     icon: 'star',
     group: 'Email Actions',
-    action: { type: 'message', command: 'mail.toggle-star' },
+    action: commandAction('mail.toggle-star'),
   },
   {
     id: 'mail.toggle-important',
@@ -213,7 +221,7 @@ const MAIL_DETAIL_COMMANDS = [
     description: 'Toggle important state for the open email',
     icon: 'sparkles',
     group: 'Email Actions',
-    action: { type: 'message', command: 'mail.toggle-important' },
+    action: commandAction('mail.toggle-important'),
   },
   {
     id: 'mail.add-label',
@@ -221,7 +229,7 @@ const MAIL_DETAIL_COMMANDS = [
     description: 'Open the label picker for the open email',
     icon: 'tag',
     group: 'Email Actions',
-    action: { type: 'message', command: 'mail.add-label' },
+    action: commandAction('mail.add-label'),
   },
 ] satisfies AppCommand[]
 
@@ -293,6 +301,7 @@ export function App() {
     query,
     enabled: statusQuery.data?.authenticated === true && !showingDrafts,
   })
+  const refetchMessages = messagesQuery.refetch
   const snoozedQuery = useMailMessages({
     folderId: 'SNOOZED',
     query: '',

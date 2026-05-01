@@ -1,3 +1,5 @@
+export type ConnectionPolicyMode = 'read-only' | 'write' | 'admin'
+
 export interface ConnectionInput {
   name: string
   host: string
@@ -8,6 +10,7 @@ export interface ConnectionInput {
   ssl: boolean
   color: string | null
   environment: string | null
+  policyMode: ConnectionPolicyMode
 }
 
 export interface ConnectionSummary {
@@ -21,6 +24,7 @@ export interface ConnectionSummary {
   ssl: boolean
   color: string | null
   environment: string | null
+  policyMode: ConnectionPolicyMode
   createdAt: string
   updatedAt: string
 }
@@ -58,6 +62,26 @@ export interface QueryResultResponse {
   rowCount: number | null
   executionMs: number
   command: string
+  readOnly?: boolean
+  affectedRows?: number
+  maxAffectedRows?: number
+  admin?: boolean
+}
+
+export interface QueryExportResponse {
+  filename: string
+  format: 'csv' | 'jsonl'
+  content: string
+  bytes: number
+  rowCount: number
+  executionMs: number
+}
+
+export interface ImportRowsResponse {
+  affectedRows: number
+  rowCount: number
+  sourceBytes: number
+  executionMs: number
 }
 
 export interface QueryHistoryItem {
@@ -72,6 +96,7 @@ export interface QueryHistoryItem {
 export interface DbBrowserPreferences {
   sqlEditorHeight: number
   activeConnectionId: string | null
+  queryTimeoutMs: number
 }
 
 export interface SqlEditorTab {

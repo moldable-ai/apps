@@ -3,9 +3,11 @@ import {
   createSqlWorkspaceTab,
   describeTable,
   editSqlWorkspaceTab,
+  exportReadOnlyQuery,
   getExplorer,
   getPreferences,
   getSqlWorkspace,
+  importRows,
   listConnections,
   listQueryHistory,
   parseConnectionInput,
@@ -13,6 +15,7 @@ import {
   removeConnection,
   resolveConnectionId,
   runReadOnlyQuery,
+  runSqlStatement,
   saveConnection,
   savePreferences,
   saveSqlWorkspace,
@@ -56,6 +59,30 @@ function paramsObject(value: unknown): Record<string, unknown> {
     : {}
 }
 
+function quoteIdentifier(identifier: string) {
+  return `"${identifier.replaceAll('"', '""')}"`
+}
+
+function ensureSqlTerminator(sql: string) {
+  const trimmedEnd = sql.trimEnd()
+  if (!trimmedEnd) return ''
+  return trimmedEnd.endsWith(';') ? trimmedEnd : `${trimmedEnd};`
+}
+
+function queryHistoryTitle(sql: string) {
+  return sql.split('\n')[0]?.trim().slice(0, 80) || 'SQL query'
+}
+
+function previewSql(
+  schema: string,
+  table: string,
+  limit: number,
+  offset: number,
+) {
+  const base = `select * from ${quoteIdentifier(schema)}.${quoteIdentifier(table)} limit ${limit}`
+  return ensureSqlTerminator(offset > 0 ? `${base} offset ${offset}` : base)
+}
+
 async function resolveRpcConnectionId(
   workspaceId: string,
   dataDir: string,
@@ -81,6 +108,7 @@ app.post('/api/moldable/rpc', async (c) => {
     const body = paramsObject(await c.req.json().catch(() => ({})))
     const method = typeof body.method === 'string' ? body.method : ''
     const params = paramsObject(body.params)
+    const preferences = await getPreferences(dataDir)
 
     if (!method) {
       const error = rpcError('invalid_request', 'method is required')
@@ -92,14 +120,13 @@ app.post('/api/moldable/rpc', async (c) => {
         ok: true,
         result: {
           connections: await listConnections(workspaceId, dataDir),
-          preferences: await getPreferences(dataDir),
+          preferences,
         },
       })
     }
 
     if (method === 'db.context.get') {
       const connections = await listConnections(workspaceId, dataDir)
-      const preferences = await getPreferences(dataDir)
       const connectionId = connections.length
         ? await resolveConnectionId(workspaceId, dataDir, params.connectionId)
         : null
@@ -116,7 +143,12 @@ app.post('/api/moldable/rpc', async (c) => {
             null,
           schemas:
             connectionId && includeSchema
-              ? await getExplorer(workspaceId, dataDir, connectionId)
+              ? await getExplorer(
+                  workspaceId,
+                  dataDir,
+                  connectionId,
+                  preferences.queryTimeoutMs,
+                )
               : undefined,
           sqlWorkspace:
             connectionId && includeSqlWorkspace
@@ -137,7 +169,12 @@ app.post('/api/moldable/rpc', async (c) => {
         ok: true,
         result: {
           connectionId,
-          schemas: await getExplorer(workspaceId, dataDir, connectionId),
+          schemas: await getExplorer(
+            workspaceId,
+            dataDir,
+            connectionId,
+            preferences.queryTimeoutMs,
+          ),
         },
       })
     }
@@ -176,6 +213,7 @@ app.post('/api/moldable/rpc', async (c) => {
             connectionId,
             typeof params.schema === 'string' ? params.schema : '',
             typeof params.table === 'string' ? params.table : '',
+            preferences.queryTimeoutMs,
           )),
         },
       })
@@ -193,11 +231,12 @@ app.post('/api/moldable/rpc', async (c) => {
         dataDir,
         connectionId,
         sql,
+        preferences.queryTimeoutMs,
       )
 
       await appendQueryHistory(workspaceId, dataDir, connectionId, {
-        sql,
-        title: sql.split('\n')[0]?.trim().slice(0, 80) || 'SQL query',
+        sql: ensureSqlTerminator(sql),
+        title: queryHistoryTitle(sql),
         rowCount: result.rowCount,
         executionMs: result.executionMs,
       }).catch(() => undefined)
@@ -220,11 +259,26 @@ app.post('/api/moldable/rpc', async (c) => {
       const rawSql = typeof params.sql === 'string' ? params.sql.trim() : ''
       const sql = /^explain\b/i.test(rawSql) ? rawSql : `explain ${rawSql}`
 
+      const result = await runReadOnlyQuery(
+        workspaceId,
+        dataDir,
+        connectionId,
+        sql,
+        preferences.queryTimeoutMs,
+      )
+
+      await appendQueryHistory(workspaceId, dataDir, connectionId, {
+        sql: ensureSqlTerminator(sql),
+        title: queryHistoryTitle(sql),
+        rowCount: result.rowCount,
+        executionMs: result.executionMs,
+      }).catch(() => undefined)
+
       return c.json({
         ok: true,
         result: {
           connectionId,
-          ...(await runReadOnlyQuery(workspaceId, dataDir, connectionId, sql)),
+          ...result,
         },
       })
     }
@@ -452,8 +506,15 @@ app.delete('/api/connections/:id', async (c) => {
 app.get('/api/connections/:id/explorer', async (c) => {
   try {
     const workspaceId = requiredWorkspaceId(getWorkspaceId(c))
+    const dataDir = getDataDir(c)
+    const preferences = await getPreferences(dataDir)
     return c.json(
-      await getExplorer(workspaceId, getDataDir(c), c.req.param('id')),
+      await getExplorer(
+        workspaceId,
+        dataDir,
+        c.req.param('id'),
+        preferences.queryTimeoutMs,
+      ),
     )
   } catch (error) {
     return jsonError(
@@ -540,6 +601,8 @@ app.post('/api/connections/:id/query-history', async (c) => {
 app.get('/api/connections/:id/preview', async (c) => {
   try {
     const workspaceId = requiredWorkspaceId(getWorkspaceId(c))
+    const dataDir = getDataDir(c)
+    const preferences = await getPreferences(dataDir)
     const schema = c.req.query('schema') ?? ''
     const table = c.req.query('table') ?? ''
     const limit = Number(c.req.query('limit') ?? '100')
@@ -552,17 +615,24 @@ app.get('/api/connections/:id/preview', async (c) => {
       return jsonError(c, 'Offset must be a non-negative safe integer', 400)
     }
 
-    return c.json(
-      await previewTable(
-        workspaceId,
-        getDataDir(c),
-        c.req.param('id'),
-        schema,
-        table,
-        limit,
-        offset,
-      ),
+    const result = await previewTable(
+      workspaceId,
+      dataDir,
+      c.req.param('id'),
+      schema,
+      table,
+      limit,
+      offset,
+      preferences.queryTimeoutMs,
     )
+    await appendQueryHistory(workspaceId, dataDir, c.req.param('id'), {
+      sql: previewSql(schema, table, limit, offset),
+      title: `${schema}.${table}`,
+      rowCount: result.rowCount,
+      executionMs: null,
+    }).catch(() => undefined)
+
+    return c.json(result)
   } catch (error) {
     return jsonError(
       c,
@@ -575,21 +645,84 @@ app.get('/api/connections/:id/preview', async (c) => {
 app.post('/api/connections/:id/query', async (c) => {
   try {
     const workspaceId = requiredWorkspaceId(getWorkspaceId(c))
-    const body = (await c.req.json().catch(() => ({}))) as { sql?: unknown }
+    const dataDir = getDataDir(c)
+    const preferences = await getPreferences(dataDir)
+    const body = (await c.req.json().catch(() => ({}))) as {
+      sql?: unknown
+    }
     const sql = typeof body.sql === 'string' ? body.sql : ''
 
+    const result = await runSqlStatement(
+      workspaceId,
+      dataDir,
+      c.req.param('id'),
+      sql,
+      {
+        timeoutMs: preferences.queryTimeoutMs,
+      },
+    )
+    await appendQueryHistory(workspaceId, dataDir, c.req.param('id'), {
+      sql: ensureSqlTerminator(sql),
+      title: queryHistoryTitle(sql),
+      rowCount: result.rowCount,
+      executionMs: result.executionMs,
+    }).catch(() => undefined)
+
+    return c.json(result)
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to execute query',
+      400,
+    )
+  }
+})
+
+app.post('/api/connections/:id/export', async (c) => {
+  try {
+    const workspaceId = requiredWorkspaceId(getWorkspaceId(c))
+    const dataDir = getDataDir(c)
+    const preferences = await getPreferences(dataDir)
+    const body = await c.req.json().catch(() => ({}))
+    const params = paramsObject(body)
+    const sql = typeof params.sql === 'string' ? params.sql : ''
+
     return c.json(
-      await runReadOnlyQuery(
+      await exportReadOnlyQuery(workspaceId, dataDir, c.req.param('id'), sql, {
+        format: params.format,
+        filename: params.filename,
+        timeoutMs: preferences.queryTimeoutMs,
+      }),
+    )
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to export query',
+      400,
+    )
+  }
+})
+
+app.post('/api/connections/:id/import', async (c) => {
+  try {
+    const workspaceId = requiredWorkspaceId(getWorkspaceId(c))
+    const dataDir = getDataDir(c)
+    const preferences = await getPreferences(dataDir)
+    const body = await c.req.json().catch(() => ({}))
+
+    return c.json(
+      await importRows(
         workspaceId,
-        getDataDir(c),
+        dataDir,
         c.req.param('id'),
-        sql,
+        body,
+        preferences.queryTimeoutMs,
       ),
     )
   } catch (error) {
     return jsonError(
       c,
-      error instanceof Error ? error.message : 'Failed to execute query',
+      error instanceof Error ? error.message : 'Failed to import rows',
       400,
     )
   }

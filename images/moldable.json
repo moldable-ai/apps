@@ -1,0 +1,174 @@
+{
+  "name": "Images",
+  "version": "0.1.0",
+  "aliases": ["image generation", "pictures", "art"],
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "Generate and iterate images with GPT Image 2",
+  "author": "Moldable",
+  "license": "MIT",
+  "icon": "🖼️",
+  "iconPath": "public/icon.png",
+  "widgetSize": "medium",
+  "widgetTint": "teal",
+  "category": "creative",
+  "tags": ["images", "generation", "openai", "gpt-image-2"],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.8",
+    "@moldable-ai/storage": "^0.1.4"
+  },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "images.images",
+        "name": "Images",
+        "description": "Generate, edit, inspect, and manage GPT Image 2 image threads in the active workspace.",
+        "scopes": [
+          {
+            "id": "images.list",
+            "name": "List images",
+            "description": "List image threads with their latest iteration metadata.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 100
+                }
+              }
+            }
+          },
+          {
+            "id": "images.get",
+            "name": "Get image thread",
+            "description": "Get one image thread including all iteration metadata.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "images.generate",
+            "name": "Generate image",
+            "description": "Generate a new image thread using gpt-image-2.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "type": "string"
+                },
+                "aspectRatio": {
+                  "type": "string",
+                  "enum": [
+                    "square",
+                    "portrait",
+                    "story",
+                    "landscape",
+                    "widescreen"
+                  ]
+                },
+                "quality": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high", "auto"]
+                }
+              },
+              "required": ["prompt"]
+            }
+          },
+          {
+            "id": "images.retry",
+            "name": "Retry image",
+            "description": "Retry a failed new image generation thread with its original prompt and aspect ratio.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "quality": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high", "auto"]
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "images.edit",
+            "name": "Edit image",
+            "description": "Create a new iteration in an image thread using gpt-image-2 image edits.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "prompt": {
+                  "type": "string"
+                },
+                "aspectRatio": {
+                  "type": "string",
+                  "enum": [
+                    "square",
+                    "portrait",
+                    "story",
+                    "landscape",
+                    "widescreen"
+                  ]
+                },
+                "quality": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high", "auto"]
+                }
+              },
+              "required": ["id", "prompt"]
+            }
+          },
+          {
+            "id": "images.setAspectRatio",
+            "name": "Set aspect ratio",
+            "description": "Regenerate the selected thread as a new iteration with a different aspect ratio.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "aspectRatio": {
+                  "type": "string",
+                  "enum": [
+                    "square",
+                    "portrait",
+                    "story",
+                    "landscape",
+                    "widescreen"
+                  ]
+                }
+              },
+              "required": ["id", "aspectRatio"]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "env": [],
+  "vault": [
+    {
+      "key": "OPENAI_API_KEY",
+      "name": "OpenAI API Key",
+      "description": "Powers GPT Image 2 generation and image edits through aivault.",
+      "url": "https://platform.openai.com/api-keys",
+      "required": true,
+      "capabilities": ["openai/image-generation"]
+    }
+  ],
+  "routeName": "images"
+}

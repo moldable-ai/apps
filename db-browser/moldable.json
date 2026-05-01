@@ -22,7 +22,7 @@
       {
         "id": "db.browser",
         "name": "Database browser",
-        "description": "Read database metadata, run bounded read-only queries, and manage saved SQL editor tabs through DB Browser without exposing credentials.",
+        "description": "Read database metadata, run bounded read-only queries only when explicitly asked, and manage saved SQL editor tabs through DB Browser without exposing credentials. Write and admin execution are not exposed to agents.",
         "scopes": [
           {
             "id": "db.connections.list",
@@ -36,9 +36,15 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "connectionId": { "type": "string" },
-                "includeSchema": { "type": "boolean" },
-                "includeSqlWorkspace": { "type": "boolean" }
+                "connectionId": {
+                  "type": "string"
+                },
+                "includeSchema": {
+                  "type": "boolean"
+                },
+                "includeSqlWorkspace": {
+                  "type": "boolean"
+                }
               }
             }
           },
@@ -49,7 +55,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "connectionId": { "type": "string" }
+                "connectionId": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -60,9 +68,17 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "connectionId": { "type": "string" },
-                "query": { "type": "string" },
-                "limit": { "type": "number", "minimum": 1, "maximum": 100 }
+                "connectionId": {
+                  "type": "string"
+                },
+                "query": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 100
+                }
               },
               "required": ["query"]
             }
@@ -74,9 +90,15 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "connectionId": { "type": "string" },
-                "schema": { "type": "string" },
-                "table": { "type": "string" }
+                "connectionId": {
+                  "type": "string"
+                },
+                "schema": {
+                  "type": "string"
+                },
+                "table": {
+                  "type": "string"
+                }
               },
               "required": ["schema", "table"]
             }
@@ -88,8 +110,12 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "connectionId": { "type": "string" },
-                "sql": { "type": "string" }
+                "connectionId": {
+                  "type": "string"
+                },
+                "sql": {
+                  "type": "string"
+                }
               },
               "required": ["sql"]
             }
@@ -97,12 +123,16 @@
           {
             "id": "db.query.runReadonly",
             "name": "Run read-only query",
-            "description": "Run one bounded read-only SQL statement through DB Browser and aivault.",
+            "description": "Run one bounded read-only SQL statement through DB Browser and aivault only when the user explicitly asks to execute it. Do not use this for writes or admin commands.",
             "inputSchema": {
               "type": "object",
               "properties": {
-                "connectionId": { "type": "string" },
-                "sql": { "type": "string" }
+                "connectionId": {
+                  "type": "string"
+                },
+                "sql": {
+                  "type": "string"
+                }
               },
               "required": ["sql"]
             }
@@ -114,7 +144,9 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "connectionId": { "type": "string" }
+                "connectionId": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -125,10 +157,18 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "connectionId": { "type": "string" },
-                "title": { "type": "string" },
-                "sql": { "type": "string" },
-                "select": { "type": "boolean" }
+                "connectionId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "sql": {
+                  "type": "string"
+                },
+                "select": {
+                  "type": "boolean"
+                }
               }
             }
           },
@@ -139,11 +179,21 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "connectionId": { "type": "string" },
-                "tabId": { "type": "string" },
-                "title": { "type": "string" },
-                "sql": { "type": "string" },
-                "select": { "type": "boolean" }
+                "connectionId": {
+                  "type": "string"
+                },
+                "tabId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "sql": {
+                  "type": "string"
+                },
+                "select": {
+                  "type": "boolean"
+                }
               },
               "required": ["tabId"]
             }
@@ -155,12 +205,24 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "connectionId": { "type": "string" },
-                "tabId": { "type": "string" },
-                "oldString": { "type": "string" },
-                "newString": { "type": "string" },
-                "replaceAll": { "type": "boolean" },
-                "select": { "type": "boolean" }
+                "connectionId": {
+                  "type": "string"
+                },
+                "tabId": {
+                  "type": "string"
+                },
+                "oldString": {
+                  "type": "string"
+                },
+                "newString": {
+                  "type": "string"
+                },
+                "replaceAll": {
+                  "type": "boolean"
+                },
+                "select": {
+                  "type": "boolean"
+                }
               },
               "required": ["oldString", "newString"]
             }
@@ -172,8 +234,12 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "connectionId": { "type": "string" },
-                "tabId": { "type": "string" }
+                "connectionId": {
+                  "type": "string"
+                },
+                "tabId": {
+                  "type": "string"
+                }
               },
               "required": ["tabId"]
             }

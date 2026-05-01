@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Download,
   History,
   MoreVertical,
   PanelLeft,
@@ -8,6 +9,8 @@ import {
   PanelRightClose,
   Pencil,
   Plus,
+  Settings,
+  Upload,
 } from 'lucide-react'
 import {
   type FormEvent,
@@ -41,7 +44,6 @@ import {
   blankConnectionForm,
   buildPostgresConnectionUrl,
   connectionPayload,
-  ensureSqlTerminator,
   quoteIdentifier,
 } from './lib/sql'
 import {
@@ -57,6 +59,13 @@ import {
   type SidebarMode,
 } from './components/connection-sidebar'
 import { ConnectionSwitch } from './components/connection-switch'
+import {
+  type ExportFormat,
+  ExportQueryDialog,
+  ImportRowsDialog,
+  type ImportRowsPayload,
+} from './components/data-transfer-dialogs'
+import { DbBrowserSettingsDialog } from './components/db-browser-settings-dialog'
 import { QueryHistoryDialog } from './components/query-history-dialog'
 import { QueryWorkspace } from './components/query-workspace'
 import { RowDetails, RowDetailsEmpty } from './components/row-details'
@@ -65,6 +74,8 @@ import type {
   ConnectionTestResponse,
   DbBrowserPreferences,
   ExplorerSchema,
+  ImportRowsResponse,
+  QueryExportResponse,
   QueryHistoryItem,
   QueryResultResponse,
   SqlEditorTab,
@@ -92,6 +103,23 @@ function previewSql(schema: string, table: string, offset: number) {
   return offset > 0 ? `${base} offset ${offset};` : `${base};`
 }
 
+function downloadExport(
+  filename: string,
+  format: ExportFormat,
+  content: string,
+) {
+  const type =
+    format === 'csv'
+      ? 'text/csv;charset=utf-8'
+      : 'application/x-ndjson;charset=utf-8'
+  const url = URL.createObjectURL(new Blob([content], { type }))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
 function isTypingTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false
   return Boolean(
@@ -115,6 +143,7 @@ function connectionFormFromSummary(
     ssl: connection.ssl,
     color: connection.color,
     environment: connection.environment,
+    policyMode: connection.policyMode,
   }
 
   return {
@@ -130,6 +159,9 @@ export function App() {
   const [objectSearch, setObjectSearch] = useState('')
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>('objects')
   const [showNewConnectionDialog, setShowNewConnectionDialog] = useState(false)
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false)
+  const [showExportDialog, setShowExportDialog] = useState(false)
+  const [showImportDialog, setShowImportDialog] = useState(false)
   const [editingConnectionId, setEditingConnectionId] = useState<string | null>(
     null,
   )
@@ -202,6 +234,12 @@ export function App() {
         ['db-browser-preferences', workspaceId],
         preferences,
       )
+      void queryClient.invalidateQueries({
+        queryKey: ['db-browser-explorer', workspaceId],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['db-browser-preview', workspaceId],
+      })
     },
   })
   const savePreferences = savePreferencesMutation.mutate
@@ -213,6 +251,7 @@ export function App() {
         (current) => ({
           sqlEditorHeight: current?.sqlEditorHeight ?? sqlEditorHeight,
           activeConnectionId: connectionId,
+          queryTimeoutMs: current?.queryTimeoutMs ?? 5000,
         }),
       )
       savePreferences({ activeConnectionId: connectionId })
@@ -235,13 +274,13 @@ export function App() {
 
   useEffect(() => {
     const activeContext = activeConnection
-      ? `Active connection: ${activeConnection.name} (${activeConnection.engine}, ${activeConnection.host}:${activeConnection.port}/${activeConnection.database}). Connection id: ${activeConnection.id}.`
+      ? `Active connection: ${activeConnection.name} (${activeConnection.engine}, ${activeConnection.host}:${activeConnection.port}/${activeConnection.database}, policy: ${activeConnection.policyMode}). Connection id: ${activeConnection.id}.`
       : 'No database connection is currently selected.'
 
     window.parent.postMessage(
       {
         type: 'moldable:set-chat-instructions',
-        text: `DB Browser can help write database queries through app-owned APIs. Use listMoldableAppApi/callMoldableAppApi with the database-generic db.* methods exposed by this app. Prefer reading schema context first. When fixing existing SQL, prefer db.sqlTabs.edit with exact oldString/newString for surgical edits in the active editor; use db.sqlTabs.update only when a whole-tab rewrite is explicitly appropriate. Only run db.query.runReadonly when the user explicitly asks to execute a read-only query. ${activeContext}`,
+        text: `DB Browser can help write database queries through app-owned APIs. Use listMoldableAppApi/callMoldableAppApi with the database-generic db.* methods exposed by this app. Prefer reading schema context first. When fixing existing SQL, prefer db.sqlTabs.edit with exact oldString/newString for surgical edits in the active editor; use db.sqlTabs.update only when a whole-tab rewrite is explicitly appropriate. Only run db.query.runReadonly when the user explicitly asks to execute a read-only query. Do not run writes, admin commands, imports, exports, or transaction workflows through Chat. ${activeContext}`,
       },
       '*',
     )
@@ -368,32 +407,6 @@ export function App() {
 
   const queryHistory = queryHistoryQuery.data ?? []
 
-  const appendQueryHistoryMutation = useMutation({
-    mutationFn: async ({
-      connectionId,
-      item,
-    }: {
-      connectionId: string
-      item: Omit<QueryHistoryItem, 'id' | 'timestamp'>
-    }) => {
-      return apiJson<QueryHistoryItem[]>(
-        fetchWithWorkspace,
-        `/api/connections/${connectionId}/query-history`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(item),
-        },
-      )
-    },
-    onSuccess: (items, variables) => {
-      queryClient.setQueryData(
-        ['db-browser-query-history', workspaceId, variables.connectionId],
-        items,
-      )
-    },
-  })
-
   useEffect(() => {
     function handleAppApiChanged(event: MessageEvent) {
       if (event.data?.type !== 'moldable:app-api-changed') return
@@ -499,6 +512,20 @@ export function App() {
   useEffect(() => {
     setSelectedRowIndex(null)
   }, [resultMode, queryResult, previewQuery.data])
+
+  useEffect(() => {
+    if (resultMode !== 'preview' || !activeConnectionId || !previewQuery.data)
+      return
+    void queryClient.invalidateQueries({
+      queryKey: ['db-browser-query-history', workspaceId, activeConnectionId],
+    })
+  }, [
+    activeConnectionId,
+    previewQuery.data,
+    queryClient,
+    resultMode,
+    workspaceId,
+  ])
 
   const testConnectionMutation = useMutation({
     mutationFn: async () => {
@@ -606,11 +633,12 @@ export function App() {
     onSuccess: (result, variables) => {
       setQueryResult(result)
       setResultMode('query')
-      recordQueryHistory(variables.connectionId, {
-        sql: variables.statement,
-        title: variables.statement.split('\n')[0]?.slice(0, 80) || 'SQL query',
-        rowCount: result.rowCount,
-        executionMs: result.executionMs,
+      void queryClient.invalidateQueries({
+        queryKey: [
+          'db-browser-query-history',
+          workspaceId,
+          variables.connectionId,
+        ],
       })
       setActivityLog((current) => [
         buildActivity(
@@ -619,6 +647,71 @@ export function App() {
         ),
         ...current,
       ])
+    },
+  })
+
+  const exportQueryMutation = useMutation({
+    mutationFn: async ({
+      connectionId,
+      format,
+      filename,
+      statement,
+    }: {
+      connectionId: string
+      format: ExportFormat
+      filename: string
+      statement: string
+    }) => {
+      return apiJson<QueryExportResponse>(
+        fetchWithWorkspace,
+        `/api/connections/${connectionId}/export`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sql: statement, format, filename }),
+        },
+      )
+    },
+    onSuccess: (result) => {
+      downloadExport(result.filename, result.format, result.content)
+      setShowExportDialog(false)
+      appendActivity(
+        `Exported ${result.filename}`,
+        `${result.rowCount} rows • ${result.bytes} bytes`,
+      )
+    },
+  })
+
+  const importRowsMutation = useMutation({
+    mutationFn: async ({
+      connectionId,
+      payload,
+    }: {
+      connectionId: string
+      payload: ImportRowsPayload
+    }) => {
+      return apiJson<ImportRowsResponse>(
+        fetchWithWorkspace,
+        `/api/connections/${connectionId}/import`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+      )
+    },
+    onSuccess: async (result, variables) => {
+      setShowImportDialog(false)
+      await queryClient.invalidateQueries({
+        queryKey: ['db-browser-explorer', workspaceId, variables.connectionId],
+      })
+      await queryClient.invalidateQueries({
+        queryKey: ['db-browser-preview', workspaceId],
+      })
+      appendActivity(
+        `Imported ${result.affectedRows} rows`,
+        `${result.sourceBytes} bytes • ${result.executionMs} ms`,
+      )
     },
   })
 
@@ -709,6 +802,21 @@ export function App() {
     runQueryMutation.mutate({ connectionId: activeConnectionId, statement })
   }
 
+  function handleExportQuery(format: ExportFormat, filename: string) {
+    if (!activeConnectionId || !sql.trim()) return
+    exportQueryMutation.mutate({
+      connectionId: activeConnectionId,
+      format,
+      filename,
+      statement: sql,
+    })
+  }
+
+  function handleImportRows(payload: ImportRowsPayload) {
+    if (!activeConnectionId) return
+    importRowsMutation.mutate({ connectionId: activeConnectionId, payload })
+  }
+
   function handleRunAllQueries(statements: string[]) {
     if (!activeConnectionId) return
     const runnableStatements = statements.filter((statement) =>
@@ -737,21 +845,6 @@ export function App() {
     if (persist) {
       savePreferencesMutation.mutate({ sqlEditorHeight: nextHeight })
     }
-  }
-
-  function recordQueryHistory(
-    connectionId: string,
-    item: Omit<QueryHistoryItem, 'id' | 'timestamp'>,
-  ) {
-    const sql = ensureSqlTerminator(item.sql)
-    appendQueryHistoryMutation.mutate({
-      connectionId,
-      item: {
-        ...item,
-        sql,
-        title: sql.split('\n')[0]?.slice(0, 80) || item.title,
-      },
-    })
   }
 
   function updateActiveSql(nextSql: string) {
@@ -850,10 +943,11 @@ export function App() {
     setShowNewConnectionDialog(true)
   }
 
-  function openEditConnectionDialog() {
-    if (!activeConnection) return
-    setConnectionForm(connectionFormFromSummary(activeConnection))
-    setEditingConnectionId(activeConnection.id)
+  function openEditConnectionDialog(connectionId = activeConnectionId) {
+    const connection = connections.find((entry) => entry.id === connectionId)
+    if (!connection) return
+    setConnectionForm(connectionFormFromSummary(connection))
+    setEditingConnectionId(connection.id)
     testConnectionMutation.reset()
     saveConnectionMutation.reset()
     updateConnectionMutation.reset()
@@ -870,14 +964,6 @@ export function App() {
     setResultMode('preview')
     setResultsPanelOpen(true)
     updateActiveSql(nextSql)
-    if (activeConnectionId) {
-      recordQueryHistory(activeConnectionId, {
-        sql: nextSql,
-        title: nextSql,
-        rowCount: null,
-        executionMs: null,
-      })
-    }
     appendActivity(`Previewing ${schema}.${table}`)
   }
 
@@ -891,14 +977,6 @@ export function App() {
         next,
       )
       updateActiveSql(nextSql)
-      if (activeConnectionId) {
-        recordQueryHistory(activeConnectionId, {
-          sql: nextSql,
-          title: nextSql,
-          rowCount: null,
-          executionMs: null,
-        })
-      }
       return next
     })
   }
@@ -920,14 +998,6 @@ export function App() {
         next,
       )
       updateActiveSql(nextSql)
-      if (activeConnectionId) {
-        recordQueryHistory(activeConnectionId, {
-          sql: nextSql,
-          title: nextSql,
-          rowCount: null,
-          executionMs: null,
-        })
-      }
       return next
     })
   }
@@ -1117,6 +1187,7 @@ export function App() {
               disabled={connectionsQuery.isLoading}
               onChange={openConnection}
               onNew={openNewConnectionDialog}
+              onEdit={openEditConnectionDialog}
             />
 
             <div className="flex-1" />
@@ -1137,7 +1208,7 @@ export function App() {
                 <DropdownMenuItem
                   className="cursor-pointer gap-2"
                   disabled={!activeConnection}
-                  onClick={openEditConnectionDialog}
+                  onClick={() => openEditConnectionDialog()}
                 >
                   <Pencil className="size-3.5" />
                   Edit connection
@@ -1151,10 +1222,33 @@ export function App() {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="cursor-pointer gap-2"
+                  disabled={!activeConnection || !sql.trim()}
+                  onClick={() => setShowExportDialog(true)}
+                >
+                  <Download className="size-3.5" />
+                  Export query
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="cursor-pointer gap-2"
+                  disabled={!activeConnection}
+                  onClick={() => setShowImportDialog(true)}
+                >
+                  <Upload className="size-3.5" />
+                  Import rows
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="cursor-pointer gap-2"
                   onClick={openNewConnectionDialog}
                 >
                   <Plus className="size-3.5" />
                   New connection
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="cursor-pointer gap-2"
+                  onClick={() => setShowSettingsDialog(true)}
+                >
+                  <Settings className="size-3.5" />
+                  Settings
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1220,6 +1314,7 @@ export function App() {
                 sql={sql}
                 columns={currentColumns}
                 rows={currentRows}
+                queryResult={resultMode === 'query' ? queryResult : null}
                 selectedRowIndex={selectedRowIndex}
                 queryError={runQueryMutation.error}
                 previewError={
@@ -1305,6 +1400,53 @@ export function App() {
           onChange={updateForm}
           onTest={() => testConnectionMutation.mutate()}
           onSubmit={handleCreateConnection}
+        />
+      ) : null}
+      {showSettingsDialog ? (
+        <DbBrowserSettingsDialog
+          preferences={preferencesQuery.data}
+          saving={savePreferencesMutation.isPending}
+          onClose={() => setShowSettingsDialog(false)}
+          onSave={(preferences) => {
+            savePreferencesMutation.mutate(preferences, {
+              onSuccess: () => setShowSettingsDialog(false),
+            })
+          }}
+        />
+      ) : null}
+
+      {showExportDialog ? (
+        <ExportQueryDialog
+          defaultFilename={
+            activeSqlTab
+              ? displaySqlTabTitle(activeSqlTab)
+                  .replaceAll(/\s+/g, '-')
+                  .toLowerCase()
+              : 'query-export'
+          }
+          exporting={exportQueryMutation.isPending}
+          error={exportQueryMutation.error}
+          onClose={() => {
+            setShowExportDialog(false)
+            exportQueryMutation.reset()
+          }}
+          onExport={handleExportQuery}
+        />
+      ) : null}
+
+      {showImportDialog ? (
+        <ImportRowsDialog
+          connection={activeConnection}
+          schemas={schemas}
+          selectedSchema={selectedSchema}
+          selectedTable={selectedTable}
+          importing={importRowsMutation.isPending}
+          error={importRowsMutation.error}
+          onClose={() => {
+            setShowImportDialog(false)
+            importRowsMutation.reset()
+          }}
+          onImport={handleImportRows}
         />
       ) : null}
 

@@ -9,11 +9,13 @@ import {
   commitFiles,
   discardChanges,
   getCommitDiff,
+  getCommitFiles,
   getDetectedEditors,
   getDiff,
   getDiffForFiles,
   getEditorIconPngPath,
   getHistory,
+  getImagePreview,
   getRecentRepos,
   getStatus,
   openFileInEditor,
@@ -30,11 +32,24 @@ import path from 'path'
 
 const MAX_COMMIT_DIFF_CHARS = 60000
 const MAX_REVIEW_DIFF_CHARS = 120000
+const DEFAULT_HISTORY_LIMIT = 50
+const MAX_HISTORY_LIMIT = 100
 
 function truncateDiff(diff: string, maxChars = MAX_COMMIT_DIFF_CHARS) {
   if (diff.length <= maxChars) return diff
 
   return `${diff.slice(0, maxChars)}\n\n[Diff truncated by Git Flow after ${maxChars} characters.]`
+}
+
+function parseBoundedInteger(
+  value: string | undefined,
+  fallback: number,
+  min: number,
+  max: number,
+) {
+  const parsed = Number.parseInt(value ?? '', 10)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(Math.max(parsed, min), max)
 }
 
 type CommitMessageJson = {
@@ -326,9 +341,24 @@ app.get('/api/git', async (c) => {
     const workspaceId = getWorkspaceFromRequest(c.req.raw)
     const filePath = c.req.query('file')
     const hash = c.req.query('hash')
+    const files = c.req.query('files')
     const history = c.req.query('history')
+    const image = c.req.query('image')
     const editors = c.req.query('editors')
     const editorIcon = c.req.query('editorIcon')
+    const fileStatus = c.req.query('status')
+    const offset = parseBoundedInteger(
+      c.req.query('offset'),
+      0,
+      0,
+      Number.MAX_SAFE_INTEGER,
+    )
+    const limit = parseBoundedInteger(
+      c.req.query('limit'),
+      DEFAULT_HISTORY_LIMIT,
+      1,
+      MAX_HISTORY_LIMIT,
+    )
 
     if (editorIcon) {
       const pngPath = await getEditorIconPngPath(editorIcon, workspaceId)
@@ -372,19 +402,53 @@ app.get('/api/git', async (c) => {
       } satisfies GitEditorsResponse)
     }
 
+    if (image !== undefined && filePath) {
+      const preview = await getImagePreview(filePath, workspaceId, {
+        hash,
+        status: fileStatus,
+      })
+      const body = preview.buffer.buffer.slice(
+        preview.buffer.byteOffset,
+        preview.buffer.byteOffset + preview.buffer.byteLength,
+      ) as ArrayBuffer
+
+      return new Response(body, {
+        status: 200,
+        headers: {
+          'Content-Type': preview.mimeType,
+          'Cache-Control': hash
+            ? 'public, max-age=31536000, immutable'
+            : 'no-store',
+        },
+      })
+    }
+
+    if (hash) {
+      if (files !== undefined) {
+        const commitFiles = await getCommitFiles(hash, undefined, workspaceId)
+        return c.json({ files: commitFiles })
+      }
+
+      const diff = await getCommitDiff(hash, undefined, workspaceId, filePath)
+      return c.json({ diff })
+    }
+
     if (filePath) {
       const diff = await getDiff(undefined, filePath, workspaceId)
       return c.json({ diff })
     }
 
-    if (hash) {
-      const diff = await getCommitDiff(hash, undefined, workspaceId)
-      return c.json({ diff })
-    }
-
     if (history !== undefined) {
-      const log = await getHistory(undefined, workspaceId)
-      return c.json({ history: log })
+      const log = await getHistory(undefined, workspaceId, {
+        offset,
+        limit: limit + 1,
+      })
+      const hasMore = log.length > limit
+      return c.json({
+        history: log.slice(0, limit),
+        hasMore,
+        nextOffset: hasMore ? offset + limit : undefined,
+      })
     }
 
     const [status, repos] = await Promise.all([
@@ -551,9 +615,13 @@ app.post('/api/moldable/rpc', async (c) => {
     }
 
     if (method === 'git.history') {
-      const history = await getHistory(repoPath, workspaceId)
-      const limit = numberParam(params, 'limit') ?? 50
-      return c.json({ ok: true, result: history.slice(0, limit) })
+      const limit = Math.min(
+        Math.max(numberParam(params, 'limit') ?? DEFAULT_HISTORY_LIMIT, 1),
+        MAX_HISTORY_LIMIT,
+      )
+      const offset = Math.max(numberParam(params, 'offset') ?? 0, 0)
+      const history = await getHistory(repoPath, workspaceId, { offset, limit })
+      return c.json({ ok: true, result: history })
     }
 
     if (method === 'git.generateCommitMessage') {

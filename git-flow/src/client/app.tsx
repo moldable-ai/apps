@@ -1,15 +1,25 @@
 'use client'
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import {
   AppWindow,
   ArrowUp,
   Ban,
-  Binary,
   ChevronDown,
   Code2,
   Copy,
+  FileDiff,
+  FileMinus,
+  FilePenLine,
   FilePlus,
+  FileQuestion,
+  FileSymlink,
+  FileX,
   FolderGit,
   FolderOpen,
   GitBranch,
@@ -17,6 +27,7 @@ import {
   GitPullRequest,
   History,
   LayoutList,
+  type LucideIcon,
   MessageSquare,
   RefreshCw,
   RotateCcw,
@@ -27,8 +38,19 @@ import {
   Wrench,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  type MouseEvent,
+  type UIEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -57,6 +79,23 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { formatDistanceToNow } from 'date-fns'
+
+const HISTORY_PAGE_SIZE = 50
+const IMAGE_FILE_EXTENSIONS = new Set([
+  'apng',
+  'avif',
+  'gif',
+  'jpg',
+  'jpeg',
+  'png',
+  'svg',
+  'webp',
+])
+
+function isPreviewableImagePath(filePath?: string | null) {
+  const extension = filePath?.split('.').pop()?.toLowerCase()
+  return extension ? IMAGE_FILE_EXTENSIONS.has(extension) : false
+}
 
 interface GitFile {
   path: string
@@ -97,7 +136,20 @@ interface LogEntry {
   message: string
   author_name: string
   author_email: string
+  avatarUrl?: string
   isUnpushed?: boolean
+}
+
+interface CommitFile {
+  path: string
+  oldPath?: string
+  status: string
+}
+
+interface HistoryPage {
+  history: LogEntry[]
+  hasMore: boolean
+  nextOffset?: number
 }
 
 interface CommitInput {
@@ -197,6 +249,42 @@ function AppIcon({
   )
 }
 
+function CommitAvatar({
+  commit,
+  className = 'size-5',
+}: {
+  commit: LogEntry
+  className?: string
+}) {
+  const fallback =
+    commit.author_name
+      .split(/\s+/)
+      .map((part) => part[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || '?'
+
+  if (commit.avatarUrl) {
+    return (
+      <Avatar className={className}>
+        <AvatarImage
+          src={commit.avatarUrl}
+          alt=""
+          referrerPolicy="no-referrer"
+        />
+        <AvatarFallback>{fallback}</AvatarFallback>
+      </Avatar>
+    )
+  }
+
+  return (
+    <Avatar className={className}>
+      <AvatarFallback>{fallback}</AvatarFallback>
+    </Avatar>
+  )
+}
+
 export default function GitFlowPage() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
@@ -205,6 +293,9 @@ export default function GitFlowPage() {
   const [view, setView] = useState<'changes' | 'history'>('changes')
   const [error, setError] = useState<string | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
+  const [selectedCommitFile, setSelectedCommitFile] = useState<string | null>(
+    null,
+  )
 
   const [summary, setSummary] = useState('')
   const [description, setDescription] = useState('')
@@ -225,6 +316,8 @@ export default function GitFlowPage() {
   const [preferredCommitAction, setPreferredCommitAction] =
     useState<PreferredCommitAction>('commit')
   const fileFilterInputRef = useRef<HTMLInputElement | null>(null)
+  const selectionAnchorRef = useRef<string | null>(null)
+  const initializedSelectionRepoRef = useRef<string | null>(null)
 
   // Query for Git data (status, branches, etc)
   const {
@@ -244,18 +337,38 @@ export default function GitFlowPage() {
   })
 
   // Query for Log History
-  const { data: history } = useQuery<LogEntry[]>({
+  const {
+    data: historyPages,
+    fetchNextPage: fetchNextHistoryPage,
+    hasNextPage: hasNextHistoryPage,
+    isFetchingNextPage: isFetchingNextHistoryPage,
+  } = useInfiniteQuery<HistoryPage>({
     queryKey: ['git-history', workspaceId, data?.repoPath],
-    queryFn: async () => {
-      const res = await fetchWithWorkspace('/api/git?history')
+    queryFn: async ({ pageParam }) => {
+      const offset =
+        typeof pageParam === 'number' && Number.isFinite(pageParam)
+          ? pageParam
+          : 0
+      const params = new URLSearchParams({
+        history: '1',
+        limit: String(HISTORY_PAGE_SIZE),
+        offset: String(offset),
+      })
+      const res = await fetchWithWorkspace(`/api/git?${params.toString()}`)
       if (!res.ok) throw new Error('Failed to fetch history')
-      const json = await res.json()
-      return json.history
+      return res.json()
     },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore ? lastPage.nextOffset : undefined,
     enabled: !!data?.repoPath, // Enable even when not in history view to show pending last commit
     refetchInterval: 10000,
     refetchOnWindowFocus: true,
   })
+  const history = useMemo(
+    () => historyPages?.pages.flatMap((page) => page.history) ?? [],
+    [historyPages],
+  )
 
   const { data: editorData } = useQuery<{
     editors: DetectedEditor[]
@@ -276,12 +389,56 @@ export default function GitFlowPage() {
     [editorData?.editors],
   )
 
+  const { data: commitFiles = [], isLoading: loadingCommitFiles } = useQuery<
+    CommitFile[]
+  >({
+    queryKey: ['git-commit-files', workspaceId, selectedCommit],
+    queryFn: async () => {
+      if (!selectedCommit) return []
+      const res = await fetchWithWorkspace(
+        `/api/git?hash=${encodeURIComponent(selectedCommit)}&files=1`,
+      )
+      if (!res.ok) throw new Error('Failed to fetch commit files')
+      const json = await res.json()
+      return json.files ?? []
+    },
+    enabled: !!selectedCommit,
+  })
+
+  const selectedChangedFile = useMemo(
+    () => data?.files.find((file) => file.path === selectedFile),
+    [data?.files, selectedFile],
+  )
+  const selectedCommitFileEntry = useMemo(
+    () => commitFiles.find((file) => file.path === selectedCommitFile),
+    [commitFiles, selectedCommitFile],
+  )
+  const selectedDiffPath = selectedCommit ? selectedCommitFile : selectedFile
+  const selectedImageStatus = selectedCommit
+    ? selectedCommitFileEntry?.status
+    : selectedChangedFile
+      ? `${selectedChangedFile.index}${selectedChangedFile.working_dir}`
+      : undefined
+  const selectedDiffIsImage = isPreviewableImagePath(selectedDiffPath)
+
   // Query for File Diff
   const { data: fileDiff, isLoading: loadingDiff } = useQuery<string | null>({
-    queryKey: ['git-diff', workspaceId, selectedFile, selectedCommit],
+    queryKey: [
+      'git-diff',
+      workspaceId,
+      selectedFile,
+      selectedCommit,
+      selectedCommitFile,
+    ],
     queryFn: async () => {
       if (selectedCommit) {
-        const res = await fetchWithWorkspace(`/api/git?hash=${selectedCommit}`)
+        if (!selectedCommitFile) return null
+
+        const res = await fetchWithWorkspace(
+          `/api/git?hash=${encodeURIComponent(
+            selectedCommit,
+          )}&file=${encodeURIComponent(selectedCommitFile)}`,
+        )
         if (!res.ok) throw new Error('Failed to fetch commit diff')
         const json = await res.json()
         return json.diff || null
@@ -295,8 +452,64 @@ export default function GitFlowPage() {
       const json = await res.json()
       return json.diff || null
     },
-    enabled: !!selectedFile || !!selectedCommit,
+    enabled:
+      !selectedDiffIsImage &&
+      (selectedCommit ? !!selectedCommitFile : !!selectedFile),
   })
+
+  const imagePreviewParams = useMemo(() => {
+    if (!selectedDiffIsImage || !selectedDiffPath) return null
+
+    const params = new URLSearchParams({
+      image: '1',
+      file: selectedDiffPath,
+    })
+    if (selectedCommit) params.set('hash', selectedCommit)
+    if (selectedImageStatus) params.set('status', selectedImageStatus)
+    return params.toString()
+  }, [
+    selectedCommit,
+    selectedDiffIsImage,
+    selectedDiffPath,
+    selectedImageStatus,
+  ])
+
+  const {
+    data: imagePreviewBlob,
+    isLoading: loadingImagePreview,
+    isError: imagePreviewFailed,
+  } = useQuery<Blob | null>({
+    queryKey: [
+      'git-image-preview',
+      workspaceId,
+      selectedDiffPath,
+      selectedCommit,
+      selectedImageStatus,
+    ],
+    queryFn: async () => {
+      if (!imagePreviewParams) return null
+      const res = await fetchWithWorkspace(`/api/git?${imagePreviewParams}`)
+      if (!res.ok) throw new Error('Failed to load image preview')
+      return res.blob()
+    },
+    enabled: !!imagePreviewParams,
+  })
+
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!imagePreviewBlob) {
+      setImagePreviewUrl(null)
+      return
+    }
+
+    const objectUrl = URL.createObjectURL(imagePreviewBlob)
+    setImagePreviewUrl(objectUrl)
+
+    return () => URL.revokeObjectURL(objectUrl)
+  }, [imagePreviewBlob])
+
+  const diffLines = useMemo(() => fileDiff?.split('\n') ?? [], [fileDiff])
 
   // Mutation for generating a commit message from selected diffs
   const generateCommitMessageMutation = useMutation({
@@ -370,6 +583,7 @@ export default function GitFlowPage() {
       setSelectedFiles(new Set())
       setSelectedFile(null)
       setSelectedCommit(null)
+      setSelectedCommitFile(null)
       queryClient.invalidateQueries({ queryKey: ['git-status', workspaceId] })
       queryClient.invalidateQueries({ queryKey: ['git-history', workspaceId] })
     },
@@ -418,6 +632,7 @@ export default function GitFlowPage() {
     onSuccess: ({ commit }) => {
       setView('changes')
       setSelectedCommit(null)
+      setSelectedCommitFile(null)
 
       // Restore summary and description
       setSummary(commit.message)
@@ -463,11 +678,14 @@ export default function GitFlowPage() {
           recentRepos: json.recentRepos ?? previous?.recentRepos ?? [],
         }),
       )
-      const firstFile = json.files?.[0]?.path || null
+      const changedPaths = json.files?.map((file) => file.path) ?? []
+      const firstFile = changedPaths[0] ?? null
+      initializedSelectionRepoRef.current = json.repoPath
       setSelectedFile(firstFile)
-      if (json.files) {
-        setSelectedFiles(new Set(json.files.map((f: GitFile) => f.path)))
-      }
+      setSelectedCommit(null)
+      setSelectedCommitFile(null)
+      setSelectedFiles(new Set(changedPaths))
+      selectionAnchorRef.current = firstFile
       queryClient.invalidateQueries({ queryKey: ['git-history', workspaceId] })
     },
     onError: (err: Error) => {
@@ -655,13 +873,19 @@ export default function GitFlowPage() {
     })
   }
 
-  // Auto-select first file on initial load
+  // Initialize each selected repo with every changed file selected.
   useEffect(() => {
-    if (data?.files && data.files.length > 0 && !selectedFile) {
-      setSelectedFile(data.files[0].path)
-      setSelectedFiles(new Set(data.files.map((f: GitFile) => f.path)))
-    }
-  }, [data, selectedFile])
+    const repoPath = data?.repoPath ?? null
+    if (!repoPath || initializedSelectionRepoRef.current === repoPath) return
+
+    const changedPaths = data?.files.map((file) => file.path) ?? []
+    const firstFile = changedPaths[0] ?? null
+
+    initializedSelectionRepoRef.current = repoPath
+    setSelectedFile(firstFile)
+    setSelectedFiles(new Set(changedPaths))
+    selectionAnchorRef.current = firstFile
+  }, [data?.files, data?.repoPath])
 
   useEffect(() => {
     if (
@@ -701,6 +925,29 @@ export default function GitFlowPage() {
   }, [filteredFiles, selectedFile, view])
 
   useEffect(() => {
+    if (!selectedCommit) {
+      setSelectedCommitFile(null)
+      return
+    }
+
+    if (loadingCommitFiles) return
+
+    if (commitFiles.length === 0) {
+      setSelectedCommitFile(null)
+      return
+    }
+
+    if (
+      selectedCommitFile &&
+      commitFiles.some((file) => file.path === selectedCommitFile)
+    ) {
+      return
+    }
+
+    setSelectedCommitFile(commitFiles[0].path)
+  }, [commitFiles, loadingCommitFiles, selectedCommit, selectedCommitFile])
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const tagName = target?.tagName?.toLowerCase()
@@ -720,19 +967,87 @@ export default function GitFlowPage() {
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [selectRelativeFile, view])
 
-  const handleFileSelect = (filePath: string) => {
+  const getFileSelectionRange = useCallback(
+    (fromPath: string, toPath: string) => {
+      const fromIndex = filteredFiles.findIndex(
+        (file) => file.path === fromPath,
+      )
+      const toIndex = filteredFiles.findIndex((file) => file.path === toPath)
+
+      if (fromIndex === -1 || toIndex === -1) return [toPath]
+
+      const startIndex = Math.min(fromIndex, toIndex)
+      const endIndex = Math.max(fromIndex, toIndex)
+      return filteredFiles
+        .slice(startIndex, endIndex + 1)
+        .map((file) => file.path)
+    },
+    [filteredFiles],
+  )
+
+  const handleFileSelect = (
+    filePath: string,
+    event?: MouseEvent<HTMLElement>,
+  ) => {
+    const isRangeSelect = event?.shiftKey === true
+    const isToggleSelect = event?.metaKey === true || event?.ctrlKey === true
+
     setSelectedCommit(null)
+    setSelectedCommitFile(null)
     setSelectedFile(filePath)
+
+    if (isRangeSelect) {
+      const anchorPath = selectionAnchorRef.current ?? selectedFile ?? filePath
+      const rangePaths = getFileSelectionRange(anchorPath, filePath)
+
+      setCodeReview(null)
+      setSelectedFiles((previous) => {
+        const next = isToggleSelect ? new Set(previous) : new Set<string>()
+        rangePaths.forEach((path) => next.add(path))
+        return next
+      })
+      return
+    }
+
+    selectionAnchorRef.current = filePath
+
+    if (isToggleSelect) {
+      setCodeReview(null)
+      setSelectedFiles((previous) => {
+        const next = new Set(previous)
+        if (next.has(filePath)) {
+          next.delete(filePath)
+        } else {
+          next.add(filePath)
+        }
+        return next
+      })
+      return
+    }
+  }
+
+  const handleFileContextMenu = (filePath: string) => {
+    setSelectedCommit(null)
+    setSelectedCommitFile(null)
+    setSelectedFile(filePath)
+
+    if (selectedFiles.has(filePath)) return
+
+    selectionAnchorRef.current = filePath
+    setCodeReview(null)
+    setSelectedFiles(new Set([filePath]))
   }
 
   const handleCommitSelect = (hash: string) => {
     setSelectedFile(null)
     setSelectedCommit(hash)
+    setSelectedCommitFile(null)
   }
 
   const handleChangesTabSelect = () => {
     setView('changes')
     setSelectedCommit(null)
+    setSelectedCommitFile(null)
     setSelectedFile(filteredFiles[0]?.path ?? data?.files?.[0]?.path ?? null)
   }
 
@@ -740,7 +1055,22 @@ export default function GitFlowPage() {
     setView('history')
     setSelectedFile(null)
     setSelectedCommit(history?.[0]?.hash ?? null)
+    setSelectedCommitFile(null)
   }
+
+  const handleHistoryScroll = useCallback(
+    (event: UIEvent<HTMLDivElement>) => {
+      if (!hasNextHistoryPage || isFetchingNextHistoryPage) return
+
+      const element = event.currentTarget
+      const remaining =
+        element.scrollHeight - element.scrollTop - element.clientHeight
+      if (remaining < 240) {
+        void fetchNextHistoryPage()
+      }
+    },
+    [fetchNextHistoryPage, hasNextHistoryPage, isFetchingNextHistoryPage],
+  )
 
   const prepareCommitInput = async (): Promise<CommitInput | null> => {
     if (selectedFiles.size === 0) {
@@ -936,22 +1266,27 @@ export default function GitFlowPage() {
   }
 
   const toggleFile = (path: string) => {
-    const newSelected = new Set(selectedFiles)
-    if (newSelected.has(path)) {
-      newSelected.delete(path)
-    } else {
-      newSelected.add(path)
-    }
     setCodeReview(null)
-    setSelectedFiles(newSelected)
+    selectionAnchorRef.current = path
+    setSelectedFiles((previous) => {
+      const next = new Set(previous)
+      if (next.has(path)) {
+        next.delete(path)
+      } else {
+        next.add(path)
+      }
+      return next
+    })
   }
 
   const handleSelectAll = (checked: boolean) => {
     setCodeReview(null)
     if (checked && data?.files) {
       setSelectedFiles(new Set(data.files.map((f) => f.path)))
+      selectionAnchorRef.current = data.files[0]?.path ?? null
     } else {
       setSelectedFiles(new Set())
+      selectionAnchorRef.current = null
     }
   }
 
@@ -1112,6 +1447,188 @@ export default function GitFlowPage() {
     if (repoMutation.isError) return 'Repository Failed'
     return 'Action Failed'
   })()
+
+  type FileStatusKind =
+    | 'added'
+    | 'copied'
+    | 'deleted'
+    | 'modified'
+    | 'renamed'
+    | 'unmerged'
+    | 'untracked'
+
+  const getChangedFileStatusKind = (file: GitFile): FileStatusKind => {
+    const status = `${file.index}${file.working_dir}`
+
+    if (status.includes('U')) return 'unmerged'
+    if (status.includes('?')) return 'untracked'
+    if (status.includes('D')) return 'deleted'
+    if (status.includes('A')) return 'added'
+    if (status.includes('R')) return 'renamed'
+    if (status.includes('C')) return 'copied'
+    return 'modified'
+  }
+
+  const getCommitFileStatusKind = (status: string): FileStatusKind => {
+    if (status.startsWith('A')) return 'added'
+    if (status.startsWith('D')) return 'deleted'
+    if (status.startsWith('R')) return 'renamed'
+    if (status.startsWith('C')) return 'copied'
+    if (status.startsWith('U')) return 'unmerged'
+    return 'modified'
+  }
+
+  const getFileStatusPresentation = (
+    status: FileStatusKind,
+  ): {
+    Icon: LucideIcon
+    label: string
+    title: string
+    className: string
+  } => {
+    if (status === 'added') {
+      return {
+        Icon: FilePlus,
+        label: 'A',
+        title: 'Added',
+        className: 'text-green-600 dark:text-green-400',
+      }
+    }
+
+    if (status === 'deleted') {
+      return {
+        Icon: FileMinus,
+        label: 'D',
+        title: 'Deleted',
+        className: 'text-red-600 dark:text-red-400',
+      }
+    }
+
+    if (status === 'renamed') {
+      return {
+        Icon: FileSymlink,
+        label: 'R',
+        title: 'Renamed',
+        className: 'text-amber-600 dark:text-amber-400',
+      }
+    }
+
+    if (status === 'copied') {
+      return {
+        Icon: Copy,
+        label: 'C',
+        title: 'Copied',
+        className: 'text-amber-600 dark:text-amber-400',
+      }
+    }
+
+    if (status === 'unmerged') {
+      return {
+        Icon: FileX,
+        label: '!',
+        title: 'Conflict',
+        className: 'text-destructive',
+      }
+    }
+
+    if (status === 'untracked') {
+      return {
+        Icon: FileQuestion,
+        label: 'U',
+        title: 'Untracked',
+        className: 'text-amber-600 dark:text-amber-400',
+      }
+    }
+
+    return {
+      Icon: FilePenLine,
+      label: 'M',
+      title: 'Modified',
+      className: 'text-blue-600 dark:text-blue-400',
+    }
+  }
+
+  const renderDiffContent = () => (
+    <div className="custom-scrollbar bg-muted/30 min-h-0 flex-1 overflow-auto pb-[var(--chat-safe-padding)] dark:bg-zinc-950/20">
+      {selectedDiffIsImage ? (
+        loadingImagePreview ? (
+          <div className="flex min-h-[400px] items-center justify-center">
+            <RefreshCw className="text-primary/40 size-6 animate-spin" />
+          </div>
+        ) : imagePreviewUrl ? (
+          <div className="flex min-h-full items-center justify-center p-6">
+            <img
+              src={imagePreviewUrl}
+              alt={selectedDiffPath ?? 'Selected image'}
+              className="border-border bg-background max-h-full max-w-full rounded-md border object-contain shadow-sm"
+            />
+          </div>
+        ) : (
+          <div className="text-muted-foreground flex min-h-[400px] items-center justify-center px-8 text-center text-sm">
+            {imagePreviewFailed
+              ? 'Image preview is unavailable for this change.'
+              : 'No image preview to display.'}
+          </div>
+        )
+      ) : loadingDiff ? (
+        <div className="flex min-h-[400px] items-center justify-center">
+          <RefreshCw className="text-primary/40 size-6 animate-spin" />
+        </div>
+      ) : (
+        <div className="min-w-fit py-4 font-mono text-[13px] leading-relaxed">
+          {diffLines.length > 0 ? (
+            diffLines.map((line: string, i: number) => {
+              const isAddition = line.startsWith('+') && !line.startsWith('+++')
+              const isDeletion = line.startsWith('-') && !line.startsWith('---')
+              const isHeader =
+                line.startsWith('diff') ||
+                line.startsWith('index') ||
+                line.startsWith('@@') ||
+                line.startsWith('---') ||
+                line.startsWith('+++')
+
+              return (
+                <div
+                  key={i}
+                  className={cn(
+                    'hover:bg-foreground/[0.03] group grid grid-cols-[50px_1fr] border-l-4 border-transparent',
+                    isAddition &&
+                      'border-l-green-600/50 bg-green-500/10 dark:border-l-green-500/60',
+                    isDeletion &&
+                      'border-l-red-600/50 bg-red-500/10 dark:border-l-red-500/60',
+                    isHeader &&
+                      'text-muted-foreground bg-sky-500/5 py-0.5 font-bold tracking-tight',
+                  )}
+                >
+                  <div className="border-foreground/5 table-cell select-none border-r pr-5 text-right align-middle font-sans text-[10px] opacity-40 dark:opacity-20">
+                    {i + 1}
+                  </div>
+                  <div
+                    className={cn(
+                      'whitespace-pre px-5 tabular-nums',
+                      isAddition && 'text-green-700 dark:text-green-400',
+                      isDeletion && 'text-red-700 dark:text-red-400',
+                      isHeader && 'text-sky-700 dark:text-sky-300',
+                      !isAddition &&
+                        !isDeletion &&
+                        !isHeader &&
+                        'text-foreground/80 dark:text-zinc-300',
+                    )}
+                  >
+                    {line || ' '}
+                  </div>
+                </div>
+              )
+            })
+          ) : (
+            <div className="flex min-h-[400px] items-center justify-center font-sans italic opacity-20">
+              No changes to display
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
 
   if (loading && !data) {
     return (
@@ -1686,22 +2203,34 @@ export default function GitFlowPage() {
                       </p>
                     </div>
                   ) : (
-                    <div className="space-y-0.5">
+                    <div
+                      className="space-y-0.5"
+                      role="listbox"
+                      aria-multiselectable="true"
+                    >
                       {filteredFiles.map((file) => {
                         const discardCount = selectedFiles.has(file.path)
                           ? selectedFiles.size
                           : 1
+                        const fileStatus = getFileStatusPresentation(
+                          getChangedFileStatusKind(file),
+                        )
+                        const FileStatusIcon = fileStatus.Icon
 
                         return (
                           <ContextMenu key={file.path}>
                             <ContextMenuTrigger asChild>
                               <div
-                                onClick={() => handleFileSelect(file.path)}
-                                onContextMenu={() =>
-                                  handleFileSelect(file.path)
+                                onClick={(event) =>
+                                  handleFileSelect(file.path, event)
                                 }
+                                onContextMenu={() =>
+                                  handleFileContextMenu(file.path)
+                                }
+                                role="option"
+                                aria-selected={selectedFiles.has(file.path)}
                                 className={cn(
-                                  'group flex w-full cursor-pointer items-center gap-3 rounded-md p-2 text-left transition-all',
+                                  'group flex w-full cursor-pointer select-none items-center gap-3 rounded-md p-2 text-left transition-all',
                                   selectedFile === file.path
                                     ? 'bg-primary/10 shadow-sm'
                                     : 'hover:bg-accent/40',
@@ -1730,16 +2259,16 @@ export default function GitFlowPage() {
                                     >
                                       {file.path}
                                     </span>
-                                    <div
+                                    <span
                                       className={cn(
-                                        'shrink-0 rounded-sm px-1.5 py-0.5 text-[9px] font-bold uppercase',
-                                        file.index === '?'
-                                          ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                                          : 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+                                        'flex size-4 shrink-0 items-center justify-center',
+                                        fileStatus.className,
                                       )}
+                                      title={fileStatus.title}
+                                      aria-label={fileStatus.title}
                                     >
-                                      {file.index === '?' ? 'U' : 'M'}
-                                    </div>
+                                      <FileStatusIcon className="size-4" />
+                                    </span>
                                   </div>
                                 </div>
                               </div>
@@ -1980,7 +2509,7 @@ export default function GitFlowPage() {
                     <div
                       onClick={() => handleCommitSelect(history[0].hash)}
                       className={cn(
-                        'group relative flex w-full cursor-pointer flex-col gap-0.5 px-4 py-3 text-left transition-colors',
+                        'group relative flex w-full cursor-pointer flex-col px-4 py-2 text-left transition-colors',
                         selectedCommit === history[0].hash
                           ? 'bg-primary/5'
                           : 'hover:bg-muted/30',
@@ -1992,7 +2521,7 @@ export default function GitFlowPage() {
                       <div className="flex items-start justify-between gap-3">
                         <span
                           className={cn(
-                            'line-clamp-1 text-[11px] font-semibold tracking-tight transition-colors',
+                            'line-clamp-1 text-[12px] font-semibold tracking-tight transition-colors',
                             selectedCommit === history[0].hash
                               ? 'text-primary'
                               : 'text-foreground/90 group-hover:text-foreground',
@@ -2007,8 +2536,15 @@ export default function GitFlowPage() {
                           <ArrowUp className="size-3" />
                         </div>
                       </div>
-                      <div className="mt-0.5 flex items-center gap-2">
-                        <span className="text-muted-foreground font-mono text-[9px] opacity-70">
+                      <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                        <CommitAvatar commit={history[0]} />
+                        <span className="text-muted-foreground truncate text-[11px] font-medium">
+                          {history[0].author_name}
+                        </span>
+                        <span className="text-muted-foreground/40 text-[11px]">
+                          •
+                        </span>
+                        <span className="text-muted-foreground shrink-0 text-[11px] font-medium">
                           {formatDistanceToNow(new Date(history[0].date), {
                             addSuffix: true,
                           })}
@@ -2020,14 +2556,17 @@ export default function GitFlowPage() {
               </div>
             </>
           ) : (
-            <div className="custom-scrollbar flex-1 overflow-y-auto">
+            <div
+              onScroll={handleHistoryScroll}
+              className="custom-scrollbar flex-1 overflow-y-auto"
+            >
               <div className="divide-border/40 divide-y">
                 {history?.map((commit) => (
                   <div
                     key={commit.hash}
                     onClick={() => handleCommitSelect(commit.hash)}
                     className={cn(
-                      'group relative flex w-full cursor-pointer flex-col gap-0.5 px-4 py-3 text-left transition-colors',
+                      'group relative flex w-full cursor-pointer flex-col px-4 py-2 text-left transition-colors',
                       selectedCommit === commit.hash
                         ? 'bg-primary/5'
                         : 'hover:bg-muted/50',
@@ -2039,7 +2578,7 @@ export default function GitFlowPage() {
                     <div className="flex items-start justify-between gap-3">
                       <span
                         className={cn(
-                          'line-clamp-2 text-[12px] font-semibold tracking-tight transition-colors',
+                          'line-clamp-1 text-[12px] font-semibold tracking-tight transition-colors',
                           selectedCommit === commit.hash
                             ? 'text-primary'
                             : 'text-foreground/90 group-hover:text-foreground',
@@ -2056,14 +2595,15 @@ export default function GitFlowPage() {
                         </div>
                       )}
                     </div>
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="text-muted-foreground text-[10px] font-medium">
+                    <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                      <CommitAvatar commit={commit} />
+                      <span className="text-muted-foreground truncate text-[11px] font-medium">
                         {commit.author_name}
                       </span>
-                      <span className="text-muted-foreground/30 text-[10px]">
+                      <span className="text-muted-foreground/40 text-[11px]">
                         •
                       </span>
-                      <span className="text-muted-foreground font-mono text-[9px] opacity-70">
+                      <span className="text-muted-foreground shrink-0 text-[11px] font-medium">
                         {formatDistanceToNow(new Date(commit.date), {
                           addSuffix: true,
                         })}
@@ -2072,6 +2612,11 @@ export default function GitFlowPage() {
                   </div>
                 ))}
               </div>
+              {isFetchingNextHistoryPage && (
+                <div className="text-muted-foreground flex h-10 items-center justify-center text-[11px] font-medium">
+                  Loading more commits...
+                </div>
+              )}
             </div>
           )}
         </aside>
@@ -2082,9 +2627,11 @@ export default function GitFlowPage() {
             <>
               <div className="bg-background/50 flex h-10 shrink-0 items-center justify-between border-b px-4">
                 <div className="flex items-center gap-2 overflow-hidden text-[11px] font-semibold">
-                  <span className="text-muted-foreground shrink-0 text-[10px] uppercase tracking-wider">
-                    {selectedCommit ? 'Commit:' : 'Reviewing:'}
-                  </span>
+                  {selectedCommit && (
+                    <span className="text-muted-foreground shrink-0 text-[10px] uppercase tracking-wider">
+                      Commit:
+                    </span>
+                  )}
                   {selectedCommit ? (
                     <button
                       onClick={copyCommitHash}
@@ -2109,91 +2656,102 @@ export default function GitFlowPage() {
                     </button>
                   )}
                 </div>
-                <div className="flex items-center gap-3">
-                  {canUndoSelectedCommit && latestCommit && (
-                    <button
-                      onClick={() => undoMutation.mutate(latestCommit)}
-                      disabled={undoMutation.isPending}
-                      className="hover:bg-destructive/10 text-destructive flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-[10px] font-bold transition-all active:scale-95 disabled:opacity-50"
-                      title="Undo last commit (keep changes)"
-                    >
-                      <RotateCcw
-                        className={cn(
-                          'size-3',
-                          undoMutation.isPending && 'animate-spin',
-                        )}
-                      />
-                      Undo Commit
-                    </button>
-                  )}
-                  <div className="flex items-center gap-1.5 rounded border border-green-500/20 bg-green-500/10 px-2 py-1 text-[10px] font-bold text-green-600 shadow-sm dark:text-green-400">
-                    <Binary className="size-3" />{' '}
-                    {selectedCommit ? 'Commit Details' : 'Unified Diff'}
-                  </div>
-                </div>
-              </div>
-              <div className="custom-scrollbar bg-muted/30 flex-1 overflow-auto pb-[var(--chat-safe-padding)] dark:bg-zinc-950/20">
-                {loadingDiff ? (
-                  <div className="flex min-h-[400px] items-center justify-center">
-                    <RefreshCw className="text-primary/40 size-6 animate-spin" />
-                  </div>
-                ) : (
-                  <div className="min-w-fit py-4 font-mono text-[13px] leading-relaxed">
-                    {fileDiff ? (
-                      fileDiff.split('\n').map((line: string, i: number) => {
-                        const isAddition =
-                          line.startsWith('+') && !line.startsWith('+++')
-                        const isDeletion =
-                          line.startsWith('-') && !line.startsWith('---')
-                        const isHeader =
-                          line.startsWith('diff') ||
-                          line.startsWith('index') ||
-                          line.startsWith('@@') ||
-                          line.startsWith('---') ||
-                          line.startsWith('+++')
-
-                        return (
-                          <div
-                            key={i}
-                            className={cn(
-                              'hover:bg-foreground/[0.03] group grid grid-cols-[50px_1fr] border-l-4 border-transparent',
-                              isAddition &&
-                                'border-l-green-600/50 bg-green-500/10 dark:border-l-green-500/60',
-                              isDeletion &&
-                                'border-l-red-600/50 bg-red-500/10 dark:border-l-red-500/60',
-                              isHeader &&
-                                'text-muted-foreground bg-sky-500/5 py-0.5 font-bold tracking-tight',
-                            )}
-                          >
-                            <div className="border-foreground/5 table-cell select-none border-r pr-5 text-right align-middle font-sans text-[10px] opacity-40 dark:opacity-20">
-                              {i + 1}
-                            </div>
-                            <div
-                              className={cn(
-                                'whitespace-pre px-5 tabular-nums',
-                                isAddition &&
-                                  'text-green-700 dark:text-green-400',
-                                isDeletion && 'text-red-700 dark:text-red-400',
-                                isHeader && 'text-sky-700 dark:text-sky-300',
-                                !isAddition &&
-                                  !isDeletion &&
-                                  !isHeader &&
-                                  'text-foreground/80 dark:text-zinc-300',
-                              )}
-                            >
-                              {line || ' '}
-                            </div>
-                          </div>
-                        )
-                      })
-                    ) : (
-                      <div className="flex min-h-[400px] items-center justify-center font-sans italic opacity-20">
-                        No changes to display
-                      </div>
+                {canUndoSelectedCommit && (
+                  <div className="flex items-center gap-3">
+                    {canUndoSelectedCommit && latestCommit && (
+                      <button
+                        onClick={() => undoMutation.mutate(latestCommit)}
+                        disabled={undoMutation.isPending}
+                        className="hover:bg-destructive/10 text-destructive flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2 text-[10px] font-bold transition-all active:scale-95 disabled:opacity-50"
+                        title="Undo last commit (keep changes)"
+                      >
+                        <RotateCcw
+                          className={cn(
+                            'size-3',
+                            undoMutation.isPending && 'animate-spin',
+                          )}
+                        />
+                        Undo Commit
+                      </button>
                     )}
                   </div>
                 )}
               </div>
+              {selectedCommit ? (
+                <div className="flex min-h-0 flex-1">
+                  <aside className="bg-muted/10 flex w-[320px] shrink-0 flex-col border-r">
+                    <div className="bg-background/40 flex h-10 shrink-0 items-center justify-center border-b px-3 text-[12px] font-semibold">
+                      {loadingCommitFiles
+                        ? 'Loading files'
+                        : `${commitFiles.length} changed ${
+                            commitFiles.length === 1 ? 'file' : 'files'
+                          }`}
+                    </div>
+                    <div className="custom-scrollbar min-h-0 flex-1 overflow-y-auto">
+                      {loadingCommitFiles ? (
+                        <div className="flex h-full items-center justify-center">
+                          <RefreshCw className="text-primary/40 size-5 animate-spin" />
+                        </div>
+                      ) : commitFiles.length === 0 ? (
+                        <div className="text-muted-foreground flex h-full items-center justify-center px-6 text-center text-xs">
+                          No file changes found for this commit.
+                        </div>
+                      ) : (
+                        <div className="divide-border/40 divide-y">
+                          {commitFiles.map((file) => {
+                            const fileStatus = getFileStatusPresentation(
+                              getCommitFileStatusKind(file.status),
+                            )
+                            const FileStatusIcon = fileStatus.Icon
+
+                            return (
+                              <button
+                                key={`${file.status}:${file.path}`}
+                                onClick={() => setSelectedCommitFile(file.path)}
+                                className={cn(
+                                  'group flex w-full cursor-pointer select-none items-center gap-3 px-4 py-3 text-left text-[12px] font-semibold transition-colors',
+                                  selectedCommitFile === file.path
+                                    ? 'bg-primary/10 text-foreground'
+                                    : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground',
+                                )}
+                              >
+                                <span className="min-w-0 flex-1 truncate">
+                                  {file.path}
+                                </span>
+                                <span
+                                  className={cn(
+                                    'flex size-4 shrink-0 items-center justify-center',
+                                    fileStatus.className,
+                                  )}
+                                  title={
+                                    file.oldPath
+                                      ? `${fileStatus.title}: ${file.oldPath} -> ${file.path}`
+                                      : fileStatus.title
+                                  }
+                                  aria-label={fileStatus.title}
+                                >
+                                  <FileStatusIcon className="size-4" />
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </aside>
+
+                  <section className="flex min-w-0 flex-1 flex-col">
+                    <div className="bg-background/40 flex h-10 shrink-0 items-center border-b px-5 text-[13px] font-semibold">
+                      <span className="text-muted-foreground min-w-0 truncate">
+                        {selectedCommitFile ?? 'Select a changed file'}
+                      </span>
+                    </div>
+                    {renderDiffContent()}
+                  </section>
+                </div>
+              ) : (
+                renderDiffContent()
+              )}
             </>
           ) : (
             <div className="group flex flex-1 flex-col items-center justify-center gap-8 p-12 text-center opacity-40">

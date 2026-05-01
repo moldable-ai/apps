@@ -1,7 +1,50 @@
-import { Check, ChevronDown, Plus } from 'lucide-react'
+import { Check, ChevronDown, Pencil, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger, cn } from '@moldable-ai/ui'
 import type { ConnectionSummary } from '../../shared/types'
+
+function policyLabel(policyMode: ConnectionSummary['policyMode']) {
+  if (policyMode === 'read-only') return 'read'
+  return policyMode
+}
+
+function policyBadgeClass(policyMode: ConnectionSummary['policyMode']) {
+  if (policyMode === 'read-only') {
+    return 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-500/15 dark:text-emerald-400'
+  }
+
+  if (policyMode === 'write') {
+    return 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/15 dark:text-amber-400'
+  }
+
+  return 'bg-destructive/10 text-destructive dark:bg-destructive/15'
+}
+
+function environmentBadgeClass(environment: string) {
+  const normalized = environment.trim().toLowerCase()
+
+  if (['local', 'localhost'].includes(normalized)) {
+    return 'bg-sky-500/10 text-sky-600 dark:bg-sky-500/15 dark:text-sky-400'
+  }
+
+  if (['dev', 'development'].includes(normalized)) {
+    return 'bg-indigo-500/10 text-indigo-600 dark:bg-indigo-500/15 dark:text-indigo-400'
+  }
+
+  if (['staging', 'stage'].includes(normalized)) {
+    return 'bg-violet-500/10 text-violet-600 dark:bg-violet-500/15 dark:text-violet-400'
+  }
+
+  if (['prod', 'production'].includes(normalized)) {
+    return 'bg-rose-500/10 text-rose-600 dark:bg-rose-500/15 dark:text-rose-400'
+  }
+
+  if (['test', 'testing', 'qa'].includes(normalized)) {
+    return 'bg-teal-500/10 text-teal-600 dark:bg-teal-500/15 dark:text-teal-400'
+  }
+
+  return 'bg-muted text-muted-foreground/80'
+}
 
 export function ConnectionSwitch({
   connections,
@@ -9,12 +52,14 @@ export function ConnectionSwitch({
   disabled,
   onChange,
   onNew,
+  onEdit,
 }: {
   connections: ConnectionSummary[]
   value: string | null
   disabled?: boolean
   onChange: (connectionId: string) => void
   onNew: () => void
+  onEdit: (connectionId: string) => void
 }) {
   const [open, setOpen] = useState(false)
   const activeConnection = connections.find(
@@ -42,8 +87,23 @@ export function ConnectionSwitch({
               {activeConnection?.name ?? 'Open connection'}
             </span>
             {activeConnection?.environment ? (
-              <span className="text-muted-foreground/80 bg-muted shrink-0 rounded px-1 text-[9px] font-medium leading-4">
+              <span
+                className={cn(
+                  'shrink-0 rounded px-1 text-[9px] font-medium leading-4',
+                  environmentBadgeClass(activeConnection.environment),
+                )}
+              >
                 {activeConnection.environment}
+              </span>
+            ) : null}
+            {activeConnection ? (
+              <span
+                className={cn(
+                  'shrink-0 rounded px-1 text-[9px] font-medium leading-4',
+                  policyBadgeClass(activeConnection.policyMode),
+                )}
+              >
+                {policyLabel(activeConnection.policyMode)}
               </span>
             ) : null}
           </span>
@@ -65,38 +125,69 @@ export function ConnectionSwitch({
           </button>
         </div>
         {connections.map((connection) => (
-          <button
+          <div
             key={connection.id}
-            type="button"
-            onClick={() => {
-              setOpen(false)
-              onChange(connection.id)
-            }}
             className={cn(
-              'hover:bg-accent hover:text-accent-foreground flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left transition-colors',
+              'hover:bg-accent hover:text-accent-foreground focus-within:bg-accent focus-within:text-accent-foreground group flex w-full items-center transition-colors',
               connection.id === value && 'bg-accent/60 text-accent-foreground',
             )}
           >
-            {connection.color ? (
-              <span
-                className="border-border size-2.5 shrink-0 rounded-full border"
-                style={{ backgroundColor: connection.color }}
-              />
-            ) : null}
-            <span className="min-w-0 flex-1">
-              <span className="block max-w-[220px] truncate text-xs font-semibold leading-none">
-                {connection.name}
-              </span>
-              {connection.environment ? (
-                <span className="text-muted-foreground mt-1 block text-[10px] leading-none">
-                  {connection.environment}
-                </span>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                onChange(connection.id)
+              }}
+              className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 px-3 py-2 text-left"
+            >
+              {connection.color ? (
+                <span
+                  className="border-border size-2.5 shrink-0 rounded-full border"
+                  style={{ backgroundColor: connection.color }}
+                />
               ) : null}
-            </span>
+              <span className="min-w-0 flex-1">
+                <span className="block max-w-[190px] truncate text-xs font-semibold leading-none">
+                  {connection.name}
+                </span>
+                <span className="mt-1.5 flex items-center gap-1 leading-none">
+                  {connection.environment ? (
+                    <span
+                      className={cn(
+                        'shrink-0 rounded px-1.5 text-[10px] font-medium leading-4',
+                        environmentBadgeClass(connection.environment),
+                      )}
+                    >
+                      {connection.environment}
+                    </span>
+                  ) : null}
+                  <span
+                    className={cn(
+                      'shrink-0 rounded px-1.5 text-[10px] font-medium leading-4',
+                      policyBadgeClass(connection.policyMode),
+                    )}
+                  >
+                    {policyLabel(connection.policyMode)}
+                  </span>
+                </span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                onEdit(connection.id)
+              }}
+              className="text-muted-foreground hover:bg-background/60 hover:text-foreground focus-visible:ring-ring mr-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md opacity-0 transition-opacity focus:opacity-100 focus-visible:outline-none focus-visible:ring-[3px] group-hover:opacity-100"
+              aria-label={`Edit ${connection.name}`}
+              title={`Edit ${connection.name}`}
+            >
+              <Pencil className="size-3.5" />
+            </button>
             {connection.id === value ? (
-              <Check className="text-muted-foreground size-3.5 shrink-0" />
+              <Check className="text-muted-foreground mr-3 size-3.5 shrink-0" />
             ) : null}
-          </button>
+          </div>
         ))}
       </PopoverContent>
     </Popover>

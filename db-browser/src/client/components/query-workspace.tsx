@@ -29,7 +29,7 @@ import {
 } from '@moldable-ai/ui'
 import { formatSql } from '../lib/sql'
 import { splitSqlStatements } from '../lib/sql-statements'
-import type { ConnectionSummary } from '../../shared/types'
+import type { ConnectionSummary, QueryResultResponse } from '../../shared/types'
 import { ResultGrid } from './result-grid'
 import { EmptyPane } from './shared'
 
@@ -44,6 +44,7 @@ export function QueryWorkspace({
   sql,
   columns,
   rows,
+  queryResult,
   selectedRowIndex,
   queryError,
   previewError,
@@ -70,6 +71,7 @@ export function QueryWorkspace({
   sql: string
   columns: string[]
   rows: Record<string, unknown>[]
+  queryResult: QueryResultResponse | null
   selectedRowIndex: number | null
   queryError: Error | null
   previewError: Error | null
@@ -209,7 +211,7 @@ export function QueryWorkspace({
 
         <div
           className={cn(
-            'border-border/70 bg-background z-10 flex flex-col border-b',
+            'border-border/70 bg-background z-10 flex flex-col',
             resultsPanelOpen ? 'shrink-0' : 'min-h-0 flex-1',
           )}
           style={resultsPanelOpen ? { height: editorHeight } : undefined}
@@ -259,6 +261,7 @@ export function QueryWorkspace({
                 activeConnection={activeConnection}
                 currentColumns={columns}
                 currentRows={rows}
+                queryResult={queryResult}
                 selectedRowIndex={selectedRowIndex}
                 queryError={queryError}
                 previewError={previewError}
@@ -388,6 +391,7 @@ function ResultSurface({
   activeConnection,
   currentColumns,
   currentRows,
+  queryResult,
   selectedRowIndex,
   queryError,
   previewError,
@@ -399,6 +403,7 @@ function ResultSurface({
   activeConnection: ConnectionSummary | null
   currentColumns: string[]
   currentRows: Record<string, unknown>[]
+  queryResult: QueryResultResponse | null
   selectedRowIndex: number | null
   queryError: Error | null
   previewError: Error | null
@@ -444,7 +449,11 @@ function ResultSurface({
   }
 
   if (currentColumns.length === 0 && currentRows.length === 0) {
-    return <ResultEmptyState />
+    return queryResult ? (
+      <CommandSuccessState result={queryResult} />
+    ) : (
+      <ResultEmptyState />
+    )
   }
 
   return (
@@ -505,10 +514,30 @@ function sendSqlErrorToChat(
     sql.trim(),
     '```',
     '',
-    'Please explain the issue briefly and update the current SQL editor in DB Browser with a corrected read-only query. Prefer db.sqlTabs.edit with exact oldString/newString for the smallest surgical change.',
+    'Please explain the issue briefly and update the current SQL editor in DB Browser with corrected SQL. Prefer db.sqlTabs.edit with exact oldString/newString for the smallest surgical change.',
   ].join('\n')
 
   window.parent.postMessage({ type: 'moldable:set-chat-input', text }, '*')
+}
+
+function CommandSuccessState({ result }: { result: QueryResultResponse }) {
+  const command = result.command || 'Statement'
+  const affectedRows = result.affectedRows ?? result.rowCount ?? 0
+  const rowLabel = affectedRows === 1 ? 'row' : 'rows'
+  const countLabel = result.readOnly === false ? 'affected' : 'returned'
+
+  return (
+    <div className="flex h-full items-start overflow-y-auto px-6 pb-[var(--chat-safe-padding,0px)] pt-8 text-left">
+      <div>
+        <p className="text-foreground text-sm font-medium">
+          {command} succeeded
+        </p>
+        <p className="text-muted-foreground mt-1 text-xs">
+          {affectedRows} {rowLabel} {countLabel} • {result.executionMs} ms
+        </p>
+      </div>
+    </div>
+  )
 }
 
 function ResultEmptyState() {
@@ -521,7 +550,7 @@ function ResultEmptyState() {
     {
       icon: <FileSearch className="size-3.5" />,
       title: 'select * from orders limit 100;',
-      meta: 'Run a read-only query',
+      meta: 'Run a query',
     },
     {
       icon: <Database className="size-3.5" />,

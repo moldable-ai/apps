@@ -1,5 +1,8 @@
 import type { FormEvent } from 'react'
-import type { ConnectionTestResponse } from '../shared/types'
+import type {
+  ConnectionPolicyMode,
+  ConnectionTestResponse,
+} from '../shared/types'
 
 export interface ConnectionFormState {
   connectionUrl: string
@@ -12,6 +15,7 @@ export interface ConnectionFormState {
   ssl: boolean
   color: string | null
   environment: string | null
+  policyMode: ConnectionPolicyMode
 }
 
 export interface SelectedTable {
