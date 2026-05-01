@@ -24,6 +24,7 @@ import {
   downloadFile,
   useWorkspace,
 } from '@moldable-ai/ui'
+import { ZoomableImage } from './components/zoomable-image'
 
 type AspectRatioId =
   | 'square'
@@ -525,16 +526,6 @@ export function App() {
   useEffect(() => {
     if (selectedThread && !selectedIterationId) {
       setSelectedIterationId(selectedIterationIdForThread(selectedThread))
-    }
-  }, [selectedIterationId, selectedThread])
-
-  useEffect(() => {
-    if (
-      selectedThread &&
-      pendingAspectRatio(selectedThread) &&
-      selectedIterationId !== PENDING_ITERATION_ID
-    ) {
-      setSelectedIterationId(PENDING_ITERATION_ID)
     }
   }, [selectedIterationId, selectedThread])
 
@@ -1240,10 +1231,10 @@ export function App() {
                   </>
                 ) : selectedIteration ? (
                   <>
-                    <img
+                    <ZoomableImage
                       src={selectedIteration.imageUrl}
                       alt={selectedThread.title}
-                      className="max-h-[calc(100vh-var(--chat-safe-padding,0px)-11rem)] max-w-full rounded-sm object-contain"
+                      imageClassName="max-h-[calc(100vh-var(--chat-safe-padding,0px)-11rem)] max-w-full object-contain"
                       style={{
                         viewTransitionName: transitionNameForThread(
                           selectedThread.id,
@@ -1408,8 +1399,17 @@ export function App() {
                           draggable="false"
                         />
                       ) : isFailed ? (
-                        <span className="flex size-full items-center justify-center">
-                          <RotateCcw className="text-muted-foreground size-4" />
+                        <span className="bg-muted/45 border-border/50 flex size-full flex-col justify-between border p-3">
+                          <span className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+                            Generation failed
+                          </span>
+                          <span className="text-foreground line-clamp-3 text-xs font-medium leading-5">
+                            {thread.title}
+                          </span>
+                          <span className="text-muted-foreground flex items-center gap-1.5 text-[11px]">
+                            <ImageIcon className="size-3.5" />
+                            Open details
+                          </span>
                         </span>
                       ) : null}
                     </span>
@@ -1417,7 +1417,7 @@ export function App() {
                   {isFailed ? (
                     <button
                       type="button"
-                      className="text-muted-foreground hover:text-foreground mt-2 flex h-7 w-full cursor-pointer items-center justify-center rounded-md text-xs transition-colors disabled:cursor-default disabled:opacity-60"
+                      className="border-border/60 bg-muted/35 text-muted-foreground hover:bg-muted hover:text-foreground mt-2 flex h-7 w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border text-xs font-medium transition-colors disabled:cursor-default disabled:opacity-60"
                       disabled={retryGeneration.isPending}
                       onClick={() => {
                         setSelectedThreadId(thread.id)
@@ -1430,6 +1430,7 @@ export function App() {
                       ) : (
                         <RotateCcw className="size-3.5" />
                       )}
+                      Retry
                     </button>
                   ) : null}
                 </div>

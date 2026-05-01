@@ -6,6 +6,7 @@ import {
   safePath,
   writeJson,
 } from '@moldable-ai/storage'
+import { imageRequest } from './moldable'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { spawn } from 'node:child_process'
@@ -358,10 +359,78 @@ function runAivault(
   })
 }
 
+function canFallbackFromMoldableImageStatus(status?: number): boolean {
+  return status === 401 || status === 403 || status === 404
+}
+
+async function invokeMoldableImages<T>(
+  workspaceId: string | undefined,
+  request: AivaultRequest,
+): Promise<T | null> {
+  const startedAt = Date.now()
+  console.info(
+    `[Images moldable-ai] start workspace=${workspaceLabel(workspaceId)} method=${request.method ?? 'POST'} path=${request.path ?? '/v1/images'} body=${request.body ? 'json' : request.multipartFields ? 'multipart' : 'empty'} timeoutMs=${request.timeoutMs ?? 'none'}`,
+  )
+
+  let parsed: {
+    response?: { json?: unknown; status?: number }
+    error?: { message?: string; code?: string }
+    code?: string
+    message?: string
+  }
+
+  try {
+    parsed = await imageRequest<T>({
+      workspaceId,
+      purpose: 'images.openai-image-generation',
+      ...request,
+    })
+  } catch (error) {
+    const message = errorMessage(error, 'Moldable AI image request failed')
+    if (
+      message.includes('Moldable AI server environment is not configured') ||
+      message.includes('codex_unavailable') ||
+      message.includes('status 404')
+    ) {
+      console.warn(
+        `[Images moldable-ai] unavailable workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)} message=${message}; falling back to aivault`,
+      )
+      return null
+    }
+    throw error
+  }
+
+  const status = parsed.response?.status
+  if (canFallbackFromMoldableImageStatus(status)) {
+    console.warn(
+      `[Images moldable-ai] upstream status=${status} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}; falling back to aivault`,
+    )
+    return null
+  }
+
+  const json = (parsed.response?.json ?? parsed) as
+    | (T & { error?: { message?: string } })
+    | undefined
+  if (status && status >= 400) {
+    throw new Error(
+      json?.error?.message ?? `OpenAI image request failed with ${status}`,
+    )
+  }
+  if (!json) throw new Error('OpenAI image request returned no JSON body')
+
+  console.info(
+    `[Images moldable-ai] success workspace=${workspaceLabel(workspaceId)} method=${request.method ?? 'POST'} path=${request.path ?? '/v1/images'} status=${status ?? 'unknown'} durationMs=${elapsedMs(startedAt)}`,
+  )
+  return json as T
+}
+
 async function invokeOpenAIImages<T>(
   workspaceId: string | undefined,
   request: AivaultRequest,
 ): Promise<T> {
+  const moldableResponse = await invokeMoldableImages<T>(workspaceId, request)
+  if (moldableResponse) return moldableResponse
+
   const startedAt = Date.now()
   console.info(
     `[Images aivault] start workspace=${workspaceLabel(workspaceId)} method=${request.method ?? 'POST'} path=${request.path ?? '/v1/images'} body=${request.body ? 'json' : request.multipartFields ? 'multipart' : 'empty'} timeoutMs=${request.timeoutMs ?? 'none'}`,

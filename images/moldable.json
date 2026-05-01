@@ -164,7 +164,7 @@
     {
       "key": "OPENAI_API_KEY",
       "name": "OpenAI API Key",
-      "description": "Powers GPT Image 2 generation and image edits through aivault.",
+      "description": "Fallback for GPT Image 2 generation and image edits when Codex CLI auth is unavailable.",
       "url": "https://platform.openai.com/api-keys",
       "required": true,
       "capabilities": ["openai/image-generation"]
