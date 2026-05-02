@@ -110,6 +110,9 @@
                 "id": {
                   "type": "string"
                 },
+                "baseIterationId": {
+                  "type": "string"
+                },
                 "prompt": {
                   "type": "string"
                 },

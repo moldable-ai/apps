@@ -86,6 +86,7 @@ type ImageIteration = {
   fileName: string
   mimeType: string
   model?: typeof MODEL
+  parentIterationId?: string
   width?: number
   height?: number
   originalName?: string
@@ -97,6 +98,7 @@ type PendingIteration = {
   prompt: string
   aspectRatio: AspectRatioId
   quality: Quality
+  baseIterationId?: string
   startedAt: string
 }
 
@@ -173,6 +175,7 @@ const retryParamsSchema = z.object({
 
 const editParamsSchema = z.object({
   id: z.string().trim().min(1),
+  baseIterationId: z.string().trim().min(1).optional(),
   prompt: z.string().trim().min(1),
   aspectRatio: aspectRatioSchema.optional(),
   quality: qualitySchema.optional(),
@@ -292,6 +295,9 @@ function summarizeRpcParams(params: unknown): string {
   const parts: string[] = []
 
   if (typeof record.id === 'string') parts.push(`id=${record.id}`)
+  if (typeof record.baseIterationId === 'string') {
+    parts.push(`baseIterationId=${record.baseIterationId}`)
+  }
   if (typeof record.aspectRatio === 'string') {
     parts.push(`aspectRatio=${record.aspectRatio}`)
   }
@@ -539,6 +545,15 @@ async function saveThreads(
 
 function latestIteration(thread: ImageThread): ImageIteration | undefined {
   return thread.iterations.at(-1)
+}
+
+function baseIterationForEdit(
+  thread: ImageThread,
+  baseIterationId?: string,
+): ImageIteration | undefined {
+  return baseIterationId
+    ? thread.iterations.find((iteration) => iteration.id === baseIterationId)
+    : latestIteration(thread)
 }
 
 function displayIteration(thread: ImageThread): ImageIteration | undefined {
@@ -1289,7 +1304,7 @@ async function queueThreadEdit(
     return thread
   }
 
-  const base = latestIteration(thread)
+  const base = baseIterationForEdit(thread, params.baseIterationId)
   if (!base) throw new Error('Image thread does not have an image to edit.')
 
   const aspectRatio = params.aspectRatio ?? base.aspectRatio
@@ -1306,6 +1321,7 @@ async function queueThreadEdit(
       prompt: params.prompt,
       aspectRatio,
       quality,
+      baseIterationId: base.id,
       startedAt: now,
     },
     updatedAt: now,
@@ -1322,6 +1338,7 @@ async function queueThreadEdit(
     workspaceId,
     {
       id: params.id,
+      baseIterationId: base.id,
       prompt: params.prompt,
       aspectRatio,
       quality,
@@ -1340,7 +1357,7 @@ async function editThread(
   const thread = threads[threadIndex]
   if (!thread) return null
 
-  const base = latestIteration(thread)
+  const base = baseIterationForEdit(thread, params.baseIterationId)
   if (!base) throw new Error('Image thread does not have an image to edit.')
 
   const aspectRatio = params.aspectRatio ?? base.aspectRatio
@@ -1392,6 +1409,7 @@ async function editThread(
         fileName,
         mimeType: 'image/png',
         model: MODEL,
+        parentIterationId: base.id,
         createdAt: now,
       },
     ],

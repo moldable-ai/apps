@@ -7,6 +7,7 @@ import {
   Image as ImageIcon,
   Loader2,
   PanelTop,
+  Plus,
   RotateCcw,
   Shuffle,
   X,
@@ -50,6 +51,7 @@ type ImageIteration = {
   quality: ImageQuality
   mimeType: string
   model?: string
+  parentIterationId?: string
   width?: number
   height?: number
   originalName?: string
@@ -62,6 +64,7 @@ type PendingIteration = {
   prompt: string
   aspectRatio: AspectRatioId
   quality: ImageQuality
+  baseIterationId?: string
   startedAt: string
 }
 
@@ -80,6 +83,30 @@ type ImageThread = {
   latestImageUrl: string | null
   iterations: ImageIteration[]
 }
+
+type ThumbnailItem =
+  | {
+      id: string
+      type: 'image'
+      imageUrl: string
+      aspectRatio: AspectRatioId
+      label: string
+      iteration: ImageIteration
+      children: ImageIteration[]
+      selectedBranchIteration: ImageIteration
+      isSelected: boolean
+    }
+  | {
+      id: string
+      type: 'pending'
+      imageUrl: null
+      aspectRatio: AspectRatioId
+      label: string
+      iteration: null
+      children: ImageIteration[]
+      selectedBranchIteration: null
+      isSelected: boolean
+    }
 
 type RpcResponse<T> =
   | {
@@ -127,6 +154,8 @@ const THUMBNAIL_SIZE = 56
 const THUMBNAIL_SELECTED_SCALE = 1.21429
 const THUMBNAIL_SELECTED_SIZE = THUMBNAIL_SIZE * THUMBNAIL_SELECTED_SCALE
 const THUMBNAIL_GAP = 8
+const THUMBNAIL_RAIL_ITEM_LEFT = 11
+const THUMBNAIL_FLYOUT_GAP = 12
 
 function aspectLabel(id: AspectRatioId) {
   return ASPECT_RATIOS.find((ratio) => ratio.id === id) ?? ASPECT_RATIOS[0]
@@ -134,6 +163,16 @@ function aspectLabel(id: AspectRatioId) {
 
 function sendToChatInput(text: string) {
   window.parent.postMessage({ type: 'moldable:set-chat-input', text }, '*')
+}
+
+function sendChatInstructions(text: string) {
+  window.parent.postMessage(
+    {
+      type: 'moldable:set-chat-instructions',
+      text,
+    },
+    '*',
+  )
 }
 
 function transitionNameForThread(threadId: string) {
@@ -366,6 +405,57 @@ function naturalAspectStyle(iteration?: ImageIteration | null) {
   return { aspectRatio: `${iteration.width} / ${iteration.height}` }
 }
 
+function childIterationsForThread(
+  thread: ImageThread,
+  parentIterationId: string,
+): ImageIteration[] {
+  const byParent = new Map<string, ImageIteration[]>()
+  for (const iteration of thread.iterations) {
+    if (!iteration.parentIterationId) continue
+    const siblings = byParent.get(iteration.parentIterationId) ?? []
+    siblings.push(iteration)
+    byParent.set(iteration.parentIterationId, siblings)
+  }
+
+  const descendants: ImageIteration[] = []
+  const visited = new Set<string>()
+  const collect = (id: string) => {
+    for (const child of byParent.get(id) ?? []) {
+      if (visited.has(child.id)) continue
+      visited.add(child.id)
+      descendants.push(child)
+      collect(child.id)
+    }
+  }
+
+  collect(parentIterationId)
+  return descendants
+}
+
+function rootIterationsForThread(thread: ImageThread): ImageIteration[] {
+  const iterationIds = new Set(
+    thread.iterations.map((iteration) => iteration.id),
+  )
+  return thread.iterations.filter(
+    (iteration) =>
+      !iteration.parentIterationId ||
+      !iterationIds.has(iteration.parentIterationId),
+  )
+}
+
+function containsIteration(
+  iterations: ImageIteration[],
+  iterationId: string | null,
+) {
+  return Boolean(
+    iterationId && iterations.some((iteration) => iteration.id === iterationId),
+  )
+}
+
+function remixInstructionsForIteration(threadId: string, iterationId: string) {
+  return `Images app is open to image thread ${threadId}, with image iteration ${iterationId} selected. Drive this app only through app RPC methods. To remix this selected image, call images.edit with { id: "${threadId}", baseIterationId: "${iterationId}", prompt, aspectRatio? }. To change the thread ratio, call images.setAspectRatio with { id: "${threadId}", aspectRatio }. Use images.get to inspect iteration history.`
+}
+
 function AspectRatioMenu({
   value,
   busy,
@@ -464,6 +554,10 @@ export function App() {
   const [copiedPromptIterationId, setCopiedPromptIterationId] = useState<
     string | null
   >(null)
+  const [hoveredThumbnailId, setHoveredThumbnailId] = useState<string | null>(
+    null,
+  )
+  const [thumbnailScrollTop, setThumbnailScrollTop] = useState(0)
   const thumbnailScrollRef = useRef<HTMLDivElement | null>(null)
   const [thumbnailScrollState, setThumbnailScrollState] = useState({
     canScrollUp: false,
@@ -473,6 +567,8 @@ export function App() {
   const updateThumbnailScrollState = useCallback(() => {
     const node = thumbnailScrollRef.current
     if (!node) return
+
+    setThumbnailScrollTop(node.scrollTop)
 
     const maxScrollTop = node.scrollHeight - node.clientHeight
     const nextState = {
@@ -642,17 +738,16 @@ export function App() {
     const context = selectedThread
       ? selectedThread.status === 'failed'
         ? `Images app is open to failed image thread ${selectedThread.id}. Drive this app only through app RPC methods. To retry this failed generation, call images.retry with { id: "${selectedThread.id}" }. Use images.get to inspect the failure details.`
-        : `Images app is open to image thread ${selectedThread.id}. Drive this app only through app RPC methods. To edit the current image, call images.edit with { id: "${selectedThread.id}", prompt, aspectRatio? }. To change ratio, call images.setAspectRatio with { id: "${selectedThread.id}", aspectRatio }. Use images.get to inspect iteration history.`
+        : selectedIteration
+          ? remixInstructionsForIteration(
+              selectedThread.id,
+              selectedIteration.id,
+            )
+          : `Images app is open to image thread ${selectedThread.id}. Drive this app only through app RPC methods. To edit the current image, call images.edit with { id: "${selectedThread.id}", prompt, aspectRatio? }. To change ratio, call images.setAspectRatio with { id: "${selectedThread.id}", aspectRatio }. Use images.get to inspect iteration history.`
       : `Images app grid is open. Drive this app only through app RPC methods. To create a new image thread, call images.generate with { prompt, aspectRatio } when the user specifies a ratio; otherwise omit aspectRatio. To retry a failed generation, call images.retry with { id }. Use images.list or images.get to inspect existing image history.`
 
-    window.parent.postMessage(
-      {
-        type: 'moldable:set-chat-instructions',
-        text: context,
-      },
-      '*',
-    )
-  }, [selectedThread])
+    sendChatInstructions(context)
+  }, [selectedIteration, selectedThread])
 
   const setAspectRatio = useMutation({
     mutationFn: async ({
@@ -972,15 +1067,30 @@ export function App() {
     const canCopyPrompt = Boolean(selectedIteration?.prompt)
     const isPromptCopied =
       selectedIteration && copiedPromptIterationId === selectedIteration.id
-    const thumbnailItems = [
-      ...selectedThread.iterations.map((iteration, index) => ({
-        id: iteration.id,
-        type: 'image' as const,
-        imageUrl: iteration.imageUrl,
-        aspectRatio: iteration.aspectRatio,
-        label: `View iteration ${index + 1}`,
-        isSelected: selectedIteration?.id === iteration.id,
-      })),
+    const rootIterations = rootIterationsForThread(selectedThread)
+    const thumbnailItems: ThumbnailItem[] = [
+      ...rootIterations.map((iteration, index) => {
+        const children = childIterationsForThread(selectedThread, iteration.id)
+        const branchIterations = [iteration, ...children]
+        const selectedBranchIteration =
+          branchIterations.find(
+            (branchIteration) => branchIteration.id === selectedIteration?.id,
+          ) ?? iteration
+        return {
+          id: iteration.id,
+          type: 'image' as const,
+          imageUrl: iteration.imageUrl,
+          aspectRatio: iteration.aspectRatio,
+          label: `View iteration ${index + 1}`,
+          iteration,
+          children,
+          selectedBranchIteration,
+          isSelected: containsIteration(
+            branchIterations,
+            selectedIteration?.id ?? null,
+          ),
+        }
+      }),
       ...(pendingAspectRatio(selectedThread)
         ? [
             {
@@ -989,6 +1099,9 @@ export function App() {
               imageUrl: null,
               aspectRatio: displayedAspectRatio,
               label: pendingMainLabel(selectedThread, displayedAspectRatio),
+              iteration: null,
+              children: [] as ImageIteration[],
+              selectedBranchIteration: null,
               isSelected: Boolean(selectedPendingAspectRatio),
             },
           ]
@@ -1028,6 +1141,27 @@ export function App() {
         )
       }
     }
+
+    const activeThreadId = selectedThread.id
+
+    function remixIteration(iteration: ImageIteration | null | undefined) {
+      if (!iteration) return
+      setSelectedIterationId(iteration.id)
+      sendChatInstructions(
+        remixInstructionsForIteration(activeThreadId, iteration.id),
+      )
+      sendToChatInput('Remix this image: ')
+    }
+
+    const hoveredThumbnail = thumbnailStack.find(
+      (item) => item.id === hoveredThumbnailId,
+    )
+    const hoveredBranchTarget = hoveredThumbnail?.iteration
+      ? hoveredThumbnail.selectedBranchIteration
+      : null
+    const hoveredThumbnailVisualSize = hoveredThumbnail?.isSelected
+      ? THUMBNAIL_SELECTED_SIZE
+      : THUMBNAIL_SIZE
 
     return (
       <main
@@ -1091,7 +1225,7 @@ export function App() {
                 aria-label="Remix image"
                 title="Remix image"
                 disabled={!selectedIteration}
-                onClick={() => sendToChatInput('Remix this image: ')}
+                onClick={() => remixIteration(selectedIteration)}
               >
                 <Shuffle className="size-3.5" />
               </Button>
@@ -1150,60 +1284,134 @@ export function App() {
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[84px_minmax(0,1fr)] overflow-hidden">
-          <aside className="relative min-h-0 overflow-hidden">
+        <div className="grid min-h-0 flex-1 grid-cols-[84px_minmax(0,1fr)] overflow-visible">
+          <aside
+            className="relative z-30 min-h-0 overflow-visible"
+            onMouseLeave={() => setHoveredThumbnailId(null)}
+          >
             <div
               ref={thumbnailScrollRef}
-              className="h-full overflow-y-auto px-2 py-4 pb-[calc(var(--chat-safe-padding,0px)+7rem)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="h-full overflow-y-auto overflow-x-visible px-2 py-4 pb-[calc(var(--chat-safe-padding,0px)+7rem)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               onScroll={updateThumbnailScrollState}
             >
               <div
                 className="relative mx-auto w-[74px] rounded-xl"
                 style={{ height: thumbnailStackHeight }}
               >
-                {thumbnailStack.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className={cn(
-                      'focus-visible:ring-ring absolute cursor-pointer select-none overflow-hidden text-left transition-transform duration-150 ease-out focus-visible:outline-none focus-visible:ring-2',
-                      item.isSelected ? 'z-10' : 'z-0',
-                    )}
-                    style={{
-                      left: 6,
-                      width: THUMBNAIL_SIZE,
-                      height: THUMBNAIL_SIZE,
-                      transform: `translateY(${item.offset}px) scale(${
-                        item.isSelected ? THUMBNAIL_SELECTED_SCALE : 1
-                      })`,
-                      transformOrigin: 'left top',
-                      borderRadius: 6,
-                    }}
-                    aria-label={item.label}
-                    aria-current={item.isSelected ? 'true' : undefined}
-                    data-selected-thumbnail={
-                      item.isSelected ? 'true' : undefined
-                    }
-                    onClick={() => setSelectedIterationId(item.id)}
-                  >
-                    {item.type === 'pending' ? (
-                      <GenerationLoadingPreview
-                        aspectRatio={item.aspectRatio}
-                        className="size-full rounded-none"
-                        label={null}
-                      />
-                    ) : (
-                      <img
-                        src={item.imageUrl}
-                        alt=""
-                        draggable="false"
-                        className="pointer-events-none size-full select-none object-cover"
-                      />
-                    )}
-                  </button>
-                ))}
+                {thumbnailStack.map((item) => {
+                  return (
+                    <div
+                      key={item.id}
+                      className={cn(
+                        'group/thumbnail absolute overflow-visible',
+                        item.isSelected ? 'z-20' : 'z-0',
+                      )}
+                      style={{
+                        left: 6,
+                        top: item.offset,
+                        width: THUMBNAIL_SIZE,
+                        height: THUMBNAIL_SIZE,
+                      }}
+                      onMouseEnter={() => {
+                        if (item.type === 'image')
+                          setHoveredThumbnailId(item.id)
+                      }}
+                      onFocus={() => {
+                        if (item.type === 'image')
+                          setHoveredThumbnailId(item.id)
+                      }}
+                    >
+                      {item.type === 'image' && item.children.length > 0 ? (
+                        <span
+                          aria-hidden="true"
+                          className="border-border/50 bg-muted/35 absolute inset-0 -z-10 translate-x-1.5 translate-y-1.5 rounded-md border transition-transform duration-200 ease-out group-hover/thumbnail:translate-x-2.5 group-hover/thumbnail:translate-y-2 motion-reduce:transition-none"
+                        />
+                      ) : null}
+                      <button
+                        type="button"
+                        className="focus-visible:ring-ring relative block size-full cursor-pointer select-none overflow-hidden text-left transition-transform duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 motion-reduce:transition-none"
+                        style={{
+                          transform: `scale(${
+                            item.isSelected ? THUMBNAIL_SELECTED_SCALE : 1
+                          })`,
+                          transformOrigin: 'left top',
+                          borderRadius: 6,
+                        }}
+                        aria-label={item.label}
+                        aria-current={item.isSelected ? 'true' : undefined}
+                        data-selected-thumbnail={
+                          item.isSelected ? 'true' : undefined
+                        }
+                        onClick={() => {
+                          if (item.iteration)
+                            setSelectedIterationId(item.iteration.id)
+                          else setSelectedIterationId(item.id)
+                        }}
+                      >
+                        {item.type === 'pending' ? (
+                          <GenerationLoadingPreview
+                            aspectRatio={item.aspectRatio}
+                            className="size-full rounded-none"
+                            label={null}
+                          />
+                        ) : item.iteration ? (
+                          <img
+                            src={item.iteration.imageUrl}
+                            alt=""
+                            draggable="false"
+                            className="pointer-events-none size-full select-none object-cover"
+                          />
+                        ) : null}
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
             </div>
+
+            {hoveredThumbnail?.iteration ? (
+              <div
+                className="absolute z-40 flex translate-x-0 items-center gap-2"
+                style={{
+                  left:
+                    THUMBNAIL_RAIL_ITEM_LEFT +
+                    hoveredThumbnailVisualSize +
+                    THUMBNAIL_FLYOUT_GAP,
+                  top: 16 + hoveredThumbnail.offset - thumbnailScrollTop,
+                }}
+                onMouseEnter={() => setHoveredThumbnailId(hoveredThumbnail.id)}
+              >
+                {hoveredThumbnail.children.map((child) => (
+                  <button
+                    key={child.id}
+                    type="button"
+                    className={cn(
+                      'bg-muted ring-border/55 focus-visible:ring-ring size-14 cursor-pointer overflow-hidden rounded-md text-left shadow-sm ring-1 transition-transform hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 motion-reduce:transition-none',
+                      selectedIteration?.id === child.id && 'ring-ring ring-2',
+                    )}
+                    aria-label="View variant"
+                    onClick={() => setSelectedIterationId(child.id)}
+                  >
+                    <img
+                      src={child.imageUrl}
+                      alt=""
+                      draggable="false"
+                      className="pointer-events-none size-full select-none object-cover"
+                    />
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="border-border/70 bg-background/95 text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:ring-ring flex size-14 cursor-pointer items-center justify-center rounded-md border shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2"
+                  aria-label="Remix image"
+                  title="Remix image"
+                  onClick={() => remixIteration(hoveredBranchTarget)}
+                >
+                  <Plus className="size-4" />
+                </button>
+              </div>
+            ) : null}
+
             {thumbnailScrollState.canScrollUp ? (
               <div className="from-background via-background/80 to-background/0 pointer-events-none absolute inset-x-0 top-0 z-20 h-12 bg-gradient-to-b" />
             ) : null}
