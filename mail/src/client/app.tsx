@@ -6,6 +6,7 @@ import {
   PenLine,
   RefreshCcw,
   Search,
+  Sparkles,
   X,
 } from 'lucide-react'
 import {
@@ -36,9 +37,11 @@ import {
 import { folders } from './lib/folders'
 import { emptyComposer, replyComposer, senderName } from './lib/mail-format'
 import {
+  useActionSuggestions,
   useConnectGmail,
   useDeleteMailDraft,
   useDisconnectGmail,
+  useGenerateMailSearchQuery,
   useLabels,
   useMailContacts,
   useMailDrafts,
@@ -46,6 +49,8 @@ import {
   useMailMessages,
   useMailStatus,
   useMessageAction,
+  useRecordActionSuggestionSignal,
+  useRetriageActionSuggestions,
   useSaveMailDraft,
   useSendMail,
   useUnsubscribeAndArchive,
@@ -53,6 +58,7 @@ import {
   useWarmMailFolders,
 } from './hooks/use-mail'
 import { useMailKeyboard } from './hooks/use-mail-keyboard'
+import { ActionSuggestionsPanel } from './components/action-suggestions-panel'
 import { Composer } from './components/composer'
 import { ConnectScreen } from './components/connect-screen'
 import {
@@ -63,6 +69,8 @@ import { EmailView } from './components/email-view'
 import { InboxView } from './components/inbox-view'
 import type {
   ComposerState,
+  GeneratedMailSearchQuery,
+  MailActionSuggestion,
   MailDraft,
   MailMessageDetail,
   MailMessageSummary,
@@ -277,9 +285,14 @@ export function App() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const connectGmail = useConnectGmail()
   const disconnectGmail = useDisconnectGmail()
+  const generateSearchQuery = useGenerateMailSearchQuery()
   const [folderId, setFolderId] = useState('INBOX')
+  const [inboxMode, setInboxMode] = useState<'triaged' | 'inbox'>('triaged')
   const [searchInput, setSearchInput] = useState('')
   const [query, setQuery] = useState('')
+  const [generatedSearch, setGeneratedSearch] =
+    useState<GeneratedMailSearchQuery | null>(null)
+  const [searchError, setSearchError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [selectedBulkIds, setSelectedBulkIds] = useState<Set<string>>(
     () => new Set(),
@@ -292,6 +305,7 @@ export function App() {
   const readerHistoryOpenRef = useRef(false)
   const readerClosingRef = useRef(false)
   const readerCloseTimerRef = useRef<number | null>(null)
+  const searchRequestIdRef = useRef(0)
 
   const statusQuery = useMailStatus()
   const showingDrafts = folderId === DRAFT_FOLDER_ID
@@ -315,7 +329,7 @@ export function App() {
   const draftsQuery = useMailDrafts({
     enabled: statusQuery.data?.authenticated === true,
   })
-  const drafts = draftsQuery.data ?? []
+  const drafts = useMemo(() => draftsQuery.data ?? [], [draftsQuery.data])
   const snoozedCount =
     (showingSnoozed ? messagesQuery.data : snoozedQuery.data)
       ?.resultSizeEstimate ?? 0
@@ -363,10 +377,22 @@ export function App() {
     enabled: statusQuery.data?.authenticated === true,
     query: contactSearch,
   })
-  useLabels(statusQuery.data?.authenticated === true)
+  const labelsQuery = useLabels(statusQuery.data?.authenticated === true)
   useWarmMailFolders({
     enabled: statusQuery.data?.authenticated === true,
   })
+  const actionSuggestionsQuery = useActionSuggestions({
+    messages,
+    labels: labelsQuery.data ?? [],
+    account: statusQuery.data?.profile?.emailAddress ?? null,
+    enabled:
+      statusQuery.data?.authenticated === true &&
+      folderId === 'INBOX' &&
+      !query &&
+      !showingDrafts,
+  })
+  const recordActionSuggestionSignal = useRecordActionSuggestionSignal()
+  const retriageActionSuggestions = useRetriageActionSuggestions()
   const saveDraftMutation = useSaveMailDraft()
   const deleteDraftMutation = useDeleteMailDraft()
   const updateLabelsMutation = useUpdateMessageLabels()
@@ -480,6 +506,12 @@ export function App() {
     [actionMutation],
   )
 
+  const runActionAsync = useCallback(
+    (id: string, action: MessageAction, until?: number) =>
+      actionMutation.mutateAsync({ id, action, until }),
+    [actionMutation],
+  )
+
   const openReply = useCallback(
     (message: MailMessageDetail) => setComposer(replyComposer(message)),
     [],
@@ -583,6 +615,81 @@ export function App() {
     },
     [selectedBulkIds, updateLabelsMutation],
   )
+
+  const approveActionSuggestion = useCallback(
+    async (suggestion: MailActionSuggestion) => {
+      switch (suggestion.groupId) {
+        case 'archive':
+          await runActionAsync(suggestion.messageId, 'archive')
+          break
+        case 'label-archive':
+          if (!suggestion.suggestedLabelId) return
+          await updateLabelsMutation.mutateAsync({
+            id: suggestion.messageId,
+            addLabelIds: [suggestion.suggestedLabelId],
+            removeLabelIds: ['INBOX', 'SNOOZED'],
+          })
+          break
+        case 'follow-up':
+        case 'reply-needed':
+          await runActionAsync(suggestion.messageId, 'star')
+          break
+        case 'unsubscribe-archive':
+          await unsubscribeArchiveMutation.mutateAsync(suggestion.messageId)
+          break
+        case 'trash':
+          await runActionAsync(suggestion.messageId, 'trash')
+          break
+        case 'spam':
+          await runActionAsync(suggestion.messageId, 'spam')
+          break
+        case 'keep-inbox':
+        case 'waiting-on':
+        case 'read-later':
+        case 'needs-review':
+          break
+      }
+    },
+    [runActionAsync, unsubscribeArchiveMutation, updateLabelsMutation],
+  )
+
+  const retriageSuggestions = useCallback(
+    async (suggestions: MailActionSuggestion[]) => {
+      const messageIds = new Set(
+        suggestions.map((suggestion) => suggestion.messageId),
+      )
+      const response = await retriageActionSuggestions.mutateAsync({
+        messages: messages.filter((message) => messageIds.has(message.id)),
+        labels: labelsQuery.data ?? [],
+        account: statusQuery.data?.profile?.emailAddress ?? null,
+      })
+      return response.suggestions
+    },
+    [
+      labelsQuery.data,
+      messages,
+      retriageActionSuggestions,
+      statusQuery.data?.profile?.emailAddress,
+    ],
+  )
+
+  const refreshActionSuggestions = useCallback(async () => {
+    if (messages.length === 0) return
+    try {
+      await retriageActionSuggestions.mutateAsync({
+        messages,
+        labels: labelsQuery.data ?? [],
+        account: statusQuery.data?.profile?.emailAddress ?? null,
+      })
+    } catch (error) {
+      console.error('Failed to refresh action suggestions:', error)
+    }
+  }, [
+    labelsQuery.data,
+    messages,
+    retriageActionSuggestions,
+    statusQuery.data?.profile?.emailAddress,
+  ])
 
   useMailKeyboard({
     disabled: !!composer,
@@ -722,25 +829,104 @@ export function App() {
       0,
     [inboxUnreadQuery.data],
   )
+  const {
+    fetchNextPage: fetchNextMessagesPage,
+    hasNextPage: hasNextMessagesPage,
+    isFetchingNextPage: isFetchingNextMessagesPage,
+  } = messagesQuery
+  const hasMoreMessages = !showingDrafts && Boolean(hasNextMessagesPage)
+  const loadingMoreMessages = !showingDrafts && isFetchingNextMessagesPage
+  const loadMoreMessages = useCallback(() => {
+    if (showingDrafts || !hasNextMessagesPage || isFetchingNextMessagesPage) {
+      return
+    }
+    void fetchNextMessagesPage()
+  }, [
+    fetchNextMessagesPage,
+    hasNextMessagesPage,
+    isFetchingNextMessagesPage,
+    showingDrafts,
+  ])
 
-  const handleSearch = (event?: FormEvent) => {
+  const handleSearch = async (event?: FormEvent) => {
     event?.preventDefault()
     setSelectedBulkIds(new Set())
     dismissReader()
-    setQuery(searchInput.trim())
+
+    const naturalLanguageQuery = searchInput.trim()
+    const searchRequestId = searchRequestIdRef.current + 1
+    searchRequestIdRef.current = searchRequestId
+
+    if (!naturalLanguageQuery) {
+      setQuery('')
+      setGeneratedSearch(null)
+      setSearchError(null)
+      return
+    }
+
+    setFolderId('all')
+    setInboxMode('inbox')
+    setQuery('')
+    setGeneratedSearch(null)
+    setSearchError(null)
+
+    try {
+      const generated = await generateSearchQuery.mutateAsync({
+        query: naturalLanguageQuery,
+        currentLabelId: showingDrafts ? 'INBOX' : folderId,
+      })
+      if (searchRequestIdRef.current !== searchRequestId) return
+      const generatedQuery = generated.gmailQuery || naturalLanguageQuery
+      queryClient.removeQueries({
+        queryKey: [
+          'mail-messages',
+          workspaceId,
+          generated.labelId,
+          generatedQuery,
+        ],
+        exact: true,
+      })
+      setGeneratedSearch(generated)
+      setQuery(generatedQuery)
+      if (generated.labelId !== DRAFT_FOLDER_ID) {
+        setFolderId(generated.labelId)
+        setInboxMode('inbox')
+      }
+    } catch {
+      if (searchRequestIdRef.current !== searchRequestId) return
+      setGeneratedSearch(null)
+      queryClient.removeQueries({
+        queryKey: ['mail-messages', workspaceId, 'all', naturalLanguageQuery],
+        exact: true,
+      })
+      setFolderId('all')
+      setInboxMode('inbox')
+      setQuery(naturalLanguageQuery)
+      setSearchError(
+        'AI search translation is unavailable; searching all mail for your words instead.',
+      )
+    }
   }
 
   const clearSearch = () => {
+    searchRequestIdRef.current += 1
     setSelectedBulkIds(new Set())
     setSearchInput('')
     setQuery('')
+    setGeneratedSearch(null)
+    setSearchError(null)
     dismissReader()
   }
 
   const handleFolderChange = useCallback(
-    (nextFolderId: string) => {
+    (nextFolderId: string, nextInboxMode?: 'triaged' | 'inbox') => {
       setSelectedBulkIds(new Set())
       setFolderId(nextFolderId)
+      if (nextFolderId === 'INBOX') {
+        setInboxMode(nextInboxMode ?? 'inbox')
+      } else {
+        setInboxMode('inbox')
+      }
       dismissReader()
     },
     [dismissReader],
@@ -787,12 +973,15 @@ export function App() {
   }
 
   const handleDisconnect = () => {
+    searchRequestIdRef.current += 1
     disconnectGmail.mutate(undefined, {
       onSuccess: () => {
         dismissReader()
         setComposer(null)
         setQuery('')
         setSearchInput('')
+        setGeneratedSearch(null)
+        setSearchError(null)
       },
     })
   }
@@ -852,7 +1041,7 @@ export function App() {
           }, 0)
           break
         case 'mail.refresh':
-          if (!showingDrafts) void messagesQuery.refetch()
+          if (!showingDrafts) void refetchMessages()
           break
         case 'mail.reply':
           if (messageQuery.data) openReply(messageQuery.data)
@@ -896,7 +1085,7 @@ export function App() {
           }
           break
         case 'mail.open-inbox':
-          handleFolderChange('INBOX')
+          handleFolderChange('INBOX', 'inbox')
           break
         case 'mail.open-sent':
           handleFolderChange('SENT')
@@ -928,7 +1117,7 @@ export function App() {
     draftClosePromptOpen,
     handleFolderChange,
     messageQuery.data,
-    messagesQuery.refetch,
+    refetchMessages,
     openReply,
     runAction,
     selectedId,
@@ -1013,18 +1202,27 @@ export function App() {
           <InboxHeader
             account={statusQuery.data.profile?.emailAddress ?? 'Gmail'}
             folderId={folderId}
+            inboxMode={inboxMode}
             query={query}
             searchInput={searchInput}
             unreadCount={unreadCount}
+            triagedCount={actionSuggestionsQuery.data?.suggestions.length ?? 0}
             draftCount={drafts.length}
             snoozedCount={snoozedCount}
-            refreshing={!showingDrafts && messagesQuery.isFetching}
+            refreshing={
+              !showingDrafts &&
+              messagesQuery.isFetching &&
+              !messagesQuery.isFetchingNextPage
+            }
             disconnecting={disconnectGmail.isPending}
+            searchTranslating={generateSearchQuery.isPending}
+            generatedSearch={generatedSearch}
+            searchError={searchError}
             onCompose={() => setComposer(emptyComposer())}
             onDisconnect={handleDisconnect}
             onFolderChange={handleFolderChange}
             onRefresh={() => {
-              if (!showingDrafts) void messagesQuery.refetch()
+              if (!showingDrafts) void refetchMessages()
             }}
             onSearchInputChange={setSearchInput}
             onSearch={handleSearch}
@@ -1036,6 +1234,15 @@ export function App() {
               selectedId={selectedId}
               loading={
                 showingDrafts ? draftsQuery.isLoading : messagesQuery.isLoading
+              }
+              searchLoading={
+                !showingDrafts &&
+                (generateSearchQuery.isPending ||
+                  Boolean(
+                    query &&
+                      messagesQuery.isFetching &&
+                      !messagesQuery.isFetchingNextPage,
+                  ))
               }
               error={showingDrafts ? draftsQuery.error : messagesQuery.error}
               folderId={folderId}
@@ -1059,6 +1266,51 @@ export function App() {
               selectedMessageIds={selectedBulkIds}
               selectionActive={bulkSelectionActive}
               onToggleMessageSelected={toggleBulkSelected}
+              hasMoreMessages={hasMoreMessages}
+              loadingMore={loadingMoreMessages}
+              onLoadMore={loadMoreMessages}
+              hideMessageList={
+                folderId === 'INBOX' &&
+                inboxMode === 'triaged' &&
+                !query &&
+                !showingDrafts
+              }
+              practicePanel={
+                folderId === 'INBOX' &&
+                inboxMode === 'triaged' &&
+                !query &&
+                !showingDrafts ? (
+                  <ActionSuggestionsPanel
+                    messages={messages}
+                    labels={labelsQuery.data ?? []}
+                    response={actionSuggestionsQuery.data}
+                    loading={
+                      actionSuggestionsQuery.isLoading ||
+                      retriageActionSuggestions.isPending
+                    }
+                    error={actionSuggestionsQuery.error}
+                    onRefresh={() => void refreshActionSuggestions()}
+                    onRetriage={retriageSuggestions}
+                    onSelectMessage={handleSelectMessage}
+                    onReply={handleReplyFromRow}
+                    onArchive={(id) => runAction(id, 'archive')}
+                    onUnsubscribeArchive={(id) =>
+                      unsubscribeArchiveMutation.mutate(id)
+                    }
+                    onSnooze={(id, until) => runAction(id, 'snooze', until)}
+                    onUnsnooze={(id) => runAction(id, 'unsnooze')}
+                    onSpam={(id) => runAction(id, 'spam')}
+                    onApprove={approveActionSuggestion}
+                    onRecordSignal={(signal) =>
+                      recordActionSuggestionSignal.mutateAsync({
+                        ...signal,
+                        account:
+                          statusQuery.data?.profile?.emailAddress ?? null,
+                      })
+                    }
+                  />
+                ) : null
+              }
             />
           </div>
         </>
@@ -1157,16 +1409,21 @@ export function App() {
 interface InboxHeaderProps {
   account: string
   folderId: string
+  inboxMode: 'triaged' | 'inbox'
   query: string
   searchInput: string
   unreadCount: number
+  triagedCount: number
   draftCount: number
   snoozedCount: number
   refreshing: boolean
   disconnecting: boolean
+  searchTranslating: boolean
+  generatedSearch: GeneratedMailSearchQuery | null
+  searchError: string | null
   onCompose: () => void
   onDisconnect: () => void
-  onFolderChange: (folderId: string) => void
+  onFolderChange: (folderId: string, inboxMode?: 'triaged' | 'inbox') => void
   onRefresh: () => void
   onSearchInputChange: (value: string) => void
   onSearch: (event?: FormEvent) => void
@@ -1176,13 +1433,18 @@ interface InboxHeaderProps {
 function InboxHeader({
   account,
   folderId,
+  inboxMode,
   query,
   searchInput,
   unreadCount,
+  triagedCount,
   draftCount,
   snoozedCount,
   refreshing,
   disconnecting,
+  searchTranslating,
+  generatedSearch,
+  searchError,
   onCompose,
   onDisconnect,
   onFolderChange,
@@ -1260,13 +1522,18 @@ function InboxHeader({
               data-mail-search-input
               value={searchInput}
               onChange={(event) => onSearchInputChange(event.target.value)}
-              placeholder="Search mail - from:, subject:, has:attachment"
+              placeholder="Ask in plain English, e.g. unread with attachments"
+              aria-label="Search mail with natural language"
               className={cn(
                 'emails-search-input bg-muted/50 h-10 rounded-full border-transparent pl-10 pr-10 text-[13.5px]',
                 'placeholder:text-muted-foreground/70',
               )}
             />
-            {query || searchInput ? (
+            {searchTranslating ? (
+              <div className="text-muted-foreground pointer-events-none absolute right-4 top-1/2 -translate-y-1/2">
+                <Loader2 className="size-4 animate-spin" />
+              </div>
+            ) : query || searchInput ? (
               <div className="text-muted-foreground/70 pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1 text-[10.5px]">
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1286,20 +1553,67 @@ function InboxHeader({
               </div>
             ) : null}
           </div>
+          {searchError ? (
+            <p className="text-destructive mt-1.5 px-3 text-[11px]">
+              {searchError}
+            </p>
+          ) : generatedSearch && query ? (
+            <p className="text-muted-foreground mt-1.5 truncate px-3 text-[11px]">
+              Gmail search:{' '}
+              <code className="bg-muted text-foreground rounded px-1 py-0.5 font-mono">
+                {query}
+              </code>
+            </p>
+          ) : null}
         </form>
 
         <nav className="mt-4 flex gap-1 overflow-x-auto pb-1">
           {[
-            folders[0],
-            ...(snoozedCount > 0 || folderId === 'SNOOZED' ? [folders[1]] : []),
-            ...(draftCount > 0
-              ? [{ id: DRAFT_FOLDER_ID, label: 'Drafts', icon: FileText }]
+            {
+              id: 'TRIAGED',
+              folderId: 'INBOX',
+              inboxMode: 'triaged' as const,
+              label: 'Triaged',
+              icon: Sparkles,
+            },
+            {
+              ...folders[0],
+              folderId: 'INBOX',
+              inboxMode: 'inbox' as const,
+            },
+            ...(snoozedCount > 0 || folderId === 'SNOOZED'
+              ? [{ ...folders[1], folderId: 'SNOOZED' }]
               : []),
-            ...folders.slice(2),
+            ...(draftCount > 0
+              ? [
+                  {
+                    id: DRAFT_FOLDER_ID,
+                    folderId: DRAFT_FOLDER_ID,
+                    label: 'Drafts',
+                    icon: FileText,
+                  },
+                ]
+              : []),
+            ...folders
+              .slice(2)
+              .map((folder) => ({ ...folder, folderId: folder.id })),
           ].map((folder) => {
             if (!folder) return null
             const Icon = folder.icon
-            const active = folder.id === folderId
+            const active =
+              folder.folderId === 'INBOX'
+                ? folderId === 'INBOX' && folder.inboxMode === inboxMode
+                : folder.folderId === folderId
+            const count =
+              folder.id === 'TRIAGED'
+                ? triagedCount
+                : folder.id === 'INBOX'
+                  ? unreadCount
+                  : folder.id === DRAFT_FOLDER_ID
+                    ? draftCount
+                    : folder.id === 'SNOOZED'
+                      ? snoozedCount
+                      : 0
 
             return (
               <button
@@ -1311,11 +1625,13 @@ function InboxHeader({
                     ? 'bg-foreground text-background'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                 )}
-                onClick={() => onFolderChange(folder.id)}
+                onClick={() =>
+                  onFolderChange(folder.folderId, folder.inboxMode)
+                }
               >
                 <Icon className="size-3.5" />
                 <span>{folder.label}</span>
-                {folder.id === 'INBOX' && unreadCount > 0 ? (
+                {count > 0 ? (
                   <span
                     className={cn(
                       'ml-0.5 rounded-full px-1.5 text-[10px] font-semibold tabular-nums',
@@ -1324,31 +1640,7 @@ function InboxHeader({
                         : 'bg-muted text-foreground/90',
                     )}
                   >
-                    {unreadCount}
-                  </span>
-                ) : null}
-                {folder.id === DRAFT_FOLDER_ID && draftCount > 0 ? (
-                  <span
-                    className={cn(
-                      'ml-0.5 rounded-full px-1.5 text-[10px] font-semibold tabular-nums',
-                      active
-                        ? 'bg-background/20 text-background'
-                        : 'bg-muted text-foreground/90',
-                    )}
-                  >
-                    {draftCount}
-                  </span>
-                ) : null}
-                {folder.id === 'SNOOZED' && snoozedCount > 0 ? (
-                  <span
-                    className={cn(
-                      'ml-0.5 rounded-full px-1.5 text-[10px] font-semibold tabular-nums',
-                      active
-                        ? 'bg-background/20 text-background'
-                        : 'bg-muted text-foreground/90',
-                    )}
-                  >
-                    {snoozedCount}
+                    {count}
                   </span>
                 ) : null}
               </button>

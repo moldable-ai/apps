@@ -77,6 +77,60 @@ export interface MessagesResponse {
   resultSizeEstimate: number
 }
 
+export interface GeneratedMailSearchQuery {
+  naturalLanguageQuery: string
+  gmailQuery: string
+  labelId: string
+  explanation: string
+}
+
+export type MailActionGroupId =
+  | 'archive'
+  | 'label-archive'
+  | 'keep-inbox'
+  | 'follow-up'
+  | 'waiting-on'
+  | 'reply-needed'
+  | 'read-later'
+  | 'unsubscribe-archive'
+  | 'trash'
+  | 'spam'
+  | 'needs-review'
+
+export interface MailActionSuggestion {
+  id: string
+  messageId: string
+  groupId: MailActionGroupId
+  confidence: number
+  reason?: string
+  suggestedLabelId?: string
+  suggestedLabelName?: string
+  matchedRuleIds?: string[]
+}
+
+export interface ActionSuggestionsResponse {
+  suggestions: MailActionSuggestion[]
+  fingerprint: string
+  generatedAt: string
+  signalCount: number
+}
+
+export interface MailTriageSignalInput {
+  account?: string | null
+  message: Pick<
+    MailMessageSummary,
+    'id' | 'from' | 'subject' | 'snippet' | 'labelIds'
+  >
+  suggestedGroupId?: MailActionGroupId
+  finalGroupId: MailActionGroupId
+  outcome: 'approved' | 'corrected' | 'label_changed' | 'dismissed'
+  suggestedLabelId?: string
+  suggestedLabelName?: string
+  finalLabelId?: string
+  finalLabelName?: string
+  reason?: string
+}
+
 export interface ComposerState {
   mode: 'new' | 'reply'
   draftId?: string

@@ -12,8 +12,8 @@ importers:
         specifier: ^1.19.14
         version: 1.19.14(hono@4.12.14)
       '@moldable-ai/editor':
-        specifier: ^0.1.7
-        version: 0.1.7(@moldable-ai/ui@0.2.7(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)
+        specifier: ^0.1.8
+        version: 0.1.8(@moldable-ai/ui@0.2.7(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)
       '@moldable-ai/storage':
         specifier: ^0.1.4
         version: 0.1.4
@@ -53,6 +53,9 @@ importers:
       zod:
         specifier: ^3.25.76
         version: 3.25.76
+      zod-to-json-schema:
+        specifier: ^3.25.2
+        version: 3.25.2(zod@3.25.76)
     devDependencies:
       '@moldable-ai/eslint-config':
         specifier: 0.1.4
@@ -484,8 +487,8 @@ packages:
     peerDependencies:
       yjs: '>=13.5.22'
 
-  '@moldable-ai/editor@0.1.7':
-    resolution: {integrity: sha512-W0KL1Iwrr+TbmFl81nIf7GkcTDslyXNQBgxpNZAvgWWkugt0bxZpiTnYHH3VapsvHRxM6VbHpZY8TLWjsGqzUQ==}
+  '@moldable-ai/editor@0.1.8':
+    resolution: {integrity: sha512-FhOb/9dQDhpFFJGrUk7sihr7gMv02cffI7Xm21WA9ZwxtnCPwRv6Pp5kCJ1kVYIy80KH2pvRSEtdTFq+b6+xQQ==}
     peerDependencies:
       '@moldable-ai/ui': '>=0.2.7'
       react: ^19.0.0
@@ -3460,6 +3463,11 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
+  zod-to-json-schema@3.25.2:
+    resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
+    peerDependencies:
+      zod: ^3.25.28 || ^4
+
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
@@ -3884,7 +3892,7 @@ snapshots:
       lexical: 0.39.0
       yjs: 13.6.30
 
-  '@moldable-ai/editor@0.1.7(@moldable-ai/ui@0.2.7(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)':
+  '@moldable-ai/editor@0.1.8(@moldable-ai/ui@0.2.7(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)':
     dependencies:
       '@lexical/clipboard': 0.39.0
       '@lexical/code': 0.39.0
@@ -3893,6 +3901,7 @@ snapshots:
       '@lexical/html': 0.39.0
       '@lexical/link': 0.39.0
       '@lexical/list': 0.39.0
+      '@lexical/mark': 0.39.0
       '@lexical/markdown': 0.39.0
       '@lexical/react': 0.39.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)
       '@lexical/rich-text': 0.39.0
@@ -7469,6 +7478,10 @@ snapshots:
       lib0: 0.2.117
 
   yocto-queue@0.1.0: {}
+
+  zod-to-json-schema@3.25.2(zod@3.25.76):
+    dependencies:
+      zod: 3.25.76
 
   zod@3.25.76: {}
 

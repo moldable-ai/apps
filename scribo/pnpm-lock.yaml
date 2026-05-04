@@ -33,8 +33,8 @@ importers:
         specifier: ^0.39.0
         version: 0.39.0
       '@moldable-ai/editor':
-        specifier: ^0.1.7
-        version: 0.1.7(@moldable-ai/ui@0.2.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)
+        specifier: ^0.1.8
+        version: 0.1.8(@moldable-ai/ui@0.2.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)
       '@moldable-ai/storage':
         specifier: ^0.1.4
         version: 0.1.4
@@ -561,8 +561,8 @@ packages:
     peerDependencies:
       yjs: '>=13.5.22'
 
-  '@moldable-ai/editor@0.1.7':
-    resolution: {integrity: sha512-W0KL1Iwrr+TbmFl81nIf7GkcTDslyXNQBgxpNZAvgWWkugt0bxZpiTnYHH3VapsvHRxM6VbHpZY8TLWjsGqzUQ==}
+  '@moldable-ai/editor@0.1.8':
+    resolution: {integrity: sha512-FhOb/9dQDhpFFJGrUk7sihr7gMv02cffI7Xm21WA9ZwxtnCPwRv6Pp5kCJ1kVYIy80KH2pvRSEtdTFq+b6+xQQ==}
     peerDependencies:
       '@moldable-ai/ui': '>=0.2.7'
       react: ^19.0.0
@@ -4043,7 +4043,7 @@ snapshots:
       lexical: 0.39.0
       yjs: 13.6.30
 
-  '@moldable-ai/editor@0.1.7(@moldable-ai/ui@0.2.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)':
+  '@moldable-ai/editor@0.1.8(@moldable-ai/ui@0.2.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)':
     dependencies:
       '@lexical/clipboard': 0.39.0
       '@lexical/code': 0.39.0
@@ -4052,6 +4052,7 @@ snapshots:
       '@lexical/html': 0.39.0
       '@lexical/link': 0.39.0
       '@lexical/list': 0.39.0
+      '@lexical/mark': 0.39.0
       '@lexical/markdown': 0.39.0
       '@lexical/react': 0.39.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)
       '@lexical/rich-text': 0.39.0

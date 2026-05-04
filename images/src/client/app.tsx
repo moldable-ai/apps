@@ -14,7 +14,6 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DragEvent } from 'react'
-import { flushSync } from 'react-dom'
 import {
   Button,
   Dialog,
@@ -120,10 +119,6 @@ type RpcResponse<T> =
       }
     }
 
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (updateCallback: () => void) => unknown
-}
-
 const ASPECT_RATIOS: AspectRatio[] = [
   { id: 'square', label: 'Square', ratio: '1:1' },
   { id: 'portrait', label: 'Portrait', ratio: '3:4' },
@@ -155,7 +150,12 @@ const THUMBNAIL_SELECTED_SCALE = 1.21429
 const THUMBNAIL_SELECTED_SIZE = THUMBNAIL_SIZE * THUMBNAIL_SELECTED_SCALE
 const THUMBNAIL_GAP = 8
 const THUMBNAIL_RAIL_ITEM_LEFT = 11
+const THUMBNAIL_RAIL_WIDTH = 84
 const THUMBNAIL_FLYOUT_GAP = 12
+const GALLERY_ALBUM_PREVIEW_LIMIT = 8
+const GALLERY_ALBUM_PREVIEW_SIZE = 72
+const GALLERY_ALBUM_PREVIEW_GAP = 8
+const GALLERY_ALBUM_PREVIEW_MAX_COLUMNS = 3
 
 function aspectLabel(id: AspectRatioId) {
   return ASPECT_RATIOS.find((ratio) => ratio.id === id) ?? ASPECT_RATIOS[0]
@@ -173,27 +173,6 @@ function sendChatInstructions(text: string) {
     },
     '*',
   )
-}
-
-function transitionNameForThread(threadId: string) {
-  return `image-thread-${threadId.replace(/[^a-zA-Z0-9_-]/g, '-')}`
-}
-
-function runViewTransition(update: () => void) {
-  const prefersReducedMotion = window.matchMedia(
-    '(prefers-reduced-motion: reduce)',
-  ).matches
-  const startViewTransition = (document as ViewTransitionDocument)
-    .startViewTransition
-
-  if (!startViewTransition || prefersReducedMotion) {
-    update()
-    return
-  }
-
-  startViewTransition.call(document, () => {
-    flushSync(update)
-  })
 }
 
 async function copyText(text: string) {
@@ -400,11 +379,6 @@ function hasFileDrag(event: DragEvent): boolean {
   return Array.from(event.dataTransfer.types).includes('Files')
 }
 
-function naturalAspectStyle(iteration?: ImageIteration | null) {
-  if (!iteration?.width || !iteration.height) return undefined
-  return { aspectRatio: `${iteration.width} / ${iteration.height}` }
-}
-
 function childIterationsForThread(
   thread: ImageThread,
   parentIterationId: string,
@@ -452,8 +426,34 @@ function containsIteration(
   )
 }
 
+function StackCountBadge({
+  count,
+  compact = false,
+}: {
+  count: number
+  compact?: boolean
+}) {
+  if (count <= 0) return null
+
+  const label = count > 99 ? '+99' : `+${count}`
+
+  return (
+    <span
+      className={cn(
+        'border-border/65 bg-background/90 text-foreground pointer-events-none absolute z-20 flex items-center justify-center rounded-full border font-mono font-semibold shadow-sm backdrop-blur-sm',
+        compact
+          ? 'bottom-1 right-1 h-4 min-w-4 px-1 text-[9px] leading-none'
+          : 'bottom-2 right-2 h-5 min-w-5 px-1.5 text-[11px] leading-none',
+      )}
+      aria-hidden="true"
+    >
+      {label}
+    </span>
+  )
+}
+
 function remixInstructionsForIteration(threadId: string, iterationId: string) {
-  return `Images app is open to image thread ${threadId}, with image iteration ${iterationId} selected. Drive this app only through app RPC methods. To remix this selected image, call images.edit with { id: "${threadId}", baseIterationId: "${iterationId}", prompt, aspectRatio? }. To change the thread ratio, call images.setAspectRatio with { id: "${threadId}", aspectRatio }. Use images.get to inspect iteration history.`
+  return `Images app is open to image thread ${threadId}, with image iteration ${iterationId} selected. Drive this app only through app RPC methods. To remix this selected image, call images.edit with { id: "${threadId}", baseIterationId: "${iterationId}", prompt, aspectRatio? }. To cancel stuck pending work, call images.cancel with { id: "${threadId}" }. To change the thread ratio, call images.setAspectRatio with { id: "${threadId}", aspectRatio }. Use images.get to inspect iteration history.`
 }
 
 function AspectRatioMenu({
@@ -554,15 +554,138 @@ export function App() {
   const [copiedPromptIterationId, setCopiedPromptIterationId] = useState<
     string | null
   >(null)
+  const [hoveredGalleryThreadId, setHoveredGalleryThreadId] = useState<
+    string | null
+  >(null)
+  const [isGalleryAlbumOpen, setIsGalleryAlbumOpen] = useState(false)
+  const [galleryAlbumAlign, setGalleryAlbumAlign] = useState<'left' | 'right'>(
+    'left',
+  )
+  const galleryAlbumCloseTimeoutRef = useRef<number | null>(null)
+  const galleryAlbumOpenFrameRef = useRef<number | null>(null)
   const [hoveredThumbnailId, setHoveredThumbnailId] = useState<string | null>(
     null,
   )
+  const [isThumbnailFlyoutOpen, setIsThumbnailFlyoutOpen] = useState(false)
+  const [hoveredFanItemId, setHoveredFanItemId] = useState<string | null>(null)
+  const hoveredThumbnailIdRef = useRef<string | null>(null)
+  const thumbnailFlyoutCloseTimeoutRef = useRef<number | null>(null)
+  const thumbnailFlyoutOpenFrameRef = useRef<number | null>(null)
   const [thumbnailScrollTop, setThumbnailScrollTop] = useState(0)
   const thumbnailScrollRef = useRef<HTMLDivElement | null>(null)
   const [thumbnailScrollState, setThumbnailScrollState] = useState({
     canScrollUp: false,
     canScrollDown: false,
   })
+
+  const openGalleryAlbum = useCallback(
+    (threadId: string, triggerRect?: DOMRect, popoverWidth = 0) => {
+      if (galleryAlbumCloseTimeoutRef.current !== null) {
+        window.clearTimeout(galleryAlbumCloseTimeoutRef.current)
+        galleryAlbumCloseTimeoutRef.current = null
+      }
+      if (galleryAlbumOpenFrameRef.current !== null) {
+        window.cancelAnimationFrame(galleryAlbumOpenFrameRef.current)
+        galleryAlbumOpenFrameRef.current = null
+      }
+
+      if (triggerRect && popoverWidth > 0) {
+        setGalleryAlbumAlign(
+          triggerRect.left + popoverWidth > window.innerWidth - 12
+            ? 'right'
+            : 'left',
+        )
+      } else {
+        setGalleryAlbumAlign('left')
+      }
+
+      setHoveredGalleryThreadId(threadId)
+      setIsGalleryAlbumOpen(false)
+      galleryAlbumOpenFrameRef.current = window.requestAnimationFrame(() => {
+        galleryAlbumOpenFrameRef.current = window.requestAnimationFrame(() => {
+          setIsGalleryAlbumOpen(true)
+          galleryAlbumOpenFrameRef.current = null
+        })
+      })
+    },
+    [],
+  )
+
+  const closeGalleryAlbum = useCallback(() => {
+    if (galleryAlbumCloseTimeoutRef.current !== null) {
+      window.clearTimeout(galleryAlbumCloseTimeoutRef.current)
+    }
+    if (galleryAlbumOpenFrameRef.current !== null) {
+      window.cancelAnimationFrame(galleryAlbumOpenFrameRef.current)
+      galleryAlbumOpenFrameRef.current = null
+    }
+
+    setIsGalleryAlbumOpen(false)
+    galleryAlbumCloseTimeoutRef.current = window.setTimeout(() => {
+      setHoveredGalleryThreadId(null)
+      galleryAlbumCloseTimeoutRef.current = null
+    }, 260)
+  }, [])
+
+  const openThumbnailFlyout = useCallback((thumbnailId: string) => {
+    if (thumbnailFlyoutCloseTimeoutRef.current !== null) {
+      window.clearTimeout(thumbnailFlyoutCloseTimeoutRef.current)
+      thumbnailFlyoutCloseTimeoutRef.current = null
+    }
+    if (thumbnailFlyoutOpenFrameRef.current !== null) {
+      window.cancelAnimationFrame(thumbnailFlyoutOpenFrameRef.current)
+      thumbnailFlyoutOpenFrameRef.current = null
+    }
+
+    if (hoveredThumbnailIdRef.current === thumbnailId) {
+      setIsThumbnailFlyoutOpen(true)
+      return
+    }
+
+    setHoveredFanItemId(null)
+    hoveredThumbnailIdRef.current = thumbnailId
+    setHoveredThumbnailId(thumbnailId)
+    setIsThumbnailFlyoutOpen(false)
+    thumbnailFlyoutOpenFrameRef.current = window.requestAnimationFrame(() => {
+      thumbnailFlyoutOpenFrameRef.current = window.requestAnimationFrame(() => {
+        setIsThumbnailFlyoutOpen(true)
+        thumbnailFlyoutOpenFrameRef.current = null
+      })
+    })
+  }, [])
+
+  const closeThumbnailFlyout = useCallback(() => {
+    if (thumbnailFlyoutCloseTimeoutRef.current !== null) {
+      window.clearTimeout(thumbnailFlyoutCloseTimeoutRef.current)
+    }
+    if (thumbnailFlyoutOpenFrameRef.current !== null) {
+      window.cancelAnimationFrame(thumbnailFlyoutOpenFrameRef.current)
+      thumbnailFlyoutOpenFrameRef.current = null
+    }
+    setIsThumbnailFlyoutOpen(false)
+    thumbnailFlyoutCloseTimeoutRef.current = window.setTimeout(() => {
+      hoveredThumbnailIdRef.current = null
+      setHoveredThumbnailId(null)
+      thumbnailFlyoutCloseTimeoutRef.current = null
+    }, 340)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (galleryAlbumCloseTimeoutRef.current !== null) {
+        window.clearTimeout(galleryAlbumCloseTimeoutRef.current)
+      }
+      if (galleryAlbumOpenFrameRef.current !== null) {
+        window.cancelAnimationFrame(galleryAlbumOpenFrameRef.current)
+      }
+      if (thumbnailFlyoutCloseTimeoutRef.current !== null) {
+        window.clearTimeout(thumbnailFlyoutCloseTimeoutRef.current)
+      }
+      if (thumbnailFlyoutOpenFrameRef.current !== null) {
+        window.cancelAnimationFrame(thumbnailFlyoutOpenFrameRef.current)
+      }
+    }
+  }, [])
 
   const updateThumbnailScrollState = useCallback(() => {
     const node = thumbnailScrollRef.current
@@ -743,8 +866,8 @@ export function App() {
               selectedThread.id,
               selectedIteration.id,
             )
-          : `Images app is open to image thread ${selectedThread.id}. Drive this app only through app RPC methods. To edit the current image, call images.edit with { id: "${selectedThread.id}", prompt, aspectRatio? }. To change ratio, call images.setAspectRatio with { id: "${selectedThread.id}", aspectRatio }. Use images.get to inspect iteration history.`
-      : `Images app grid is open. Drive this app only through app RPC methods. To create a new image thread, call images.generate with { prompt, aspectRatio } when the user specifies a ratio; otherwise omit aspectRatio. To retry a failed generation, call images.retry with { id }. Use images.list or images.get to inspect existing image history.`
+          : `Images app is open to image thread ${selectedThread.id}. Drive this app only through app RPC methods. To edit the current image, call images.edit with { id: "${selectedThread.id}", prompt, aspectRatio? }. To cancel stuck pending work, call images.cancel with { id: "${selectedThread.id}" }. To change ratio, call images.setAspectRatio with { id: "${selectedThread.id}", aspectRatio }. Use images.get to inspect iteration history.`
+      : `Images app grid is open. Drive this app only through app RPC methods. To create a new image thread, call images.generate with { prompt, aspectRatio } when the user specifies a ratio; otherwise omit aspectRatio. To retry a failed generation, call images.retry with { id }. To cancel stuck pending work, call images.cancel with { id }. Use images.list or images.get to inspect existing image history.`
 
     sendChatInstructions(context)
   }, [selectedIteration, selectedThread])
@@ -1081,7 +1204,10 @@ export function App() {
           type: 'image' as const,
           imageUrl: iteration.imageUrl,
           aspectRatio: iteration.aspectRatio,
-          label: `View iteration ${index + 1}`,
+          label:
+            children.length > 0
+              ? `View iteration ${index + 1}, ${children.length} more ${children.length === 1 ? 'image' : 'images'}`
+              : `View iteration ${index + 1}`,
           iteration,
           children,
           selectedBranchIteration,
@@ -1114,7 +1240,7 @@ export function App() {
         ? THUMBNAIL_SELECTED_SIZE
         : THUMBNAIL_SIZE
       thumbnailOffset += visualSize + THUMBNAIL_GAP
-      return { ...item, offset }
+      return { ...item, offset, visualSize }
     })
     const thumbnailStackHeight =
       thumbnailStack.length > 0
@@ -1159,13 +1285,22 @@ export function App() {
     const hoveredBranchTarget = hoveredThumbnail?.iteration
       ? hoveredThumbnail.selectedBranchIteration
       : null
-    const hoveredThumbnailVisualSize = hoveredThumbnail?.isSelected
-      ? THUMBNAIL_SELECTED_SIZE
-      : THUMBNAIL_SIZE
+    const hoveredThumbnailVisualSize =
+      hoveredThumbnail?.visualSize ?? THUMBNAIL_SIZE
+    const hoveredFlyoutItemCount = hoveredThumbnail?.iteration
+      ? hoveredThumbnail.children.length + 1
+      : 0
+    const hoveredFlyoutWidth =
+      THUMBNAIL_FLYOUT_GAP +
+      Math.max(
+        0,
+        hoveredFlyoutItemCount * THUMBNAIL_SIZE +
+          Math.max(0, hoveredFlyoutItemCount - 1) * THUMBNAIL_GAP,
+      )
 
     return (
       <main
-        className="text-foreground relative flex h-full min-h-0 flex-col overflow-hidden"
+        className="image-view-emerge text-foreground relative flex h-full min-h-0 flex-col overflow-hidden"
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -1179,10 +1314,8 @@ export function App() {
             className="cursor-pointer"
             aria-label="Close image"
             onClick={() => {
-              runViewTransition(() => {
-                setSelectedThreadId(null)
-                setSelectedIterationId(null)
-              })
+              setSelectedThreadId(null)
+              setSelectedIterationId(null)
             }}
           >
             <X className="size-3.5" />
@@ -1284,10 +1417,10 @@ export function App() {
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-cols-[84px_minmax(0,1fr)] overflow-visible">
+        <div className="relative min-h-0 flex-1 overflow-visible">
           <aside
-            className="relative z-30 min-h-0 overflow-visible"
-            onMouseLeave={() => setHoveredThumbnailId(null)}
+            className="absolute inset-y-0 right-0 z-30 min-h-0 w-[84px] overflow-visible"
+            onMouseLeave={closeThumbnailFlyout}
           >
             <div
               ref={thumbnailScrollRef}
@@ -1309,34 +1442,19 @@ export function App() {
                       style={{
                         left: 6,
                         top: item.offset,
-                        width: THUMBNAIL_SIZE,
-                        height: THUMBNAIL_SIZE,
+                        width: item.visualSize,
+                        height: item.visualSize,
                       }}
                       onMouseEnter={() => {
-                        if (item.type === 'image')
-                          setHoveredThumbnailId(item.id)
+                        if (item.type === 'image') openThumbnailFlyout(item.id)
                       }}
                       onFocus={() => {
-                        if (item.type === 'image')
-                          setHoveredThumbnailId(item.id)
+                        if (item.type === 'image') openThumbnailFlyout(item.id)
                       }}
                     >
-                      {item.type === 'image' && item.children.length > 0 ? (
-                        <span
-                          aria-hidden="true"
-                          className="border-border/50 bg-muted/35 absolute inset-0 -z-10 translate-x-1.5 translate-y-1.5 rounded-md border transition-transform duration-200 ease-out group-hover/thumbnail:translate-x-2.5 group-hover/thumbnail:translate-y-2 motion-reduce:transition-none"
-                        />
-                      ) : null}
                       <button
                         type="button"
-                        className="focus-visible:ring-ring relative block size-full cursor-pointer select-none overflow-hidden text-left transition-transform duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 motion-reduce:transition-none"
-                        style={{
-                          transform: `scale(${
-                            item.isSelected ? THUMBNAIL_SELECTED_SCALE : 1
-                          })`,
-                          transformOrigin: 'left top',
-                          borderRadius: 6,
-                        }}
+                        className="focus-visible:ring-ring relative block size-full cursor-pointer select-none overflow-visible text-left focus-visible:outline-none focus-visible:ring-2"
                         aria-label={item.label}
                         aria-current={item.isSelected ? 'true' : undefined}
                         data-selected-thumbnail={
@@ -1348,18 +1466,57 @@ export function App() {
                           else setSelectedIterationId(item.id)
                         }}
                       >
-                        {item.type === 'pending' ? (
-                          <GenerationLoadingPreview
-                            aspectRatio={item.aspectRatio}
-                            className="size-full rounded-none"
-                            label={null}
-                          />
-                        ) : item.iteration ? (
-                          <img
-                            src={item.iteration.imageUrl}
-                            alt=""
-                            draggable="false"
-                            className="pointer-events-none size-full select-none object-cover"
+                        {item.type === 'image' && item.children.length > 0
+                          ? item.children
+                              .slice(-2)
+                              .map((child, stackIndex, ledges) => {
+                                const depth = ledges.length - stackIndex
+                                const ledgeOffset = 3 * depth
+                                return (
+                                  <span
+                                    key={child.id}
+                                    aria-hidden="true"
+                                    className="bg-muted ring-border/55 absolute inset-0 block overflow-hidden rounded-md shadow-sm ring-1 transition-[box-shadow,translate,scale] duration-[260ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none"
+                                    style={{
+                                      transform: `translate3d(${ledgeOffset}px, ${ledgeOffset}px, 0)`,
+                                      zIndex: stackIndex,
+                                    }}
+                                  >
+                                    <img
+                                      src={child.imageUrl}
+                                      alt=""
+                                      draggable="false"
+                                      className="size-full object-cover"
+                                    />
+                                  </span>
+                                )
+                              })
+                          : null}
+                        <span
+                          className={cn(
+                            'ring-border/55 relative z-10 block size-full overflow-hidden rounded-md shadow-sm ring-1 transition-[translate,scale,box-shadow] duration-[260ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover/thumbnail:-translate-x-0.5 group-hover/thumbnail:-translate-y-1 group-hover/thumbnail:scale-[1.035] group-hover/thumbnail:shadow-md group-focus-visible/thumbnail:-translate-x-0.5 group-focus-visible/thumbnail:-translate-y-1 group-focus-visible/thumbnail:scale-[1.035] motion-reduce:transition-none',
+                            item.isSelected && 'ring-ring ring-2',
+                          )}
+                        >
+                          {item.type === 'pending' ? (
+                            <GenerationLoadingPreview
+                              aspectRatio={item.aspectRatio}
+                              className="size-full rounded-none"
+                              label={null}
+                            />
+                          ) : item.iteration ? (
+                            <img
+                              src={item.iteration.imageUrl}
+                              alt=""
+                              draggable="false"
+                              className="pointer-events-none size-full select-none object-cover"
+                            />
+                          ) : null}
+                        </span>
+                        {item.type === 'image' && item.children.length > 0 ? (
+                          <StackCountBadge
+                            count={item.children.length}
+                            compact
                           />
                         ) : null}
                       </button>
@@ -1371,44 +1528,98 @@ export function App() {
 
             {hoveredThumbnail?.iteration ? (
               <div
-                className="absolute z-40 flex translate-x-0 items-center gap-2"
+                className={cn(
+                  'absolute z-40 origin-right motion-reduce:transition-none',
+                  isThumbnailFlyoutOpen
+                    ? 'pointer-events-auto'
+                    : 'pointer-events-none',
+                )}
                 style={{
-                  left:
-                    THUMBNAIL_RAIL_ITEM_LEFT +
-                    hoveredThumbnailVisualSize +
-                    THUMBNAIL_FLYOUT_GAP,
+                  right: THUMBNAIL_RAIL_WIDTH - THUMBNAIL_RAIL_ITEM_LEFT,
+                  height: hoveredThumbnailVisualSize,
                   top: 16 + hoveredThumbnail.offset - thumbnailScrollTop,
+                  width: hoveredFlyoutWidth,
                 }}
-                onMouseEnter={() => setHoveredThumbnailId(hoveredThumbnail.id)}
+                onMouseEnter={() => openThumbnailFlyout(hoveredThumbnail.id)}
+                onMouseLeave={closeThumbnailFlyout}
               >
-                {hoveredThumbnail.children.map((child) => (
-                  <button
-                    key={child.id}
-                    type="button"
-                    className={cn(
-                      'bg-muted ring-border/55 focus-visible:ring-ring size-14 cursor-pointer overflow-hidden rounded-md text-left shadow-sm ring-1 transition-transform hover:scale-[1.04] focus-visible:outline-none focus-visible:ring-2 motion-reduce:transition-none',
-                      selectedIteration?.id === child.id && 'ring-ring ring-2',
-                    )}
-                    aria-label="View variant"
-                    onClick={() => setSelectedIterationId(child.id)}
-                  >
-                    <img
-                      src={child.imageUrl}
-                      alt=""
-                      draggable="false"
-                      className="pointer-events-none size-full select-none object-cover"
-                    />
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  className="border-border/70 bg-background/95 text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:ring-ring flex size-14 cursor-pointer items-center justify-center rounded-md border shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2"
-                  aria-label="Remix image"
-                  title="Remix image"
-                  onClick={() => remixIteration(hoveredBranchTarget)}
-                >
-                  <Plus className="size-4" />
-                </button>
+                {hoveredThumbnail.children.map((child, index) => {
+                  const openX =
+                    THUMBNAIL_FLYOUT_GAP +
+                    index * (THUMBNAIL_SIZE + THUMBNAIL_GAP)
+                  const restingY =
+                    (hoveredThumbnailVisualSize - THUMBNAIL_SIZE) / 2
+                  const openY = restingY - Math.min(index * 1.5, 6)
+                  const closeDelay = Math.max(
+                    0,
+                    hoveredFlyoutItemCount - index - 1,
+                  )
+                  return (
+                    <button
+                      key={child.id}
+                      type="button"
+                      className="group/fan-item focus-visible:ring-ring absolute right-0 top-0 size-14 cursor-pointer overflow-visible rounded-md text-left transition-[opacity,transform] duration-[220ms] ease-out focus-visible:outline-none focus-visible:ring-2 motion-reduce:transition-none"
+                      style={{
+                        opacity: isThumbnailFlyoutOpen ? 1 : 0,
+                        transform: isThumbnailFlyoutOpen
+                          ? `translate3d(${-openX}px, ${openY}px, 0) scale(1) rotate(0deg)`
+                          : `translate3d(0px, ${restingY}px, 0) scale(0.68) rotate(${10 - index * 2}deg)`,
+                        transformOrigin: 'right center',
+                        transitionDelay: isThumbnailFlyoutOpen
+                          ? `${Math.min(index * 26, 90)}ms`
+                          : `${Math.min(closeDelay * 18, 90)}ms`,
+                      }}
+                      aria-label="View variant"
+                      onClick={() => setSelectedIterationId(child.id)}
+                    >
+                      <span
+                        className={cn(
+                          'bg-muted ring-border/55 block size-full overflow-hidden rounded-md shadow-sm ring-1 transition-[box-shadow,translate,scale] duration-[260ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover/fan-item:-translate-y-0.5 group-hover/fan-item:scale-[1.07] group-hover/fan-item:shadow-md group-focus-visible/fan-item:-translate-y-0.5 group-focus-visible/fan-item:scale-[1.07] motion-reduce:transition-none',
+                          selectedIteration?.id === child.id &&
+                            'ring-ring ring-2',
+                        )}
+                      >
+                        <img
+                          src={child.imageUrl}
+                          alt=""
+                          draggable="false"
+                          className="pointer-events-none size-full select-none object-cover"
+                        />
+                      </span>
+                    </button>
+                  )
+                })}
+                {(() => {
+                  const index = hoveredThumbnail.children.length
+                  const openX =
+                    THUMBNAIL_FLYOUT_GAP +
+                    index * (THUMBNAIL_SIZE + THUMBNAIL_GAP)
+                  const restingY =
+                    (hoveredThumbnailVisualSize - THUMBNAIL_SIZE) / 2
+                  return (
+                    <button
+                      type="button"
+                      className="group/fan-item focus-visible:ring-ring absolute right-0 top-0 size-14 cursor-pointer overflow-visible rounded-md transition-[opacity,transform] duration-[220ms] ease-out focus-visible:outline-none focus-visible:ring-2 motion-reduce:transition-none"
+                      style={{
+                        opacity: isThumbnailFlyoutOpen ? 1 : 0,
+                        transform: isThumbnailFlyoutOpen
+                          ? `translate3d(${-openX}px, ${restingY - Math.min(index * 1.5, 6)}px, 0) scale(1) rotate(0deg)`
+                          : `translate3d(0px, ${restingY}px, 0) scale(0.68) rotate(${10 - index * 2}deg)`,
+                        transformOrigin: 'right center',
+                        transitionDelay: isThumbnailFlyoutOpen
+                          ? `${Math.min(index * 26, 100)}ms`
+                          : '0ms',
+                      }}
+                      aria-label="Remix image"
+                      title="Remix image"
+                      onClick={() => remixIteration(hoveredBranchTarget)}
+                    >
+                      <span className="border-border/70 bg-background/95 text-muted-foreground group-hover/fan-item:text-foreground group-hover/fan-item:bg-muted flex size-full items-center justify-center rounded-md border shadow-sm transition-[background-color,border-color,color,box-shadow,translate,scale] duration-[260ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover/fan-item:-translate-y-0.5 group-hover/fan-item:scale-[1.07] group-hover/fan-item:shadow-md group-focus-visible/fan-item:-translate-y-0.5 group-focus-visible/fan-item:scale-[1.07] motion-reduce:transition-none">
+                        <Plus className="size-4" />
+                      </span>
+                    </button>
+                  )
+                })()}
               </div>
             ) : null}
 
@@ -1420,9 +1631,9 @@ export function App() {
             ) : null}
           </aside>
 
-          <section className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+          <section className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden">
             <div className="min-h-0 flex-1 overflow-auto px-8 py-8 pb-[calc(var(--chat-safe-padding,0px)+1rem)]">
-              <div className="mx-auto flex min-h-full max-w-6xl -translate-x-[42px] flex-col items-center justify-center gap-5">
+              <div className="mx-auto flex min-h-full max-w-6xl flex-col items-center justify-center gap-5">
                 {selectedPendingAspectRatio ? (
                   <>
                     <GenerationLoadingPreview
@@ -1443,11 +1654,6 @@ export function App() {
                       src={selectedIteration.imageUrl}
                       alt={selectedThread.title}
                       imageClassName="max-h-[calc(100vh-var(--chat-safe-padding,0px)-11rem)] max-w-full object-contain"
-                      style={{
-                        viewTransitionName: transitionNameForThread(
-                          selectedThread.id,
-                        ),
-                      }}
                     />
                   </>
                 ) : null}
@@ -1483,7 +1689,7 @@ export function App() {
 
   return (
     <main
-      className="bg-background text-foreground relative flex h-full min-h-0 flex-col overflow-hidden"
+      className="image-view-emerge bg-background text-foreground relative flex h-full min-h-0 flex-col overflow-hidden"
       onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -1512,7 +1718,7 @@ export function App() {
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(148px,1fr))] gap-2.5 sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(220px,1fr))]">
+          <div className="relative grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-x-4 gap-y-6 sm:grid-cols-[repeat(auto-fill,minmax(168px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(196px,1fr))]">
             {threads.map((thread) => {
               const isGenerating = thread.status === 'generating'
               const isFailed = thread.status === 'failed'
@@ -1525,74 +1731,116 @@ export function App() {
                   )
                 : thread.iterations.at(-1)
               const isGroup = thread.iterations.length > 1
-              const stackIterations =
+              const isGalleryAlbumHovered = hoveredGalleryThreadId === thread.id
+              const galleryAlbumIterations =
                 isGroup && displayedIteration
                   ? thread.iterations
                       .filter(
                         (iteration) => iteration.id !== displayedIteration.id,
                       )
-                      .slice(-2)
+                      .slice(-GALLERY_ALBUM_PREVIEW_LIMIT)
                       .reverse()
                   : []
-              const previewAspectClass = displayedIteration
-                ? !displayedIteration.width || !displayedIteration.height
-                  ? ASPECT_PREVIEW_CLASS[displayedIteration.aspectRatio]
-                  : ''
-                : ASPECT_PREVIEW_CLASS[generatingAspectRatio]
-              const previewAspectStyle = naturalAspectStyle(displayedIteration)
-              const previewTransitionStyle = displayedIteration
-                ? {
-                    ...previewAspectStyle,
-                    viewTransitionName: transitionNameForThread(thread.id),
-                  }
-                : previewAspectStyle
+              const hiddenGalleryAlbumCount = Math.max(
+                0,
+                thread.iterations.length -
+                  (displayedIteration ? 1 : 0) -
+                  galleryAlbumIterations.length,
+              )
+              const galleryAlbumItemCount =
+                galleryAlbumIterations.length +
+                (hiddenGalleryAlbumCount > 0 ? 1 : 0)
+              const galleryAlbumColumnCount = Math.min(
+                GALLERY_ALBUM_PREVIEW_MAX_COLUMNS,
+                Math.max(1, Math.ceil(Math.sqrt(galleryAlbumItemCount))),
+              )
+              const galleryAlbumSurfaceWidth =
+                galleryAlbumColumnCount * GALLERY_ALBUM_PREVIEW_SIZE +
+                Math.max(0, galleryAlbumColumnCount - 1) *
+                  GALLERY_ALBUM_PREVIEW_GAP
+              const galleryAlbumRowCount = Math.ceil(
+                galleryAlbumItemCount / galleryAlbumColumnCount,
+              )
+              const galleryAlbumSurfaceHeight =
+                galleryAlbumRowCount * GALLERY_ALBUM_PREVIEW_SIZE +
+                Math.max(0, galleryAlbumRowCount - 1) *
+                  GALLERY_ALBUM_PREVIEW_GAP
+              const galleryAlbumSurfaceOuterWidth =
+                galleryAlbumSurfaceWidth + 16
+              const galleryAlbumPreviewItems = [
+                ...galleryAlbumIterations.map((iteration) => ({
+                  id: iteration.id,
+                  type: 'image' as const,
+                  iteration,
+                })),
+                ...(hiddenGalleryAlbumCount > 0
+                  ? [
+                      {
+                        id: `${thread.id}-more`,
+                        type: 'more' as const,
+                        count: hiddenGalleryAlbumCount,
+                      },
+                    ]
+                  : []),
+              ]
 
               return (
-                <div key={thread.id} className="min-w-0 p-3">
+                <div
+                  key={thread.id}
+                  className={cn(
+                    'group relative min-w-0',
+                    isGalleryAlbumHovered ? 'z-30' : 'z-0',
+                  )}
+                  onMouseEnter={(event) => {
+                    if (isGroup && galleryAlbumItemCount > 0) {
+                      openGalleryAlbum(
+                        thread.id,
+                        event.currentTarget.getBoundingClientRect(),
+                        galleryAlbumSurfaceOuterWidth,
+                      )
+                    }
+                  }}
+                  onMouseLeave={() => {
+                    if (isGalleryAlbumHovered) closeGalleryAlbum()
+                  }}
+                  onFocus={(event) => {
+                    if (isGroup && galleryAlbumItemCount > 0) {
+                      openGalleryAlbum(
+                        thread.id,
+                        event.currentTarget.getBoundingClientRect(),
+                        galleryAlbumSurfaceOuterWidth,
+                      )
+                    }
+                  }}
+                  onBlur={(event) => {
+                    if (
+                      isGalleryAlbumHovered &&
+                      !event.currentTarget.contains(event.relatedTarget)
+                    ) {
+                      closeGalleryAlbum()
+                    }
+                  }}
+                >
                   <button
                     type="button"
                     className={cn(
-                      'focus-visible:ring-ring group relative block w-full text-left focus-visible:outline-none focus-visible:ring-2 disabled:cursor-default',
+                      'focus-visible:ring-ring focus-visible:ring-offset-background relative block w-full overflow-visible rounded-[1.35rem] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:cursor-default',
                       canOpen ? 'cursor-pointer' : 'cursor-default',
                     )}
                     disabled={!canOpen}
+                    aria-label={
+                      isGroup
+                        ? `Open ${thread.title}, ${thread.iterations.length - 1} more ${thread.iterations.length === 2 ? 'image' : 'images'}`
+                        : `Open ${thread.title}`
+                    }
                     onClick={() => {
-                      runViewTransition(() => {
-                        setSelectedThreadId(thread.id)
-                        setSelectedIterationId(
-                          selectedIterationIdForThread(thread),
-                        )
-                      })
+                      setSelectedThreadId(thread.id)
+                      setSelectedIterationId(
+                        selectedIterationIdForThread(thread),
+                      )
                     }}
                   >
-                    {stackIterations.map((iteration, index) => (
-                      <span
-                        key={iteration.id}
-                        aria-hidden="true"
-                        className={cn(
-                          'absolute inset-0 z-0 block overflow-hidden rounded-md transition-transform duration-300 ease-out will-change-transform motion-reduce:transition-none',
-                          previewAspectClass,
-                          index === 0
-                            ? 'translate-x-0.5 translate-y-1.5 -rotate-3 group-hover:-translate-x-1 group-hover:translate-y-2.5 group-hover:-rotate-6 group-hover:scale-[1.01]'
-                            : 'translate-x-2 translate-y-2.5 rotate-3 group-hover:translate-x-3.5 group-hover:translate-y-3.5 group-hover:rotate-6 group-hover:scale-[1.015]',
-                        )}
-                        style={previewAspectStyle}
-                      >
-                        <img
-                          src={iteration.imageUrl}
-                          alt=""
-                          className="size-full object-cover"
-                          draggable="false"
-                        />
-                      </span>
-                    ))}
-                    <span
-                      className={cn(
-                        'relative z-10 block overflow-hidden rounded-md transition-transform duration-300 ease-out will-change-transform group-hover:-translate-x-0.5 group-hover:-translate-y-1 group-hover:scale-[1.012] motion-reduce:transition-none',
-                        previewAspectClass,
-                      )}
-                      style={previewTransitionStyle}
-                    >
+                    <span className="bg-muted ring-border/35 relative z-20 block aspect-square w-full overflow-hidden rounded-[1.35rem] shadow-sm ring-1 transition-[translate,scale,box-shadow] duration-[260ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover:-translate-y-1 group-hover:scale-[1.018] group-hover:shadow-xl group-focus-visible:-translate-y-1 group-focus-visible:scale-[1.018] motion-reduce:transition-none">
                       {isGenerating ? (
                         <GenerationLoadingPreview
                           aspectRatio={generatingAspectRatio}
@@ -1620,8 +1868,121 @@ export function App() {
                           </span>
                         </span>
                       ) : null}
+
+                      {!isFailed && thread.title.trim() ? (
+                        <span className="from-background/85 via-background/40 pointer-events-none absolute inset-x-0 bottom-0 flex min-h-16 items-end bg-gradient-to-t to-transparent p-3">
+                          <span className="text-foreground line-clamp-2 text-base font-semibold leading-5 drop-shadow-sm sm:text-lg sm:leading-6">
+                            {thread.title}
+                          </span>
+                        </span>
+                      ) : null}
                     </span>
                   </button>
+
+                  {isGroup && galleryAlbumItemCount > 0 ? (
+                    <div
+                      className={cn(
+                        'absolute top-full z-30 block pt-3 transition-[opacity,transform] duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none',
+                        galleryAlbumAlign === 'right' ? 'right-0' : 'left-0',
+                      )}
+                      style={{
+                        width: galleryAlbumSurfaceOuterWidth,
+                        opacity:
+                          isGalleryAlbumHovered && isGalleryAlbumOpen ? 1 : 0,
+                        transform:
+                          isGalleryAlbumHovered && isGalleryAlbumOpen
+                            ? 'scale(1)'
+                            : 'scale(0.96)',
+                        transformOrigin:
+                          galleryAlbumAlign === 'right'
+                            ? 'top right'
+                            : 'top left',
+                      }}
+                    >
+                      <div
+                        className="relative block rounded-xl p-2"
+                        style={{
+                          width: galleryAlbumSurfaceOuterWidth,
+                          height: galleryAlbumSurfaceHeight + 16,
+                        }}
+                      >
+                        {galleryAlbumPreviewItems.map(
+                          (item, index, albumItems) => {
+                            const column = index % galleryAlbumColumnCount
+                            const row = Math.floor(
+                              index / galleryAlbumColumnCount,
+                            )
+                            const openX =
+                              column *
+                              (GALLERY_ALBUM_PREVIEW_SIZE +
+                                GALLERY_ALBUM_PREVIEW_GAP)
+                            const openY =
+                              row *
+                              (GALLERY_ALBUM_PREVIEW_SIZE +
+                                GALLERY_ALBUM_PREVIEW_GAP)
+                            const closeDelay = Math.max(
+                              0,
+                              albumItems.length - index - 1,
+                            )
+
+                            return (
+                              <button
+                                key={item.id}
+                                type="button"
+                                className="group/album-preview-item focus-visible:ring-ring focus-visible:ring-offset-background absolute left-2 top-2 block cursor-pointer overflow-hidden rounded-md bg-transparent p-0 text-left outline-none transition-[opacity,transform,box-shadow] duration-[240ms] ease-[cubic-bezier(0.16,1,0.3,1)] focus-visible:ring-2 focus-visible:ring-offset-2 motion-reduce:transition-none"
+                                style={{
+                                  width: GALLERY_ALBUM_PREVIEW_SIZE,
+                                  height: GALLERY_ALBUM_PREVIEW_SIZE,
+                                  opacity:
+                                    isGalleryAlbumHovered && isGalleryAlbumOpen
+                                      ? 1
+                                      : 0,
+                                  transform:
+                                    isGalleryAlbumHovered && isGalleryAlbumOpen
+                                      ? `translate3d(${openX}px, ${openY}px, 0) scale(1) rotate(0deg)`
+                                      : `translate3d(0px, 0px, 0) scale(0.72) rotate(${-8 + index * 2}deg)`,
+                                  transformOrigin: 'left top',
+                                  transitionDelay:
+                                    isGalleryAlbumHovered && isGalleryAlbumOpen
+                                      ? `${Math.min(index * 28, 130)}ms`
+                                      : `${Math.min(closeDelay * 18, 120)}ms`,
+                                }}
+                                aria-label={
+                                  item.type === 'image'
+                                    ? `Open image ${index + 1} in ${thread.title}`
+                                    : `Open ${thread.title}, ${item.count} more images`
+                                }
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  setSelectedThreadId(thread.id)
+                                  setSelectedIterationId(
+                                    item.type === 'image'
+                                      ? item.iteration.id
+                                      : selectedIterationIdForThread(thread),
+                                  )
+                                  closeGalleryAlbum()
+                                }}
+                              >
+                                {item.type === 'image' ? (
+                                  <img
+                                    src={item.iteration.imageUrl}
+                                    alt=""
+                                    className="size-full object-contain transition-[translate,scale,filter] duration-[220ms] ease-[cubic-bezier(0.16,1,0.3,1)] group-hover/album-preview-item:-translate-y-0.5 group-hover/album-preview-item:scale-[1.045] group-focus-visible/album-preview-item:-translate-y-0.5 group-focus-visible/album-preview-item:scale-[1.045] motion-reduce:transition-none"
+                                    draggable="false"
+                                  />
+                                ) : (
+                                  <span className="border-border/70 bg-background/85 text-muted-foreground flex size-full items-center justify-center rounded-md border font-mono text-sm font-semibold shadow-sm">
+                                    +{item.count}
+                                  </span>
+                                )}
+                              </button>
+                            )
+                          },
+                        )}
+                      </div>
+                    </div>
+                  ) : null}
+
                   {isFailed ? (
                     <button
                       type="button"

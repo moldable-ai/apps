@@ -10,7 +10,6 @@ interface StreamAppTextOptions {
   system?: string
   prompt?: string
   messages?: AppLlmMessage[]
-  maxOutputTokens?: number
 }
 
 function getAppLlmConfig() {
@@ -46,7 +45,6 @@ export async function streamAppText(
       system: options.system,
       prompt: options.prompt,
       messages: options.messages,
-      maxOutputTokens: options.maxOutputTokens,
     }),
   })
 

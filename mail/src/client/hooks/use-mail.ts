@@ -1,14 +1,23 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef } from 'react'
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
+import { useEffect, useMemo, useRef } from 'react'
 import { useWorkspace } from '@moldable-ai/ui'
 import type {
+  ActionSuggestionsResponse,
   ComposerState,
+  GeneratedMailSearchQuery,
   MailContact,
   MailDraft,
   MailLabel,
   MailMessageDetail,
   MailMessageSummary,
   MailStatus,
+  MailTriageSignalInput,
   MessageAction,
   MessagesResponse,
 } from '../types'
@@ -63,6 +72,53 @@ export function useMailStatus() {
   })
 }
 
+type MailMessagesPageParam = string | undefined
+
+type MailMessagesPages = InfiniteData<MessagesResponse, MailMessagesPageParam>
+type MailMessagesQueryData = MailMessagesPages | MessagesResponse
+
+function flattenMessagePages(
+  data: MailMessagesPages | MessagesResponse | undefined,
+): MessagesResponse | undefined {
+  if (!data) return undefined
+
+  // Be defensive: older/background cache writes may have stored a plain
+  // MessagesResponse under this infinite-query key. Treat it as one page
+  // instead of throwing during render and blanking the app.
+  if (!('pages' in data)) {
+    return Array.isArray(data.messages) ? data : undefined
+  }
+
+  if (!data.pages.length) return undefined
+
+  const messages: MessagesResponse['messages'] = []
+  const seen = new Set<string>()
+  for (const page of data.pages) {
+    for (const message of page.messages) {
+      if (seen.has(message.id)) continue
+      seen.add(message.id)
+      messages.push(message)
+    }
+  }
+
+  const lastPage = data.pages.at(-1)
+  const resultSizeEstimate =
+    data.pages.find((page) => page.resultSizeEstimate > 0)
+      ?.resultSizeEstimate ?? messages.length
+
+  return {
+    messages,
+    nextPageToken: lastPage?.nextPageToken,
+    resultSizeEstimate,
+  }
+}
+
+function isInfiniteMessagesData(
+  data: MailMessagesQueryData | undefined,
+): data is MailMessagesPages {
+  return Boolean(data && 'pages' in data && Array.isArray(data.pages))
+}
+
 export function useMailMessages({
   folderId,
   query,
@@ -74,6 +130,7 @@ export function useMailMessages({
 }) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
+  const isSearch = Boolean(query.trim())
   const messagesCacheKey = cacheKey(['messages', workspaceId, folderId, query])
 
   const fetchMessageDetail = async (id: string) => {
@@ -84,19 +141,32 @@ export function useMailMessages({
     return data.message
   }
 
-  return useQuery({
+  const messagesQuery = useInfiniteQuery<
+    MessagesResponse,
+    Error,
+    MailMessagesPages,
+    string[],
+    MailMessagesPageParam
+  >({
     queryKey: ['mail-messages', workspaceId, folderId, query],
     enabled,
-    initialData: () => readCachedValue<MessagesResponse>(messagesCacheKey),
+    initialPageParam: undefined,
+    initialData: () => {
+      if (isSearch) return undefined
+      const cached = readCachedValue<MessagesResponse>(messagesCacheKey)
+      return cached ? { pages: [cached], pageParams: [undefined] } : undefined
+    },
+    getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
     refetchOnMount: 'always',
     refetchInterval: folderId === 'INBOX' && !query ? 15_000 : false,
     refetchIntervalInBackground: true,
-    queryFn: async () => {
+    queryFn: async ({ pageParam }) => {
       const params = new URLSearchParams({
         labelId: folderId,
         maxResults: '24',
       })
       if (query) params.set('q', query)
+      if (pageParam) params.set('pageToken', pageParam)
 
       const res = await fetchWithWorkspace(`/api/messages?${params.toString()}`)
       if (res.status === 401) {
@@ -106,7 +176,7 @@ export function useMailMessages({
       if (!res.ok) throw new Error('Failed to load messages')
 
       const data = (await res.json()) as MessagesResponse
-      writeCachedValue(messagesCacheKey, data)
+      if (!isSearch && !pageParam) writeCachedValue(messagesCacheKey, data)
 
       for (const message of data.messages) {
         void queryClient.prefetchQuery({
@@ -117,6 +187,160 @@ export function useMailMessages({
       }
 
       return data
+    },
+  })
+
+  const data = useMemo(
+    () => flattenMessagePages(messagesQuery.data),
+    [messagesQuery.data],
+  )
+
+  return {
+    ...messagesQuery,
+    data,
+  }
+}
+
+export function useGenerateMailSearchQuery() {
+  const { fetchWithWorkspace } = useWorkspace()
+
+  return useMutation({
+    mutationFn: async ({
+      query,
+      currentLabelId,
+    }: {
+      query: string
+      currentLabelId: string
+    }) => {
+      const res = await fetchWithWorkspace('/api/search-query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, currentLabelId }),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error ?? 'Failed to translate search')
+      }
+      return (await res.json()) as GeneratedMailSearchQuery
+    },
+  })
+}
+
+function actionSuggestionsKey({
+  messages,
+  labels,
+  account,
+}: {
+  messages: MailMessageSummary[]
+  labels: MailLabel[]
+  account?: string | null
+}) {
+  const messagePart = messages
+    .map(
+      (message) =>
+        `${message.id}:${message.unread ? '1' : '0'}:${message.labelIds.join(',')}`,
+    )
+    .join('|')
+  const labelPart = labels
+    .filter((label) => label.type === 'user')
+    .map((label) => `${label.id}:${label.name}`)
+    .join('|')
+  return `${account ?? ''}::${messagePart}::${labelPart}`
+}
+
+export function useActionSuggestions({
+  messages,
+  labels,
+  account,
+  enabled,
+}: {
+  messages: MailMessageSummary[]
+  labels: MailLabel[]
+  account?: string | null
+  enabled: boolean
+}) {
+  const { workspaceId, fetchWithWorkspace } = useWorkspace()
+  const key = actionSuggestionsKey({ messages, labels, account })
+
+  return useQuery({
+    queryKey: ['mail-action-suggestions', workspaceId, key],
+    enabled: enabled && messages.length > 0,
+    staleTime: 60_000,
+    placeholderData: (previousData) => previousData,
+    queryFn: async () => {
+      const res = await fetchWithWorkspace('/api/action-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, labels, account }),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error ?? 'Failed to suggest actions')
+      }
+      return (await res.json()) as ActionSuggestionsResponse
+    },
+  })
+}
+
+export function useRetriageActionSuggestions() {
+  const queryClient = useQueryClient()
+  const { workspaceId, fetchWithWorkspace } = useWorkspace()
+
+  return useMutation({
+    mutationFn: async ({
+      messages,
+      labels,
+      account,
+    }: {
+      messages: MailMessageSummary[]
+      labels: MailLabel[]
+      account?: string | null
+    }) => {
+      const res = await fetchWithWorkspace('/api/action-suggestions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, labels, account, force: true }),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error ?? 'Failed to re-triage messages')
+      }
+      return (await res.json()) as ActionSuggestionsResponse
+    },
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData(
+        [
+          'mail-action-suggestions',
+          workspaceId,
+          actionSuggestionsKey({
+            messages: variables.messages,
+            labels: variables.labels,
+            account: variables.account,
+          }),
+        ],
+        data,
+      )
+      void queryClient.invalidateQueries({
+        queryKey: ['mail-action-suggestions', workspaceId],
+      })
+    },
+  })
+}
+
+export function useRecordActionSuggestionSignal() {
+  const { fetchWithWorkspace } = useWorkspace()
+
+  return useMutation({
+    mutationFn: async (signal: MailTriageSignalInput) => {
+      const res = await fetchWithWorkspace('/api/action-suggestions/signals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(signal),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error ?? 'Failed to record triage signal')
+      }
     },
   })
 }
@@ -152,7 +376,10 @@ export function useWarmMailFolders({ enabled }: { enabled: boolean }) {
 
           const data = (await res.json()) as MessagesResponse
           const queryKey = ['mail-messages', workspaceId, folderId, query]
-          queryClient.setQueryData(queryKey, data)
+          queryClient.setQueryData<MailMessagesPages>(queryKey, {
+            pages: [data],
+            pageParams: [undefined],
+          })
           writeCachedValue(
             cacheKey(['messages', workspaceId, folderId, query]),
             data,
@@ -399,15 +626,145 @@ function writeMessagesResponseCache(
   )
 }
 
+function writeMessagesQueryCache(
+  queryKey: readonly unknown[],
+  data: MailMessagesQueryData,
+) {
+  const response = flattenMessagePages(data)
+  if (response) writeMessagesResponseCache(queryKey, response)
+}
+
 function restoreMessageListSnapshots(
   queryClient: ReturnType<typeof useQueryClient>,
-  snapshots: [readonly unknown[], MessagesResponse | undefined][],
+  snapshots: [readonly unknown[], MailMessagesQueryData | undefined][],
 ) {
   for (const [queryKey, snapshot] of snapshots) {
-    queryClient.setQueryData<MessagesResponse>(queryKey, snapshot)
+    queryClient.setQueryData<MailMessagesQueryData>(queryKey, snapshot)
     if (snapshot && Array.isArray(queryKey)) {
-      writeMessagesResponseCache(queryKey, snapshot)
+      writeMessagesQueryCache(queryKey, snapshot)
     }
+  }
+}
+
+function updateMessagesResponse({
+  response,
+  id,
+  updateMessage,
+  isVisible,
+}: {
+  response: MessagesResponse
+  id: string
+  updateMessage: (message: MailMessageSummary) => MailMessageSummary
+  isVisible: (message: MailMessageSummary) => boolean
+}) {
+  let removed = 0
+  let updatedMessage: MailMessageSummary | undefined
+  const messages = response.messages.flatMap((message) => {
+    if (message.id !== id) return [message]
+
+    const nextMessage = updateMessage(message)
+    updatedMessage = nextMessage
+    if (isVisible(nextMessage)) return [nextMessage]
+
+    removed += 1
+    return []
+  })
+
+  return {
+    response: {
+      ...response,
+      messages,
+      resultSizeEstimate: Math.max(0, response.resultSizeEstimate - removed),
+    },
+    updatedMessage,
+  }
+}
+
+function updateMessagesQueryData({
+  data,
+  id,
+  updateMessage,
+  isVisible,
+}: {
+  data: MailMessagesQueryData
+  id: string
+  updateMessage: (message: MailMessageSummary) => MailMessageSummary
+  isVisible: (message: MailMessageSummary) => boolean
+}) {
+  let updatedMessage: MailMessageSummary | undefined
+
+  if (isInfiniteMessagesData(data)) {
+    return {
+      data: {
+        ...data,
+        pages: data.pages.map((page) => {
+          const next = updateMessagesResponse({
+            response: page,
+            id,
+            updateMessage,
+            isVisible,
+          })
+          updatedMessage ??= next.updatedMessage
+          return next.response
+        }),
+      },
+      updatedMessage,
+    }
+  }
+
+  const next = updateMessagesResponse({
+    response: data,
+    id,
+    updateMessage,
+    isVisible,
+  })
+  return {
+    data: next.response,
+    updatedMessage: next.updatedMessage,
+  }
+}
+
+function messagesQueryContains(data: MailMessagesQueryData, id: string) {
+  const response = flattenMessagePages(data)
+  return response?.messages.some((message) => message.id === id) ?? false
+}
+
+function insertMessageIntoQueryData(
+  data: MailMessagesQueryData,
+  message: MailMessageSummary,
+): MailMessagesQueryData {
+  if (isInfiniteMessagesData(data)) {
+    const [firstPage, ...restPages] = data.pages
+    if (!firstPage) {
+      return {
+        ...data,
+        pages: [
+          {
+            messages: [message],
+            resultSizeEstimate: 1,
+          },
+        ],
+        pageParams: [undefined],
+      }
+    }
+
+    return {
+      ...data,
+      pages: [
+        {
+          ...firstPage,
+          messages: [message, ...firstPage.messages],
+          resultSizeEstimate: firstPage.resultSizeEstimate + 1,
+        },
+        ...restPages,
+      ],
+    }
+  }
+
+  return {
+    ...data,
+    messages: [message, ...data.messages],
+    resultSizeEstimate: data.resultSizeEstimate + 1,
   }
 }
 
@@ -434,7 +791,7 @@ function applyOptimisticMessageAction({
   action: MessageAction
   until?: number
 }) {
-  const listSnapshots = queryClient.getQueriesData<MessagesResponse>({
+  const listSnapshots = queryClient.getQueriesData<MailMessagesQueryData>({
     queryKey: ['mail-messages'],
   })
   const detailSnapshot = queryClient.getQueryData<MailMessageDetail>([
@@ -449,26 +806,17 @@ function applyOptimisticMessageAction({
 
     const folderId = Array.isArray(queryKey) ? queryKey[2] : undefined
     const query = Array.isArray(queryKey) ? queryKey[3] : undefined
-    let removed = 0
-    const messages = current.messages.flatMap((message) => {
-      if (message.id !== id) return [message]
-
-      const nextMessage = messageWithAction(message, action, { until })
-      optimisticMessage = nextMessage
-      if (messageVisibleInFolder(nextMessage, folderId, query, action)) {
-        return [nextMessage]
-      }
-      removed += 1
-      return []
+    const next = updateMessagesQueryData({
+      data: current,
+      id,
+      updateMessage: (message) => messageWithAction(message, action, { until }),
+      isVisible: (message) =>
+        messageVisibleInFolder(message, folderId, query, action),
     })
-    const next = {
-      ...current,
-      messages,
-      resultSizeEstimate: Math.max(0, current.resultSizeEstimate - removed),
-    }
+    optimisticMessage ??= next.updatedMessage
 
-    queryClient.setQueryData<MessagesResponse>(queryKey, next)
-    if (Array.isArray(queryKey)) writeMessagesResponseCache(queryKey, next)
+    queryClient.setQueryData<MailMessagesQueryData>(queryKey, next.data)
+    if (Array.isArray(queryKey)) writeMessagesQueryCache(queryKey, next.data)
   }
 
   queryClient.setQueryData<MailMessageDetail>(
@@ -491,21 +839,17 @@ function applyOptimisticMessageAction({
       const query = queryKey[3]
       if (!shouldInsertMissingMessage(folderId, query, action)) continue
 
-      const current = queryClient.getQueryData<MessagesResponse>(queryKey)
-      if (!current || current.messages.some((message) => message.id === id)) {
+      const current = queryClient.getQueryData<MailMessagesQueryData>(queryKey)
+      if (!current || messagesQueryContains(current, id)) {
         continue
       }
       if (!messageVisibleInFolder(nextMessage, folderId, query, action)) {
         continue
       }
 
-      const next = {
-        ...current,
-        messages: [nextMessage, ...current.messages],
-        resultSizeEstimate: current.resultSizeEstimate + 1,
-      }
-      queryClient.setQueryData<MessagesResponse>(queryKey, next)
-      writeMessagesResponseCache(queryKey, next)
+      const next = insertMessageIntoQueryData(current, nextMessage)
+      queryClient.setQueryData<MailMessagesQueryData>(queryKey, next)
+      writeMessagesQueryCache(queryKey, next)
     }
   }
 
@@ -710,7 +1054,7 @@ export function useUpdateMessageLabels() {
           queryKey: ['mail-message', workspaceId, variables.id],
         }),
       ])
-      const listSnapshots = queryClient.getQueriesData<MessagesResponse>({
+      const listSnapshots = queryClient.getQueriesData<MailMessagesQueryData>({
         queryKey: ['mail-messages'],
       })
       const detailSnapshot = queryClient.getQueryData<MailMessageDetail>([
@@ -725,30 +1069,22 @@ export function useUpdateMessageLabels() {
       for (const [
         queryKey,
         current,
-      ] of queryClient.getQueriesData<MessagesResponse>({
+      ] of queryClient.getQueriesData<MailMessagesQueryData>({
         queryKey: ['mail-messages'],
       })) {
         if (!current) continue
         const folderId = Array.isArray(queryKey) ? queryKey[2] : undefined
         const query = Array.isArray(queryKey) ? queryKey[3] : undefined
-        let removed = 0
-        const next = {
-          ...current,
-          messages: current.messages.flatMap((message) => {
-            if (message.id !== variables.id) return [message]
-
-            const nextMessage = applyLabelChanges(message, changes)
-            if (messageVisibleWithLabels(nextMessage, folderId, query)) {
-              return [nextMessage]
-            }
-            removed += 1
-            return []
-          }),
-          resultSizeEstimate: Math.max(0, current.resultSizeEstimate - removed),
-        }
-        queryClient.setQueryData<MessagesResponse>(queryKey, next)
+        const next = updateMessagesQueryData({
+          data: current,
+          id: variables.id,
+          updateMessage: (message) => applyLabelChanges(message, changes),
+          isVisible: (message) =>
+            messageVisibleWithLabels(message, folderId, query),
+        }).data
+        queryClient.setQueryData<MailMessagesQueryData>(queryKey, next)
         if (Array.isArray(queryKey)) {
-          writeMessagesResponseCache(queryKey, next)
+          writeMessagesQueryCache(queryKey, next)
         }
       }
       queryClient.setQueryData<MailMessageDetail>(

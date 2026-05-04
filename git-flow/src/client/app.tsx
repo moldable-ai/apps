@@ -48,6 +48,14 @@ import {
   useState,
 } from 'react'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
   Avatar,
   AvatarFallback,
   AvatarImage,
@@ -296,6 +304,9 @@ export default function GitFlowPage() {
   const [selectedCommitFile, setSelectedCommitFile] = useState<string | null>(
     null,
   )
+  const [pendingDiscardPaths, setPendingDiscardPaths] = useState<
+    string[] | null
+  >(null)
 
   const [summary, setSummary] = useState('')
   const [description, setDescription] = useState('')
@@ -842,16 +853,19 @@ export default function GitFlowPage() {
     return [filePath]
   }
 
-  const handleDiscardChanges = (filePath: string) => {
+  const requestDiscardChanges = (filePath: string) => {
     const paths = getContextActionPaths(filePath)
-    const fileLabel = paths.length === 1 ? 'this file' : `${paths.length} files`
-    const confirmed = window.confirm(
-      `Discard changes to ${fileLabel}? This cannot be undone.`,
-    )
-
-    if (!confirmed) return
+    if (paths.length === 0) return
 
     setError(null)
+    setPendingDiscardPaths(paths)
+  }
+
+  const confirmDiscardChanges = () => {
+    if (!pendingDiscardPaths || pendingDiscardPaths.length === 0) return
+
+    const paths = pendingDiscardPaths
+    setPendingDiscardPaths(null)
     discardChangesMutation.mutate(paths)
   }
 
@@ -1428,6 +1442,8 @@ export default function GitFlowPage() {
     !!selectedCommit &&
     latestCommit?.hash === selectedCommit &&
     latestCommit.isUnpushed === true
+  const pendingDiscardCount = pendingDiscardPaths?.length ?? 0
+  const pendingDiscardPreview = pendingDiscardPaths?.slice(0, 5) ?? []
 
   const visibleFindings = codeReview
     ? codeReview.findings
@@ -1645,6 +1661,70 @@ export default function GitFlowPage() {
 
   return (
     <div className="bg-background text-foreground flex h-screen flex-col overflow-hidden">
+      <AlertDialog
+        open={pendingDiscardPaths !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDiscardPaths(null)
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDiscardCount === 1 ? (
+                <>
+                  This will permanently discard uncommitted changes to{' '}
+                  <span className="text-foreground font-mono font-semibold">
+                    {pendingDiscardPaths?.[0]}
+                  </span>
+                  .
+                </>
+              ) : (
+                <>
+                  This will permanently discard uncommitted changes to{' '}
+                  <span className="text-foreground font-semibold">
+                    {pendingDiscardCount} selected files
+                  </span>
+                  .
+                </>
+              )}{' '}
+              This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {pendingDiscardPreview.length > 1 ? (
+            <div className="bg-muted/50 border-border/60 max-h-36 overflow-auto rounded-lg border p-2">
+              <ul className="space-y-1">
+                {pendingDiscardPreview.map((filePath) => (
+                  <li
+                    key={filePath}
+                    className="text-muted-foreground truncate font-mono text-[11px]"
+                  >
+                    {filePath}
+                  </li>
+                ))}
+              </ul>
+              {pendingDiscardCount > pendingDiscardPreview.length ? (
+                <p className="text-muted-foreground mt-1 text-[11px]">
+                  +{pendingDiscardCount - pendingDiscardPreview.length} more
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={discardChangesMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={discardChangesMutation.isPending}
+              onClick={confirmDiscardChanges}
+            >
+              Discard changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Header */}
       <header className="bg-muted/30 flex h-12 shrink-0 items-center justify-between border-b pl-2 pr-4 backdrop-blur-md">
         <div className="flex items-center gap-1.5">
@@ -2277,7 +2357,12 @@ export default function GitFlowPage() {
                               <ContextMenuItem
                                 variant="destructive"
                                 disabled={discardChangesMutation.isPending}
-                                onSelect={() => handleDiscardChanges(file.path)}
+                                onSelect={() => {
+                                  setTimeout(
+                                    () => requestDiscardChanges(file.path),
+                                    0,
+                                  )
+                                }}
                                 className="cursor-pointer rounded-lg py-2 text-[13px] font-semibold"
                               >
                                 <Trash2 className="size-4" />

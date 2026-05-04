@@ -1,5 +1,17 @@
 import { getWorkspaceFromRequest } from '@moldable-ai/storage'
-import type { MailMessageSummary } from '../client/types'
+import type { MailLabel, MailMessageSummary } from '../client/types'
+import {
+  ACTION_GROUPS,
+  appendTriageSignal,
+  archiveTriageRule,
+  clearActionSuggestionsCache,
+  computeActionSuggestionsFingerprint,
+  generateActionSuggestions,
+  readTriageRules,
+  readTriageSignals,
+  regenerateTriageRules,
+  upsertTriageRule,
+} from './action-suggestions'
 import {
   type BriefingCache,
   computeBriefingFingerprint,
@@ -29,6 +41,7 @@ import {
   startGmailTokenKeepalive,
   unsubscribeAndArchive,
 } from './gmail-service'
+import { generateMailSearchQuery } from './search-query'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
@@ -81,11 +94,74 @@ const rpcRequestSchema = z.object({
   params: z.unknown().optional(),
 })
 
+const searchQuerySchema = z.object({
+  query: z.string().trim().min(1).max(500),
+  currentLabelId: z.string().trim().optional(),
+})
+
 const messageSearchParamsSchema = z
   .object({
     query: z.string().optional(),
     labelId: z.string().optional(),
     maxResults: z.number().int().min(1).max(50).optional(),
+  })
+  .optional()
+
+const messageListParamsSchema = z
+  .object({
+    query: z.string().optional(),
+    labelId: z.string().optional(),
+    pageToken: z.string().optional(),
+    maxResults: z.number().int().min(1).max(100).optional(),
+    includeBodies: z.boolean().optional(),
+  })
+  .optional()
+
+const triageClassifyParamsSchema = z
+  .object({
+    query: z.string().optional(),
+    labelId: z.string().optional(),
+    pageToken: z.string().optional(),
+    maxResults: z.number().int().min(1).max(100).optional(),
+    force: z.boolean().optional(),
+    includeMessages: z.boolean().optional(),
+    account: z.string().nullable().optional(),
+  })
+  .optional()
+
+const triageClassifyMessagesParamsSchema = z.object({
+  ids: z.array(z.string().min(1)).min(1).max(100),
+  force: z.boolean().optional(),
+  includeMessages: z.boolean().optional(),
+  account: z.string().nullable().optional(),
+})
+
+const triageRulesListParamsSchema = z
+  .object({
+    account: z.string().nullable().optional(),
+  })
+  .optional()
+
+const triageRuleUpsertParamsSchema = z.object({
+  id: z.string().optional(),
+  title: z.string().min(1),
+  body: z.string().min(1),
+  groupId: z.enum([...ACTION_GROUPS] as [string, ...string[]]),
+  labelName: z.string().optional(),
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+  confidence: z.number().min(0).max(1).optional(),
+  exceptions: z.array(z.string()).optional(),
+  account: z.string().nullable().optional(),
+})
+
+const triageRuleArchiveParamsSchema = z.object({
+  id: z.string().min(1),
+  account: z.string().nullable().optional(),
+})
+
+const triageCacheClearParamsSchema = z
+  .object({
+    account: z.string().nullable().optional(),
   })
   .optional()
 
@@ -98,9 +174,58 @@ function getWorkspaceId(request: Request) {
   return getWorkspaceFromRequest(request) ?? urlWorkspace ?? 'personal'
 }
 
+async function resolveTriageAccount(
+  workspaceId: string,
+  explicitAccount?: string | null,
+) {
+  if (explicitAccount !== undefined) return explicitAccount?.trim() || null
+  return (await getProfile(workspaceId).catch(() => null))?.emailAddress ?? null
+}
+
 function numberQuery(value: string | undefined, fallback: number) {
   const parsed = Number(value ?? fallback)
   return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function rpcMessageSummary(message: MailMessageSummary) {
+  return {
+    id: message.id,
+    threadId: message.threadId,
+    from: message.from,
+    to: message.to,
+    subject: message.subject,
+    date: message.date,
+    snippet: message.snippet,
+    labelIds: message.labelIds,
+    unread: message.unread,
+    starred: message.starred,
+    important: message.important,
+    internalDate: message.internalDate,
+    snoozedUntil: message.snoozedUntil,
+    bodyCached: message.bodyCached,
+    attachments: message.attachments,
+    unsubscribe: message.unsubscribe,
+  }
+}
+
+function normalizeRpcLabels(
+  labels: Awaited<ReturnType<typeof getLabels>>,
+): MailLabel[] {
+  return labels
+    .filter(
+      (label): label is MailLabel =>
+        typeof label.id === 'string' &&
+        typeof label.name === 'string' &&
+        (label.type === 'system' || label.type === 'user'),
+    )
+    .map((label) => ({
+      id: label.id,
+      name: label.name,
+      type: label.type,
+      messageListVisibility: label.messageListVisibility,
+      labelListVisibility: label.labelListVisibility,
+      color: label.color,
+    }))
 }
 
 function errorDetails(error: unknown) {
@@ -393,6 +518,34 @@ app.get('/api/labels', async (c) => {
   }
 })
 
+app.post('/api/search-query', async (c) => {
+  const workspaceId = getWorkspaceId(c.req.raw)
+
+  try {
+    const input = searchQuerySchema.parse(await c.req.json())
+    const labels = await getLabels(workspaceId).catch((error) => {
+      console.warn('Failed to load labels for AI mail search:', error)
+      return []
+    })
+    return c.json(
+      await generateMailSearchQuery(
+        {
+          query: input.query,
+          currentLabelId: input.currentLabelId,
+          labels,
+        },
+        workspaceId,
+      ),
+    )
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: 'Search query is invalid.' }, 400)
+    }
+    console.warn('Failed to translate natural-language mail search:', error)
+    return c.json({ error: 'Failed to translate search query.' }, 500)
+  }
+})
+
 app.get('/api/messages', async (c) => {
   try {
     return c.json(
@@ -596,6 +749,63 @@ const briefingBodySchema = z.object({
   force: z.boolean().optional(),
 })
 
+const suggestionLabelSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.enum(['system', 'user']),
+  messageListVisibility: z.enum(['hide', 'show']).optional(),
+  labelListVisibility: z
+    .enum(['labelHide', 'labelShow', 'labelShowIfUnread'])
+    .optional(),
+  color: z
+    .object({
+      textColor: z.string().optional(),
+      backgroundColor: z.string().optional(),
+    })
+    .optional(),
+})
+
+const actionSuggestionsBodySchema = z.object({
+  messages: z
+    .array(
+      briefingMessageSchema.extend({
+        unsubscribe: z
+          .object({
+            mailto: z.string().optional(),
+            url: z.string().optional(),
+            oneClick: z.boolean().optional(),
+          })
+          .optional(),
+      }),
+    )
+    .min(1)
+    .max(100),
+  labels: z.array(suggestionLabelSchema).max(200).optional().default([]),
+  account: z.string().nullable().optional(),
+  force: z.boolean().optional(),
+})
+
+const actionGroupSchema = z.enum([...ACTION_GROUPS] as [string, ...string[]])
+
+const triageSignalBodySchema = z.object({
+  account: z.string().nullable().optional(),
+  message: z.object({
+    id: z.string(),
+    from: z.string().optional().default(''),
+    subject: z.string().optional().default(''),
+    snippet: z.string().optional().default(''),
+    labelIds: z.array(z.string()).optional().default([]),
+  }),
+  suggestedGroupId: actionGroupSchema.optional(),
+  finalGroupId: actionGroupSchema,
+  outcome: z.enum(['approved', 'corrected', 'label_changed', 'dismissed']),
+  suggestedLabelId: z.string().optional(),
+  suggestedLabelName: z.string().optional(),
+  finalLabelId: z.string().optional(),
+  finalLabelName: z.string().optional(),
+  reason: z.string().optional(),
+})
+
 function normalizeBriefingMessages(
   raw: z.infer<typeof briefingMessageSchema>[],
 ): MailMessageSummary[] {
@@ -615,6 +825,15 @@ function normalizeBriefingMessages(
     important: message.important,
     internalDate: message.internalDate,
   }))
+}
+
+const BRIEFING_GENERATION_COOLDOWN_MS = 60_000
+
+function briefingIsCoolingDown(cached: BriefingCache) {
+  const generatedAt = Date.parse(cached.generatedAt)
+  return Number.isFinite(generatedAt)
+    ? Date.now() - generatedAt < BRIEFING_GENERATION_COOLDOWN_MS
+    : false
 }
 
 async function cacheBriefing({
@@ -656,6 +875,105 @@ app.get('/api/briefing', async (c) => {
   })
 })
 
+app.post('/api/action-suggestions', async (c) => {
+  const workspaceId = getWorkspaceId(c.req.raw)
+
+  try {
+    const body = actionSuggestionsBodySchema.parse(await c.req.json())
+    const messages = normalizeBriefingMessages(body.messages)
+    const input = {
+      messages: messages.map((message, index) => ({
+        ...message,
+        unsubscribe: body.messages[index]?.unsubscribe,
+      })),
+      labels: body.labels,
+      account: body.account ?? null,
+      force: body.force,
+    }
+    const suggestions = await generateActionSuggestions(input, workspaceId)
+    const account = input.account ?? null
+    const [signals, rules] = await Promise.all([
+      readTriageSignals(workspaceId, account),
+      readTriageRules(workspaceId, account),
+    ])
+
+    return c.json({
+      suggestions,
+      fingerprint: computeActionSuggestionsFingerprint(input, rules),
+      generatedAt: new Date().toISOString(),
+      signalCount: signals.length,
+    })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: 'Invalid action suggestion payload' }, 400)
+    }
+    console.error('Failed to generate action suggestions:', error)
+    const message = error instanceof Error ? error.message : String(error)
+    return c.json(
+      { error: `Failed to generate action suggestions: ${message}` },
+      500,
+    )
+  }
+})
+
+app.get('/api/action-suggestions/rules', async (c) => {
+  const workspaceId = getWorkspaceId(c.req.raw)
+  const account = await resolveTriageAccount(
+    workspaceId,
+    c.req.query('account') ?? undefined,
+  )
+  return c.json({ rules: await readTriageRules(workspaceId, account), account })
+})
+
+app.post('/api/action-suggestions/rules/generate', async (c) => {
+  const workspaceId = getWorkspaceId(c.req.raw)
+  try {
+    const body = z
+      .object({ account: z.string().nullable().optional() })
+      .parse(await c.req.json().catch(() => ({})))
+    const account = await resolveTriageAccount(workspaceId, body.account)
+    return c.json({
+      rules: await regenerateTriageRules(workspaceId, account),
+      account,
+    })
+  } catch (error) {
+    console.error('Failed to generate triage rules:', error)
+    return c.json({ error: 'Failed to generate triage rules' }, 500)
+  }
+})
+
+app.post('/api/action-suggestions/signals', async (c) => {
+  const workspaceId = getWorkspaceId(c.req.raw)
+
+  try {
+    const body = triageSignalBodySchema.parse(await c.req.json())
+    const account = await resolveTriageAccount(workspaceId, body.account)
+    const signal = await appendTriageSignal(workspaceId, {
+      account,
+      message: body.message,
+      suggestedGroupId: body.suggestedGroupId as
+        | (typeof ACTION_GROUPS)[number]
+        | undefined,
+      finalGroupId: body.finalGroupId as (typeof ACTION_GROUPS)[number],
+      outcome: body.outcome,
+      suggestedLabelId: body.suggestedLabelId,
+      suggestedLabelName: body.suggestedLabelName,
+      finalLabelId: body.finalLabelId,
+      finalLabelName: body.finalLabelName,
+      reason: body.reason,
+    })
+
+    return c.json({ ok: true, signal })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: 'Invalid triage signal' }, 400)
+    }
+    console.error('Failed to record triage signal:', error)
+    const message = error instanceof Error ? error.message : String(error)
+    return c.json({ error: `Failed to record triage signal: ${message}` }, 500)
+  }
+})
+
 app.post('/api/briefing/stream', async (c) => {
   const workspaceId = getWorkspaceId(c.req.raw)
 
@@ -675,17 +993,24 @@ app.post('/api/briefing/stream', async (c) => {
 
   if (!body.force) {
     const cached = await readCachedBriefing(workspaceId)
-    if (cached && cached.fingerprint === fingerprint && cached.markdown) {
-      return new Response(cached.markdown, {
-        status: 200,
-        headers: {
-          'Cache-Control': 'no-cache, no-transform',
-          'Content-Type': 'text/plain; charset=utf-8',
-          'X-Emails-Briefing-Source': 'cache',
-          'X-Emails-Briefing-Fingerprint': fingerprint,
-          'X-Emails-Briefing-Generated-At': cached.generatedAt,
-        },
-      })
+    if (cached?.markdown) {
+      const exactMatch = cached.fingerprint === fingerprint
+      const coolingDown = briefingIsCoolingDown(cached)
+      if (exactMatch || coolingDown) {
+        return new Response(cached.markdown, {
+          status: 200,
+          headers: {
+            'Cache-Control': 'no-cache, no-transform',
+            'Content-Type': 'text/plain; charset=utf-8',
+            'X-Emails-Briefing-Source': 'cache',
+            'X-Emails-Briefing-Fingerprint': cached.fingerprint,
+            'X-Emails-Briefing-Generated-At': cached.generatedAt,
+            ...(coolingDown && !exactMatch
+              ? { 'X-Emails-Briefing-Cooldown': 'true' }
+              : {}),
+          },
+        })
+      }
     }
   }
 
@@ -850,11 +1175,147 @@ app.post('/api/moldable/rpc', async (c) => {
       return c.json({ ok: true, result: result.messages })
     }
 
+    if (body.method === 'messages.list' || body.method === 'messages.inbox') {
+      const params = messageListParamsSchema.parse(body.params)
+      const result = await listMessages(workspaceId, {
+        labelId:
+          body.method === 'messages.inbox'
+            ? 'INBOX'
+            : (params?.labelId ?? 'INBOX'),
+        query: params?.query,
+        pageToken: params?.pageToken,
+        maxResults: params?.maxResults ?? 25,
+      })
+
+      return c.json({
+        ok: true,
+        result: {
+          messages: params?.includeBodies
+            ? result.messages
+            : result.messages.map(rpcMessageSummary),
+          nextPageToken: result.nextPageToken,
+          resultSizeEstimate: result.resultSizeEstimate,
+        },
+      })
+    }
+
     if (body.method === 'messages.get') {
       const params = messageGetParamsSchema.parse(body.params)
       return c.json({
         ok: true,
         result: await getMessage(workspaceId, params.id),
+      })
+    }
+
+    if (body.method === 'triage.rules.list') {
+      const params = triageRulesListParamsSchema.parse(body.params)
+      const account = await resolveTriageAccount(workspaceId, params?.account)
+      return c.json({
+        ok: true,
+        result: { rules: await readTriageRules(workspaceId, account), account },
+      })
+    }
+
+    if (body.method === 'triage.rules.upsert') {
+      const params = triageRuleUpsertParamsSchema.parse(body.params)
+      const account = await resolveTriageAccount(workspaceId, params.account)
+      const rule = await upsertTriageRule(workspaceId, account, {
+        id: params.id,
+        title: params.title,
+        body: params.body,
+        action: {
+          groupId: params.groupId,
+          labelName: params.labelName,
+        },
+        status: params.status ?? 'active',
+        confidence: params.confidence ?? 0.8,
+        exceptions: params.exceptions,
+        evidenceSignalIds: [],
+      })
+      return c.json({ ok: true, result: { rule, account } })
+    }
+
+    if (body.method === 'triage.rules.archive') {
+      const params = triageRuleArchiveParamsSchema.parse(body.params)
+      const account = await resolveTriageAccount(workspaceId, params.account)
+      return c.json({
+        ok: true,
+        result: {
+          rule: await archiveTriageRule(workspaceId, account, params.id),
+          account,
+        },
+      })
+    }
+
+    if (body.method === 'triage.cache.clear') {
+      const params = triageCacheClearParamsSchema.parse(body.params)
+      const account = await resolveTriageAccount(workspaceId, params?.account)
+      await clearActionSuggestionsCache(workspaceId, account)
+      return c.json({ ok: true, result: { cleared: true, account } })
+    }
+
+    if (body.method === 'triage.reclassify.messages') {
+      const params = triageClassifyMessagesParamsSchema.parse(body.params)
+      const [labels, messages] = await Promise.all([
+        getLabels(workspaceId).then(normalizeRpcLabels),
+        Promise.all(params.ids.map((id) => getMessage(workspaceId, id))),
+      ])
+      const account = await resolveTriageAccount(workspaceId, params.account)
+      const suggestions = await generateActionSuggestions(
+        {
+          messages,
+          labels,
+          account,
+          force: params.force ?? true,
+        },
+        workspaceId,
+      )
+      return c.json({
+        ok: true,
+        result: {
+          suggestions,
+          messages: params.includeMessages
+            ? messages
+            : messages.map(rpcMessageSummary),
+        },
+      })
+    }
+
+    if (
+      body.method === 'triage.classify' ||
+      body.method === 'triage.reclassify.inbox'
+    ) {
+      const params = triageClassifyParamsSchema.parse(body.params)
+      const labels = normalizeRpcLabels(await getLabels(workspaceId))
+      const list = await listMessages(workspaceId, {
+        labelId:
+          body.method === 'triage.reclassify.inbox'
+            ? 'INBOX'
+            : (params?.labelId ?? 'INBOX'),
+        query: params?.query,
+        pageToken: params?.pageToken,
+        maxResults: params?.maxResults ?? 25,
+      })
+      const account = await resolveTriageAccount(workspaceId, params?.account)
+      const suggestions = await generateActionSuggestions(
+        {
+          messages: list.messages,
+          labels,
+          account,
+          force: params?.force ?? body.method === 'triage.reclassify.inbox',
+        },
+        workspaceId,
+      )
+      return c.json({
+        ok: true,
+        result: {
+          suggestions,
+          messages: params?.includeMessages
+            ? list.messages
+            : list.messages.map(rpcMessageSummary),
+          nextPageToken: list.nextPageToken,
+          resultSizeEstimate: list.resultSizeEstimate,
+        },
       })
     }
 

@@ -30,6 +30,85 @@
             "description": "Check whether Gmail is connected in this workspace."
           },
           {
+            "id": "messages.inbox",
+            "name": "Paged inbox messages",
+            "description": "List Inbox messages with pagination metadata for iterative review.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "pageToken": {
+                  "type": "string"
+                },
+                "maxResults": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "includeBodies": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "messages": {
+                  "type": "array"
+                },
+                "nextPageToken": {
+                  "type": "string"
+                },
+                "resultSizeEstimate": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          {
+            "id": "messages.list",
+            "name": "Paged email messages",
+            "description": "List Gmail messages by label/search with pageToken support.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "labelId": {
+                  "type": "string"
+                },
+                "pageToken": {
+                  "type": "string"
+                },
+                "maxResults": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "includeBodies": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "messages": {
+                  "type": "array"
+                },
+                "nextPageToken": {
+                  "type": "string"
+                },
+                "resultSizeEstimate": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          {
             "id": "messages.unread",
             "name": "Unread email",
             "description": "List recent unread email summaries.",
@@ -83,6 +162,178 @@
                 }
               },
               "required": ["id"]
+            }
+          },
+          {
+            "id": "triage.rules.list",
+            "name": "List triage rules",
+            "description": "Return active, draft, and archived mail triage preference rules for the current workspace and email account.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "account": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "triage.rules.upsert",
+            "name": "Create or update triage rule",
+            "description": "Create or update one human-readable triage preference rule for the current workspace and email account.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "body": {
+                  "type": "string"
+                },
+                "groupId": {
+                  "type": "string"
+                },
+                "labelName": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "exceptions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "account": {
+                  "type": "string"
+                }
+              },
+              "required": ["title", "body", "groupId"]
+            }
+          },
+          {
+            "id": "triage.rules.archive",
+            "name": "Archive triage rule",
+            "description": "Archive one triage preference rule by ID for the current workspace and email account.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "account": {
+                  "type": "string"
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "triage.cache.clear",
+            "name": "Clear triage cache",
+            "description": "Clear cached triage suggestions for the current workspace and email account so future classifications use current rules.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "account": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "triage.classify",
+            "name": "Classify mail with triage rules",
+            "description": "Classify a page of messages by label/search and return suggestions for sanity checking.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "labelId": {
+                  "type": "string"
+                },
+                "pageToken": {
+                  "type": "string"
+                },
+                "maxResults": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "force": {
+                  "type": "boolean"
+                },
+                "includeMessages": {
+                  "type": "boolean"
+                },
+                "account": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "triage.reclassify.inbox",
+            "name": "Re-classify inbox page",
+            "description": "Force re-classification of a paged Inbox sample with current triage rules.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "pageToken": {
+                  "type": "string"
+                },
+                "maxResults": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "includeMessages": {
+                  "type": "boolean"
+                },
+                "account": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "triage.reclassify.messages",
+            "name": "Re-classify selected messages",
+            "description": "Force re-classification of specific Gmail message IDs with current triage rules.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "force": {
+                  "type": "boolean"
+                },
+                "includeMessages": {
+                  "type": "boolean"
+                },
+                "account": {
+                  "type": "string"
+                }
+              },
+              "required": ["ids"]
             }
           }
         ]

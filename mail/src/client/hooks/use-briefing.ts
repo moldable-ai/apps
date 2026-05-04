@@ -36,6 +36,8 @@ const INITIAL_STATE: BriefingState = {
   error: null,
 }
 
+const AUTO_BRIEFING_COOLDOWN_MS = 60_000
+
 type MessageSnapshot = Map<string, string>
 
 function messageStateKey(message: MailMessageSummary) {
@@ -84,7 +86,7 @@ function canKeepCurrentBriefing({
 
   for (const [id, currentState] of current) {
     const previousState = previous.get(id)
-    if (!previousState) return false
+    if (!previousState) continue
     if (previousState !== currentState && linked.has(id)) return false
   }
 
@@ -153,6 +155,8 @@ export function useInboxBriefing({
   const lastHandledRef = useRef<string | null>(null)
   const lastMessageSnapshotRef = useRef<MessageSnapshot | null>(null)
   const linkedMessageIdsRef = useRef<string[]>([])
+  const lastAutoBriefingRunAtRef = useRef(0)
+  const cooldownTimerRef = useRef<number | null>(null)
 
   const clientFingerprint = useMemo(() => {
     if (messages.length === 0) return null
@@ -162,10 +166,17 @@ export function useInboxBriefing({
   const run = useCallback(
     async (force: boolean) => {
       if (!enabled || messages.length === 0 || !clientFingerprint) return
+      if (cooldownTimerRef.current !== null) {
+        window.clearTimeout(cooldownTimerRef.current)
+        cooldownTimerRef.current = null
+      }
+      if (!force) lastAutoBriefingRunAtRef.current = Date.now()
+
       abortRef.current?.abort()
       const controller = new AbortController()
       abortRef.current = controller
 
+      const previousSnapshot = lastMessageSnapshotRef.current
       lastHandledRef.current = clientFingerprint
       lastMessageSnapshotRef.current = createMessageSnapshot(messages)
       setState((prev) => ({
@@ -222,6 +233,8 @@ export function useInboxBriefing({
         const generatedAt =
           res.headers.get('x-emails-briefing-generated-at') ??
           new Date().toISOString()
+        const coolingDown =
+          res.headers.get('x-emails-briefing-cooldown') === 'true'
 
         if (source === 'cache') {
           const markdown = (await res.text()).trim()
@@ -240,6 +253,14 @@ export function useInboxBriefing({
             status: 'ready',
             error: null,
           })
+          if (coolingDown && !force) {
+            const cachedGeneratedAt = Date.parse(generatedAt)
+            if (Number.isFinite(cachedGeneratedAt)) {
+              lastAutoBriefingRunAtRef.current = cachedGeneratedAt
+            }
+            lastHandledRef.current = null
+            lastMessageSnapshotRef.current = previousSnapshot
+          }
           return
         }
 
@@ -333,25 +354,48 @@ export function useInboxBriefing({
   useEffect(() => {
     if (!enabled || !clientFingerprint) return
     if (lastHandledRef.current === clientFingerprint) return
+
     const currentSnapshot = createMessageSnapshot(messages)
-    if (
+    const currentBriefingStillApplies =
       state.status === 'ready' &&
       canKeepCurrentBriefing({
         previous: lastMessageSnapshotRef.current,
         current: currentSnapshot,
         linkedMessageIds: linkedMessageIdsRef.current,
       })
-    ) {
+
+    if (currentBriefingStillApplies) {
       lastHandledRef.current = clientFingerprint
       lastMessageSnapshotRef.current = currentSnapshot
       return
     }
-    void run(false)
+
+    if (state.status === 'loading' || state.status === 'streaming') return
+
+    const elapsed = Date.now() - lastAutoBriefingRunAtRef.current
+    const delay = Math.max(0, AUTO_BRIEFING_COOLDOWN_MS - elapsed)
+
+    if (delay === 0) {
+      void run(false)
+      return
+    }
+
+    if (cooldownTimerRef.current !== null) {
+      window.clearTimeout(cooldownTimerRef.current)
+    }
+    cooldownTimerRef.current = window.setTimeout(() => {
+      cooldownTimerRef.current = null
+      void run(false)
+    }, delay)
   }, [clientFingerprint, enabled, messages, run, state.status])
 
   useEffect(() => {
     if (!enabled) {
       abortRef.current?.abort()
+      if (cooldownTimerRef.current !== null) {
+        window.clearTimeout(cooldownTimerRef.current)
+        cooldownTimerRef.current = null
+      }
       lastHandledRef.current = null
       lastMessageSnapshotRef.current = null
       linkedMessageIdsRef.current = []
@@ -360,12 +404,25 @@ export function useInboxBriefing({
   }, [enabled])
 
   useEffect(() => {
+    if (cooldownTimerRef.current !== null) {
+      window.clearTimeout(cooldownTimerRef.current)
+      cooldownTimerRef.current = null
+    }
     lastHandledRef.current = null
     lastMessageSnapshotRef.current = null
     linkedMessageIdsRef.current = []
+    lastAutoBriefingRunAtRef.current = 0
   }, [workspaceId])
 
-  useEffect(() => () => abortRef.current?.abort(), [])
+  useEffect(
+    () => () => {
+      abortRef.current?.abort()
+      if (cooldownTimerRef.current !== null) {
+        window.clearTimeout(cooldownTimerRef.current)
+      }
+    },
+    [],
+  )
 
   const refresh = useCallback(() => {
     lastHandledRef.current = null

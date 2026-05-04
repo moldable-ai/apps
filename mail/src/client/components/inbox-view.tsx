@@ -1,6 +1,14 @@
-import { Archive, Ban, Check, Clock, CornerUpLeft, EyeOff } from 'lucide-react'
-import type { CSSProperties, KeyboardEvent, MouseEvent } from 'react'
-import { useMemo, useState } from 'react'
+import {
+  Archive,
+  Ban,
+  Check,
+  Clock,
+  CornerUpLeft,
+  EyeOff,
+  Loader2,
+} from 'lucide-react'
+import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ScrollArea,
   Skeleton,
@@ -27,6 +35,7 @@ interface InboxViewProps {
   messages: MailMessageSummary[]
   selectedId: string | null
   loading: boolean
+  searchLoading?: boolean
   error: unknown
   folderId: string
   query: string
@@ -43,12 +52,18 @@ interface InboxViewProps {
   selectedMessageIds: Set<string>
   selectionActive: boolean
   onToggleMessageSelected: (id: string) => void
+  practicePanel?: ReactNode
+  hideMessageList?: boolean
+  hasMoreMessages?: boolean
+  loadingMore?: boolean
+  onLoadMore?: () => void
 }
 
 export function InboxView({
   messages,
   selectedId,
   loading,
+  searchLoading = false,
   error,
   folderId,
   query,
@@ -65,7 +80,13 @@ export function InboxView({
   selectedMessageIds,
   selectionActive,
   onToggleMessageSelected,
+  practicePanel,
+  hideMessageList = false,
+  hasMoreMessages = false,
+  loadingMore = false,
+  onLoadMore,
 }: InboxViewProps) {
+  const loadMoreRef = useRef<HTMLDivElement | null>(null)
   const groups = useMemo(
     () =>
       folderId === 'SNOOZED'
@@ -81,6 +102,34 @@ export function InboxView({
     account: account ?? null,
     enabled: briefingEnabled,
   })
+
+  useEffect(() => {
+    if (hideMessageList || !hasMoreMessages || loadingMore || !onLoadMore)
+      return
+
+    const node = loadMoreRef.current
+    if (!node) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) onLoadMore()
+      },
+      { root: null, rootMargin: '360px 0px 520px', threshold: 0 },
+    )
+    observer.observe(node)
+
+    return () => observer.disconnect()
+  }, [
+    hasMoreMessages,
+    hideMessageList,
+    loadingMore,
+    onLoadMore,
+    messages.length,
+  ])
+
+  if (searchLoading) {
+    return <SearchLoadingState />
+  }
 
   if (loading && messages.length === 0) {
     return (
@@ -112,22 +161,10 @@ export function InboxView({
       <div className="flex h-full flex-col items-center justify-center px-6 pb-[var(--chat-safe-padding)] text-center">
         <div className="max-w-sm space-y-2">
           <p className="emails-serif text-2xl">
-            {folderId === 'DRAFTS'
-              ? 'No drafts'
-              : folderId === 'SNOOZED'
-                ? 'No snoozed messages'
-                : 'Inbox clear'}
+            {emptyStateTitle(folderId, Boolean(query))}
           </p>
           <p className="text-muted-foreground text-sm">
-            {query
-              ? `No mail matches "${query}".`
-              : folderId === 'INBOX'
-                ? 'Nothing new right now. Take a breath.'
-                : folderId === 'DRAFTS'
-                  ? 'No saved drafts.'
-                  : folderId === 'SNOOZED'
-                    ? 'No messages are snoozed.'
-                    : 'No messages in this folder.'}
+            {emptyStateDescription(folderId, query)}
           </p>
         </div>
       </div>
@@ -141,6 +178,8 @@ export function InboxView({
           <InboxBriefing briefing={briefing} unreadCount={unreadCount} />
         ) : null}
 
+        {practicePanel}
+
         {actionError ? (
           <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-xl border px-4 py-2 text-xs font-medium">
             {actionError instanceof Error
@@ -149,36 +188,174 @@ export function InboxView({
           </div>
         ) : null}
 
-        {groups.map((group) => (
-          <section key={group.key}>
-            <h2 className="text-muted-foreground/80 mb-2 pl-4 text-xs font-medium uppercase tracking-wider">
-              {group.label}
-            </h2>
-            <div className="border-border/70 bg-muted/30 dark:bg-muted/20 overflow-hidden rounded-2xl border">
-              {group.messages.map((message, index) => (
-                <MessageRow
-                  key={message.id}
-                  message={message}
-                  selected={message.id === selectedId}
-                  bulkSelected={selectedMessageIds.has(message.id)}
-                  selectionActive={selectionActive}
-                  selectionEnabled={folderId !== 'DRAFTS'}
-                  showSeparator={index < group.messages.length - 1}
-                  onSelect={() => onSelect(message.id)}
-                  onToggleSelected={() => onToggleMessageSelected(message.id)}
-                  onReply={() => onReply(message.id)}
-                  onArchive={() => onArchive(message.id)}
-                  onUnsubscribeArchive={() => onUnsubscribeArchive(message.id)}
-                  onSnooze={(until) => onSnooze(message.id, until)}
-                  onUnsnooze={() => onUnsnooze(message.id)}
-                  onSpam={() => onSpam(message.id)}
-                  showActions={folderId !== 'DRAFTS'}
-                  showSnoozedUntil={folderId === 'SNOOZED'}
-                />
-              ))}
-            </div>
-          </section>
-        ))}
+        {!hideMessageList &&
+          groups.map((group) => (
+            <section key={group.key}>
+              <h2 className="text-muted-foreground/80 mb-2 pl-4 text-xs font-medium uppercase tracking-wider">
+                {group.label}
+              </h2>
+              <div className="border-border/70 bg-muted/30 dark:bg-muted/20 overflow-hidden rounded-2xl border">
+                {group.messages.map((message, index) => (
+                  <MessageRow
+                    key={message.id}
+                    message={message}
+                    selected={message.id === selectedId}
+                    bulkSelected={selectedMessageIds.has(message.id)}
+                    selectionActive={selectionActive}
+                    selectionEnabled={folderId !== 'DRAFTS'}
+                    showSeparator={index < group.messages.length - 1}
+                    onSelect={() => onSelect(message.id)}
+                    onToggleSelected={() => onToggleMessageSelected(message.id)}
+                    onReply={() => onReply(message.id)}
+                    onArchive={() => onArchive(message.id)}
+                    onUnsubscribeArchive={() =>
+                      onUnsubscribeArchive(message.id)
+                    }
+                    onSnooze={(until) => onSnooze(message.id, until)}
+                    onUnsnooze={() => onUnsnooze(message.id)}
+                    onSpam={() => onSpam(message.id)}
+                    showActions={folderId !== 'DRAFTS'}
+                    showSnoozedUntil={folderId === 'SNOOZED'}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+
+        {!hideMessageList && (hasMoreMessages || loadingMore) ? (
+          <div
+            ref={loadMoreRef}
+            className="text-muted-foreground flex min-h-16 items-center justify-center gap-2 pb-2 text-xs font-medium"
+          >
+            <Loader2
+              className={cn(
+                'size-3.5',
+                loadingMore ? 'animate-spin' : 'opacity-60',
+              )}
+            />
+            {loadingMore ? 'Loading more mail…' : 'More mail below'}
+          </div>
+        ) : null}
+      </div>
+    </ScrollArea>
+  )
+}
+
+function emptyStateTitle(folderId: string, searching: boolean) {
+  if (searching) {
+    switch (folderId) {
+      case 'SPAM':
+        return 'No spam matches'
+      case 'TRASH':
+        return 'Nothing in trash'
+      case 'SENT':
+        return 'No sent matches'
+      case 'all':
+        return 'No mail matches'
+      case 'DRAFTS':
+        return 'No draft matches'
+      case 'SNOOZED':
+        return 'No snoozed matches'
+      default:
+        return 'No mail matches'
+    }
+  }
+
+  switch (folderId) {
+    case 'DRAFTS':
+      return 'No drafts'
+    case 'SNOOZED':
+      return 'No snoozed messages'
+    case 'SPAM':
+      return 'Spam clear'
+    case 'TRASH':
+      return 'Trash empty'
+    case 'SENT':
+      return 'No sent mail'
+    case 'all':
+      return 'No mail here'
+    default:
+      return 'Inbox clear'
+  }
+}
+
+function emptyStateDescription(folderId: string, query: string) {
+  if (query) return `No mail matches "${query}".`
+
+  switch (folderId) {
+    case 'INBOX':
+      return 'Nothing new right now. Take a breath.'
+    case 'DRAFTS':
+      return 'No saved drafts.'
+    case 'SNOOZED':
+      return 'No messages are snoozed.'
+    case 'SPAM':
+      return 'No spam in this view.'
+    case 'TRASH':
+      return 'No messages in trash.'
+    case 'SENT':
+      return 'No sent messages in this view.'
+    default:
+      return 'No messages in this folder.'
+  }
+}
+
+const SEARCH_LOADING_MESSAGES = [
+  'Asking Gmail to rummage through the drawers…',
+  'Checking under the inbox cushions…',
+  'Following a trail of subject lines and paperclips…',
+  'Sending a tiny search ferret into All Mail…',
+  'Peeking behind labels and dusty threads…',
+  'Shaking the email snow globe…',
+  'Sorting confetti from clues…',
+  'Listening for the message that says “psst, over here”…',
+  'Tiptoeing past old newsletters to find the good stuff…',
+  'Dusting off ancient threads with a tiny feather duster…',
+]
+
+function SearchLoadingState() {
+  const [messageIndex, setMessageIndex] = useState(0)
+  const [visible, setVisible] = useState(true)
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setVisible(false)
+      window.setTimeout(() => {
+        setMessageIndex(
+          (previous) => (previous + 1) % SEARCH_LOADING_MESSAGES.length,
+        )
+        setVisible(true)
+      }, 180)
+    }, 1_900)
+
+    return () => window.clearInterval(interval)
+  }, [])
+
+  return (
+    <ScrollArea className="h-full px-5 pt-8">
+      <div className="mx-auto flex min-h-[22rem] w-full max-w-[44rem] items-center justify-center pb-[calc(var(--chat-safe-padding,0px)+6rem)]">
+        <div className="flex max-w-sm flex-col items-center text-center">
+          <p className="text-muted-foreground mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide">
+            <Loader2 className="size-3.5 animate-spin" />
+            Searching Gmail
+          </p>
+
+          <div
+            className="relative flex min-h-12 w-full items-start justify-center px-2"
+            aria-live="polite"
+          >
+            <p
+              className={cn(
+                'text-foreground max-w-full text-wrap text-sm font-medium leading-6 transition-all duration-200 ease-out',
+                visible
+                  ? 'translate-y-0 opacity-100 blur-0'
+                  : 'translate-y-1 opacity-0 blur-sm',
+              )}
+            >
+              {SEARCH_LOADING_MESSAGES[messageIndex]}
+            </p>
+          </div>
+        </div>
       </div>
     </ScrollArea>
   )

@@ -40,7 +40,7 @@ export function Widget() {
             {GHOST_IMAGES.map((title) => (
               <div
                 key={title}
-                className="border-border/40 bg-muted/20 flex min-h-0 min-w-0 flex-col rounded-md border p-1.5 opacity-50 grayscale"
+                className="bg-muted/20 flex min-h-0 min-w-0 flex-col rounded-md p-1.5 opacity-50 grayscale"
               >
                 <div className="bg-muted mb-1 min-h-0 flex-1 rounded-sm" />
                 <p className="text-muted-foreground truncate text-[10px]">
@@ -54,7 +54,7 @@ export function Widget() {
             {images.slice(0, 6).map((image) => (
               <div
                 key={image.id}
-                className="border-border/50 bg-muted min-w-0 overflow-hidden rounded-md border"
+                className="min-w-0 overflow-hidden rounded-md"
               >
                 {image.status === 'generating' ? (
                   <div
@@ -71,7 +71,7 @@ export function Widget() {
                     className="size-full object-cover"
                   />
                 ) : (
-                  <div className="bg-muted size-full" />
+                  <div className="size-full" />
                 )}
               </div>
             ))}

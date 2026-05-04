@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTheme } from '@moldable-ai/ui'
 
-const baseCss = `
+const authoredVisualDesignPattern =
+  /(?:\bbgcolor\s*=|\bbackground(?:-color|-image)?\s*:|#[\da-f]{3,8}\b|rgba?\(|hsla?\(|linear-gradient\()/i
+
+function hasAuthoredVisualDesign(html: string) {
+  return authoredVisualDesignPattern.test(html.replace(/<!--[\s\S]*?-->/g, ''))
+}
+
+function getBaseCss({ lightSurface }: { lightSurface: boolean }) {
+  return `
   :root { color-scheme: light; }
   html, body {
     margin: 0;
     min-width: 0;
-    background: transparent;
+    background: ${lightSurface ? '#ffffff' : 'transparent'};
     color: #0f172a;
     overflow-wrap: anywhere;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -26,7 +34,7 @@ const baseCss = `
     border-collapse: collapse;
   }
   a {
-    color: inherit;
+    color: #2563eb;
     text-underline-offset: 3px;
   }
   blockquote {
@@ -36,22 +44,19 @@ const baseCss = `
     color: #475569;
   }
 `
+}
 
-const darkAdjustments = `
+const simpleDarkAdjustments = `
   :root { color-scheme: dark; }
   html, body {
+    background: transparent !important;
     color: #e5e7eb !important;
   }
-  body,
-  body :is(p, div, span, td, th, li, h1, h2, h3, h4, h5, h6, strong, em, b, i, font) {
+  body :is(p, div, span, td, th, li, h1, h2, h3, h4, h5, h6, strong, em, b, i, font):not([style*="color" i]):not([color]) {
     color: #e5e7eb !important;
-  }
-  body [style*="background"],
-  body [bgcolor] {
-    background-color: transparent !important;
   }
   a,
-  a * {
+  a :is(span, strong, em, b, i, font):not([style*="color" i]):not([color]) {
     color: #fb923c !important;
   }
   blockquote {
@@ -60,18 +65,22 @@ const darkAdjustments = `
   }
 `
 
-function buildHeadContent(dark: boolean) {
+function buildHeadContent(html: string, dark: boolean) {
+  // Designed/marketing emails usually author their own backgrounds and text colors.
+  // Forcing them dark makes pale panels with white text, like the Namecheap email.
+  const useDarkAdjustments = dark && !hasAuthoredVisualDesign(html)
+
   return `
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data: blob:; style-src 'unsafe-inline' http: https:; font-src http: https: data:; script-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none';" />
-  <style>${baseCss}${dark ? darkAdjustments : ''}</style>
+  <style>${getBaseCss({ lightSurface: !useDarkAdjustments })}${useDarkAdjustments ? simpleDarkAdjustments : ''}</style>
   `
 }
 
 function buildEmailDocument(html: string, dark: boolean) {
   const trimmed = html.trim()
-  const head = buildHeadContent(dark)
+  const head = buildHeadContent(trimmed, dark)
 
   if (/<html[\s>]/i.test(trimmed)) {
     if (/<head[\s>]/i.test(trimmed)) {
@@ -159,7 +168,7 @@ export function HtmlEmailFrame({ html }: { html: string }) {
     const doc = iframeRef.current?.contentDocument
     if (!doc) return
 
-    for (const anchor of doc.querySelectorAll('a[href]')) {
+    for (const anchor of doc.querySelectorAll<HTMLAnchorElement>('a[href]')) {
       const externalUrl = getExternalUrl(anchor)
       if (externalUrl && !externalUrl.startsWith('about:')) {
         anchor.dataset.externalUrl = externalUrl

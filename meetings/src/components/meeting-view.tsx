@@ -6,16 +6,28 @@ import {
   Captions,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   List,
   Loader2,
   type LucideIcon,
   MoreHorizontal,
+  Replace,
+  Search,
   Sparkles,
   Trash2,
   Users,
+  X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MarkdownEditor } from '@moldable-ai/editor'
+import {
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
+import { MarkdownEditor, type MarkdownEditorHandle } from '@moldable-ai/editor'
 import {
   Button,
   Calendar as DatePickerCalendar,
@@ -129,6 +141,11 @@ export function MeetingView({
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isDatePickerOpen, setIsDatePickerOpen] = useState(false)
   const [isTemplatesModalOpen, setIsTemplatesModalOpen] = useState(false)
+  const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false)
+  const [findQuery, setFindQuery] = useState('')
+  const [replaceQuery, setReplaceQuery] = useState('')
+  const [findMatchCount, setFindMatchCount] = useState(0)
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0)
   const [customTemplates, setCustomTemplates] = useState<MeetingTemplate[]>([])
   const [selectedTemplateId, setSelectedTemplateId] = useState(
     meeting.enhancedTemplateId ?? DEFAULT_MEETING_TEMPLATE_ID,
@@ -139,6 +156,8 @@ export function MeetingView({
   const [localEnhancement, setLocalEnhancement] =
     useState<EnhancementStatus | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const manualEditorRef = useRef<MarkdownEditorHandle>(null)
+  const enhancedEditorRef = useRef<MarkdownEditorHandle>(null)
   const previousMeetingIdRef = useRef(meeting.id)
   const wasEnhancingRef = useRef(false)
 
@@ -168,6 +187,9 @@ export function MeetingView({
       setActiveView(getInitialView(meeting))
       setLastSaved(null)
       setLocalEnhancement(null)
+      setIsFindReplaceOpen(false)
+      setFindMatchCount(0)
+      setCurrentMatchIndex(0)
     }
 
     setManualNotes(meeting.notes || '')
@@ -212,6 +234,17 @@ export function MeetingView({
     }
   }, [activeEnhancement?.isEnhancing, hasGeneratedEnhancedNotes])
 
+  useEffect(() => {
+    if (findMatchCount === 0) {
+      if (currentMatchIndex !== 0) setCurrentMatchIndex(0)
+      return
+    }
+
+    if (currentMatchIndex > findMatchCount - 1) {
+      setCurrentMatchIndex(findMatchCount - 1)
+    }
+  }, [currentMatchIndex, findMatchCount])
+
   const persistMeeting = useCallback(
     async (updatedMeeting: Meeting) => {
       setIsSaving(true)
@@ -255,6 +288,52 @@ export function MeetingView({
     [meeting, persistMeeting],
   )
 
+  const handleFindQueryChange = useCallback((value: string) => {
+    setFindQuery(value)
+    setCurrentMatchIndex(0)
+  }, [])
+
+  const handleFindMatchCountChange = useCallback((count: number) => {
+    setFindMatchCount((current) => (current === count ? current : count))
+  }, [])
+
+  const handleNextMatch = useCallback(() => {
+    setCurrentMatchIndex((current) => {
+      if (findMatchCount === 0) return 0
+      return (current + 1) % findMatchCount
+    })
+  }, [findMatchCount])
+
+  const handlePreviousMatch = useCallback(() => {
+    setCurrentMatchIndex((current) => {
+      if (findMatchCount === 0) return 0
+      return (current - 1 + findMatchCount) % findMatchCount
+    })
+  }, [findMatchCount])
+
+  const handleReplaceCurrentMatch = useCallback(() => {
+    if (!findQuery.trim() || findMatchCount === 0) return
+
+    const activeEditor =
+      activeView === 'manual'
+        ? manualEditorRef.current
+        : enhancedEditorRef.current
+
+    activeEditor?.replaceCurrentFindMatch(replaceQuery)
+  }, [activeView, findMatchCount, findQuery, replaceQuery])
+
+  const handleReplaceAllMatches = useCallback(() => {
+    if (!findQuery.trim() || findMatchCount === 0) return
+
+    const activeEditor =
+      activeView === 'manual'
+        ? manualEditorRef.current
+        : enhancedEditorRef.current
+
+    activeEditor?.replaceAllFindMatches(replaceQuery)
+    setCurrentMatchIndex(0)
+  }, [activeView, findMatchCount, findQuery, replaceQuery])
+
   const participant = getPrimaryParticipant(titleDraft)
   const enhancementContent = activeEnhancement?.content ?? ''
   const originalEnhancementNotes = enhancedNotes || manualNotes
@@ -263,6 +342,31 @@ export function MeetingView({
       activeEnhancement &&
       (activeEnhancement.isEnhancing || enhancementContent),
   )
+  const canFindReplace =
+    activeView === 'manual' ||
+    (activeView === 'enhanced' &&
+      hasGeneratedEnhancedNotes &&
+      !showEnhancingEditor)
+
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      const isFindShortcut =
+        (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f'
+
+      if (isFindShortcut && canFindReplace) {
+        event.preventDefault()
+        setIsFindReplaceOpen(true)
+        return
+      }
+
+      if (event.key === 'Escape' && isFindReplaceOpen) {
+        setIsFindReplaceOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [canFindReplace, isFindReplaceOpen])
 
   const handleTitleChange = useCallback(
     (nextTitle: string) => {
@@ -434,6 +538,26 @@ export function MeetingView({
       <div className="pointer-events-none absolute right-4 top-3 z-20 flex items-center gap-3">
         <SaveIndicator isSaving={isSaving} lastSaved={lastSaved} />
         <div className="pointer-events-auto flex items-center gap-3">
+          {canFindReplace ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                setIsFindReplaceOpen((open) => !open)
+                setIsMenuOpen(false)
+              }}
+              className={cn(
+                'hover:bg-muted hover:text-foreground size-9 cursor-pointer rounded-full',
+                isFindReplaceOpen
+                  ? 'bg-muted text-foreground'
+                  : 'text-muted-foreground',
+              )}
+              title="Find in notes"
+            >
+              <Search className="size-4" />
+            </Button>
+          ) : null}
           {onMoveToTrash ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -468,6 +592,7 @@ export function MeetingView({
                   onClick={() => {
                     setActiveView('manual')
                     setIsMenuOpen(false)
+                    setIsFindReplaceOpen(false)
                   }}
                 />
                 <div className="relative">
@@ -507,6 +632,7 @@ export function MeetingView({
                   onClick={() => {
                     setActiveView('transcript')
                     setIsMenuOpen(false)
+                    setIsFindReplaceOpen(false)
                   }}
                 />
               </div>
@@ -562,28 +688,74 @@ export function MeetingView({
               scrollContainer={scrollContainerRef.current}
             />
           ) : activeView === 'manual' ? (
-            <MarkdownEditor
-              value={manualNotes}
-              onChange={handleManualNotesChange}
-              placeholder="Write your notes here..."
-              minHeight="100%"
-              maxHeight="none"
-              className="meetings-document-editor"
-              contentClassName="meetings-document-content"
-              hideMarkdownHint
-            />
-          ) : activeView === 'enhanced' ? (
-            hasGeneratedEnhancedNotes ? (
+            <>
+              {isFindReplaceOpen ? (
+                <FindReplaceBar
+                  findQuery={findQuery}
+                  replaceQuery={replaceQuery}
+                  matchCount={findMatchCount}
+                  currentMatch={
+                    findMatchCount === 0 ? 0 : currentMatchIndex + 1
+                  }
+                  onFindQueryChange={handleFindQueryChange}
+                  onReplaceQueryChange={setReplaceQuery}
+                  onNextMatch={handleNextMatch}
+                  onPreviousMatch={handlePreviousMatch}
+                  onReplaceCurrent={handleReplaceCurrentMatch}
+                  onReplaceAll={handleReplaceAllMatches}
+                  onClose={() => setIsFindReplaceOpen(false)}
+                />
+              ) : null}
               <MarkdownEditor
-                value={enhancedNotes}
-                onChange={handleEnhancedNotesChange}
-                placeholder="No notes were generated for this meeting"
+                ref={manualEditorRef}
+                value={manualNotes}
+                onChange={handleManualNotesChange}
+                placeholder="Write your notes here..."
                 minHeight="100%"
                 maxHeight="none"
                 className="meetings-document-editor"
-                contentClassName="meetings-document-content meetings-enhanced-document-content"
+                contentClassName="meetings-document-content"
                 hideMarkdownHint
+                findQuery={isFindReplaceOpen ? findQuery : ''}
+                currentFindMatch={currentMatchIndex}
+                onFindMatchCountChange={handleFindMatchCountChange}
               />
+            </>
+          ) : activeView === 'enhanced' ? (
+            hasGeneratedEnhancedNotes ? (
+              <>
+                {isFindReplaceOpen ? (
+                  <FindReplaceBar
+                    findQuery={findQuery}
+                    replaceQuery={replaceQuery}
+                    matchCount={findMatchCount}
+                    currentMatch={
+                      findMatchCount === 0 ? 0 : currentMatchIndex + 1
+                    }
+                    onFindQueryChange={handleFindQueryChange}
+                    onReplaceQueryChange={setReplaceQuery}
+                    onNextMatch={handleNextMatch}
+                    onPreviousMatch={handlePreviousMatch}
+                    onReplaceCurrent={handleReplaceCurrentMatch}
+                    onReplaceAll={handleReplaceAllMatches}
+                    onClose={() => setIsFindReplaceOpen(false)}
+                  />
+                ) : null}
+                <MarkdownEditor
+                  ref={enhancedEditorRef}
+                  value={enhancedNotes}
+                  onChange={handleEnhancedNotesChange}
+                  placeholder="No notes were generated for this meeting"
+                  minHeight="100%"
+                  maxHeight="none"
+                  className="meetings-document-editor"
+                  contentClassName="meetings-document-content meetings-enhanced-document-content"
+                  hideMarkdownHint
+                  findQuery={isFindReplaceOpen ? findQuery : ''}
+                  currentFindMatch={currentMatchIndex}
+                  onFindMatchCountChange={handleFindMatchCountChange}
+                />
+              </>
             ) : (
               <div className="flex min-h-[360px] flex-col items-center justify-center text-center">
                 <div className="bg-muted mb-4 flex size-12 items-center justify-center rounded-full">
@@ -638,6 +810,149 @@ export function MeetingView({
           )
         }}
       />
+    </div>
+  )
+}
+
+interface FindReplaceBarProps {
+  findQuery: string
+  replaceQuery: string
+  matchCount: number
+  currentMatch: number
+  onFindQueryChange: (value: string) => void
+  onReplaceQueryChange: (value: string) => void
+  onNextMatch: () => void
+  onPreviousMatch: () => void
+  onReplaceCurrent: () => void
+  onReplaceAll: () => void
+  onClose: () => void
+}
+
+function FindReplaceBar({
+  findQuery,
+  replaceQuery,
+  matchCount,
+  currentMatch,
+  onFindQueryChange,
+  onReplaceQueryChange,
+  onNextMatch,
+  onPreviousMatch,
+  onReplaceCurrent,
+  onReplaceAll,
+  onClose,
+}: FindReplaceBarProps) {
+  const hasQuery = findQuery.trim().length > 0
+  const hasMatches = matchCount > 0
+  const matchLabel = !hasQuery
+    ? ''
+    : hasMatches
+      ? `${currentMatch} of ${matchCount}`
+      : 'No matches'
+
+  const handleFindKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Escape') {
+      onClose()
+      return
+    }
+
+    if (event.key !== 'Enter') return
+
+    event.preventDefault()
+    if (event.shiftKey) {
+      onPreviousMatch()
+    } else {
+      onNextMatch()
+    }
+  }
+
+  return (
+    <div className="border-border/70 bg-background/95 sticky top-2 z-10 mb-4 rounded-xl border p-2 shadow-sm backdrop-blur">
+      <div className="flex items-center gap-2">
+        <label className="relative min-w-0 flex-1">
+          <Search className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" />
+          <Input
+            autoFocus
+            value={findQuery}
+            onChange={(event) => onFindQueryChange(event.target.value)}
+            onKeyDown={handleFindKeyDown}
+            placeholder="Find"
+            className="bg-background h-8 pl-8 text-sm"
+            aria-label="Find in enhanced notes"
+          />
+        </label>
+        <span
+          className={cn(
+            'text-muted-foreground w-16 shrink-0 text-center text-[11px]',
+            hasQuery && !hasMatches && 'text-destructive',
+          )}
+        >
+          {matchLabel}
+        </span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onPreviousMatch}
+          disabled={!hasMatches}
+          className="size-8 cursor-pointer rounded-full disabled:pointer-events-none disabled:opacity-45"
+          title="Previous match"
+        >
+          <ChevronLeft className="size-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onNextMatch}
+          disabled={!hasMatches}
+          className="size-8 cursor-pointer rounded-full disabled:pointer-events-none disabled:opacity-45"
+          title="Next match"
+        >
+          <ChevronRight className="size-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          className="size-8 cursor-pointer rounded-full"
+          title="Close find and replace"
+        >
+          <X className="size-4" />
+        </Button>
+      </div>
+      <div className="mt-2 flex items-center gap-2">
+        <label className="relative min-w-0 flex-1">
+          <Replace className="text-muted-foreground pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" />
+          <Input
+            value={replaceQuery}
+            onChange={(event) => onReplaceQueryChange(event.target.value)}
+            placeholder="Replace"
+            className="bg-background h-8 pl-8 text-sm"
+            aria-label="Replace with"
+          />
+        </label>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onReplaceCurrent}
+          disabled={!hasMatches}
+          className="h-8 cursor-pointer rounded-full px-3 text-xs disabled:pointer-events-none disabled:opacity-45"
+        >
+          Replace
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={onReplaceAll}
+          disabled={!hasMatches}
+          className="h-8 cursor-pointer rounded-full px-3 text-xs disabled:pointer-events-none disabled:opacity-45"
+        >
+          All
+        </Button>
+      </div>
     </div>
   )
 }

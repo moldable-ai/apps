@@ -101,6 +101,60 @@
             }
           },
           {
+            "id": "images.cancel",
+            "name": "Cancel pending image work",
+            "description": "Cancel and clear a pending generation or edit for an image thread. Pending edits keep the last completed image; empty pending generation threads are deleted by default.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "deleteEmptyThread": {
+                  "type": "boolean",
+                  "description": "When true or omitted, delete a pending generation thread that has no completed iterations. When false, keep it as failed."
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "images.deleteThread",
+            "name": "Delete image thread",
+            "description": "Delete an image thread and all image files owned by that thread in the active workspace.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "images.deleteIteration",
+            "name": "Delete image iteration",
+            "description": "Delete one or more image iterations from a thread. If all images are deleted, the thread is deleted too.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "iterationId": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1,
+                  "description": "Array of iteration IDs to delete from the thread."
+                }
+              },
+              "required": ["id", "iterationId"]
+            }
+          },
+          {
             "id": "images.edit",
             "name": "Edit image",
             "description": "Create a new iteration in an image thread using gpt-image-2 image edits.",

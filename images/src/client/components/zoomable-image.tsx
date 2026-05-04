@@ -30,15 +30,15 @@ export function ZoomableImage({
     return () => window.clearTimeout(timer)
   }, [])
 
-  function handleMouseMove(event: MouseEvent<HTMLDivElement>) {
+  function handleMouseMove(event: MouseEvent<HTMLImageElement>) {
     if (!containerRef.current || !isMounted) return
 
     if (!hasMoved) setHasMoved(true)
 
     const { left, top, width, height } =
       containerRef.current.getBoundingClientRect()
-    const x = ((event.clientX - left) / width) * 100
-    const y = ((event.clientY - top) / height) * 100
+    const x = Math.min(100, Math.max(0, ((event.clientX - left) / width) * 100))
+    const y = Math.min(100, Math.max(0, ((event.clientY - top) / height) * 100))
 
     setTransformOrigin(`${x}% ${y}%`)
   }
@@ -49,25 +49,39 @@ export function ZoomableImage({
     <div
       ref={containerRef}
       className={cn(
-        'inline-flex max-w-full overflow-hidden rounded-sm align-middle shadow-none',
-        shouldZoom ? 'cursor-zoom-out' : 'cursor-zoom-in',
+        'relative inline-flex max-w-full overflow-visible rounded-sm align-middle shadow-none',
+        shouldZoom ? 'z-20' : null,
         className,
       )}
       style={style}
-      onMouseEnter={() => setIsZoomed(true)}
-      onMouseLeave={() => {
-        setIsZoomed(false)
-        setHasMoved(false)
-      }}
-      onMouseMove={handleMouseMove}
     >
       <img
         src={src}
         alt={alt}
         draggable="false"
         className={cn(
-          'block transition-transform duration-200 ease-out will-change-transform motion-reduce:transition-none',
+          'block select-none rounded-sm transition-opacity duration-75 ease-out motion-reduce:transition-none',
+          shouldZoom
+            ? 'cursor-zoom-out opacity-0'
+            : 'cursor-zoom-in opacity-100',
           imageClassName,
+        )}
+        onMouseEnter={() => setIsZoomed(true)}
+        onMouseLeave={() => {
+          setIsZoomed(false)
+          setHasMoved(false)
+          setTransformOrigin('50% 50%')
+        }}
+        onMouseMove={handleMouseMove}
+      />
+      <img
+        src={src}
+        alt=""
+        aria-hidden="true"
+        draggable="false"
+        className={cn(
+          'pointer-events-none absolute inset-0 block h-full w-full select-none rounded-sm object-contain transition-[opacity,transform] duration-200 ease-out will-change-transform motion-reduce:transition-none',
+          shouldZoom ? 'opacity-100' : 'opacity-0',
         )}
         style={{
           transformOrigin,

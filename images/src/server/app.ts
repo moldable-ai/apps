@@ -12,7 +12,7 @@ import { cors } from 'hono/cors'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import { basename, extname, isAbsolute } from 'node:path'
 import { z } from 'zod'
 
@@ -99,6 +99,7 @@ type PendingIteration = {
   aspectRatio: AspectRatioId
   quality: Quality
   baseIterationId?: string
+  requestId?: string
   startedAt: string
 }
 
@@ -111,6 +112,7 @@ type ImageThread = {
   status?: 'generating' | 'ready' | 'failed'
   errorMessage?: string
   pendingIteration?: PendingIteration
+  pendingRequestId?: string
   coverIterationId?: string
   createdAt: string
   updatedAt: string
@@ -168,9 +170,21 @@ const getParamsSchema = z.object({
   id: z.string().trim().min(1),
 })
 
+const deleteThreadParamsSchema = getParamsSchema
+
+const deleteIterationParamsSchema = z.object({
+  id: z.string().trim().min(1),
+  iterationId: z.array(z.string().trim().min(1)).min(1),
+})
+
 const retryParamsSchema = z.object({
   id: z.string().trim().min(1),
   quality: qualitySchema.optional(),
+})
+
+const cancelParamsSchema = z.object({
+  id: z.string().trim().min(1),
+  deleteEmptyThread: z.boolean().optional(),
 })
 
 const editParamsSchema = z.object({
@@ -295,6 +309,9 @@ function summarizeRpcParams(params: unknown): string {
   const parts: string[] = []
 
   if (typeof record.id === 'string') parts.push(`id=${record.id}`)
+  if (Array.isArray(record.iterationId)) {
+    parts.push(`iterationIds=${record.iterationId.length}`)
+  }
   if (typeof record.baseIterationId === 'string') {
     parts.push(`baseIterationId=${record.baseIterationId}`)
   }
@@ -571,6 +588,13 @@ function isOrphanedGeneratingThread(thread: ImageThread): boolean {
   return Number.isFinite(updatedAtMs) && updatedAtMs < SERVER_STARTED_AT_MS
 }
 
+function isActiveRequest(thread: ImageThread, requestId: string): boolean {
+  return (
+    thread.status === 'generating' &&
+    (!thread.pendingRequestId || thread.pendingRequestId === requestId)
+  )
+}
+
 function recoverOrphanedGeneratingThreads(threads: ImageThread[]): {
   threads: ImageThread[]
   recoveredCount: number
@@ -588,6 +612,7 @@ function recoverOrphanedGeneratingThreads(threads: ImageThread[]): {
       status: latest ? 'ready' : 'failed',
       errorMessage: latest ? undefined : ORPHANED_GENERATION_MESSAGE,
       pendingIteration: undefined,
+      pendingRequestId: undefined,
       updatedAt: new Date().toISOString(),
     } satisfies ImageThread
   })
@@ -1179,6 +1204,7 @@ async function createGeneratingThread(
     aspectRatio: params.aspectRatio ?? 'square',
     quality: params.quality ?? DEFAULT_QUALITY,
     status: 'generating',
+    pendingRequestId: requestId,
     createdAt: now,
     updatedAt: now,
     iterations: [],
@@ -1215,6 +1241,7 @@ async function retryThreadGeneration(
     ...thread,
     status: 'generating',
     errorMessage: undefined,
+    pendingRequestId: requestId,
     updatedAt: new Date().toISOString(),
   }
 
@@ -1248,6 +1275,12 @@ async function finishGeneratingThread(
       )
       return
     }
+    if (!isActiveRequest(pending, requestId)) {
+      console.info(
+        `[Images generation ${requestId}] background_cancelled thread=${threadId} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
+      )
+      return
+    }
 
     const readyThread = await buildGeneratedThread(
       workspaceId,
@@ -1265,6 +1298,12 @@ async function finishGeneratingThread(
       )
       return
     }
+    if (!isActiveRequest(threads[pendingIndex], requestId)) {
+      console.info(
+        `[Images generation ${requestId}] background_cancelled_after_generation thread=${threadId} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
+      )
+      return
+    }
     threads.splice(pendingIndex, 1)
     threads.unshift(readyThread)
     await saveThreads(workspaceId, threads)
@@ -1275,11 +1314,15 @@ async function finishGeneratingThread(
     const rpcError = rpcErrorFromUnknown(error)
     const threads = await loadThreads(workspaceId)
     const threadIndex = threads.findIndex((thread) => thread.id === threadId)
-    if (threadIndex !== -1) {
+    if (
+      threadIndex !== -1 &&
+      isActiveRequest(threads[threadIndex], requestId)
+    ) {
       threads[threadIndex] = {
         ...threads[threadIndex],
         status: 'failed',
         errorMessage: rpcError.message,
+        pendingRequestId: undefined,
         updatedAt: new Date().toISOString(),
       }
       await saveThreads(workspaceId, threads)
@@ -1287,6 +1330,189 @@ async function finishGeneratingThread(
     console.error(
       `[Images generation ${requestId}] background_failed thread=${threadId} workspace=${workspaceLabel(workspaceId)} code=${rpcError.code} durationMs=${elapsedMs(startedAt)} message=${errorMessage(error, rpcError.message)}`,
     )
+  }
+}
+
+async function cancelPendingThread(
+  workspaceId: string | undefined,
+  params: z.infer<typeof cancelParamsSchema>,
+  requestId: string,
+): Promise<{
+  cancelled: boolean
+  deleted: boolean
+  thread?: ImageThread
+} | null> {
+  const threads = await loadThreads(workspaceId)
+  const threadIndex = threads.findIndex((thread) => thread.id === params.id)
+  const thread = threads[threadIndex]
+  if (!thread) return null
+
+  const isGenerating = thread.status === 'generating'
+  const hasPendingWork = isGenerating || Boolean(thread.pendingIteration)
+  if (!hasPendingWork) {
+    return { cancelled: false, deleted: false, thread }
+  }
+
+  const latest = latestIteration(thread)
+  const deleteEmptyThread = params.deleteEmptyThread ?? true
+  if (!latest && deleteEmptyThread) {
+    threads.splice(threadIndex, 1)
+    await saveThreads(workspaceId, threads)
+    console.info(
+      `[Images cancel ${requestId}] deleted_empty_pending_thread thread=${thread.id} workspace=${workspaceLabel(workspaceId)}`,
+    )
+    return { cancelled: true, deleted: true }
+  }
+
+  const now = new Date().toISOString()
+  const updated: ImageThread = {
+    ...thread,
+    aspectRatio: latest?.aspectRatio ?? thread.aspectRatio,
+    quality: latest?.quality ?? thread.quality,
+    status: latest ? 'ready' : 'failed',
+    errorMessage: latest ? undefined : 'Image generation was cancelled.',
+    pendingIteration: undefined,
+    pendingRequestId: undefined,
+    updatedAt: now,
+  }
+
+  threads[threadIndex] = updated
+  await saveThreads(workspaceId, threads)
+  console.info(
+    `[Images cancel ${requestId}] cleared_pending_thread thread=${thread.id} workspace=${workspaceLabel(workspaceId)}`,
+  )
+  return { cancelled: true, deleted: false, thread: updated }
+}
+
+async function deleteThread(
+  workspaceId: string | undefined,
+  params: z.infer<typeof deleteThreadParamsSchema>,
+  requestId: string,
+): Promise<{
+  deleted: true
+  deletedIterations: number
+  id: string
+} | null> {
+  const threads = await loadThreads(workspaceId)
+  const threadIndex = threads.findIndex((thread) => thread.id === params.id)
+  const thread = threads[threadIndex]
+  if (!thread) return null
+
+  threads.splice(threadIndex, 1)
+  await saveThreads(workspaceId, threads)
+
+  await rm(safePath(dataDir(workspaceId), 'assets', thread.id), {
+    force: true,
+    recursive: true,
+  })
+
+  console.info(
+    `[Images delete ${requestId}] deleted_thread thread=${thread.id} workspace=${workspaceLabel(workspaceId)} iterations=${thread.iterations.length}`,
+  )
+
+  return {
+    deleted: true,
+    deletedIterations: thread.iterations.length,
+    id: thread.id,
+  }
+}
+
+async function deleteIteration(
+  workspaceId: string | undefined,
+  params: z.infer<typeof deleteIterationParamsSchema>,
+  requestId: string,
+): Promise<{
+  deleted: true
+  deletedThread: boolean
+  deletedIterationIds: string[]
+  notFoundIterationIds: string[]
+  thread?: ImageThread
+} | null> {
+  const threads = await loadThreads(workspaceId)
+  const threadIndex = threads.findIndex((thread) => thread.id === params.id)
+  const thread = threads[threadIndex]
+  if (!thread) return null
+
+  const requestedIterationIds = [...new Set(params.iterationId)]
+  const requestedIterationIdSet = new Set(requestedIterationIds)
+  const iterationsToDelete = thread.iterations.filter((iteration) =>
+    requestedIterationIdSet.has(iteration.id),
+  )
+  if (iterationsToDelete.length === 0) return null
+
+  const deletedIterationIds = iterationsToDelete.map(
+    (iteration) => iteration.id,
+  )
+  const deletedIterationIdSet = new Set(deletedIterationIds)
+  const notFoundIterationIds = requestedIterationIds.filter(
+    (id) => !deletedIterationIdSet.has(id),
+  )
+
+  await Promise.all(
+    iterationsToDelete.map((iteration) =>
+      rm(assetPath(workspaceId, thread.id, iteration.fileName), {
+        force: true,
+      }),
+    ),
+  )
+
+  const remainingIterations = thread.iterations.filter(
+    (candidate) => !deletedIterationIdSet.has(candidate.id),
+  )
+
+  if (remainingIterations.length === 0) {
+    threads.splice(threadIndex, 1)
+    await saveThreads(workspaceId, threads)
+    await rm(safePath(dataDir(workspaceId), 'assets', thread.id), {
+      force: true,
+      recursive: true,
+    })
+    console.info(
+      `[Images delete ${requestId}] deleted_iterations_and_thread thread=${thread.id} iterations=${deletedIterationIds.length} workspace=${workspaceLabel(workspaceId)}`,
+    )
+    return {
+      deleted: true,
+      deletedThread: true,
+      deletedIterationIds,
+      notFoundIterationIds,
+    }
+  }
+
+  const displayed = thread.coverIterationId
+    ? remainingIterations.find(
+        (candidate) => candidate.id === thread.coverIterationId,
+      )
+    : undefined
+  const cover = displayed ?? remainingIterations.at(-1)
+  const latest = remainingIterations.at(-1)
+  const updated: ImageThread = {
+    ...thread,
+    aspectRatio:
+      cover?.aspectRatio ?? latest?.aspectRatio ?? thread.aspectRatio,
+    quality: latest?.quality ?? thread.quality,
+    status: latest ? 'ready' : 'failed',
+    errorMessage: undefined,
+    pendingIteration: undefined,
+    pendingRequestId: undefined,
+    coverIterationId: cover?.id,
+    iterations: remainingIterations,
+    updatedAt: new Date().toISOString(),
+  }
+
+  threads.splice(threadIndex, 1)
+  threads.unshift(updated)
+  await saveThreads(workspaceId, threads)
+
+  console.info(
+    `[Images delete ${requestId}] deleted_iterations thread=${thread.id} iterations=${deletedIterationIds.length} workspace=${workspaceLabel(workspaceId)} remaining=${remainingIterations.length}`,
+  )
+
+  return {
+    deleted: true,
+    deletedThread: false,
+    deletedIterationIds,
+    notFoundIterationIds,
+    thread: updated,
   }
 }
 
@@ -1316,12 +1542,14 @@ async function queueThreadEdit(
     quality,
     status: 'generating',
     errorMessage: undefined,
+    pendingRequestId: requestId,
     pendingIteration: {
       kind: 'edit',
       prompt: params.prompt,
       aspectRatio,
       quality,
       baseIterationId: base.id,
+      requestId,
       startedAt: now,
     },
     updatedAt: now,
@@ -1351,6 +1579,7 @@ async function queueThreadEdit(
 async function editThread(
   workspaceId: string | undefined,
   params: z.infer<typeof editParamsSchema>,
+  requestId: string,
 ): Promise<ImageThread | null> {
   const threads = await loadThreads(workspaceId)
   const threadIndex = threads.findIndex((thread) => thread.id === params.id)
@@ -1380,25 +1609,39 @@ async function editThread(
     timeoutMs: IMAGE_GENERATION_TIMEOUT_MS,
   })
   const image = imageFromResponse(response)
+  const currentThreads = await loadThreads(workspaceId)
+  const currentThreadIndex = currentThreads.findIndex(
+    (candidate) => candidate.id === params.id,
+  )
+  const currentThread = currentThreads[currentThreadIndex]
+  if (!currentThread) return null
+  if (!isActiveRequest(currentThread, requestId)) {
+    console.info(
+      `[Images edit ${requestId}] background_cancelled_after_edit thread=${params.id} workspace=${workspaceLabel(workspaceId)}`,
+    )
+    return currentThread
+  }
+
   const now = new Date().toISOString()
   const iterationId = randomUUID()
   const fileName = await saveImageAsset({
     workspaceId,
-    threadId: thread.id,
+    threadId: currentThread.id,
     iterationId,
     b64Json: image.b64Json,
   })
 
   const updated: ImageThread = {
-    ...thread,
+    ...currentThread,
     aspectRatio,
     status: 'ready',
     errorMessage: undefined,
     pendingIteration: undefined,
+    pendingRequestId: undefined,
     coverIterationId: iterationId,
     updatedAt: now,
     iterations: [
-      ...thread.iterations,
+      ...currentThread.iterations,
       {
         id: iterationId,
         prompt: params.prompt,
@@ -1415,9 +1658,9 @@ async function editThread(
     ],
   }
 
-  threads.splice(threadIndex, 1)
-  threads.unshift(updated)
-  await saveThreads(workspaceId, threads)
+  currentThreads.splice(currentThreadIndex, 1)
+  currentThreads.unshift(updated)
+  await saveThreads(workspaceId, currentThreads)
   return updated
 }
 
@@ -1431,7 +1674,7 @@ async function finishEditingThread(
     console.info(
       `[Images edit ${requestId}] background_start thread=${params.id} workspace=${workspaceLabel(workspaceId)}`,
     )
-    const thread = await editThread(workspaceId, params)
+    const thread = await editThread(workspaceId, params, requestId)
     if (!thread) {
       console.warn(
         `[Images edit ${requestId}] image_not_found thread=${params.id} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
@@ -1445,12 +1688,16 @@ async function finishEditingThread(
     const rpcError = rpcErrorFromUnknown(error)
     const threads = await loadThreads(workspaceId)
     const threadIndex = threads.findIndex((thread) => thread.id === params.id)
-    if (threadIndex !== -1) {
+    if (
+      threadIndex !== -1 &&
+      isActiveRequest(threads[threadIndex], requestId)
+    ) {
       threads[threadIndex] = {
         ...threads[threadIndex],
         status: latestIteration(threads[threadIndex]) ? 'ready' : 'failed',
         errorMessage: rpcError.message,
         pendingIteration: undefined,
+        pendingRequestId: undefined,
         updatedAt: new Date().toISOString(),
       }
       await saveThreads(workspaceId, threads)
@@ -1488,11 +1735,13 @@ async function setThreadAspectRatio(
     quality,
     status: 'generating',
     errorMessage: undefined,
+    pendingRequestId: requestId,
     pendingIteration: {
       kind: 'edit',
       prompt,
       aspectRatio: params.aspectRatio,
       quality,
+      requestId,
       startedAt: now,
     },
     updatedAt: now,
@@ -1760,6 +2009,95 @@ app.post('/api/moldable/rpc', async (c) => {
         `[Images RPC ${requestId}] success method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
       )
       return c.json({ ok: true, result: serializeThread(thread, workspaceId) })
+    }
+
+    if (body.method === 'images.cancel') {
+      const params = cancelParamsSchema.parse(body.params)
+      const result = await cancelPendingThread(workspaceId, params, requestId)
+      if (!result) {
+        console.warn(
+          `[Images RPC ${requestId}] image_not_found method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)} id=${params.id}`,
+        )
+        return c.json(
+          {
+            ok: false,
+            error: {
+              code: 'image_not_found',
+              message: `Image thread ${params.id} was not found.`,
+            },
+          },
+          200,
+        )
+      }
+      console.info(
+        `[Images RPC ${requestId}] success method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
+      )
+      return c.json({
+        ok: true,
+        result: {
+          cancelled: result.cancelled,
+          deleted: result.deleted,
+          thread: result.thread
+            ? serializeThread(result.thread, workspaceId)
+            : undefined,
+        },
+      })
+    }
+
+    if (body.method === 'images.deleteThread') {
+      const params = deleteThreadParamsSchema.parse(body.params)
+      const result = await deleteThread(workspaceId, params, requestId)
+      if (!result) {
+        console.warn(
+          `[Images RPC ${requestId}] image_not_found method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)} id=${params.id}`,
+        )
+        return c.json(
+          {
+            ok: false,
+            error: {
+              code: 'image_not_found',
+              message: `Image thread ${params.id} was not found.`,
+            },
+          },
+          200,
+        )
+      }
+      console.info(
+        `[Images RPC ${requestId}] success method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
+      )
+      return c.json({ ok: true, result })
+    }
+
+    if (body.method === 'images.deleteIteration') {
+      const params = deleteIterationParamsSchema.parse(body.params)
+      const result = await deleteIteration(workspaceId, params, requestId)
+      if (!result) {
+        console.warn(
+          `[Images RPC ${requestId}] image_or_iteration_not_found method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)} id=${params.id} iterations=${params.iterationId.length}`,
+        )
+        return c.json(
+          {
+            ok: false,
+            error: {
+              code: 'image_or_iteration_not_found',
+              message: `Image thread ${params.id} or the requested iterations were not found.`,
+            },
+          },
+          200,
+        )
+      }
+      console.info(
+        `[Images RPC ${requestId}] success method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
+      )
+      return c.json({
+        ok: true,
+        result: {
+          ...result,
+          thread: result.thread
+            ? serializeThread(result.thread, workspaceId)
+            : undefined,
+        },
+      })
     }
 
     if (body.method === 'images.edit') {

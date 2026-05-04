@@ -1028,7 +1028,7 @@ export async function listMessages(
     const limited = entries.slice(0, options.maxResults ?? 20)
     const summaries = (
       await Promise.all(
-        limited.map(async (entry) => {
+        limited.map(async (entry): Promise<MailMessageSummary | null> => {
           try {
             const summary = await getMessageSummary(workspaceId, entry.id)
             return {
