@@ -39,6 +39,14 @@ import {
 } from '@moldable-ai/ui'
 import { apiJson } from './lib/api'
 import {
+  createDashboard,
+  displayDashboardTitle,
+  normalizeDashboardWorkspace,
+  renameDashboard,
+  updateDashboardCharts,
+  updateDashboardDescription,
+} from './lib/dashboards'
+import {
   DEFAULT_SQL,
   PREVIEW_LIMIT,
   blankConnectionForm,
@@ -59,6 +67,7 @@ import {
   type SidebarMode,
 } from './components/connection-sidebar'
 import { ConnectionSwitch } from './components/connection-switch'
+import { DashboardWorkspace } from './components/dashboard-workspace'
 import {
   type ExportFormat,
   ExportQueryDialog,
@@ -72,6 +81,9 @@ import { RowDetails, RowDetailsEmpty } from './components/row-details'
 import type {
   ConnectionSummary,
   ConnectionTestResponse,
+  Dashboard,
+  DashboardChart,
+  DashboardWorkspaceResponse,
   DbBrowserPreferences,
   ExplorerSchema,
   ImportRowsResponse,
@@ -182,6 +194,12 @@ export function App() {
   const [activeSqlTabId, setActiveSqlTabId] = useState<string | null>(null)
   const [loadedSqlWorkspaceConnectionId, setLoadedSqlWorkspaceConnectionId] =
     useState<string | null>(null)
+  const [dashboards, setDashboards] = useState<Dashboard[]>([])
+  const [activeDashboardId, setActiveDashboardId] = useState<string | null>(
+    null,
+  )
+  const [loadedDashboardConnectionId, setLoadedDashboardConnectionId] =
+    useState<string | null>(null)
   const [queryResult, setQueryResult] = useState<QueryResultResponse | null>(
     null,
   )
@@ -280,7 +298,7 @@ export function App() {
     window.parent.postMessage(
       {
         type: 'moldable:set-chat-instructions',
-        text: `DB Browser can help write database queries through app-owned APIs. Use listMoldableAppApi/callMoldableAppApi with the database-generic db.* methods exposed by this app. Prefer reading schema context first. When fixing existing SQL, prefer db.sqlTabs.edit with exact oldString/newString for surgical edits in the active editor; use db.sqlTabs.update only when a whole-tab rewrite is explicitly appropriate. Only run db.query.runReadonly when the user explicitly asks to execute a read-only query. Do not run writes, admin commands, imports, exports, or transaction workflows through Chat. ${activeContext}`,
+        text: `DB Browser can help write database queries and analytics dashboards through app-owned APIs. Use listMoldableAppApi/callMoldableAppApi with the database-generic db.* methods exposed by this app. Prefer reading schema context first. When fixing existing SQL, prefer db.sqlTabs.edit with exact oldString/newString for surgical edits in the active editor; use db.sqlTabs.update only when a whole-tab rewrite is explicitly appropriate. For analytics views, use db.dashboards.* and db.dashboardCharts.* so dashboards and chart-backed read-only SQL are saved in the app. Dashboard/chart methods accept unique dashboardName and chartName as well as ids; prefer names when the user references visible titles, and use db.dashboardCharts.edit for surgical SQL changes. Only run db.query.runReadonly when the user explicitly asks to execute a read-only query. Do not run writes, admin commands, imports, exports, or transaction workflows through Chat. ${activeContext}`,
       },
       '*',
     )
@@ -290,6 +308,9 @@ export function App() {
     setSqlTabs([])
     setActiveSqlTabId(null)
     setLoadedSqlWorkspaceConnectionId(null)
+    setDashboards([])
+    setActiveDashboardId(null)
+    setLoadedDashboardConnectionId(null)
   }, [activeConnectionId])
 
   useEffect(() => {
@@ -394,6 +415,21 @@ export function App() {
     },
   })
 
+  const dashboardWorkspaceQuery = useQuery({
+    queryKey: [
+      'db-browser-dashboard-workspace',
+      workspaceId,
+      activeConnectionId,
+    ],
+    enabled: Boolean(activeConnectionId),
+    queryFn: async () => {
+      return apiJson<DashboardWorkspaceResponse>(
+        fetchWithWorkspace,
+        `/api/connections/${activeConnectionId}/dashboards`,
+      )
+    },
+  })
+
   const queryHistoryQuery = useQuery({
     queryKey: ['db-browser-query-history', workspaceId, activeConnectionId],
     enabled: Boolean(activeConnectionId),
@@ -441,6 +477,19 @@ export function App() {
         })
       }
 
+      if (
+        method.startsWith('db.dashboards.') ||
+        method.startsWith('db.dashboardCharts.')
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: [
+            'db-browser-dashboard-workspace',
+            workspaceId,
+            activeConnectionId,
+          ],
+        })
+      }
+
       if (method === 'db.connections.list' || method.startsWith('db.schema.')) {
         void queryClient.invalidateQueries({
           queryKey: ['db-browser-connections', workspaceId],
@@ -470,6 +519,22 @@ export function App() {
     setActiveSqlTabId(workspace.activeTabId)
     setLoadedSqlWorkspaceConnectionId(activeConnectionId)
   }, [activeConnectionId, sqlWorkspaceQuery.data])
+
+  useEffect(() => {
+    if (!activeConnectionId) {
+      return
+    }
+
+    if (!dashboardWorkspaceQuery.data) return
+
+    const workspace = normalizeDashboardWorkspace(
+      activeConnectionId,
+      dashboardWorkspaceQuery.data,
+    )
+    setDashboards(workspace.dashboards)
+    setActiveDashboardId(workspace.activeDashboardId)
+    setLoadedDashboardConnectionId(activeConnectionId)
+  }, [activeConnectionId, dashboardWorkspaceQuery.data])
 
   useEffect(() => {
     if (!activeConnectionId) return
@@ -507,6 +572,41 @@ export function App() {
     fetchWithWorkspace,
     loadedSqlWorkspaceConnectionId,
     sqlTabs,
+  ])
+
+  useEffect(() => {
+    if (!activeConnectionId) return
+    if (loadedDashboardConnectionId !== activeConnectionId) return
+
+    const timeoutId = window.setTimeout(() => {
+      void apiJson<DashboardWorkspaceResponse>(
+        fetchWithWorkspace,
+        `/api/connections/${activeConnectionId}/dashboards`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dashboards,
+            activeDashboardId,
+          }),
+        },
+      ).catch((error: unknown) => {
+        const message =
+          error instanceof Error ? error.message : 'Failed to save dashboards'
+        setActivityLog((current) => [
+          buildActivity('Dashboard save failed', message),
+          ...current,
+        ])
+      })
+    }, 500)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    activeConnectionId,
+    activeDashboardId,
+    dashboards,
+    fetchWithWorkspace,
+    loadedDashboardConnectionId,
   ])
 
   useEffect(() => {
@@ -728,6 +828,13 @@ export function App() {
       sqlTabs.find((tab) => tab.id === activeSqlTabId) ?? sqlTabs[0] ?? null,
     [activeSqlTabId, sqlTabs],
   )
+  const activeDashboard = useMemo(
+    () =>
+      dashboards.find((dashboard) => dashboard.id === activeDashboardId) ??
+      dashboards[0] ??
+      null,
+    [activeDashboardId, dashboards],
+  )
   const sql = activeSqlTab?.sql ?? DEFAULT_SQL
   const resultTitle =
     resultMode === 'query'
@@ -913,6 +1020,110 @@ export function App() {
     setSqlTabs(nextTabs)
   }
 
+  function openNewDashboard() {
+    const nextDashboard = createDashboard(dashboards.length + 1)
+    setDashboards((current) => [...current, nextDashboard])
+    setActiveDashboardId(nextDashboard.id)
+    setSidebarMode('dashboards')
+  }
+
+  function selectDashboard(dashboardId: string) {
+    setActiveDashboardId(dashboardId)
+    setSidebarMode('dashboards')
+    setSelectedRowIndex(null)
+  }
+
+  function deleteDashboard(dashboardId: string) {
+    setDashboards((current) => {
+      const nextDashboards = current.filter(
+        (dashboard) => dashboard.id !== dashboardId,
+      )
+
+      if (activeDashboardId === dashboardId) {
+        setActiveDashboardId(nextDashboards[0]?.id ?? null)
+      }
+
+      return nextDashboards
+    })
+  }
+
+  function renameActiveDashboard(dashboardId: string, title: string) {
+    setDashboards((current) =>
+      current.map((dashboard) =>
+        dashboard.id === dashboardId
+          ? renameDashboard(dashboard, title)
+          : dashboard,
+      ),
+    )
+  }
+
+  function updateActiveDashboardDescription(description: string) {
+    if (!activeDashboardId) return
+    setDashboards((current) =>
+      current.map((dashboard) =>
+        dashboard.id === activeDashboardId
+          ? updateDashboardDescription(dashboard, description)
+          : dashboard,
+      ),
+    )
+  }
+
+  function reorderDashboards(nextDashboards: Dashboard[]) {
+    setDashboards(nextDashboards)
+  }
+
+  function addChartToActiveDashboard(chart: DashboardChart) {
+    if (!activeDashboardId) return
+    setDashboards((current) =>
+      current.map((dashboard) =>
+        dashboard.id === activeDashboardId
+          ? updateDashboardCharts(dashboard, [...dashboard.charts, chart])
+          : dashboard,
+      ),
+    )
+  }
+
+  function updateChartInActiveDashboard(chart: DashboardChart) {
+    if (!activeDashboardId) return
+    setDashboards((current) =>
+      current.map((dashboard) =>
+        dashboard.id === activeDashboardId
+          ? updateDashboardCharts(
+              dashboard,
+              dashboard.charts.map((item) =>
+                item.id === chart.id ? chart : item,
+              ),
+            )
+          : dashboard,
+      ),
+    )
+  }
+
+  function deleteChartFromActiveDashboard(chartId: string) {
+    if (!activeDashboardId) return
+    setDashboards((current) =>
+      current.map((dashboard) =>
+        dashboard.id === activeDashboardId
+          ? updateDashboardCharts(
+              dashboard,
+              dashboard.charts.filter((chart) => chart.id !== chartId),
+            )
+          : dashboard,
+      ),
+    )
+  }
+
+  function reorderChartsInActiveDashboard(charts: DashboardChart[]) {
+    if (!activeDashboardId) return
+    setDashboards((current) =>
+      current.map((dashboard) =>
+        dashboard.id === activeDashboardId
+          ? updateDashboardCharts(dashboard, charts)
+          : dashboard,
+      ),
+    )
+  }
+
   function openConnection(connectionId: string) {
     const connection = connections.find((entry) => entry.id === connectionId)
     if (!connection) return
@@ -927,6 +1138,9 @@ export function App() {
     setSqlTabs([])
     setActiveSqlTabId(null)
     setLoadedSqlWorkspaceConnectionId(null)
+    setDashboards([])
+    setActiveDashboardId(null)
+    setLoadedDashboardConnectionId(null)
 
     appendActivity(
       `Opened ${connection.name}`,
@@ -1017,6 +1231,18 @@ export function App() {
         },
       },
       {
+        id: 'db-browser.show-dashboards',
+        label: 'Show Dashboards',
+        description: 'Open saved analytics dashboards',
+        icon: 'bar-chart',
+        group: 'Navigation',
+        action: {
+          type: 'message',
+          command: 'db-browser.show-dashboards',
+          payload: null,
+        },
+      },
+      {
         id: 'db-browser.show-sql-queries',
         label: 'Show SQL Queries',
         description: 'Open saved SQL editors',
@@ -1037,6 +1263,18 @@ export function App() {
         action: {
           type: 'message',
           command: 'db-browser.new-sql-query',
+          payload: null,
+        },
+      },
+      {
+        id: 'db-browser.new-dashboard',
+        label: 'New Dashboard',
+        description: 'Create a dashboard for the active connection',
+        icon: 'plus',
+        group: 'Actions',
+        action: {
+          type: 'message',
+          command: 'db-browser.new-dashboard',
           payload: null,
         },
       },
@@ -1104,6 +1342,21 @@ export function App() {
         },
       }))
 
+    const dashboardCommands: AppCommand[] = dashboards.map((dashboard) => ({
+      id: `db-browser.open-dashboard.${dashboard.id}`,
+      label: displayDashboardTitle(dashboard),
+      description: activeConnection
+        ? `Open dashboard • ${activeConnection.name}`
+        : 'Open dashboard',
+      icon: 'bar-chart',
+      group: 'Dashboards',
+      action: {
+        type: 'message',
+        command: 'db-browser.open-dashboard',
+        payload: { dashboardId: dashboard.id },
+      },
+    }))
+
     const schemaCommands: AppCommand[] = schemas
       .filter((schema) => schema.name !== selectedSchema)
       .map((schema) => ({
@@ -1123,6 +1376,7 @@ export function App() {
 
     return [
       ...baseCommands,
+      ...dashboardCommands,
       ...sqlQueryCommands,
       ...schemaCommands,
       ...connectionCommands,
@@ -1131,6 +1385,7 @@ export function App() {
     activeConnection,
     activeConnectionId,
     connections,
+    dashboards,
     schemas,
     selectedSchema,
     sqlTabs,
@@ -1139,8 +1394,10 @@ export function App() {
   useMoldableAppCommands('db-browser', dbBrowserCommands)
   useMoldableCommands({
     'db-browser.show-objects': () => setSidebarMode('objects'),
+    'db-browser.show-dashboards': () => setSidebarMode('dashboards'),
     'db-browser.show-sql-queries': () => setSidebarMode('sql'),
     'db-browser.new-sql-query': () => openNewSqlTab(),
+    'db-browser.new-dashboard': () => openNewDashboard(),
     'db-browser.new-connection': () => openNewConnectionDialog(),
     'db-browser.query-history': () => setShowHistoryDialog(true),
     'db-browser.open-sql-query': (payload?: unknown) => {
@@ -1149,6 +1406,13 @@ export function App() {
       if (typeof tabId !== 'string') return
       if (!sqlTabs.some((tab) => tab.id === tabId)) return
       selectSqlTab(tabId)
+    },
+    'db-browser.open-dashboard': (payload?: unknown) => {
+      if (!payload || typeof payload !== 'object') return
+      const dashboardId = (payload as { dashboardId?: unknown }).dashboardId
+      if (typeof dashboardId !== 'string') return
+      if (!dashboards.some((dashboard) => dashboard.id === dashboardId)) return
+      selectDashboard(dashboardId)
     },
     'db-browser.switch-connection': (payload?: unknown) => {
       if (!payload || typeof payload !== 'object') return
@@ -1165,6 +1429,8 @@ export function App() {
       setSidebarMode('objects')
     },
   })
+
+  const showingDashboard = sidebarMode === 'dashboards'
 
   return (
     <main className="bg-background text-foreground h-full min-h-0 overflow-hidden">
@@ -1252,16 +1518,18 @@ export function App() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <PanelToggleButton
-              label={rightPanelOpen ? 'Hide row details' : 'Show row details'}
-              onClick={() => setRightPanelOpen((open) => !open)}
-            >
-              {rightPanelOpen ? (
-                <PanelRightClose className="size-4" />
-              ) : (
-                <PanelRight className="size-4" />
-              )}
-            </PanelToggleButton>
+            {!showingDashboard ? (
+              <PanelToggleButton
+                label={rightPanelOpen ? 'Hide row details' : 'Show row details'}
+                onClick={() => setRightPanelOpen((open) => !open)}
+              >
+                {rightPanelOpen ? (
+                  <PanelRightClose className="size-4" />
+                ) : (
+                  <PanelRight className="size-4" />
+                )}
+              </PanelToggleButton>
+            ) : null}
           </div>
         </header>
 
@@ -1288,14 +1556,22 @@ export function App() {
                     objectsFetching={explorerQuery.isFetching}
                     objectsError={explorerQuery.error}
                     selectedTable={selectedTable}
+                    dashboards={dashboards}
+                    activeDashboardId={activeDashboardId}
                     sqlTabs={sqlTabs}
                     activeSqlTabId={activeSqlTabId}
+                    dashboardsLoading={dashboardWorkspaceQuery.isLoading}
                     sqlWorkspaceLoading={sqlWorkspaceQuery.isLoading}
                     onModeChange={setSidebarMode}
                     onObjectSearchChange={setObjectSearch}
                     onSchemaChange={setSelectedSchema}
                     onRefreshObjects={() => void explorerQuery.refetch()}
                     onSelectTable={handleSelectTable}
+                    onSelectDashboard={selectDashboard}
+                    onNewDashboard={openNewDashboard}
+                    onDeleteDashboard={deleteDashboard}
+                    onRenameDashboard={renameActiveDashboard}
+                    onReorderDashboards={reorderDashboards}
                     onSelectSqlTab={selectSqlTab}
                     onNewSqlTab={openNewSqlTab}
                     onCloseSqlTab={closeSqlTab}
@@ -1307,53 +1583,73 @@ export function App() {
               </>
             ) : null}
             <ResizablePanel minSize="320px">
-              <QueryWorkspace
-                activeConnection={activeConnection}
-                resultTitle={resultTitle}
-                resultMeta={resultMeta}
-                sql={sql}
-                columns={currentColumns}
-                rows={currentRows}
-                queryResult={resultMode === 'query' ? queryResult : null}
-                selectedRowIndex={selectedRowIndex}
-                queryError={runQueryMutation.error}
-                previewError={
-                  resultMode === 'preview' ? previewQuery.error : null
-                }
-                errorSql={runQueryMutation.variables?.statement ?? sql}
-                editorHeight={sqlEditorHeight}
-                resultLoading={
-                  runQueryMutation.isPending ||
-                  (resultMode === 'preview' && previewQuery.isFetching)
-                }
-                refreshing={explorerQuery.isFetching}
-                running={runQueryMutation.isPending}
-                resultsPanelOpen={resultsPanelOpen}
-                previewPagination={
-                  resultMode === 'preview'
-                    ? {
-                        offset: previewOffset,
-                        hasMore: Boolean(previewQuery.data?.hasMore),
-                        loading: previewQuery.isFetching,
-                        onPrevious: goToPreviousPreviewPage,
-                        onNext: goToNextPreviewPage,
-                      }
-                    : null
-                }
-                onSqlChange={updateActiveSql}
-                onEditorHeightChange={handleSqlEditorHeightChange}
-                onRunCurrent={handleRunCurrentQuery}
-                onRunAll={handleRunAllQueries}
-                onNewSqlTab={openNewSqlTab}
-                onRefresh={() => void explorerQuery.refetch()}
-                onOpenConnection={openNewConnectionDialog}
-                onSelectRow={handleSelectResultRow}
-                onToggleResultsPanel={() =>
-                  setResultsPanelOpen((open) => !open)
-                }
-              />
+              {showingDashboard ? (
+                <DashboardWorkspace
+                  activeConnection={activeConnection}
+                  dashboard={activeDashboard}
+                  loading={dashboardWorkspaceQuery.isLoading}
+                  onCreateDashboard={openNewDashboard}
+                  onRenameDashboard={(title) => {
+                    if (activeDashboardId)
+                      renameActiveDashboard(activeDashboardId, title)
+                  }}
+                  onUpdateDashboardDescription={
+                    updateActiveDashboardDescription
+                  }
+                  onAddChart={addChartToActiveDashboard}
+                  onUpdateChart={updateChartInActiveDashboard}
+                  onDeleteChart={deleteChartFromActiveDashboard}
+                  onReorderCharts={reorderChartsInActiveDashboard}
+                />
+              ) : (
+                <QueryWorkspace
+                  activeConnection={activeConnection}
+                  resultTitle={resultTitle}
+                  resultMeta={resultMeta}
+                  sql={sql}
+                  columns={currentColumns}
+                  rows={currentRows}
+                  queryResult={resultMode === 'query' ? queryResult : null}
+                  selectedRowIndex={selectedRowIndex}
+                  queryError={runQueryMutation.error}
+                  previewError={
+                    resultMode === 'preview' ? previewQuery.error : null
+                  }
+                  errorSql={runQueryMutation.variables?.statement ?? sql}
+                  editorHeight={sqlEditorHeight}
+                  resultLoading={
+                    runQueryMutation.isPending ||
+                    (resultMode === 'preview' && previewQuery.isFetching)
+                  }
+                  refreshing={explorerQuery.isFetching}
+                  running={runQueryMutation.isPending}
+                  resultsPanelOpen={resultsPanelOpen}
+                  previewPagination={
+                    resultMode === 'preview'
+                      ? {
+                          offset: previewOffset,
+                          hasMore: Boolean(previewQuery.data?.hasMore),
+                          loading: previewQuery.isFetching,
+                          onPrevious: goToPreviousPreviewPage,
+                          onNext: goToNextPreviewPage,
+                        }
+                      : null
+                  }
+                  onSqlChange={updateActiveSql}
+                  onEditorHeightChange={handleSqlEditorHeightChange}
+                  onRunCurrent={handleRunCurrentQuery}
+                  onRunAll={handleRunAllQueries}
+                  onNewSqlTab={openNewSqlTab}
+                  onRefresh={() => void explorerQuery.refetch()}
+                  onOpenConnection={openNewConnectionDialog}
+                  onSelectRow={handleSelectResultRow}
+                  onToggleResultsPanel={() =>
+                    setResultsPanelOpen((open) => !open)
+                  }
+                />
+              )}
             </ResizablePanel>
-            {rightPanelOpen ? (
+            {rightPanelOpen && !showingDashboard ? (
               <>
                 <ResizableHandle />
                 <ResizablePanel

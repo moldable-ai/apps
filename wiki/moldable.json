@@ -1,0 +1,52 @@
+{
+  "name": "Wiki",
+  "version": "0.1.0",
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "Create, edit, and organize a Markdown knowledge base.",
+  "author": "",
+  "license": "MIT",
+  "icon": "📚",
+  "widgetSize": "large",
+  "category": "knowledge",
+  "tags": ["markdown", "notes", "wiki", "knowledge-base"],
+  "moldableDependencies": {
+    "@moldable-ai/editor": "^0.1.9",
+    "@moldable-ai/ui": "^0.2.10",
+    "@moldable-ai/storage": "^0.1.5"
+  },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "wiki",
+        "name": "Wiki RPC",
+        "description": "Read, search, edit, and organize the active Markdown wiki vault.",
+        "scopes": [
+          {
+            "id": "read",
+            "name": "Read wiki",
+            "description": "List vault contents, read notes, search, inspect backlinks, health, templates, settings, and properties."
+          },
+          {
+            "id": "write",
+            "name": "Edit wiki",
+            "description": "Create, update, move, delete, restore, and template notes and folders."
+          },
+          {
+            "id": "properties",
+            "name": "Edit properties",
+            "description": "Set, delete, rename, reorder, and change types for frontmatter properties."
+          },
+          {
+            "id": "vaults",
+            "name": "Manage vaults",
+            "description": "Create, switch, update, bootstrap, configure, and delete wiki vaults."
+          }
+        ]
+      }
+    ]
+  },
+  "env": [],
+  "iconPath": "public/icon.png"
+}

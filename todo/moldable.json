@@ -15,8 +15,8 @@
   "category": "productivity",
   "tags": ["tasks", "todo", "checklist", "productivity"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.1.0",
-    "@moldable-ai/storage": "^0.1.0"
+    "@moldable-ai/ui": "^0.2.10",
+    "@moldable-ai/storage": "^0.1.5"
   },
   "appApi": {
     "version": 1,

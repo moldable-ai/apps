@@ -1,16 +1,19 @@
 import {
   ArrowLeft,
   Ban,
+  CalendarDays,
   Check,
   ChevronLeft,
   ChevronRight,
   Download,
+  ExternalLink,
   File,
   FileArchive,
   FileImage,
   FileText,
   Loader2,
   Mail,
+  MapPin,
   MoreHorizontal,
   Paperclip,
   Plus,
@@ -50,6 +53,10 @@ import {
   cn,
   useWorkspace,
 } from '@moldable-ai/ui'
+import {
+  type CalendarInvite,
+  parseCalendarInvite,
+} from '../lib/calendar-invite'
 import { folderById } from '../lib/folders'
 import {
   cleanSnippet,
@@ -57,6 +64,7 @@ import {
   formatLongDate,
   senderName,
 } from '../lib/mail-format'
+import { callMoldableApp } from '../lib/moldable-apps'
 import { useLabels, useUpdateMessageLabels } from '../hooks/use-mail'
 import type {
   MailAttachment,
@@ -263,6 +271,13 @@ export function EmailView({
 
             <EmailMeta message={display} />
 
+            {message ? (
+              <CalendarInviteHeaders
+                messageId={message.id}
+                attachments={attachments}
+              />
+            ) : null}
+
             <div className="from-border/70 via-border/40 mt-6 h-px w-full bg-gradient-to-r to-transparent" />
 
             {attachments.length > 0 ? (
@@ -328,6 +343,438 @@ function ReaderNavButton({
       </TooltipContent>
     </Tooltip>
   )
+}
+
+interface ParsedInvite {
+  attachmentId: string
+  invite: CalendarInvite
+}
+
+interface CalendarRpcEvent {
+  id?: string | null
+  iCalUID?: string | null
+  title?: string | null
+  start?: string | null
+  end?: string | null
+  location?: string | null
+  link?: string | null
+  status?: string | null
+  selfResponseStatus?: CalendarResponseStatus | null
+  organizer?: {
+    email?: string | null
+    displayName?: string | null
+    self?: boolean | null
+  } | null
+}
+
+type CalendarResponseStatus =
+  | 'accepted'
+  | 'tentative'
+  | 'declined'
+  | 'needsAction'
+
+function CalendarInviteHeaders({
+  messageId,
+  attachments,
+}: {
+  messageId: string
+  attachments: MailAttachment[]
+}) {
+  const { fetchWithWorkspace, workspaceId } = useWorkspace()
+  const [loading, setLoading] = useState(false)
+  const [invites, setInvites] = useState<ParsedInvite[]>([])
+  const icsAttachments = useMemo(
+    () => attachments.filter(isIcsAttachment),
+    [attachments],
+  )
+
+  useEffect(() => {
+    if (icsAttachments.length === 0) {
+      setInvites([])
+      setLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setLoading(true)
+
+    async function loadInvites() {
+      const parsed: ParsedInvite[] = []
+      const seen = new Set<string>()
+
+      for (const attachment of icsAttachments) {
+        if (!attachment.attachmentId) continue
+
+        try {
+          const params = new URLSearchParams({
+            filename: attachment.filename,
+            mimeType: attachment.mimeType,
+            disposition: 'inline',
+            workspace: workspaceId,
+          })
+          const response = await fetchWithWorkspace(
+            `/api/messages/${encodeURIComponent(
+              messageId,
+            )}/attachments/${encodeURIComponent(
+              attachment.attachmentId,
+            )}?${params.toString()}`,
+          )
+          if (!response.ok) continue
+
+          const invite = parseCalendarInvite(await response.text())
+          if (!invite || seen.has(invite.uid)) continue
+
+          seen.add(invite.uid)
+          parsed.push({ attachmentId: attachment.id, invite })
+        } catch (error) {
+          console.warn('Failed to parse calendar invite:', error)
+        }
+      }
+
+      if (!cancelled) {
+        setInvites(parsed)
+        setLoading(false)
+      }
+    }
+
+    void loadInvites()
+
+    return () => {
+      cancelled = true
+    }
+  }, [fetchWithWorkspace, icsAttachments, messageId, workspaceId])
+
+  if (icsAttachments.length === 0) return null
+
+  if (loading && invites.length === 0) {
+    return (
+      <div className="border-border bg-muted/25 text-muted-foreground mt-5 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm">
+        <Loader2 className="size-4 animate-spin" />
+        Reading calendar invite
+      </div>
+    )
+  }
+
+  if (invites.length === 0) return null
+
+  return (
+    <div className="mt-5 space-y-3">
+      {invites.map(({ attachmentId, invite }) => (
+        <CalendarInviteCard
+          key={`${attachmentId}:${invite.uid}`}
+          invite={invite}
+        />
+      ))}
+    </div>
+  )
+}
+
+function CalendarInviteCard({ invite }: { invite: CalendarInvite }) {
+  const [event, setEvent] = useState<CalendarRpcEvent | null>(null)
+  const [status, setStatus] = useState<
+    'loading' | 'ready' | 'not-found' | 'error'
+  >('loading')
+  const [errorMessage, setErrorMessage] = useState('')
+  const [updatingStatus, setUpdatingStatus] =
+    useState<CalendarResponseStatus | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setStatus('loading')
+    setErrorMessage('')
+    setEvent(null)
+
+    async function loadCalendarEvent() {
+      try {
+        const result = await callMoldableApp<CalendarRpcEvent | null>(
+          'calendar',
+          'events.findByICalUid',
+          { iCalUid: invite.uid },
+          {
+            scopes: ['events.findByICalUid'],
+            timeoutMs: 45_000,
+            requestAccess: true,
+          },
+        )
+
+        if (cancelled) return
+        setEvent(result)
+        setStatus(result ? 'ready' : 'not-found')
+      } catch (error) {
+        if (cancelled) return
+        setStatus('error')
+        setErrorMessage(calendarErrorMessage(error))
+      }
+    }
+
+    void loadCalendarEvent()
+
+    return () => {
+      cancelled = true
+    }
+  }, [invite.uid])
+
+  const currentResponse = event?.selfResponseStatus ?? 'needsAction'
+  const canRsvp = status === 'ready' && Boolean(event?.id || invite.uid)
+
+  const handleRsvp = async (responseStatus: CalendarResponseStatus) => {
+    if (updatingStatus || !canRsvp) return
+
+    setUpdatingStatus(responseStatus)
+    setErrorMessage('')
+
+    try {
+      const updated = await callMoldableApp<CalendarRpcEvent>(
+        'calendar',
+        'events.rsvp',
+        {
+          eventId: event?.id,
+          iCalUid: invite.uid,
+          responseStatus,
+        },
+        {
+          scopes: ['events.rsvp'],
+          timeoutMs: 45_000,
+          requestAccess: true,
+        },
+      )
+
+      setEvent(updated)
+      setStatus('ready')
+    } catch (error) {
+      setErrorMessage(calendarErrorMessage(error))
+      setStatus(event ? 'ready' : 'error')
+    } finally {
+      setUpdatingStatus(null)
+    }
+  }
+
+  const openCalendar = () => {
+    if (!event?.link) return
+    window.parent.postMessage(
+      { type: 'moldable:open-url', url: event.link },
+      '*',
+    )
+  }
+
+  return (
+    <section className="border-border bg-muted/20 mt-5 rounded-lg border p-4 shadow-sm">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="text-muted-foreground mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider">
+            <CalendarDays className="size-3.5" />
+            <span>Calendar invite</span>
+            <span aria-hidden>·</span>
+            <span>{responseLabel(currentResponse, status)}</span>
+          </div>
+          <h2 className="text-foreground truncate text-base font-semibold">
+            {invite.title}
+          </h2>
+          <div className="text-muted-foreground mt-1.5 flex flex-col gap-1 text-sm">
+            <p>{formatInviteTime(invite, event)}</p>
+            {invite.location ? (
+              <p className="flex min-w-0 items-center gap-1.5">
+                <MapPin className="size-3.5 shrink-0" />
+                <span className="truncate">{invite.location}</span>
+              </p>
+            ) : null}
+            {invite.organizer ? (
+              <p className="truncate">
+                Organizer: {invite.organizer.name || invite.organizer.email}
+              </p>
+            ) : null}
+          </div>
+          {status === 'not-found' ? (
+            <p className="text-muted-foreground mt-3 text-xs">
+              This invite was not found on your Google Calendar, so Mail cannot
+              RSVP to it yet.
+            </p>
+          ) : null}
+          {errorMessage ? (
+            <p className="text-destructive mt-3 text-xs">{errorMessage}</p>
+          ) : null}
+        </div>
+
+        <div className="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+          <RsvpButton
+            label="Accept"
+            status="accepted"
+            current={currentResponse}
+            disabled={!canRsvp}
+            updating={updatingStatus}
+            onClick={handleRsvp}
+          />
+          <RsvpButton
+            label="Maybe"
+            status="tentative"
+            current={currentResponse}
+            disabled={!canRsvp}
+            updating={updatingStatus}
+            onClick={handleRsvp}
+          />
+          <RsvpButton
+            label="Decline"
+            status="declined"
+            current={currentResponse}
+            disabled={!canRsvp}
+            updating={updatingStatus}
+            onClick={handleRsvp}
+          />
+          {event?.link ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground hover:bg-background hover:text-foreground size-9 cursor-pointer rounded-full"
+                  onClick={openCalendar}
+                  aria-label="Open in Calendar"
+                >
+                  <ExternalLink className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                <p>Open in Calendar</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function RsvpButton({
+  label,
+  status,
+  current,
+  disabled,
+  updating,
+  onClick,
+}: {
+  label: string
+  status: CalendarResponseStatus
+  current: CalendarResponseStatus
+  disabled: boolean
+  updating: CalendarResponseStatus | null
+  onClick: (status: CalendarResponseStatus) => void
+}) {
+  const active = current === status
+  const loading = updating === status
+
+  return (
+    <Button
+      type="button"
+      variant={active ? 'default' : 'outline'}
+      size="sm"
+      className={cn(
+        'h-8 cursor-pointer gap-1.5 rounded-full px-3 text-xs',
+        disabled && 'cursor-not-allowed',
+      )}
+      disabled={disabled || Boolean(updating)}
+      aria-pressed={active}
+      onClick={() => onClick(status)}
+    >
+      {loading ? <Loader2 className="size-3.5 animate-spin" /> : null}
+      {label}
+    </Button>
+  )
+}
+
+function isIcsAttachment(attachment: MailAttachment) {
+  const filename = attachment.filename.toLowerCase()
+  const mimeType = attachment.mimeType.toLowerCase()
+  return (
+    Boolean(attachment.attachmentId) &&
+    (filename.endsWith('.ics') ||
+      mimeType.includes('text/calendar') ||
+      mimeType.includes('application/ics'))
+  )
+}
+
+function calendarErrorMessage(error: unknown) {
+  const code =
+    error instanceof Error && 'code' in error
+      ? (error as Error & { code?: string }).code
+      : undefined
+
+  if (code === 'calendar_not_connected') {
+    return 'Connect Calendar before responding to invites.'
+  }
+  if (code === 'event_not_found') {
+    return 'This invite was not found on your Google Calendar.'
+  }
+  if (code === 'attendee_not_found') {
+    return 'Calendar could not find your attendee record for this event.'
+  }
+
+  return error instanceof Error
+    ? error.message
+    : 'Calendar could not update this invite.'
+}
+
+function responseLabel(
+  responseStatus: CalendarResponseStatus,
+  status: 'loading' | 'ready' | 'not-found' | 'error',
+) {
+  if (status === 'loading') return 'Checking RSVP'
+  if (status === 'not-found') return 'Not on calendar'
+  if (status === 'error') return 'Calendar unavailable'
+
+  switch (responseStatus) {
+    case 'accepted':
+      return 'Accepted'
+    case 'tentative':
+      return 'Maybe'
+    case 'declined':
+      return 'Declined'
+    case 'needsAction':
+      return 'Not responded'
+  }
+}
+
+function formatInviteTime(
+  invite: CalendarInvite,
+  event?: CalendarRpcEvent | null,
+) {
+  const start = event?.start
+    ? parseCalendarEventDate(event.start)
+    : invite.start
+  const end = event?.end ? parseCalendarEventDate(event.end) : invite.end
+
+  if (!start) return 'Time not specified'
+
+  const startLabel = formatDateTime(start)
+  if (!end) return startLabel
+
+  const sameDay = start.toDateString() === end.toDateString()
+  const endLabel = sameDay ? formatTime(end) : formatDateTime(end)
+
+  return `${startLabel} - ${endLabel}`
+}
+
+function parseCalendarEventDate(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split('-').map(Number)
+    return new Date(year ?? 0, (month ?? 1) - 1, day ?? 1)
+  }
+
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function formatDateTime(date: Date) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
+}
+
+function formatTime(date: Date) {
+  return new Intl.DateTimeFormat(undefined, {
+    timeStyle: 'short',
+  }).format(date)
 }
 
 function AttachmentGrid({

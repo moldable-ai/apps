@@ -301,6 +301,9 @@ export default function GitFlowPage() {
   const [view, setView] = useState<'changes' | 'history'>('changes')
   const [error, setError] = useState<string | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
+  const [selectedActionFiles, setSelectedActionFiles] = useState<Set<string>>(
+    new Set(),
+  )
   const [selectedCommitFile, setSelectedCommitFile] = useState<string | null>(
     null,
   )
@@ -592,6 +595,7 @@ export default function GitFlowPage() {
       setSummary('')
       setDescription('')
       setSelectedFiles(new Set())
+      setSelectedActionFiles(new Set())
       setSelectedFile(null)
       setSelectedCommit(null)
       setSelectedCommitFile(null)
@@ -659,7 +663,12 @@ export default function GitFlowPage() {
             workspaceId,
           ])
           if (status?.files) {
-            setSelectedFiles(new Set(status.files.map((f) => f.path)))
+            const changedPaths = status.files.map((f) => f.path)
+            const firstPath = changedPaths[0] ?? null
+            setSelectedFiles(new Set(changedPaths))
+            setSelectedFile(firstPath)
+            setSelectedActionFiles(firstPath ? new Set([firstPath]) : new Set())
+            selectionAnchorRef.current = firstPath
           }
         })
       queryClient.invalidateQueries({ queryKey: ['git-history', workspaceId] })
@@ -696,6 +705,7 @@ export default function GitFlowPage() {
       setSelectedCommit(null)
       setSelectedCommitFile(null)
       setSelectedFiles(new Set(changedPaths))
+      setSelectedActionFiles(firstFile ? new Set([firstFile]) : new Set())
       selectionAnchorRef.current = firstFile
       queryClient.invalidateQueries({ queryKey: ['git-history', workspaceId] })
     },
@@ -729,6 +739,11 @@ export default function GitFlowPage() {
     onSuccess: ({ paths }) => {
       setCodeReview(null)
       setSelectedFiles((previous) => {
+        const next = new Set(previous)
+        paths.forEach((filePath) => next.delete(filePath))
+        return next
+      })
+      setSelectedActionFiles((previous) => {
         const next = new Set(previous)
         paths.forEach((filePath) => next.delete(filePath))
         return next
@@ -792,8 +807,11 @@ export default function GitFlowPage() {
         Math.max(0, startIndex + direction),
       )
 
+      const nextPath = filteredFiles[nextIndex]?.path ?? null
       setSelectedCommit(null)
-      setSelectedFile(filteredFiles[nextIndex]?.path ?? null)
+      setSelectedFile(nextPath)
+      setSelectedActionFiles(nextPath ? new Set([nextPath]) : new Set())
+      selectionAnchorRef.current = nextPath
     },
     [filteredFiles, selectedFile, view],
   )
@@ -846,8 +864,8 @@ export default function GitFlowPage() {
   }
 
   const getContextActionPaths = (filePath: string) => {
-    if (selectedFiles.has(filePath)) {
-      return Array.from(selectedFiles)
+    if (selectedActionFiles.has(filePath)) {
+      return Array.from(selectedActionFiles)
     }
 
     return [filePath]
@@ -898,6 +916,7 @@ export default function GitFlowPage() {
     initializedSelectionRepoRef.current = repoPath
     setSelectedFile(firstFile)
     setSelectedFiles(new Set(changedPaths))
+    setSelectedActionFiles(firstFile ? new Set([firstFile]) : new Set())
     selectionAnchorRef.current = firstFile
   }, [data?.files, data?.repoPath])
 
@@ -935,7 +954,10 @@ export default function GitFlowPage() {
       return
     }
 
-    setSelectedFile(filteredFiles[0]?.path ?? null)
+    const nextPath = filteredFiles[0]?.path ?? null
+    setSelectedFile(nextPath)
+    setSelectedActionFiles(nextPath ? new Set([nextPath]) : new Set())
+    selectionAnchorRef.current = nextPath
   }, [filteredFiles, selectedFile, view])
 
   useEffect(() => {
@@ -1014,8 +1036,7 @@ export default function GitFlowPage() {
       const anchorPath = selectionAnchorRef.current ?? selectedFile ?? filePath
       const rangePaths = getFileSelectionRange(anchorPath, filePath)
 
-      setCodeReview(null)
-      setSelectedFiles((previous) => {
+      setSelectedActionFiles((previous) => {
         const next = isToggleSelect ? new Set(previous) : new Set<string>()
         rangePaths.forEach((path) => next.add(path))
         return next
@@ -1026,8 +1047,7 @@ export default function GitFlowPage() {
     selectionAnchorRef.current = filePath
 
     if (isToggleSelect) {
-      setCodeReview(null)
-      setSelectedFiles((previous) => {
+      setSelectedActionFiles((previous) => {
         const next = new Set(previous)
         if (next.has(filePath)) {
           next.delete(filePath)
@@ -1038,6 +1058,8 @@ export default function GitFlowPage() {
       })
       return
     }
+
+    setSelectedActionFiles(new Set([filePath]))
   }
 
   const handleFileContextMenu = (filePath: string) => {
@@ -1045,29 +1067,33 @@ export default function GitFlowPage() {
     setSelectedCommitFile(null)
     setSelectedFile(filePath)
 
-    if (selectedFiles.has(filePath)) return
+    if (selectedActionFiles.has(filePath)) return
 
     selectionAnchorRef.current = filePath
-    setCodeReview(null)
-    setSelectedFiles(new Set([filePath]))
+    setSelectedActionFiles(new Set([filePath]))
   }
 
   const handleCommitSelect = (hash: string) => {
     setSelectedFile(null)
+    setSelectedActionFiles(new Set())
     setSelectedCommit(hash)
     setSelectedCommitFile(null)
   }
 
   const handleChangesTabSelect = () => {
+    const nextPath = filteredFiles[0]?.path ?? data?.files?.[0]?.path ?? null
     setView('changes')
     setSelectedCommit(null)
     setSelectedCommitFile(null)
-    setSelectedFile(filteredFiles[0]?.path ?? data?.files?.[0]?.path ?? null)
+    setSelectedFile(nextPath)
+    setSelectedActionFiles(nextPath ? new Set([nextPath]) : new Set())
+    selectionAnchorRef.current = nextPath
   }
 
   const handleHistoryTabSelect = () => {
     setView('history')
     setSelectedFile(null)
+    setSelectedActionFiles(new Set())
     setSelectedCommit(history?.[0]?.hash ?? null)
     setSelectedCommitFile(null)
   }
@@ -1281,7 +1307,6 @@ export default function GitFlowPage() {
 
   const toggleFile = (path: string) => {
     setCodeReview(null)
-    selectionAnchorRef.current = path
     setSelectedFiles((previous) => {
       const next = new Set(previous)
       if (next.has(path)) {
@@ -1297,10 +1322,8 @@ export default function GitFlowPage() {
     setCodeReview(null)
     if (checked && data?.files) {
       setSelectedFiles(new Set(data.files.map((f) => f.path)))
-      selectionAnchorRef.current = data.files[0]?.path ?? null
     } else {
       setSelectedFiles(new Set())
-      selectionAnchorRef.current = null
     }
   }
 
@@ -1667,49 +1690,39 @@ export default function GitFlowPage() {
           if (!open) setPendingDiscardPaths(null)
         }}
       >
-        <AlertDialogContent size="sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingDiscardCount === 1 ? (
-                <>
-                  This will permanently discard uncommitted changes to{' '}
-                  <span className="text-foreground font-mono font-semibold">
-                    {pendingDiscardPaths?.[0]}
-                  </span>
-                  .
-                </>
-              ) : (
-                <>
-                  This will permanently discard uncommitted changes to{' '}
-                  <span className="text-foreground font-semibold">
-                    {pendingDiscardCount} selected files
-                  </span>
-                  .
-                </>
-              )}{' '}
-              This cannot be undone.
+        <AlertDialogContent className="max-h-[calc(100vh-var(--chat-safe-padding)-2rem)] sm:max-w-md">
+          <AlertDialogHeader className="items-start text-left">
+            <AlertDialogTitle>
+              {pendingDiscardCount === 1
+                ? 'Discard selected file?'
+                : `Discard ${pendingDiscardCount} selected files?`}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-left leading-6">
+              This will permanently discard uncommitted changes in the selected
+              {pendingDiscardCount === 1 ? ' file' : ' files'} below. This
+              cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          {pendingDiscardPreview.length > 1 ? (
-            <div className="bg-muted/50 border-border/60 max-h-36 overflow-auto rounded-lg border p-2">
-              <ul className="space-y-1">
-                {pendingDiscardPreview.map((filePath) => (
-                  <li
-                    key={filePath}
-                    className="text-muted-foreground truncate font-mono text-[11px]"
-                  >
-                    {filePath}
-                  </li>
-                ))}
-              </ul>
-              {pendingDiscardCount > pendingDiscardPreview.length ? (
-                <p className="text-muted-foreground mt-1 text-[11px]">
-                  +{pendingDiscardCount - pendingDiscardPreview.length} more
-                </p>
-              ) : null}
-            </div>
-          ) : null}
+
+          <div className="bg-muted/50 border-border/60 max-h-48 overflow-auto rounded-lg border p-2.5">
+            <ul className="space-y-1.5">
+              {pendingDiscardPreview.map((filePath) => (
+                <li
+                  key={filePath}
+                  title={filePath}
+                  className="text-foreground break-all font-mono text-xs leading-5"
+                >
+                  {filePath}
+                </li>
+              ))}
+            </ul>
+            {pendingDiscardCount > pendingDiscardPreview.length ? (
+              <p className="text-muted-foreground mt-2 text-xs">
+                +{pendingDiscardCount - pendingDiscardPreview.length} more
+              </p>
+            ) : null}
+          </div>
+
           <AlertDialogFooter>
             <AlertDialogCancel disabled={discardChangesMutation.isPending}>
               Cancel
@@ -1719,7 +1732,9 @@ export default function GitFlowPage() {
               disabled={discardChangesMutation.isPending}
               onClick={confirmDiscardChanges}
             >
-              Discard changes
+              {pendingDiscardCount === 1
+                ? 'Discard file'
+                : `Discard ${pendingDiscardCount} files`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2289,8 +2304,12 @@ export default function GitFlowPage() {
                       aria-multiselectable="true"
                     >
                       {filteredFiles.map((file) => {
-                        const discardCount = selectedFiles.has(file.path)
-                          ? selectedFiles.size
+                        const isActionSelected = selectedActionFiles.has(
+                          file.path,
+                        )
+                        const isPrimarySelected = selectedFile === file.path
+                        const discardCount = isActionSelected
+                          ? selectedActionFiles.size
                           : 1
                         const fileStatus = getFileStatusPresentation(
                           getChangedFileStatusKind(file),
@@ -2308,12 +2327,14 @@ export default function GitFlowPage() {
                                   handleFileContextMenu(file.path)
                                 }
                                 role="option"
-                                aria-selected={selectedFiles.has(file.path)}
+                                aria-selected={isActionSelected}
                                 className={cn(
                                   'group flex w-full cursor-pointer select-none items-center gap-3 rounded-md p-2 text-left transition-all',
-                                  selectedFile === file.path
+                                  isPrimarySelected
                                     ? 'bg-primary/10 shadow-sm'
-                                    : 'hover:bg-accent/40',
+                                    : isActionSelected
+                                      ? 'bg-accent/70'
+                                      : 'hover:bg-accent/40',
                                 )}
                               >
                                 <div
@@ -2332,9 +2353,11 @@ export default function GitFlowPage() {
                                     <span
                                       className={cn(
                                         'truncate text-xs font-medium tracking-tight opacity-70 transition-opacity group-hover:opacity-100',
-                                        selectedFile === file.path
+                                        isPrimarySelected
                                           ? 'text-primary opacity-100'
-                                          : 'text-muted-foreground',
+                                          : isActionSelected
+                                            ? 'text-foreground opacity-90'
+                                            : 'text-muted-foreground',
                                       )}
                                     >
                                       {file.path}

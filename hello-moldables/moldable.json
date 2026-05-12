@@ -9,7 +9,7 @@
   "modified": false,
   "runtime": "vite_hono",
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.6"
+    "@moldable-ai/ui": "^0.2.10"
   },
   "name": "Hello Moldables",
   "tags": ["tutorial", "welcome", "getting-started"],

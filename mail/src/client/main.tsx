@@ -8,7 +8,7 @@ import { QueryProvider } from './query-provider'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary>
+    <ErrorBoundary appName="Mail">
       <ThemeProvider>
         <WorkspaceProvider>
           <QueryProvider>

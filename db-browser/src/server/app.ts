@@ -1,9 +1,13 @@
+import type { Dashboard, DashboardChart } from '../shared/types'
 import {
   appendQueryHistory,
+  createDashboard,
+  createDashboardChart,
   createSqlWorkspaceTab,
   describeTable,
   editSqlWorkspaceTab,
   exportReadOnlyQuery,
+  getDashboardWorkspace,
   getExplorer,
   getPreferences,
   getSqlWorkspace,
@@ -13,17 +17,23 @@ import {
   parseConnectionInput,
   previewTable,
   removeConnection,
+  removeDashboard,
+  removeDashboardChart,
   resolveConnectionId,
   runReadOnlyQuery,
   runSqlStatement,
   saveConnection,
+  saveDashboardWorkspace,
   savePreferences,
   saveSqlWorkspace,
   searchSchema,
+  selectDashboard,
   selectSqlWorkspaceTab,
   testConnection,
   testSavedConnection,
   updateConnection,
+  updateDashboard,
+  updateDashboardChart,
   updateSqlWorkspaceTab,
 } from './db'
 import { getDataDir, getWorkspaceId, jsonError } from './moldable'
@@ -73,6 +83,14 @@ function queryHistoryTitle(sql: string) {
   return sql.split('\n')[0]?.trim().slice(0, 80) || 'SQL query'
 }
 
+function normalizedLookup(value: string) {
+  return value.trim().toLowerCase().replaceAll(/\s+/g, ' ')
+}
+
+function titleMatches(title: string, query: string) {
+  return normalizedLookup(title) === normalizedLookup(query)
+}
+
 function previewSql(
   schema: string,
   table: string,
@@ -89,6 +107,124 @@ async function resolveRpcConnectionId(
   params: Record<string, unknown>,
 ) {
   return resolveConnectionId(workspaceId, dataDir, params.connectionId)
+}
+
+function resolveNamedDashboard(
+  workspace: { activeDashboardId: string | null; dashboards: Dashboard[] },
+  params: Record<string, unknown>,
+) {
+  const dashboardId =
+    typeof params.dashboardId === 'string' ? params.dashboardId.trim() : ''
+  if (dashboardId) return dashboardId
+
+  const dashboardName =
+    typeof params.dashboardName === 'string'
+      ? params.dashboardName.trim()
+      : typeof params.currentDashboardTitle === 'string'
+        ? params.currentDashboardTitle.trim()
+        : ''
+  if (dashboardName) {
+    const matches = workspace.dashboards.filter((dashboard) =>
+      titleMatches(dashboard.title, dashboardName),
+    )
+    if (matches.length === 1) return matches[0].id
+    if (matches.length > 1) {
+      throw new Error(
+        `Multiple dashboards are named "${dashboardName}". Use dashboardId.`,
+      )
+    }
+    throw new Error(`Dashboard "${dashboardName}" not found`)
+  }
+
+  if (workspace.activeDashboardId) return workspace.activeDashboardId
+  if (workspace.dashboards.length === 1) return workspace.dashboards[0].id
+  throw new Error('Dashboard id or dashboardName is required')
+}
+
+function resolveNamedChart(
+  dashboard: Dashboard,
+  params: Record<string, unknown>,
+) {
+  const chartId =
+    typeof params.chartId === 'string' ? params.chartId.trim() : ''
+  if (chartId) return chartId
+
+  const chartName =
+    typeof params.chartName === 'string'
+      ? params.chartName.trim()
+      : typeof params.currentChartTitle === 'string'
+        ? params.currentChartTitle.trim()
+        : ''
+  if (!chartName) throw new Error('Chart id or chartName is required')
+
+  const matches = dashboard.charts.filter((chart) =>
+    titleMatches(chart.title, chartName),
+  )
+  if (matches.length === 1) return matches[0].id
+  if (matches.length > 1) {
+    throw new Error(`Multiple charts are named "${chartName}". Use chartId.`)
+  }
+  throw new Error(`Chart "${chartName}" not found`)
+}
+
+async function resolveRpcDashboardId(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+  params: Record<string, unknown>,
+) {
+  const workspace = await getDashboardWorkspace(
+    workspaceId,
+    dataDir,
+    connectionId,
+  )
+  return resolveNamedDashboard(workspace, params)
+}
+
+async function resolveRpcDashboardAndChartId(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+  params: Record<string, unknown>,
+) {
+  const workspace = await getDashboardWorkspace(
+    workspaceId,
+    dataDir,
+    connectionId,
+  )
+  const dashboardId = resolveNamedDashboard(workspace, params)
+  const dashboard = workspace.dashboards.find((item) => item.id === dashboardId)
+  if (!dashboard) throw new Error('Dashboard not found')
+
+  return {
+    dashboardId,
+    chartId: resolveNamedChart(dashboard, params),
+    dashboard,
+  }
+}
+
+function editDashboardChartSql(
+  chart: DashboardChart,
+  params: Record<string, unknown>,
+) {
+  const oldString = typeof params.oldString === 'string' ? params.oldString : ''
+  const newString = typeof params.newString === 'string' ? params.newString : ''
+  const replaceAll = params.replaceAll === true
+
+  if (!oldString) throw new Error('oldString is required')
+
+  const occurrences = chart.sql.split(oldString).length - 1
+  if (occurrences === 0) throw new Error('oldString was not found in chart SQL')
+  if (occurrences > 1 && !replaceAll) {
+    throw new Error('oldString occurs multiple times. Set replaceAll to true.')
+  }
+
+  return {
+    ...chart,
+    sql: replaceAll
+      ? chart.sql.replaceAll(oldString, newString)
+      : chart.sql.replace(oldString, newString),
+  }
 }
 
 app.get('/api/moldable/health', (c) => {
@@ -132,6 +268,7 @@ app.post('/api/moldable/rpc', async (c) => {
         : null
       const includeSchema = params.includeSchema !== false
       const includeSqlWorkspace = params.includeSqlWorkspace !== false
+      const includeDashboards = params.includeDashboards !== false
 
       return c.json({
         ok: true,
@@ -153,6 +290,10 @@ app.post('/api/moldable/rpc', async (c) => {
           sqlWorkspace:
             connectionId && includeSqlWorkspace
               ? await getSqlWorkspace(workspaceId, dataDir, connectionId)
+              : undefined,
+          dashboardWorkspace:
+            connectionId && includeDashboards
+              ? await getDashboardWorkspace(workspaceId, dataDir, connectionId)
               : undefined,
           preferences,
         },
@@ -360,6 +501,224 @@ app.post('/api/moldable/rpc', async (c) => {
       return c.json({ ok: true, result: workspace })
     }
 
+    if (method === 'db.dashboards.list') {
+      const connectionId = await resolveRpcConnectionId(
+        workspaceId,
+        dataDir,
+        params,
+      )
+      return c.json({
+        ok: true,
+        result: await getDashboardWorkspace(workspaceId, dataDir, connectionId),
+      })
+    }
+
+    if (method === 'db.dashboards.create') {
+      const connectionId = await resolveRpcConnectionId(
+        workspaceId,
+        dataDir,
+        params,
+      )
+      const result = await createDashboard(
+        workspaceId,
+        dataDir,
+        connectionId,
+        params,
+      )
+      await savePreferences(dataDir, { activeConnectionId: connectionId })
+      return c.json({ ok: true, result })
+    }
+
+    if (method === 'db.dashboards.update') {
+      const connectionId = await resolveRpcConnectionId(
+        workspaceId,
+        dataDir,
+        params,
+      )
+      const dashboardId = await resolveRpcDashboardId(
+        workspaceId,
+        dataDir,
+        connectionId,
+        params,
+      )
+      const result = await updateDashboard(
+        workspaceId,
+        dataDir,
+        connectionId,
+        dashboardId,
+        params,
+      )
+      await savePreferences(dataDir, { activeConnectionId: connectionId })
+      return c.json({ ok: true, result })
+    }
+
+    if (method === 'db.dashboards.delete') {
+      const connectionId = await resolveRpcConnectionId(
+        workspaceId,
+        dataDir,
+        params,
+      )
+      const dashboardId = await resolveRpcDashboardId(
+        workspaceId,
+        dataDir,
+        connectionId,
+        params,
+      )
+      const result = await removeDashboard(
+        workspaceId,
+        dataDir,
+        connectionId,
+        dashboardId,
+      )
+      await savePreferences(dataDir, { activeConnectionId: connectionId })
+      return c.json({ ok: true, result })
+    }
+
+    if (method === 'db.dashboards.select') {
+      const connectionId = await resolveRpcConnectionId(
+        workspaceId,
+        dataDir,
+        params,
+      )
+      const dashboardId = await resolveRpcDashboardId(
+        workspaceId,
+        dataDir,
+        connectionId,
+        params,
+      )
+      const result = await selectDashboard(
+        workspaceId,
+        dataDir,
+        connectionId,
+        dashboardId,
+      )
+      await savePreferences(dataDir, { activeConnectionId: connectionId })
+      return c.json({ ok: true, result })
+    }
+
+    if (method === 'db.dashboardCharts.list') {
+      const connectionId = await resolveRpcConnectionId(
+        workspaceId,
+        dataDir,
+        params,
+      )
+      const workspace = await getDashboardWorkspace(
+        workspaceId,
+        dataDir,
+        connectionId,
+      )
+      const dashboardId = resolveNamedDashboard(workspace, params)
+      const dashboard = workspace.dashboards.find(
+        (item) => item.id === dashboardId,
+      )
+      if (!dashboard) throw new Error('Dashboard not found')
+      return c.json({
+        ok: true,
+        result: {
+          connectionId,
+          dashboard,
+          charts: dashboard.charts,
+        },
+      })
+    }
+
+    if (method === 'db.dashboardCharts.create') {
+      const connectionId = await resolveRpcConnectionId(
+        workspaceId,
+        dataDir,
+        params,
+      )
+      const dashboardId = await resolveRpcDashboardId(
+        workspaceId,
+        dataDir,
+        connectionId,
+        params,
+      )
+      const result = await createDashboardChart(
+        workspaceId,
+        dataDir,
+        connectionId,
+        dashboardId,
+        params,
+      )
+      await savePreferences(dataDir, { activeConnectionId: connectionId })
+      return c.json({ ok: true, result })
+    }
+
+    if (method === 'db.dashboardCharts.update') {
+      const connectionId = await resolveRpcConnectionId(
+        workspaceId,
+        dataDir,
+        params,
+      )
+      const { dashboardId, chartId } = await resolveRpcDashboardAndChartId(
+        workspaceId,
+        dataDir,
+        connectionId,
+        params,
+      )
+      const result = await updateDashboardChart(
+        workspaceId,
+        dataDir,
+        connectionId,
+        dashboardId,
+        chartId,
+        params,
+      )
+      await savePreferences(dataDir, { activeConnectionId: connectionId })
+      return c.json({ ok: true, result })
+    }
+
+    if (method === 'db.dashboardCharts.edit') {
+      const connectionId = await resolveRpcConnectionId(
+        workspaceId,
+        dataDir,
+        params,
+      )
+      const { dashboardId, chartId, dashboard } =
+        await resolveRpcDashboardAndChartId(
+          workspaceId,
+          dataDir,
+          connectionId,
+          params,
+        )
+      const chart = dashboard.charts.find((item) => item.id === chartId)
+      if (!chart) throw new Error('Chart not found')
+      const result = await updateDashboardChart(
+        workspaceId,
+        dataDir,
+        connectionId,
+        dashboardId,
+        chartId,
+        editDashboardChartSql(chart, params),
+      )
+      await savePreferences(dataDir, { activeConnectionId: connectionId })
+      return c.json({ ok: true, result })
+    }
+
+    if (method === 'db.dashboardCharts.delete') {
+      const connectionId = await resolveRpcConnectionId(
+        workspaceId,
+        dataDir,
+        params,
+      )
+      const { dashboardId, chartId } = await resolveRpcDashboardAndChartId(
+        workspaceId,
+        dataDir,
+        connectionId,
+        params,
+      )
+      const result = await removeDashboardChart(
+        workspaceId,
+        dataDir,
+        connectionId,
+        dashboardId,
+        chartId,
+      )
+      await savePreferences(dataDir, { activeConnectionId: connectionId })
+      return c.json({ ok: true, result })
+    }
+
     const error = rpcError('method_not_found', `Unknown method: ${method}`, 404)
     return c.json(error.body, error.status)
   } catch (error) {
@@ -556,6 +915,83 @@ app.put('/api/connections/:id/sql-workspace', async (c) => {
     return jsonError(
       c,
       error instanceof Error ? error.message : 'Failed to save SQL workspace',
+      400,
+    )
+  }
+})
+
+app.get('/api/connections/:id/dashboards', async (c) => {
+  try {
+    const workspaceId = requiredWorkspaceId(getWorkspaceId(c))
+    return c.json(
+      await getDashboardWorkspace(
+        workspaceId,
+        getDataDir(c),
+        c.req.param('id'),
+      ),
+    )
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to load dashboards',
+      400,
+    )
+  }
+})
+
+app.put('/api/connections/:id/dashboards', async (c) => {
+  try {
+    const workspaceId = requiredWorkspaceId(getWorkspaceId(c))
+    const body = await c.req.json().catch(() => ({}))
+    return c.json(
+      await saveDashboardWorkspace(
+        workspaceId,
+        getDataDir(c),
+        c.req.param('id'),
+        body,
+      ),
+    )
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to save dashboards',
+      400,
+    )
+  }
+})
+
+app.post('/api/connections/:id/dashboard-chart-query', async (c) => {
+  try {
+    const workspaceId = requiredWorkspaceId(getWorkspaceId(c))
+    const dataDir = getDataDir(c)
+    const preferences = await getPreferences(dataDir)
+    const body = (await c.req.json().catch(() => ({}))) as {
+      sql?: unknown
+      maxRows?: unknown
+    }
+    const sql = typeof body.sql === 'string' ? body.sql : ''
+
+    const result = await runReadOnlyQuery(
+      workspaceId,
+      dataDir,
+      c.req.param('id'),
+      sql,
+      preferences.queryTimeoutMs,
+    )
+    const maxRows =
+      typeof body.maxRows === 'number' && Number.isFinite(body.maxRows)
+        ? Math.max(1, Math.min(5_000, Math.round(body.maxRows)))
+        : 500
+
+    return c.json({
+      ...result,
+      rows: result.rows.slice(0, maxRows),
+      rowCount: result.rowCount ?? result.rows.length,
+    })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to load dashboard chart',
       400,
     )
   }

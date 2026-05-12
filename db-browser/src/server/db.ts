@@ -4,6 +4,14 @@ import type {
   ConnectionPolicyMode,
   ConnectionSummary,
   ConnectionTestResponse,
+  Dashboard,
+  DashboardChart,
+  DashboardChartComparisonMode,
+  DashboardChartSeries,
+  DashboardChartSize,
+  DashboardChartType,
+  DashboardChartVisibleRange,
+  DashboardWorkspaceResponse,
   DbBrowserPreferences,
   ExplorerSchema,
   ImportRowsResponse,
@@ -121,9 +129,13 @@ interface AivaultPreviewResult extends AivaultQueryResult {
 const CONNECTIONS_FILE = 'connections.json'
 const PREFERENCES_FILE = 'preferences.json'
 const SQL_WORKSPACES_DIR = 'sql-workspaces'
+const DASHBOARD_WORKSPACES_DIR = 'dashboard-workspaces'
 const QUERY_HISTORY_DIR = 'query-history'
 const MAX_SQL_TABS = 30
 const MAX_SQL_LENGTH = 250_000
+const MAX_DASHBOARDS = 50
+const MAX_DASHBOARD_CHARTS = 80
+const MAX_DASHBOARD_CHART_ROWS = 5_000
 const MAX_QUERY_HISTORY_ITEMS = 200
 const DEFAULT_SQL_EDITOR_HEIGHT = 128
 const MIN_SQL_EDITOR_HEIGHT = 96
@@ -158,6 +170,14 @@ function sqlWorkspacePath(dataDir: string, connectionId: string) {
   return safePath(
     dataDir,
     SQL_WORKSPACES_DIR,
+    `${sanitizeId(connectionId)}.json`,
+  )
+}
+
+function dashboardWorkspacePath(dataDir: string, connectionId: string) {
+  return safePath(
+    dataDir,
+    DASHBOARD_WORKSPACES_DIR,
     `${sanitizeId(connectionId)}.json`,
   )
 }
@@ -311,6 +331,291 @@ function parseSqlWorkspaceInput(
     activeTabId,
     tabs,
     updatedAt: now,
+  }
+}
+
+function normalizeDashboardChartType(value: unknown): DashboardChartType {
+  const normalized = normalizeOptionalString(value)?.toLowerCase()
+  const allowed = new Set<DashboardChartType>([
+    'line',
+    'area',
+    'bar',
+    'stacked-bar',
+    'horizontal-bar',
+    'composed',
+    'pie',
+    'donut',
+    'scatter',
+    'bubble',
+    'number',
+    'table',
+  ])
+
+  return allowed.has(normalized as DashboardChartType)
+    ? (normalized as DashboardChartType)
+    : 'bar'
+}
+
+function normalizeDashboardChartSize(value: unknown): DashboardChartSize {
+  const normalized = normalizeOptionalString(value)?.toLowerCase()
+  const allowed = new Set<DashboardChartSize>(['sm', 'md', 'lg', 'xl'])
+  return allowed.has(normalized as DashboardChartSize)
+    ? (normalized as DashboardChartSize)
+    : 'md'
+}
+
+function normalizeDashboardChartComparisonMode(
+  value: unknown,
+): DashboardChartComparisonMode {
+  const normalized = normalizeOptionalString(value)?.toLowerCase()
+  const allowed = new Set<DashboardChartComparisonMode>([
+    'auto',
+    'percent',
+    'previous-value',
+    'number',
+  ])
+  return allowed.has(normalized as DashboardChartComparisonMode)
+    ? (normalized as DashboardChartComparisonMode)
+    : 'auto'
+}
+
+function normalizeDashboardChartVisibleRange(
+  value: unknown,
+  fallback?: DashboardChartVisibleRange,
+): DashboardChartVisibleRange {
+  const body =
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const normalizedMode = normalizeOptionalString(body.mode)?.toLowerCase()
+  const mode =
+    normalizedMode === 'all' ||
+    normalizedMode === 'latest' ||
+    normalizedMode === 'first' ||
+    normalizedMode === 'custom'
+      ? normalizedMode
+      : (fallback?.mode ?? 'all')
+
+  return {
+    mode,
+    count: normalizePositiveInteger(
+      body.count ?? fallback?.count,
+      fallback?.count ?? 60,
+      1,
+      5000,
+    ),
+    start: normalizePositiveInteger(
+      body.start ?? fallback?.start,
+      fallback?.start ?? 1,
+      1,
+      5000,
+    ),
+    end: normalizePositiveInteger(
+      body.end ?? fallback?.end,
+      fallback?.end ?? 60,
+      1,
+      5000,
+    ),
+  }
+}
+
+function normalizeStringArray(value: unknown, maxItems: number): string[] {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',')
+      : []
+
+  const seen = new Set<string>()
+  return raw
+    .map((entry) => asTrimmedString(entry))
+    .filter(Boolean)
+    .filter((entry) => {
+      const key = entry.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .slice(0, maxItems)
+}
+
+function normalizeDashboardChartSeries(value: unknown): DashboardChartSeries[] {
+  const rawSeries = Array.isArray(value) ? value : []
+  const now = Date.now()
+
+  return rawSeries
+    .flatMap((rawSeriesItem, index) => {
+      if (!rawSeriesItem || typeof rawSeriesItem !== 'object') return []
+
+      const item = rawSeriesItem as Record<string, unknown>
+      const column = asTrimmedString(item.column)
+      if (!column) return []
+
+      const chartType = normalizeOptionalString(item.chartType)?.toLowerCase()
+      const normalizedChartType =
+        chartType === 'line' || chartType === 'area' || chartType === 'bar'
+          ? chartType
+          : undefined
+
+      return [
+        {
+          id: asTrimmedString(item.id) || `series-${now}-${index}`,
+          name: asTrimmedString(item.name) || column,
+          column,
+          color: normalizeOptionalString(item.color),
+          chartType: normalizedChartType,
+        } satisfies DashboardChartSeries,
+      ]
+    })
+    .slice(0, 12)
+}
+
+function parseDashboardChartInput(
+  value: unknown,
+  fallback?: DashboardChart,
+): DashboardChart {
+  const body =
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const now = new Date().toISOString()
+  const sql = typeof body.sql === 'string' ? body.sql : (fallback?.sql ?? '')
+
+  if (sql.length > MAX_SQL_LENGTH) {
+    throw new Error('Dashboard chart SQL is too large')
+  }
+
+  const maxRows = normalizePositiveInteger(
+    body.maxRows ?? fallback?.maxRows,
+    fallback?.maxRows ?? 500,
+    1,
+    MAX_DASHBOARD_CHART_ROWS,
+  )
+
+  return {
+    id: asTrimmedString(body.id) || fallback?.id || randomUUID(),
+    title: asTrimmedString(body.title) || fallback?.title || 'Untitled chart',
+    description:
+      typeof body.description === 'string'
+        ? body.description.trim()
+        : (fallback?.description ?? ''),
+    type: normalizeDashboardChartType(body.type ?? fallback?.type),
+    sql,
+    size: normalizeDashboardChartSize(body.size ?? fallback?.size),
+    xAxis: asTrimmedString(body.xAxis) || fallback?.xAxis || '',
+    series: normalizeDashboardChartSeries(body.series ?? fallback?.series),
+    categoryColumn:
+      asTrimmedString(body.categoryColumn) || fallback?.categoryColumn || '',
+    valueColumn:
+      asTrimmedString(body.valueColumn) || fallback?.valueColumn || '',
+    colorColumn:
+      asTrimmedString(body.colorColumn) || fallback?.colorColumn || '',
+    sizeColumn: asTrimmedString(body.sizeColumn) || fallback?.sizeColumn || '',
+    labelColumn:
+      asTrimmedString(body.labelColumn) || fallback?.labelColumn || '',
+    metricColumn:
+      asTrimmedString(body.metricColumn) || fallback?.metricColumn || '',
+    comparisonColumn:
+      asTrimmedString(body.comparisonColumn) ||
+      fallback?.comparisonColumn ||
+      '',
+    comparisonMode: normalizeDashboardChartComparisonMode(
+      body.comparisonMode ?? fallback?.comparisonMode,
+    ),
+    tableColumns: normalizeStringArray(
+      body.tableColumns ?? fallback?.tableColumns,
+      30,
+    ),
+    maxRows,
+    visibleRange: normalizeDashboardChartVisibleRange(
+      body.visibleRange,
+      fallback?.visibleRange,
+    ),
+    showLegend:
+      typeof body.showLegend === 'boolean'
+        ? body.showLegend
+        : (fallback?.showLegend ?? true),
+    showAxes:
+      typeof body.showAxes === 'boolean'
+        ? body.showAxes
+        : (fallback?.showAxes ?? true),
+    showGrid:
+      typeof body.showGrid === 'boolean'
+        ? body.showGrid
+        : (fallback?.showGrid ?? true),
+    showDots:
+      typeof body.showDots === 'boolean'
+        ? body.showDots
+        : (fallback?.showDots ?? false),
+    createdAt: asTrimmedString(body.createdAt) || fallback?.createdAt || now,
+    updatedAt: now,
+  }
+}
+
+function parseDashboardInput(value: unknown, fallback?: Dashboard): Dashboard {
+  const body =
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const rawCharts = Array.isArray(body.charts)
+    ? body.charts
+    : (fallback?.charts ?? [])
+
+  if (rawCharts.length > MAX_DASHBOARD_CHARTS) {
+    throw new Error(
+      `A dashboard can contain at most ${MAX_DASHBOARD_CHARTS} charts`,
+    )
+  }
+
+  const now = new Date().toISOString()
+
+  return {
+    id: asTrimmedString(body.id) || fallback?.id || randomUUID(),
+    title:
+      asTrimmedString(body.title) || fallback?.title || 'Untitled dashboard',
+    description:
+      typeof body.description === 'string'
+        ? body.description.trim()
+        : (fallback?.description ?? ''),
+    charts: rawCharts.map((chart) => parseDashboardChartInput(chart)),
+    createdAt: asTrimmedString(body.createdAt) || fallback?.createdAt || now,
+    updatedAt: now,
+  }
+}
+
+function parseDashboardWorkspaceInput(
+  connectionId: string,
+  value: unknown,
+): DashboardWorkspaceResponse {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Dashboard workspace is required')
+  }
+
+  const body = value as Record<string, unknown>
+  const rawDashboards = Array.isArray(body.dashboards) ? body.dashboards : []
+
+  if (rawDashboards.length > MAX_DASHBOARDS) {
+    throw new Error(
+      `A connection can contain at most ${MAX_DASHBOARDS} dashboards`,
+    )
+  }
+
+  const seenIds = new Set<string>()
+  const dashboards = rawDashboards.map((rawDashboard) => {
+    const dashboard = parseDashboardInput(rawDashboard)
+    if (seenIds.has(dashboard.id)) {
+      throw new Error('Dashboard ids must be unique')
+    }
+    seenIds.add(dashboard.id)
+    return dashboard
+  })
+
+  const requestedActiveDashboardId = asTrimmedString(body.activeDashboardId)
+  const activeDashboardId = dashboards.some(
+    (dashboard) => dashboard.id === requestedActiveDashboardId,
+  )
+    ? requestedActiveDashboardId
+    : (dashboards[0]?.id ?? null)
+
+  return {
+    connectionId,
+    activeDashboardId,
+    dashboards,
+    updatedAt: new Date().toISOString(),
   }
 }
 
@@ -1248,6 +1553,364 @@ export async function selectSqlWorkspaceTab(
   return nextWorkspace
 }
 
+export async function getDashboardWorkspace(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+): Promise<DashboardWorkspaceResponse> {
+  await getStoredConnection(workspaceId, dataDir, connectionId)
+
+  return readJson<DashboardWorkspaceResponse>(
+    dashboardWorkspacePath(dataDir, connectionId),
+    {
+      connectionId,
+      activeDashboardId: null,
+      dashboards: [],
+      updatedAt: new Date().toISOString(),
+    },
+  )
+}
+
+export async function saveDashboardWorkspace(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+  value: unknown,
+): Promise<DashboardWorkspaceResponse> {
+  await getStoredConnection(workspaceId, dataDir, connectionId)
+
+  const workspace = parseDashboardWorkspaceInput(connectionId, value)
+  await writeJson(dashboardWorkspacePath(dataDir, connectionId), workspace)
+  return workspace
+}
+
+export async function createDashboard(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+  value: unknown,
+): Promise<{ workspace: DashboardWorkspaceResponse; dashboard: Dashboard }> {
+  await getStoredConnection(workspaceId, dataDir, connectionId)
+
+  const current = await getDashboardWorkspace(
+    workspaceId,
+    dataDir,
+    connectionId,
+  )
+  if (current.dashboards.length >= MAX_DASHBOARDS) {
+    throw new Error(
+      `A connection can contain at most ${MAX_DASHBOARDS} dashboards`,
+    )
+  }
+
+  const body =
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const dashboard = parseDashboardInput({
+    title:
+      asTrimmedString(body.title) ||
+      `Dashboard ${current.dashboards.length + 1}`,
+    description: body.description,
+    charts: body.charts,
+  })
+  const shouldSelect = body.select !== false
+  const nextWorkspace: DashboardWorkspaceResponse = {
+    connectionId,
+    dashboards: [...current.dashboards, dashboard],
+    activeDashboardId: shouldSelect ? dashboard.id : current.activeDashboardId,
+    updatedAt: new Date().toISOString(),
+  }
+
+  await writeJson(dashboardWorkspacePath(dataDir, connectionId), nextWorkspace)
+  return { workspace: nextWorkspace, dashboard }
+}
+
+export async function updateDashboard(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+  dashboardId: unknown,
+  value: unknown,
+): Promise<{ workspace: DashboardWorkspaceResponse; dashboard: Dashboard }> {
+  await getStoredConnection(workspaceId, dataDir, connectionId)
+
+  const normalizedDashboardId = asTrimmedString(dashboardId)
+  if (!normalizedDashboardId) {
+    throw new Error('Dashboard id is required')
+  }
+
+  const current = await getDashboardWorkspace(
+    workspaceId,
+    dataDir,
+    connectionId,
+  )
+  let updatedDashboard: Dashboard | null = null
+  const dashboards = current.dashboards.map((dashboard) => {
+    if (dashboard.id !== normalizedDashboardId) return dashboard
+    updatedDashboard = parseDashboardInput(value, dashboard)
+    return updatedDashboard
+  })
+
+  if (!updatedDashboard) {
+    throw new Error('Dashboard not found')
+  }
+
+  const body =
+    value && typeof value === 'object' ? (value as Record<string, unknown>) : {}
+  const shouldSelect = body.select === true
+  const nextWorkspace: DashboardWorkspaceResponse = {
+    connectionId,
+    dashboards,
+    activeDashboardId: shouldSelect
+      ? normalizedDashboardId
+      : current.activeDashboardId,
+    updatedAt: new Date().toISOString(),
+  }
+
+  await writeJson(dashboardWorkspacePath(dataDir, connectionId), nextWorkspace)
+  return { workspace: nextWorkspace, dashboard: updatedDashboard }
+}
+
+export async function removeDashboard(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+  dashboardId: unknown,
+): Promise<DashboardWorkspaceResponse> {
+  await getStoredConnection(workspaceId, dataDir, connectionId)
+
+  const normalizedDashboardId = asTrimmedString(dashboardId)
+  if (!normalizedDashboardId) {
+    throw new Error('Dashboard id is required')
+  }
+
+  const current = await getDashboardWorkspace(
+    workspaceId,
+    dataDir,
+    connectionId,
+  )
+  const dashboards = current.dashboards.filter(
+    (dashboard) => dashboard.id !== normalizedDashboardId,
+  )
+
+  if (dashboards.length === current.dashboards.length) {
+    throw new Error('Dashboard not found')
+  }
+
+  const nextWorkspace: DashboardWorkspaceResponse = {
+    connectionId,
+    dashboards,
+    activeDashboardId:
+      current.activeDashboardId === normalizedDashboardId
+        ? (dashboards[0]?.id ?? null)
+        : current.activeDashboardId,
+    updatedAt: new Date().toISOString(),
+  }
+
+  await writeJson(dashboardWorkspacePath(dataDir, connectionId), nextWorkspace)
+  return nextWorkspace
+}
+
+export async function selectDashboard(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+  dashboardId: unknown,
+): Promise<DashboardWorkspaceResponse> {
+  await getStoredConnection(workspaceId, dataDir, connectionId)
+
+  const normalizedDashboardId = asTrimmedString(dashboardId)
+  if (!normalizedDashboardId) {
+    throw new Error('Dashboard id is required')
+  }
+
+  const current = await getDashboardWorkspace(
+    workspaceId,
+    dataDir,
+    connectionId,
+  )
+  if (
+    !current.dashboards.some(
+      (dashboard) => dashboard.id === normalizedDashboardId,
+    )
+  ) {
+    throw new Error('Dashboard not found')
+  }
+
+  const nextWorkspace: DashboardWorkspaceResponse = {
+    ...current,
+    activeDashboardId: normalizedDashboardId,
+    updatedAt: new Date().toISOString(),
+  }
+
+  await writeJson(dashboardWorkspacePath(dataDir, connectionId), nextWorkspace)
+  return nextWorkspace
+}
+
+export async function createDashboardChart(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+  dashboardId: unknown,
+  value: unknown,
+): Promise<{
+  workspace: DashboardWorkspaceResponse
+  dashboard: Dashboard
+  chart: DashboardChart
+}> {
+  const current = await getDashboardWorkspace(
+    workspaceId,
+    dataDir,
+    connectionId,
+  )
+  const normalizedDashboardId = asTrimmedString(dashboardId)
+  if (!normalizedDashboardId) {
+    throw new Error('Dashboard id is required')
+  }
+
+  let updatedDashboard: Dashboard | null = null
+  let chart: DashboardChart | null = null
+  const dashboards = current.dashboards.map((dashboard) => {
+    if (dashboard.id !== normalizedDashboardId) return dashboard
+    if (dashboard.charts.length >= MAX_DASHBOARD_CHARTS) {
+      throw new Error(
+        `A dashboard can contain at most ${MAX_DASHBOARD_CHARTS} charts`,
+      )
+    }
+
+    chart = parseDashboardChartInput(value)
+    updatedDashboard = {
+      ...dashboard,
+      charts: [...dashboard.charts, chart],
+      updatedAt: new Date().toISOString(),
+    }
+    return updatedDashboard
+  })
+
+  if (!updatedDashboard || !chart) {
+    throw new Error('Dashboard not found')
+  }
+
+  const nextWorkspace: DashboardWorkspaceResponse = {
+    connectionId,
+    dashboards,
+    activeDashboardId: normalizedDashboardId,
+    updatedAt: new Date().toISOString(),
+  }
+
+  await writeJson(dashboardWorkspacePath(dataDir, connectionId), nextWorkspace)
+  return { workspace: nextWorkspace, dashboard: updatedDashboard, chart }
+}
+
+export async function updateDashboardChart(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+  dashboardId: unknown,
+  chartId: unknown,
+  value: unknown,
+): Promise<{
+  workspace: DashboardWorkspaceResponse
+  dashboard: Dashboard
+  chart: DashboardChart
+}> {
+  const current = await getDashboardWorkspace(
+    workspaceId,
+    dataDir,
+    connectionId,
+  )
+  const normalizedDashboardId = asTrimmedString(dashboardId)
+  const normalizedChartId = asTrimmedString(chartId)
+
+  if (!normalizedDashboardId) throw new Error('Dashboard id is required')
+  if (!normalizedChartId) throw new Error('Chart id is required')
+
+  let updatedDashboard: Dashboard | null = null
+  let updatedChart: DashboardChart | null = null
+
+  const dashboards = current.dashboards.map((dashboard) => {
+    if (dashboard.id !== normalizedDashboardId) return dashboard
+
+    const charts = dashboard.charts.map((chart) => {
+      if (chart.id !== normalizedChartId) return chart
+      updatedChart = parseDashboardChartInput(value, chart)
+      return updatedChart
+    })
+
+    if (!updatedChart) return dashboard
+
+    updatedDashboard = {
+      ...dashboard,
+      charts,
+      updatedAt: new Date().toISOString(),
+    }
+    return updatedDashboard
+  })
+
+  if (!updatedDashboard) throw new Error('Dashboard not found')
+  if (!updatedChart) throw new Error('Chart not found')
+
+  const nextWorkspace: DashboardWorkspaceResponse = {
+    connectionId,
+    dashboards,
+    activeDashboardId: normalizedDashboardId,
+    updatedAt: new Date().toISOString(),
+  }
+
+  await writeJson(dashboardWorkspacePath(dataDir, connectionId), nextWorkspace)
+  return {
+    workspace: nextWorkspace,
+    dashboard: updatedDashboard,
+    chart: updatedChart,
+  }
+}
+
+export async function removeDashboardChart(
+  workspaceId: string,
+  dataDir: string,
+  connectionId: string,
+  dashboardId: unknown,
+  chartId: unknown,
+): Promise<{ workspace: DashboardWorkspaceResponse; dashboard: Dashboard }> {
+  const current = await getDashboardWorkspace(
+    workspaceId,
+    dataDir,
+    connectionId,
+  )
+  const normalizedDashboardId = asTrimmedString(dashboardId)
+  const normalizedChartId = asTrimmedString(chartId)
+
+  if (!normalizedDashboardId) throw new Error('Dashboard id is required')
+  if (!normalizedChartId) throw new Error('Chart id is required')
+
+  let updatedDashboard: Dashboard | null = null
+  const dashboards = current.dashboards.map((dashboard) => {
+    if (dashboard.id !== normalizedDashboardId) return dashboard
+    const charts = dashboard.charts.filter(
+      (chart) => chart.id !== normalizedChartId,
+    )
+    if (charts.length === dashboard.charts.length) return dashboard
+
+    updatedDashboard = {
+      ...dashboard,
+      charts,
+      updatedAt: new Date().toISOString(),
+    }
+    return updatedDashboard
+  })
+
+  if (!updatedDashboard) throw new Error('Chart not found')
+
+  const nextWorkspace: DashboardWorkspaceResponse = {
+    connectionId,
+    dashboards,
+    activeDashboardId: normalizedDashboardId,
+    updatedAt: new Date().toISOString(),
+  }
+
+  await writeJson(dashboardWorkspacePath(dataDir, connectionId), nextWorkspace)
+  return { workspace: nextWorkspace, dashboard: updatedDashboard }
+}
+
 export async function listQueryHistory(
   workspaceId: string,
   dataDir: string,
@@ -1445,6 +2108,9 @@ export async function removeConnection(
   await rm(sqlWorkspacePath(dataDir, connectionId), { force: true }).catch(
     () => undefined,
   )
+  await rm(dashboardWorkspacePath(dataDir, connectionId), {
+    force: true,
+  }).catch(() => undefined)
   await rm(queryHistoryPath(dataDir, connectionId), { force: true }).catch(
     () => undefined,
   )

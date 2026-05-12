@@ -114,6 +114,92 @@ export interface SqlWorkspaceResponse {
   updatedAt: string
 }
 
+export type DashboardChartType =
+  | 'line'
+  | 'area'
+  | 'bar'
+  | 'stacked-bar'
+  | 'horizontal-bar'
+  | 'composed'
+  | 'pie'
+  | 'donut'
+  | 'scatter'
+  | 'bubble'
+  | 'number'
+  | 'table'
+
+export type DashboardChartSize = 'sm' | 'md' | 'lg' | 'xl'
+
+export type DashboardChartVisibleRangeMode =
+  | 'all'
+  | 'latest'
+  | 'first'
+  | 'custom'
+export type DashboardChartComparisonMode =
+  | 'auto'
+  | 'percent'
+  | 'previous-value'
+  | 'number'
+
+export interface DashboardChartVisibleRange {
+  mode: DashboardChartVisibleRangeMode
+  count: number
+  start: number
+  end: number
+}
+
+export interface DashboardChartSeries {
+  id: string
+  name: string
+  column: string
+  color?: string | null
+  chartType?: 'line' | 'area' | 'bar'
+}
+
+export interface DashboardChart {
+  id: string
+  title: string
+  description: string
+  type: DashboardChartType
+  sql: string
+  size: DashboardChartSize
+  xAxis: string
+  series: DashboardChartSeries[]
+  categoryColumn: string
+  valueColumn: string
+  colorColumn: string
+  sizeColumn: string
+  labelColumn: string
+  metricColumn: string
+  comparisonColumn: string
+  comparisonMode: DashboardChartComparisonMode
+  tableColumns: string[]
+  maxRows: number
+  visibleRange: DashboardChartVisibleRange
+  showLegend: boolean
+  showAxes: boolean
+  showGrid: boolean
+  showDots: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Dashboard {
+  id: string
+  title: string
+  description: string
+  charts: DashboardChart[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DashboardWorkspaceResponse {
+  connectionId: string
+  activeDashboardId: string | null
+  dashboards: Dashboard[]
+  updatedAt: string
+}
+
 export interface ConnectionTestResponse {
   database: string
   user: string

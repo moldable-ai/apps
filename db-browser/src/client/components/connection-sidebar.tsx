@@ -1,4 +1,4 @@
-import { Code2, FolderTree } from 'lucide-react'
+import { BarChart3, Code2, FolderTree } from 'lucide-react'
 import type { ReactNode } from 'react'
 import {
   Button,
@@ -9,14 +9,16 @@ import {
 } from '@moldable-ai/ui'
 import type {
   ConnectionSummary,
+  Dashboard,
   ExplorerSchema,
   SqlEditorTab,
 } from '../../shared/types'
 import type { SelectedTable } from '../types'
+import { DashboardBrowser } from './dashboard-browser'
 import { ObjectBrowser } from './object-browser'
 import { SqlWorkspaceBrowser } from './sql-workspace-browser'
 
-export type SidebarMode = 'objects' | 'sql'
+export type SidebarMode = 'objects' | 'dashboards' | 'sql'
 
 export function ConnectionSidebar({
   mode,
@@ -28,14 +30,22 @@ export function ConnectionSidebar({
   objectsFetching,
   objectsError,
   selectedTable,
+  dashboards,
+  activeDashboardId,
   sqlTabs,
   activeSqlTabId,
+  dashboardsLoading,
   sqlWorkspaceLoading,
   onModeChange,
   onObjectSearchChange,
   onSchemaChange,
   onRefreshObjects,
   onSelectTable,
+  onSelectDashboard,
+  onNewDashboard,
+  onDeleteDashboard,
+  onRenameDashboard,
+  onReorderDashboards,
   onSelectSqlTab,
   onNewSqlTab,
   onCloseSqlTab,
@@ -51,14 +61,22 @@ export function ConnectionSidebar({
   objectsFetching: boolean
   objectsError: Error | null
   selectedTable: SelectedTable | null
+  dashboards: Dashboard[]
+  activeDashboardId: string | null
   sqlTabs: SqlEditorTab[]
   activeSqlTabId: string | null
+  dashboardsLoading: boolean
   sqlWorkspaceLoading: boolean
   onModeChange: (mode: SidebarMode) => void
   onObjectSearchChange: (value: string) => void
   onSchemaChange: (schema: string) => void
   onRefreshObjects: () => void
   onSelectTable: (schema: string, table: string) => void
+  onSelectDashboard: (dashboardId: string) => void
+  onNewDashboard: () => void
+  onDeleteDashboard: (dashboardId: string) => void
+  onRenameDashboard: (dashboardId: string, title: string) => void
+  onReorderDashboards: (dashboards: Dashboard[]) => void
   onSelectSqlTab: (tabId: string) => void
   onNewSqlTab: () => void
   onCloseSqlTab: (tabId: string) => void
@@ -84,6 +102,18 @@ export function ConnectionSidebar({
               onSchemaChange={onSchemaChange}
               onRetry={onRefreshObjects}
               onSelectTable={onSelectTable}
+            />
+          ) : mode === 'dashboards' ? (
+            <DashboardBrowser
+              activeConnection={activeConnection}
+              dashboards={dashboards}
+              activeDashboardId={activeDashboardId}
+              loading={dashboardsLoading}
+              onSelect={onSelectDashboard}
+              onNew={onNewDashboard}
+              onDelete={onDeleteDashboard}
+              onRename={onRenameDashboard}
+              onReorder={onReorderDashboards}
             />
           ) : (
             <SqlWorkspaceBrowser
@@ -119,6 +149,13 @@ function SidebarModeTabs({
         onClick={() => onModeChange('objects')}
       >
         <FolderTree className="size-3.5" />
+      </ModeButton>
+      <ModeButton
+        active={mode === 'dashboards'}
+        label="Dashboards"
+        onClick={() => onModeChange('dashboards')}
+      >
+        <BarChart3 className="size-3.5" />
       </ModeButton>
       <ModeButton
         active={mode === 'sql'}

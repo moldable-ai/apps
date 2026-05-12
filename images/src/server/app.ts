@@ -20,6 +20,10 @@ const MODEL = 'gpt-image-2'
 const DEFAULT_QUALITY = 'medium'
 const STORE_FILE = 'image-threads.json'
 const IMAGE_GENERATION_TIMEOUT_MS = 600_000
+const REMOVE_BG_TIMEOUT_MS = 180_000
+const REMOVE_BG_SECRET_NAME = 'REMOVE_BG_API_KEY'
+const REMOVE_BG_CAPABILITY_ID = 'remove-bg/background-removal'
+const REMOVE_BG_PATH = '/v1.0/removebg'
 const SERVER_STARTED_AT_MS = Date.now()
 const ORPHANED_GENERATION_MESSAGE =
   'Images restarted before this generation finished. Retry to start it again.'
@@ -79,7 +83,7 @@ const ASPECT_RATIOS: Record<AspectRatioId, AspectRatio> = {
 type ImageIteration = {
   id: string
   prompt: string
-  kind: 'generation' | 'edit' | 'upload'
+  kind: 'generation' | 'edit' | 'upload' | 'background-removal'
   aspectRatio: AspectRatioId
   size: string
   quality: Quality
@@ -94,7 +98,8 @@ type ImageIteration = {
 }
 
 type PendingIteration = {
-  kind: 'edit'
+  id?: string
+  kind: 'generation' | 'edit'
   prompt: string
   aspectRatio: AspectRatioId
   quality: Quality
@@ -112,6 +117,7 @@ type ImageThread = {
   status?: 'generating' | 'ready' | 'failed'
   errorMessage?: string
   pendingIteration?: PendingIteration
+  pendingIterations?: PendingIteration[]
   pendingRequestId?: string
   coverIterationId?: string
   createdAt: string
@@ -195,9 +201,29 @@ const editParamsSchema = z.object({
   quality: qualitySchema.optional(),
 })
 
+const generateFromReferenceParamsSchema = editParamsSchema
+
+const importGeneratedParamsSchema = z.object({
+  id: z.string().trim().min(1).optional(),
+  imagePath: z.string().trim().min(1),
+  prompt: z.string().trim().optional(),
+  title: z.string().trim().optional(),
+  aspectRatio: aspectRatioSchema.optional(),
+  quality: qualitySchema.optional(),
+})
+
 const setAspectRatioParamsSchema = z.object({
   id: z.string().trim().min(1),
   aspectRatio: aspectRatioSchema,
+})
+
+const removeBackgroundParamsSchema = z.object({
+  id: z.string().trim().min(1),
+  iterationId: z.string().trim().min(1).optional(),
+})
+
+const removeBgKeyParamsSchema = z.object({
+  apiKey: z.string().trim().min(1),
 })
 
 const importModeSchema = z.enum(['group', 'separate'])
@@ -309,6 +335,9 @@ function summarizeRpcParams(params: unknown): string {
   const parts: string[] = []
 
   if (typeof record.id === 'string') parts.push(`id=${record.id}`)
+  if (typeof record.iterationId === 'string') {
+    parts.push(`iterationId=${record.iterationId}`)
+  }
   if (Array.isArray(record.iterationId)) {
     parts.push(`iterationIds=${record.iterationId.length}`)
   }
@@ -509,6 +538,101 @@ async function invokeOpenAIImages<T>(
   return json as T
 }
 
+type AivaultSecretMeta = {
+  secretId: string
+  name: string
+  aliases?: string[]
+  scope?: string | Record<string, unknown>
+  revokedAtMs?: number | null
+}
+
+async function readAivaultJson<T>(
+  args: string[],
+  timeoutMs = 10_000,
+): Promise<T> {
+  const output = await runAivault(args, { timeoutMs })
+  return JSON.parse(output.toString('utf8')) as T
+}
+
+function isGlobalAivaultSecret(secret: AivaultSecretMeta): boolean {
+  return secret.scope === 'global'
+}
+
+function aivaultSecretMatchesName(
+  secret: AivaultSecretMeta,
+  name: string,
+): boolean {
+  return (
+    secret.name === name ||
+    Boolean(secret.aliases?.some((alias) => alias === name))
+  )
+}
+
+async function listAivaultSecrets(): Promise<AivaultSecretMeta[]> {
+  try {
+    return await readAivaultJson<AivaultSecretMeta[]>([
+      'secrets',
+      'list',
+      '--verbose',
+    ])
+  } catch (error) {
+    console.warn(
+      `[Images remove-bg] failed_to_list_secrets message=${errorMessage(error, 'unknown')}`,
+    )
+    return []
+  }
+}
+
+async function findRemoveBgSecret(): Promise<AivaultSecretMeta | null> {
+  const secrets = await listAivaultSecrets()
+  return (
+    secrets.find(
+      (secret) =>
+        !secret.revokedAtMs &&
+        isGlobalAivaultSecret(secret) &&
+        aivaultSecretMatchesName(secret, REMOVE_BG_SECRET_NAME),
+    ) ?? null
+  )
+}
+
+async function hasRemoveBgSecret(): Promise<boolean> {
+  return Boolean(await findRemoveBgSecret())
+}
+
+async function upsertRemoveBgSecret(
+  apiKey: string,
+): Promise<AivaultSecretMeta> {
+  const value = apiKey.trim()
+  if (!value) throw new Error('Remove.bg API key is required.')
+
+  const existing = await findRemoveBgSecret()
+  if (existing) {
+    await runAivault(
+      ['secrets', 'rotate', '--id', existing.secretId, '--value', value],
+      { timeoutMs: 10_000 },
+    )
+    return { ...existing, revokedAtMs: null }
+  }
+
+  await runAivault(
+    [
+      'secrets',
+      'create',
+      '--name',
+      REMOVE_BG_SECRET_NAME,
+      '--value',
+      value,
+      '--scope',
+      'global',
+    ],
+    { timeoutMs: 10_000 },
+  )
+
+  const created = await findRemoveBgSecret()
+  if (!created) throw new Error('Remove.bg API key was not saved to aivault.')
+  return created
+}
+
 function getWorkspaceId(request: Request): string | undefined {
   const fromQuery = new URL(request.url).searchParams.get('workspace')
   return (
@@ -595,6 +719,40 @@ function isActiveRequest(thread: ImageThread, requestId: string): boolean {
   )
 }
 
+function hasActiveReferenceRequest(
+  thread: ImageThread,
+  requestId: string,
+): boolean {
+  return (
+    thread.status === 'generating' &&
+    Boolean(
+      thread.pendingIterations?.some(
+        (iteration) => iteration.requestId === requestId,
+      ),
+    )
+  )
+}
+
+function withoutPendingReferenceRequest(
+  thread: ImageThread,
+  requestId: string,
+): PendingIteration[] | undefined {
+  const remaining = (thread.pendingIterations ?? []).filter(
+    (iteration) => iteration.requestId !== requestId,
+  )
+  return remaining.length > 0 ? remaining : undefined
+}
+
+function statusAfterPendingReferenceSettles(
+  thread: ImageThread,
+  remainingPendingIterations: PendingIteration[] | undefined,
+): NonNullable<ImageThread['status']> {
+  if (thread.pendingIteration || remainingPendingIterations?.length) {
+    return 'generating'
+  }
+  return latestIteration(thread) ? 'ready' : 'failed'
+}
+
 function recoverOrphanedGeneratingThreads(threads: ImageThread[]): {
   threads: ImageThread[]
   recoveredCount: number
@@ -612,6 +770,7 @@ function recoverOrphanedGeneratingThreads(threads: ImageThread[]): {
       status: latest ? 'ready' : 'failed',
       errorMessage: latest ? undefined : ORPHANED_GENERATION_MESSAGE,
       pendingIteration: undefined,
+      pendingIterations: undefined,
       pendingRequestId: undefined,
       updatedAt: new Date().toISOString(),
     } satisfies ImageThread
@@ -654,6 +813,7 @@ function serializeThread(thread: ImageThread, workspaceId?: string) {
     iterations: thread.iterations.map((iteration) => ({
       ...iteration,
       imageUrl: imageUrl(thread.id, iteration.id, workspaceId),
+      imagePath: assetPath(workspaceId, thread.id, iteration.fileName),
     })),
   }
 }
@@ -938,6 +1098,40 @@ async function saveLocalImageAsset({
   }
 }
 
+async function saveBufferImageAsset({
+  workspaceId,
+  threadId,
+  iterationId,
+  buffer,
+  mimeType,
+  extension,
+}: {
+  workspaceId?: string
+  threadId: string
+  iterationId: string
+  buffer: Buffer
+  mimeType: string
+  extension: string
+}): Promise<{
+  fileName: string
+  size: string
+  width?: number
+  height?: number
+}> {
+  const dimensions = detectImageDimensions(buffer, mimeType)
+  const fileName = `${iterationId}.${extension}`
+  const path = assetPath(workspaceId, threadId, fileName)
+  await ensureDir(safePath(dataDir(workspaceId), 'assets', threadId))
+  await writeFile(path, buffer)
+
+  return {
+    fileName,
+    size: dimensions ? `${dimensions.width}x${dimensions.height}` : 'unknown',
+    width: dimensions?.width,
+    height: dimensions?.height,
+  }
+}
+
 async function importImages(
   workspaceId: string | undefined,
   files: File[],
@@ -1218,6 +1412,45 @@ async function createGeneratingThread(
   return thread
 }
 
+async function requestImageEdit({
+  workspaceId,
+  sourceThreadId,
+  base,
+  prompt,
+  aspectRatio,
+  quality,
+}: {
+  workspaceId: string | undefined
+  sourceThreadId: string
+  base: ImageIteration
+  prompt: string
+  aspectRatio: AspectRatioId
+  quality: Quality
+}): Promise<{
+  b64Json: string
+  size?: string
+  quality?: Quality
+}> {
+  const aspect = ASPECT_RATIOS[aspectRatio]
+  const baseImagePath = assetPath(workspaceId, sourceThreadId, base.fileName)
+  const response = await invokeOpenAIImages<OpenAIImageResponse>(workspaceId, {
+    method: 'POST',
+    path: '/v1/images/edits',
+    multipartFields: {
+      model: MODEL,
+      prompt,
+      size: aspect.size,
+      quality,
+      output_format: 'png',
+    },
+    multipartFiles: {
+      'image[]': baseImagePath,
+    },
+    timeoutMs: IMAGE_GENERATION_TIMEOUT_MS,
+  })
+  return imageFromResponse(response)
+}
+
 async function retryThreadGeneration(
   workspaceId: string | undefined,
   params: z.infer<typeof retryParamsSchema>,
@@ -1348,7 +1581,10 @@ async function cancelPendingThread(
   if (!thread) return null
 
   const isGenerating = thread.status === 'generating'
-  const hasPendingWork = isGenerating || Boolean(thread.pendingIteration)
+  const hasPendingWork =
+    isGenerating ||
+    Boolean(thread.pendingIteration) ||
+    Boolean(thread.pendingIterations?.length)
   if (!hasPendingWork) {
     return { cancelled: false, deleted: false, thread }
   }
@@ -1372,6 +1608,7 @@ async function cancelPendingThread(
     status: latest ? 'ready' : 'failed',
     errorMessage: latest ? undefined : 'Image generation was cancelled.',
     pendingIteration: undefined,
+    pendingIterations: undefined,
     pendingRequestId: undefined,
     updatedAt: now,
   }
@@ -1516,6 +1753,284 @@ async function deleteIteration(
   }
 }
 
+async function queueReferenceGeneration(
+  workspaceId: string | undefined,
+  params: z.infer<typeof generateFromReferenceParamsSchema>,
+  requestId: string,
+): Promise<ImageThread | null> {
+  const threads = await loadThreads(workspaceId)
+  const threadIndex = threads.findIndex((thread) => thread.id === params.id)
+  const thread = threads[threadIndex]
+  if (!thread) return null
+
+  const base = baseIterationForEdit(thread, params.baseIterationId)
+  if (!base)
+    throw new Error('Image thread does not have an image to reference.')
+
+  const aspectRatio = params.aspectRatio ?? base.aspectRatio
+  const quality = params.quality ?? base.quality ?? DEFAULT_QUALITY
+  const now = new Date().toISOString()
+  const pendingId = randomUUID()
+  const queued: ImageThread = {
+    ...thread,
+    aspectRatio,
+    quality,
+    status: 'generating',
+    errorMessage: undefined,
+    pendingIterations: [
+      ...(thread.pendingIterations ?? []),
+      {
+        id: pendingId,
+        kind: 'generation',
+        prompt: params.prompt,
+        aspectRatio,
+        quality,
+        baseIterationId: base.id,
+        requestId,
+        startedAt: now,
+      },
+    ],
+    updatedAt: now,
+  }
+
+  threads.splice(threadIndex, 1)
+  threads.unshift(queued)
+  await saveThreads(workspaceId, threads)
+
+  console.info(
+    `[Images reference ${requestId}] queued thread=${thread.id} base=${base.id} workspace=${workspaceLabel(workspaceId)}`,
+  )
+  void finishReferenceGeneration(
+    workspaceId,
+    {
+      id: params.id,
+      baseIterationId: base.id,
+      prompt: params.prompt,
+      aspectRatio,
+      quality,
+    },
+    requestId,
+  )
+  return queued
+}
+
+async function finishReferenceGeneration(
+  workspaceId: string | undefined,
+  params: z.infer<typeof generateFromReferenceParamsSchema>,
+  requestId: string,
+): Promise<void> {
+  const startedAt = Date.now()
+  try {
+    console.info(
+      `[Images reference ${requestId}] background_start thread=${params.id} workspace=${workspaceLabel(workspaceId)}`,
+    )
+    const initialThreads = await loadThreads(workspaceId)
+    const pending = initialThreads.find((thread) => thread.id === params.id)
+    const base = pending
+      ? baseIterationForEdit(pending, params.baseIterationId)
+      : undefined
+    if (!pending || !base) {
+      throw new Error('Reference image was not found.')
+    }
+    if (!hasActiveReferenceRequest(pending, requestId)) {
+      console.info(
+        `[Images reference ${requestId}] background_cancelled thread=${params.id} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
+      )
+      return
+    }
+
+    const aspectRatio = params.aspectRatio ?? base.aspectRatio
+    const quality = params.quality ?? base.quality ?? DEFAULT_QUALITY
+    const aspect = ASPECT_RATIOS[aspectRatio]
+    const image = await requestImageEdit({
+      workspaceId,
+      sourceThreadId: pending.id,
+      base,
+      prompt: params.prompt,
+      aspectRatio,
+      quality,
+    })
+
+    const currentThreads = await loadThreads(workspaceId)
+    const pendingIndex = currentThreads.findIndex(
+      (thread) => thread.id === params.id,
+    )
+    if (pendingIndex === -1) return
+    if (!hasActiveReferenceRequest(currentThreads[pendingIndex], requestId)) {
+      console.info(
+        `[Images reference ${requestId}] background_cancelled_after_generation thread=${params.id} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
+      )
+      return
+    }
+
+    const now = new Date().toISOString()
+    const iterationId = randomUUID()
+    const pendingIterations = withoutPendingReferenceRequest(
+      currentThreads[pendingIndex],
+      requestId,
+    )
+    const fileName = await saveImageAsset({
+      workspaceId,
+      threadId: params.id,
+      iterationId,
+      b64Json: image.b64Json,
+    })
+    const readyThread: ImageThread = {
+      ...currentThreads[pendingIndex],
+      aspectRatio,
+      quality,
+      status:
+        currentThreads[pendingIndex].pendingIteration ||
+        pendingIterations?.length
+          ? 'generating'
+          : 'ready',
+      errorMessage: undefined,
+      pendingIterations,
+      coverIterationId: iterationId,
+      updatedAt: now,
+      iterations: [
+        ...currentThreads[pendingIndex].iterations,
+        {
+          id: iterationId,
+          prompt: params.prompt,
+          kind: 'generation',
+          aspectRatio,
+          size: image.size ?? aspect.size,
+          quality: image.quality ?? quality,
+          fileName,
+          mimeType: 'image/png',
+          model: MODEL,
+          createdAt: now,
+        },
+      ],
+    }
+
+    currentThreads.splice(pendingIndex, 1)
+    currentThreads.unshift(readyThread)
+    await saveThreads(workspaceId, currentThreads)
+    console.info(
+      `[Images reference ${requestId}] background_success thread=${params.id} iteration=${iterationId} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
+    )
+  } catch (error) {
+    const rpcError = rpcErrorFromUnknown(error)
+    const threads = await loadThreads(workspaceId)
+    const threadIndex = threads.findIndex((thread) => thread.id === params.id)
+    if (
+      threadIndex !== -1 &&
+      hasActiveReferenceRequest(threads[threadIndex], requestId)
+    ) {
+      const pendingIterations = withoutPendingReferenceRequest(
+        threads[threadIndex],
+        requestId,
+      )
+      threads[threadIndex] = {
+        ...threads[threadIndex],
+        status: statusAfterPendingReferenceSettles(
+          threads[threadIndex],
+          pendingIterations,
+        ),
+        errorMessage: rpcError.message,
+        pendingIterations,
+        updatedAt: new Date().toISOString(),
+      }
+      await saveThreads(workspaceId, threads)
+    }
+    console.error(
+      `[Images reference ${requestId}] background_failed thread=${params.id} workspace=${workspaceLabel(workspaceId)} code=${rpcError.code} durationMs=${elapsedMs(startedAt)} message=${errorMessage(error, rpcError.message)}`,
+    )
+  }
+}
+
+async function importGeneratedImage(
+  workspaceId: string | undefined,
+  params: z.infer<typeof importGeneratedParamsSchema>,
+  requestId: string,
+): Promise<ImageThread | null> {
+  const now = new Date().toISOString()
+  const prompt = params.prompt ?? ''
+  const title =
+    params.title?.trim() ||
+    (prompt
+      ? titleFromPrompt(prompt)
+      : titleFromFileName(basename(params.imagePath)))
+  const quality = params.quality ?? DEFAULT_QUALITY
+  const threads = await loadThreads(workspaceId)
+  const threadIndex =
+    params.id === undefined
+      ? -1
+      : threads.findIndex((thread) => thread.id === params.id)
+
+  if (params.id !== undefined && threadIndex === -1) return null
+
+  const threadId = params.id ?? randomUUID()
+  const iterationId = randomUUID()
+  const asset = await saveLocalImageAsset({
+    workspaceId,
+    threadId,
+    iterationId,
+    sourcePath: params.imagePath,
+  })
+  const aspectRatio =
+    params.aspectRatio ?? inferAspectRatio(asset.width, asset.height)
+
+  const iteration: ImageIteration = {
+    id: iterationId,
+    prompt,
+    kind: 'generation',
+    aspectRatio,
+    size: asset.size,
+    quality,
+    fileName: asset.fileName,
+    mimeType: asset.mimeType,
+    width: asset.width,
+    height: asset.height,
+    originalName: asset.originalName,
+    createdAt: now,
+  }
+
+  const updated: ImageThread =
+    threadIndex === -1
+      ? {
+          id: threadId,
+          title,
+          prompt,
+          aspectRatio,
+          quality,
+          status: 'ready',
+          coverIterationId: iterationId,
+          createdAt: now,
+          updatedAt: now,
+          iterations: [iteration],
+        }
+      : {
+          ...threads[threadIndex],
+          title: threads[threadIndex].title || title,
+          prompt: threads[threadIndex].prompt || prompt,
+          aspectRatio,
+          quality,
+          status: 'ready',
+          errorMessage: undefined,
+          pendingIteration: undefined,
+          pendingRequestId: undefined,
+          coverIterationId: iterationId,
+          updatedAt: now,
+          iterations: [...threads[threadIndex].iterations, iteration],
+        }
+
+  if (threadIndex === -1) {
+    threads.unshift(updated)
+  } else {
+    threads.splice(threadIndex, 1)
+    threads.unshift(updated)
+  }
+  await saveThreads(workspaceId, threads)
+
+  console.info(
+    `[Images import-generated ${requestId}] saved thread=${updated.id} workspace=${workspaceLabel(workspaceId)} path=${params.imagePath}`,
+  )
+  return updated
+}
+
 async function queueThreadEdit(
   workspaceId: string | undefined,
   params: z.infer<typeof editParamsSchema>,
@@ -1592,23 +2107,14 @@ async function editThread(
   const aspectRatio = params.aspectRatio ?? base.aspectRatio
   const quality = params.quality ?? base.quality ?? DEFAULT_QUALITY
   const aspect = ASPECT_RATIOS[aspectRatio]
-  const baseImagePath = assetPath(workspaceId, thread.id, base.fileName)
-  const response = await invokeOpenAIImages<OpenAIImageResponse>(workspaceId, {
-    method: 'POST',
-    path: '/v1/images/edits',
-    multipartFields: {
-      model: MODEL,
-      prompt: params.prompt,
-      size: aspect.size,
-      quality,
-      output_format: 'png',
-    },
-    multipartFiles: {
-      'image[]': baseImagePath,
-    },
-    timeoutMs: IMAGE_GENERATION_TIMEOUT_MS,
+  const image = await requestImageEdit({
+    workspaceId,
+    sourceThreadId: thread.id,
+    base,
+    prompt: params.prompt,
+    aspectRatio,
+    quality,
   })
-  const image = imageFromResponse(response)
   const currentThreads = await loadThreads(workspaceId)
   const currentThreadIndex = currentThreads.findIndex(
     (candidate) => candidate.id === params.id,
@@ -1767,6 +2273,103 @@ async function setThreadAspectRatio(
   return queued
 }
 
+async function removeBackgroundFromThread(
+  workspaceId: string | undefined,
+  params: z.infer<typeof removeBackgroundParamsSchema>,
+  requestId: string,
+): Promise<ImageThread | null> {
+  if (!(await hasRemoveBgSecret())) {
+    throw new Error('Add a Remove.bg API key before removing backgrounds.')
+  }
+
+  const threads = await loadThreads(workspaceId)
+  const threadIndex = threads.findIndex((thread) => thread.id === params.id)
+  const thread = threads[threadIndex]
+  if (!thread) return null
+
+  const base = params.iterationId
+    ? thread.iterations.find((iteration) => iteration.id === params.iterationId)
+    : displayIteration(thread)
+  if (!base) {
+    throw new Error('Image thread does not have an image to process.')
+  }
+
+  const sourcePath = assetPath(workspaceId, thread.id, base.fileName)
+  const startedAt = Date.now()
+  console.info(
+    `[Images remove-bg ${requestId}] start thread=${thread.id} iteration=${base.id} workspace=${workspaceLabel(workspaceId)}`,
+  )
+
+  const buffer = await runAivault(
+    [
+      'invoke',
+      ...aivaultContextArgs(workspaceId),
+      '--method',
+      'POST',
+      '--path',
+      REMOVE_BG_PATH,
+      '--multipart-field',
+      'size=auto',
+      '--multipart-field',
+      'format=png',
+      '--multipart-file',
+      `image_file=${sourcePath}`,
+      '--timeout-ms',
+      String(REMOVE_BG_TIMEOUT_MS),
+      '--stream',
+      REMOVE_BG_CAPABILITY_ID,
+    ],
+    { timeoutMs: REMOVE_BG_TIMEOUT_MS + 5_000 },
+  )
+
+  const now = new Date().toISOString()
+  const iterationId = randomUUID()
+  const asset = await saveBufferImageAsset({
+    workspaceId,
+    threadId: thread.id,
+    iterationId,
+    buffer,
+    mimeType: 'image/png',
+    extension: 'png',
+  })
+
+  const updated: ImageThread = {
+    ...thread,
+    status: 'ready',
+    errorMessage: undefined,
+    coverIterationId: iterationId,
+    updatedAt: now,
+    iterations: [
+      ...thread.iterations,
+      {
+        id: iterationId,
+        prompt: base.prompt
+          ? `${base.prompt}\n\nBackground removed with remove.bg.`
+          : 'Background removed with remove.bg.',
+        kind: 'background-removal',
+        aspectRatio: inferAspectRatio(asset.width, asset.height),
+        size: asset.size,
+        quality: base.quality,
+        fileName: asset.fileName,
+        mimeType: 'image/png',
+        parentIterationId: base.id,
+        width: asset.width,
+        height: asset.height,
+        createdAt: now,
+      },
+    ],
+  }
+
+  threads.splice(threadIndex, 1)
+  threads.unshift(updated)
+  await saveThreads(workspaceId, threads)
+
+  console.info(
+    `[Images remove-bg ${requestId}] success thread=${thread.id} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
+  )
+  return updated
+}
+
 function errorResponse(error: unknown, fallback: string) {
   return {
     error: error instanceof Error ? error.message : fallback,
@@ -1914,6 +2517,47 @@ app.get('/api/images/assets/:threadId/:iterationId', async (c) => {
   } catch (error) {
     console.error('Failed to read image asset:', error)
     return c.text('Not found', 404)
+  }
+})
+
+app.get('/api/remove-bg/status', async (c) => {
+  try {
+    return c.json({ available: await hasRemoveBgSecret() })
+  } catch (error) {
+    return c.json(errorResponse(error, 'Failed to inspect remove.bg key'), 500)
+  }
+})
+
+app.post('/api/remove-bg/key', async (c) => {
+  try {
+    const params = removeBgKeyParamsSchema.parse(await c.req.json())
+    await upsertRemoveBgSecret(params.apiKey)
+    return c.json({ available: true })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: 'Invalid remove.bg API key.' }, 400)
+    }
+    return c.json(errorResponse(error, 'Failed to save remove.bg key'), 500)
+  }
+})
+
+app.post('/api/remove-bg', async (c) => {
+  const requestId = randomUUID()
+  try {
+    const workspaceId = getWorkspaceId(c.req.raw)
+    const params = removeBackgroundParamsSchema.parse(await c.req.json())
+    const thread = await removeBackgroundFromThread(
+      workspaceId,
+      params,
+      requestId,
+    )
+    if (!thread) return c.json({ error: 'Image thread was not found' }, 404)
+    return c.json(serializeThread(thread, workspaceId))
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: 'Invalid remove background options.' }, 400)
+    }
+    return c.json(errorResponse(error, 'Failed to remove background'), 500)
   }
 })
 
@@ -2100,9 +2744,89 @@ app.post('/api/moldable/rpc', async (c) => {
       })
     }
 
+    if (body.method === 'images.generateFromReference') {
+      const params = generateFromReferenceParamsSchema.parse(body.params)
+      const thread = await queueReferenceGeneration(
+        workspaceId,
+        params,
+        requestId,
+      )
+      if (!thread) {
+        console.warn(
+          `[Images RPC ${requestId}] image_not_found method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)} id=${params.id}`,
+        )
+        return c.json(
+          {
+            ok: false,
+            error: {
+              code: 'image_not_found',
+              message: `Image thread ${params.id} was not found.`,
+            },
+          },
+          200,
+        )
+      }
+      console.info(
+        `[Images RPC ${requestId}] success method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
+      )
+      return c.json({ ok: true, result: serializeThread(thread, workspaceId) })
+    }
+
+    if (body.method === 'images.importGenerated') {
+      const params = importGeneratedParamsSchema.parse(body.params)
+      const thread = await importGeneratedImage(workspaceId, params, requestId)
+      if (!thread) {
+        console.warn(
+          `[Images RPC ${requestId}] image_not_found method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)} id=${params.id}`,
+        )
+        return c.json(
+          {
+            ok: false,
+            error: {
+              code: 'image_not_found',
+              message: `Image thread ${params.id} was not found.`,
+            },
+          },
+          200,
+        )
+      }
+      console.info(
+        `[Images RPC ${requestId}] success method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
+      )
+      return c.json({ ok: true, result: serializeThread(thread, workspaceId) })
+    }
+
     if (body.method === 'images.edit') {
       const params = editParamsSchema.parse(body.params)
       const thread = await queueThreadEdit(workspaceId, params, requestId)
+      if (!thread) {
+        console.warn(
+          `[Images RPC ${requestId}] image_not_found method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)} id=${params.id}`,
+        )
+        return c.json(
+          {
+            ok: false,
+            error: {
+              code: 'image_not_found',
+              message: `Image thread ${params.id} was not found.`,
+            },
+          },
+          200,
+        )
+      }
+      console.info(
+        `[Images RPC ${requestId}] success method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
+      )
+      return c.json({ ok: true, result: serializeThread(thread, workspaceId) })
+    }
+
+    if (body.method === 'images.removeBackground') {
+      const params = removeBackgroundParamsSchema.parse(body.params)
+      const thread = await removeBackgroundFromThread(
+        workspaceId,
+        params,
+        requestId,
+      )
       if (!thread) {
         console.warn(
           `[Images RPC ${requestId}] image_not_found method=${method} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)} id=${params.id}`,

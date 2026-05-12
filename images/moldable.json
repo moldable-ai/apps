@@ -14,8 +14,8 @@
   "category": "creative",
   "tags": ["images", "generation", "openai", "gpt-image-2"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.8",
-    "@moldable-ai/storage": "^0.1.4"
+    "@moldable-ai/ui": "^0.2.10",
+    "@moldable-ai/storage": "^0.1.5"
   },
   "appApi": {
     "version": 1,
@@ -189,6 +189,79 @@
             }
           },
           {
+            "id": "images.generateFromReference",
+            "name": "Generate from reference",
+            "description": "Use an existing image iteration as visual reference while adding a distinct new root image to the same image thread.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "baseIterationId": {
+                  "type": "string"
+                },
+                "prompt": {
+                  "type": "string"
+                },
+                "aspectRatio": {
+                  "type": "string",
+                  "enum": [
+                    "square",
+                    "portrait",
+                    "story",
+                    "landscape",
+                    "widescreen"
+                  ]
+                },
+                "quality": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high", "auto"]
+                }
+              },
+              "required": ["id", "prompt"]
+            }
+          },
+          {
+            "id": "images.importGenerated",
+            "name": "Save generated image",
+            "description": "Copy a locally generated image file into an existing image thread or create a new image thread when no id is provided.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "Existing image thread id. Omit to create a new thread."
+                },
+                "imagePath": {
+                  "type": "string",
+                  "description": "Absolute local path to the image file to save."
+                },
+                "prompt": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "aspectRatio": {
+                  "type": "string",
+                  "enum": [
+                    "square",
+                    "portrait",
+                    "story",
+                    "landscape",
+                    "widescreen"
+                  ]
+                },
+                "quality": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high", "auto"]
+                }
+              },
+              "required": ["imagePath"]
+            }
+          },
+          {
             "id": "images.setAspectRatio",
             "name": "Set aspect ratio",
             "description": "Regenerate the selected thread as a new iteration with a different aspect ratio.",
@@ -211,6 +284,24 @@
               },
               "required": ["id", "aspectRatio"]
             }
+          },
+          {
+            "id": "images.removeBackground",
+            "name": "Remove background",
+            "description": "Remove the background from an image iteration using remove.bg and save the transparent PNG as a new iteration in the same image thread.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "iterationId": {
+                  "type": "string",
+                  "description": "Existing iteration id to process. Omit to process the thread's displayed image."
+                }
+              },
+              "required": ["id"]
+            }
           }
         ]
       }
@@ -225,6 +316,14 @@
       "url": "https://platform.openai.com/api-keys",
       "required": true,
       "capabilities": ["openai/image-generation"]
+    },
+    {
+      "key": "REMOVE_BG_API_KEY",
+      "name": "Remove.bg API Key",
+      "description": "Optional. Enables one-click background removal for the current image.",
+      "url": "https://www.remove.bg/api",
+      "required": false,
+      "capabilities": ["remove-bg/background-removal"]
     }
   ],
   "routeName": "images"

@@ -17,6 +17,7 @@ app.use('/api/*', cors())
 
 interface CalendarEvent {
   id: string | null | undefined
+  iCalUID?: string | null | undefined
   title: string | null | undefined
   start: string | null | undefined
   end: string | null | undefined
@@ -25,6 +26,12 @@ interface CalendarEvent {
   link: string | null | undefined
   status: string | null | undefined
   colorId: string | null | undefined
+  organizer?: {
+    email?: string | null
+    displayName?: string | null
+    self?: boolean | null
+  } | null
+  selfResponseStatus?: string | null
 }
 
 interface CalendarListResponse {
@@ -63,9 +70,32 @@ const eventGetParamsSchema = z.object({
   id: z.string().min(1),
 })
 
+const eventFindByICalUidParamsSchema = z.object({
+  iCalUid: z.string().min(1),
+})
+
+const eventRsvpParamsSchema = z
+  .object({
+    eventId: z.string().min(1).optional(),
+    iCalUid: z.string().min(1).optional(),
+    responseStatus: z.enum([
+      'accepted',
+      'tentative',
+      'declined',
+      'needsAction',
+    ]),
+    sendUpdates: z.enum(['all', 'externalOnly', 'none']).optional(),
+  })
+  .refine((value) => value.eventId || value.iCalUid, {
+    message: 'Either eventId or iCalUid is required.',
+  })
+
 function mapGoogleEvent(event: calendar_v3.Schema$Event): CalendarEvent {
+  const selfAttendee = event.attendees?.find((attendee) => attendee.self)
+
   return {
     id: event.id,
+    iCalUID: event.iCalUID,
     title: event.summary || 'Untitled event',
     start: event.start?.dateTime || event.start?.date,
     end: event.end?.dateTime || event.end?.date,
@@ -74,6 +104,14 @@ function mapGoogleEvent(event: calendar_v3.Schema$Event): CalendarEvent {
     link: event.htmlLink,
     status: event.status,
     colorId: event.colorId,
+    organizer: event.organizer
+      ? {
+          email: event.organizer.email,
+          displayName: event.organizer.displayName,
+          self: event.organizer.self,
+        }
+      : null,
+    selfResponseStatus: selfAttendee?.responseStatus ?? null,
   }
 }
 
@@ -150,6 +188,118 @@ async function fetchCalendarList(workspaceId: string) {
     backgroundColor: item.backgroundColor,
     foregroundColor: item.foregroundColor,
   }))
+}
+
+async function fetchEventById(workspaceId: string, eventId: string) {
+  if (!(await isAuthenticated(workspaceId))) {
+    const error = new Error('Calendar is not connected')
+    error.name = 'CalendarNotConnected'
+    throw error
+  }
+
+  return invokeAivaultJson<calendar_v3.Schema$Event>(
+    workspaceId,
+    'google-calendar/events',
+    {
+      method: 'GET',
+      path: calendarPath(
+        `/calendars/primary/events/${encodeURIComponent(eventId)}`,
+      ),
+    },
+  )
+}
+
+async function fetchGoogleEventsByICalUid(
+  workspaceId: string,
+  iCalUid: string,
+) {
+  if (!(await isAuthenticated(workspaceId))) {
+    const error = new Error('Calendar is not connected')
+    error.name = 'CalendarNotConnected'
+    throw error
+  }
+
+  const params = new URLSearchParams()
+  appendParam(params, 'iCalUID', iCalUid)
+  appendParam(params, 'maxResults', 10)
+  appendParam(params, 'showDeleted', false)
+
+  const response = await invokeAivaultJson<EventListResponse>(
+    workspaceId,
+    'google-calendar/events',
+    {
+      method: 'GET',
+      path: calendarPath('/calendars/primary/events', params),
+    },
+  )
+
+  return response.items ?? []
+}
+
+async function findGoogleEventByICalUid(workspaceId: string, iCalUid: string) {
+  const events = await fetchGoogleEventsByICalUid(workspaceId, iCalUid)
+  return (
+    events.find((event) => event.status !== 'cancelled') ?? events[0] ?? null
+  )
+}
+
+async function rsvpToGoogleEvent(
+  workspaceId: string,
+  options: {
+    eventId?: string
+    iCalUid?: string
+    responseStatus: 'accepted' | 'tentative' | 'declined' | 'needsAction'
+    sendUpdates?: 'all' | 'externalOnly' | 'none'
+  },
+) {
+  const event = options.eventId
+    ? await fetchEventById(workspaceId, options.eventId)
+    : options.iCalUid
+      ? await findGoogleEventByICalUid(workspaceId, options.iCalUid)
+      : null
+
+  if (!event?.id) {
+    const error = new Error('Calendar event was not found')
+    error.name = 'CalendarEventNotFound'
+    throw error
+  }
+
+  const attendees = event.attendees ?? []
+  const selfIndex = attendees.findIndex((attendee) => attendee.self)
+
+  if (selfIndex === -1) {
+    const error = new Error(
+      'Calendar event does not identify your attendee record',
+    )
+    error.name = 'CalendarAttendeeNotFound'
+    throw error
+  }
+
+  const updatedAttendees = attendees.map((attendee, index) =>
+    index === selfIndex
+      ? { ...attendee, responseStatus: options.responseStatus }
+      : attendee,
+  )
+
+  const params = new URLSearchParams()
+  appendParam(params, 'sendUpdates', options.sendUpdates ?? 'all')
+
+  const updated = await invokeAivaultJson<calendar_v3.Schema$Event>(
+    workspaceId,
+    'google-calendar/events',
+    {
+      method: 'PATCH',
+      path: calendarPath(
+        `/calendars/primary/events/${encodeURIComponent(event.id)}`,
+        params,
+      ),
+      body: {
+        attendees: updatedAttendees,
+      },
+    },
+  )
+
+  return updated
 }
 
 function calendarPath(pathname: string, params?: URLSearchParams) {
@@ -447,6 +597,29 @@ app.post('/api/moldable/rpc', async (c) => {
       return c.json({ ok: true, result: event })
     }
 
+    if (body.method === 'events.findByICalUid') {
+      const eventParams = eventFindByICalUidParamsSchema.parse(body.params)
+      const event = await findGoogleEventByICalUid(
+        workspaceId,
+        eventParams.iCalUid,
+      )
+
+      return c.json({
+        ok: true,
+        result: event ? mapGoogleEvent(event) : null,
+      })
+    }
+
+    if (body.method === 'events.rsvp') {
+      const eventParams = eventRsvpParamsSchema.parse(body.params)
+      const event = await rsvpToGoogleEvent(workspaceId, eventParams)
+
+      return c.json({
+        ok: true,
+        result: mapGoogleEvent(event),
+      })
+    }
+
     if (body.method === 'calendar.status') {
       try {
         await fetchCalendarEvents(workspaceId, { maxResults: 1 })
@@ -480,6 +653,33 @@ app.post('/api/moldable/rpc', async (c) => {
       404,
     )
   } catch (error) {
+    if (error instanceof Error && error.name === 'CalendarEventNotFound') {
+      return c.json(
+        {
+          ok: false,
+          error: {
+            code: 'event_not_found',
+            message: 'Calendar event was not found.',
+          },
+        },
+        404,
+      )
+    }
+
+    if (error instanceof Error && error.name === 'CalendarAttendeeNotFound') {
+      return c.json(
+        {
+          ok: false,
+          error: {
+            code: 'attendee_not_found',
+            message:
+              'Calendar could not find your attendee record for this event.',
+          },
+        },
+        409,
+      )
+    }
+
     if (
       (error instanceof Error && error.name === 'CalendarNotConnected') ||
       isCalendarAuthError(error)

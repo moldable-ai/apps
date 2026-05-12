@@ -15,8 +15,8 @@
   "category": "productivity",
   "tags": ["calendar", "schedule", "events", "google"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.6",
-    "@moldable-ai/storage": "^0.1.3"
+    "@moldable-ai/ui": "^0.2.10",
+    "@moldable-ai/storage": "^0.1.5"
   },
   "appApi": {
     "version": 1,
@@ -138,6 +138,45 @@
                 }
               },
               "required": ["id"]
+            }
+          },
+          {
+            "id": "events.findByICalUid",
+            "name": "Find event by iCalendar UID",
+            "description": "Find a Google Calendar event by its iCalendar UID and return the current attendee response status.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "iCalUid": {
+                  "type": "string"
+                }
+              },
+              "required": ["iCalUid"]
+            }
+          },
+          {
+            "id": "events.rsvp",
+            "name": "Respond to calendar invite",
+            "description": "Update the current user's RSVP status for an existing Google Calendar event.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "eventId": {
+                  "type": "string"
+                },
+                "iCalUid": {
+                  "type": "string"
+                },
+                "responseStatus": {
+                  "type": "string",
+                  "enum": ["accepted", "tentative", "declined", "needsAction"]
+                },
+                "sendUpdates": {
+                  "type": "string",
+                  "enum": ["all", "externalOnly", "none"]
+                }
+              },
+              "required": ["responseStatus"]
             }
           },
           {

@@ -13,8 +13,8 @@
   "category": "custom",
   "tags": [],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.8",
-    "@moldable-ai/storage": "^0.1.4"
+    "@moldable-ai/ui": "^0.2.10",
+    "@moldable-ai/storage": "^0.1.5"
   },
   "appApi": {
     "version": 1,
@@ -43,6 +43,9 @@
                   "type": "boolean"
                 },
                 "includeSqlWorkspace": {
+                  "type": "boolean"
+                },
+                "includeDashboards": {
                   "type": "boolean"
                 }
               }
@@ -242,6 +245,411 @@
                 }
               },
               "required": ["tabId"]
+            }
+          },
+          {
+            "id": "db.dashboards.list",
+            "name": "List dashboards",
+            "description": "List dashboards and their charts for a connection. Use this to find dashboard and chart ids or names before editing.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "db.dashboards.create",
+            "name": "Create dashboard",
+            "description": "Create a dashboard for analytics charts, optionally selecting it.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "charts": {
+                  "type": "array"
+                },
+                "select": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          {
+            "id": "db.dashboards.update",
+            "name": "Update dashboard",
+            "description": "Update a dashboard by dashboardId or dashboardName. Use dashboardName for natural language edits when the name is unique.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string"
+                },
+                "dashboardId": {
+                  "type": "string"
+                },
+                "dashboardName": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "charts": {
+                  "type": "array"
+                },
+                "select": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          {
+            "id": "db.dashboards.delete",
+            "name": "Delete dashboard",
+            "description": "Delete a dashboard by dashboardId or unique dashboardName.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string"
+                },
+                "dashboardId": {
+                  "type": "string"
+                },
+                "dashboardName": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "db.dashboards.select",
+            "name": "Select dashboard",
+            "description": "Select a dashboard by dashboardId or unique dashboardName.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string"
+                },
+                "dashboardId": {
+                  "type": "string"
+                },
+                "dashboardName": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "db.dashboardCharts.list",
+            "name": "List dashboard charts",
+            "description": "List charts for a dashboard by dashboardId or unique dashboardName.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string"
+                },
+                "dashboardId": {
+                  "type": "string"
+                },
+                "dashboardName": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "db.dashboardCharts.create",
+            "name": "Create dashboard chart",
+            "description": "Create a chart in a dashboard by dashboardId or unique dashboardName. Chart SQL must be read-only.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string"
+                },
+                "dashboardId": {
+                  "type": "string"
+                },
+                "dashboardName": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "line",
+                    "area",
+                    "bar",
+                    "stacked-bar",
+                    "horizontal-bar",
+                    "composed",
+                    "pie",
+                    "donut",
+                    "scatter",
+                    "bubble",
+                    "number",
+                    "table"
+                  ]
+                },
+                "sql": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "string",
+                  "enum": ["sm", "md", "lg", "xl"]
+                },
+                "xAxis": {
+                  "type": "string"
+                },
+                "series": {
+                  "type": "array"
+                },
+                "categoryColumn": {
+                  "type": "string"
+                },
+                "valueColumn": {
+                  "type": "string"
+                },
+                "colorColumn": {
+                  "type": "string"
+                },
+                "sizeColumn": {
+                  "type": "string"
+                },
+                "labelColumn": {
+                  "type": "string"
+                },
+                "metricColumn": {
+                  "type": "string"
+                },
+                "comparisonColumn": {
+                  "type": "string"
+                },
+                "comparisonMode": {
+                  "type": "string",
+                  "enum": ["auto", "percent", "previous-value", "number"]
+                },
+                "tableColumns": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "maxRows": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 5000
+                },
+                "visibleRange": {
+                  "type": "object"
+                },
+                "showLegend": {
+                  "type": "boolean"
+                },
+                "showAxes": {
+                  "type": "boolean"
+                },
+                "showGrid": {
+                  "type": "boolean"
+                },
+                "showDots": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["sql"]
+            }
+          },
+          {
+            "id": "db.dashboardCharts.update",
+            "name": "Update dashboard chart",
+            "description": "Update a chart by dashboardId/dashboardName and chartId/chartName. Preserve existing chart fields unless the user asks to change them.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string"
+                },
+                "dashboardId": {
+                  "type": "string"
+                },
+                "dashboardName": {
+                  "type": "string"
+                },
+                "chartId": {
+                  "type": "string"
+                },
+                "chartName": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "line",
+                    "area",
+                    "bar",
+                    "stacked-bar",
+                    "horizontal-bar",
+                    "composed",
+                    "pie",
+                    "donut",
+                    "scatter",
+                    "bubble",
+                    "number",
+                    "table"
+                  ]
+                },
+                "sql": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "string",
+                  "enum": ["sm", "md", "lg", "xl"]
+                },
+                "xAxis": {
+                  "type": "string"
+                },
+                "series": {
+                  "type": "array"
+                },
+                "categoryColumn": {
+                  "type": "string"
+                },
+                "valueColumn": {
+                  "type": "string"
+                },
+                "colorColumn": {
+                  "type": "string"
+                },
+                "sizeColumn": {
+                  "type": "string"
+                },
+                "labelColumn": {
+                  "type": "string"
+                },
+                "metricColumn": {
+                  "type": "string"
+                },
+                "comparisonColumn": {
+                  "type": "string"
+                },
+                "comparisonMode": {
+                  "type": "string",
+                  "enum": ["auto", "percent", "previous-value", "number"]
+                },
+                "tableColumns": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "maxRows": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 5000
+                },
+                "visibleRange": {
+                  "type": "object"
+                },
+                "showLegend": {
+                  "type": "boolean"
+                },
+                "showAxes": {
+                  "type": "boolean"
+                },
+                "showGrid": {
+                  "type": "boolean"
+                },
+                "showDots": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          {
+            "id": "db.dashboardCharts.edit",
+            "name": "Edit dashboard chart SQL",
+            "description": "Perform surgical exact string replacement in a dashboard chart SQL query by dashboardId/dashboardName and chartId/chartName. oldString must be unique unless replaceAll is true.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string"
+                },
+                "dashboardId": {
+                  "type": "string"
+                },
+                "dashboardName": {
+                  "type": "string"
+                },
+                "chartId": {
+                  "type": "string"
+                },
+                "chartName": {
+                  "type": "string"
+                },
+                "oldString": {
+                  "type": "string"
+                },
+                "newString": {
+                  "type": "string"
+                },
+                "replaceAll": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["oldString", "newString"]
+            }
+          },
+          {
+            "id": "db.dashboardCharts.delete",
+            "name": "Delete dashboard chart",
+            "description": "Delete a dashboard chart by dashboardId/dashboardName and chartId/chartName.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "connectionId": {
+                  "type": "string"
+                },
+                "dashboardId": {
+                  "type": "string"
+                },
+                "dashboardName": {
+                  "type": "string"
+                },
+                "chartId": {
+                  "type": "string"
+                },
+                "chartName": {
+                  "type": "string"
+                }
+              }
             }
           }
         ]

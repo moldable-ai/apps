@@ -4,22 +4,38 @@ import {
   ChevronDown,
   Copy,
   Download,
+  Eraser,
   Image as ImageIcon,
+  KeyRound,
   Loader2,
   PanelTop,
   Plus,
   RotateCcw,
   Shuffle,
+  Trash2,
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { DragEvent } from 'react'
+import type { DragEvent, ReactNode } from 'react'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
   Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogTitle,
+  Input,
+  Switch,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
   cn,
   downloadFile,
   useWorkspace,
@@ -44,7 +60,7 @@ type ImageQuality = 'low' | 'medium' | 'high' | 'auto'
 type ImageIteration = {
   id: string
   prompt: string
-  kind: 'generation' | 'edit' | 'upload'
+  kind: 'generation' | 'edit' | 'upload' | 'background-removal'
   aspectRatio: AspectRatioId
   size: string
   quality: ImageQuality
@@ -55,15 +71,18 @@ type ImageIteration = {
   height?: number
   originalName?: string
   imageUrl: string
+  imagePath?: string
   createdAt: string
 }
 
 type PendingIteration = {
-  kind: 'edit'
+  id?: string
+  kind: 'generation' | 'edit'
   prompt: string
   aspectRatio: AspectRatioId
   quality: ImageQuality
   baseIterationId?: string
+  requestId?: string
   startedAt: string
 }
 
@@ -76,6 +95,7 @@ type ImageThread = {
   status: 'generating' | 'ready' | 'failed'
   errorMessage?: string
   pendingIteration?: PendingIteration
+  pendingIterations?: PendingIteration[]
   coverIterationId?: string
   createdAt: string
   updatedAt: string
@@ -107,6 +127,23 @@ type ThumbnailItem =
       isSelected: boolean
     }
 
+function HeaderTooltip({
+  label,
+  children,
+}: {
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">{children}</span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 type RpcResponse<T> =
   | {
       ok: true
@@ -119,6 +156,18 @@ type RpcResponse<T> =
       }
     }
 
+type DeleteIterationResult = {
+  deleted: true
+  deletedThread: boolean
+  deletedIterationIds: string[]
+  notFoundIterationIds: string[]
+  thread?: ImageThread
+}
+
+type RemoveBgStatus = {
+  available: boolean
+}
+
 const ASPECT_RATIOS: AspectRatio[] = [
   { id: 'square', label: 'Square', ratio: '1:1' },
   { id: 'portrait', label: 'Portrait', ratio: '3:4' },
@@ -128,6 +177,7 @@ const ASPECT_RATIOS: AspectRatio[] = [
 ]
 
 const PENDING_ITERATION_ID = '__pending_iteration__'
+const PENDING_ITERATION_ID_PREFIX = '__pending_iteration__:'
 
 const ASPECT_PREVIEW_CLASS: Record<AspectRatioId, string> = {
   square: 'aspect-square',
@@ -294,6 +344,49 @@ function pendingAspectRatio(thread: ImageThread | null): AspectRatioId | null {
     : null
 }
 
+function pendingIterationsForThread(
+  thread: ImageThread | null,
+): PendingIteration[] {
+  if (!thread || thread.status !== 'generating') return []
+  const pending = thread.pendingIterations ?? []
+  return thread.pendingIteration
+    ? [thread.pendingIteration, ...pending]
+    : pending
+}
+
+function pendingIterationItemId(
+  pending: PendingIteration,
+  index: number,
+): string {
+  return pending.id || pending.requestId || `${index}`
+}
+
+function pendingThumbnailId(pending: PendingIteration, index: number): string {
+  if (!pending.id && !pending.requestId && index === 0) {
+    return PENDING_ITERATION_ID
+  }
+  return `${PENDING_ITERATION_ID_PREFIX}${pendingIterationItemId(pending, index)}`
+}
+
+function pendingIterationByThumbnailId(
+  thread: ImageThread | null,
+  id: string | null,
+): PendingIteration | null {
+  if (!thread || !id) return null
+  const pending = pendingIterationsForThread(thread)
+  const index =
+    id === PENDING_ITERATION_ID
+      ? 0
+      : id.startsWith(PENDING_ITERATION_ID_PREFIX)
+        ? pending.findIndex(
+            (iteration, iterationIndex) =>
+              pendingIterationItemId(iteration, iterationIndex) ===
+              id.slice(PENDING_ITERATION_ID_PREFIX.length),
+          )
+        : -1
+  return index >= 0 ? (pending[index] ?? null) : null
+}
+
 function isAspectRatioOnlyEdit(thread: ImageThread): boolean {
   return Boolean(
     thread.pendingIteration?.prompt.startsWith(
@@ -312,14 +405,17 @@ function pendingMainLabel(
 }
 
 function selectedIterationIdForThread(thread: ImageThread): string | null {
-  return pendingAspectRatio(thread)
-    ? PENDING_ITERATION_ID
+  const pending = pendingIterationsForThread(thread)
+  return pending.length > 0
+    ? pendingThumbnailId(pending[pending.length - 1], pending.length - 1)
     : (thread.coverIterationId ?? thread.iterations.at(-1)?.id ?? null)
 }
 
 function selectableIterationIds(thread: ImageThread): string[] {
   const ids = thread.iterations.map((iteration) => iteration.id)
-  if (pendingAspectRatio(thread)) ids.push(PENDING_ITERATION_ID)
+  pendingIterationsForThread(thread).forEach((pending, index) => {
+    ids.push(pendingThumbnailId(pending, index))
+  })
   return ids
 }
 
@@ -453,7 +549,7 @@ function StackCountBadge({
 }
 
 function remixInstructionsForIteration(threadId: string, iterationId: string) {
-  return `Images app is open to image thread ${threadId}, with image iteration ${iterationId} selected. Drive this app only through app RPC methods. To remix this selected image, call images.edit with { id: "${threadId}", baseIterationId: "${iterationId}", prompt, aspectRatio? }. To cancel stuck pending work, call images.cancel with { id: "${threadId}" }. To change the thread ratio, call images.setAspectRatio with { id: "${threadId}", aspectRatio }. Use images.get to inspect iteration history.`
+  return `Images app is open to image thread ${threadId}, with image iteration ${iterationId} selected. Drive this app only through app RPC methods. When the user wants a new image based on this selected image, call images.generateFromReference with { id: "${threadId}", baseIterationId: "${iterationId}", prompt, aspectRatio? }; this adds a distinct new root image inside the current thread. When the user explicitly wants to edit/remix this image as a child of the selected image, call images.edit with { id: "${threadId}", baseIterationId: "${iterationId}", prompt, aspectRatio? }. To remove the selected image background, call images.removeBackground with { id: "${threadId}", iterationId: "${iterationId}" }. To delete this selected image, call images.deleteIteration with { id: "${threadId}", iterationId: ["${iterationId}"] }; include descendant iteration IDs from images.get only if the user asks to delete children too. To save a chat-generated image into this thread, call images.importGenerated with { id: "${threadId}", imagePath, prompt? }. To cancel stuck pending work, call images.cancel with { id: "${threadId}" }. To change the thread ratio, call images.setAspectRatio with { id: "${threadId}", aspectRatio }. Use images.get to inspect iteration history.`
 }
 
 function AspectRatioMenu({
@@ -472,17 +568,22 @@ function AspectRatioMenu({
 
   return (
     <div className="relative">
-      <button
-        type="button"
-        className="border-border bg-background hover:bg-muted flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-2 text-xs font-medium shadow-sm transition-colors disabled:cursor-default disabled:opacity-60"
-        disabled={busy}
-        onClick={() => setOpen((next) => !next)}
-      >
-        <PanelTop className="text-muted-foreground size-3.5" />
-        <span>Aspect</span>
-        <span className="text-muted-foreground font-mono">{current.ratio}</span>
-        <ChevronDown className="text-muted-foreground size-3.5" />
-      </button>
+      <HeaderTooltip label="Aspect ratio">
+        <button
+          type="button"
+          aria-label="Aspect ratio"
+          className="border-border bg-background hover:bg-muted flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-2 text-xs font-medium shadow-sm transition-colors disabled:cursor-default disabled:opacity-60"
+          disabled={busy}
+          onClick={() => setOpen((next) => !next)}
+        >
+          <PanelTop className="text-muted-foreground size-3.5" />
+          <span>Aspect</span>
+          <span className="text-muted-foreground font-mono">
+            {current.ratio}
+          </span>
+          <ChevronDown className="text-muted-foreground size-3.5" />
+        </button>
+      </HeaderTooltip>
 
       {open ? (
         <div className="border-border bg-popover text-popover-foreground absolute right-0 top-9 z-20 w-56 rounded-lg border p-2 shadow-lg">
@@ -547,6 +648,9 @@ export function App() {
   const [pendingImportFiles, setPendingImportFiles] = useState<File[]>([])
   const [pendingImportPaths, setPendingImportPaths] = useState<string[]>([])
   const [isDraggingImages, setIsDraggingImages] = useState(false)
+  const [removeBgKeyDialogOpen, setRemoveBgKeyDialogOpen] = useState(false)
+  const [removeBgApiKey, setRemoveBgApiKey] = useState('')
+  const [removeBgKeyError, setRemoveBgKeyError] = useState<string | null>(null)
   const dragDepthRef = useRef(0)
   const [downloadingIterationId, setDownloadingIterationId] = useState<
     string | null
@@ -554,6 +658,10 @@ export function App() {
   const [copiedPromptIterationId, setCopiedPromptIterationId] = useState<
     string | null
   >(null)
+  const [pendingDeleteIterationId, setPendingDeleteIterationId] = useState<
+    string | null
+  >(null)
+  const [deleteDescendants, setDeleteDescendants] = useState(false)
   const [hoveredGalleryThreadId, setHoveredGalleryThreadId] = useState<
     string | null
   >(null)
@@ -716,17 +824,28 @@ export function App() {
     refetchInterval: 2_000,
   })
 
+  const removeBgStatusQuery = useQuery({
+    queryKey: ['remove-bg-status', workspaceId],
+    queryFn: async () => {
+      const response = await fetchWithWorkspace('/api/remove-bg/status')
+      return parseResponse<RemoveBgStatus>(
+        response,
+        'Failed to inspect remove.bg key',
+      )
+    },
+  })
+
   const threads = useMemo(() => imagesQuery.data ?? [], [imagesQuery.data])
   const selectedThread = useMemo(
     () => threads.find((thread) => thread.id === selectedThreadId) ?? null,
     [selectedThreadId, threads],
   )
+  const selectedPendingIteration = pendingIterationByThumbnailId(
+    selectedThread,
+    selectedIterationId,
+  )
   const selectedPendingAspectRatio =
-    selectedThread &&
-    selectedIterationId === PENDING_ITERATION_ID &&
-    pendingAspectRatio(selectedThread)
-      ? pendingAspectRatio(selectedThread)
-      : null
+    selectedPendingIteration?.aspectRatio ?? null
   const selectedIteration = selectedPendingAspectRatio
     ? null
     : (selectedThread?.iterations.find(
@@ -751,8 +870,10 @@ export function App() {
   useEffect(() => {
     if (
       selectedThread &&
-      selectedIterationId === PENDING_ITERATION_ID &&
-      !pendingAspectRatio(selectedThread)
+      selectedIterationId &&
+      (selectedIterationId === PENDING_ITERATION_ID ||
+        selectedIterationId.startsWith(PENDING_ITERATION_ID_PREFIX)) &&
+      !pendingIterationByThumbnailId(selectedThread, selectedIterationId)
     ) {
       setSelectedIterationId(selectedThread.iterations.at(-1)?.id ?? null)
     }
@@ -866,8 +987,8 @@ export function App() {
               selectedThread.id,
               selectedIteration.id,
             )
-          : `Images app is open to image thread ${selectedThread.id}. Drive this app only through app RPC methods. To edit the current image, call images.edit with { id: "${selectedThread.id}", prompt, aspectRatio? }. To cancel stuck pending work, call images.cancel with { id: "${selectedThread.id}" }. To change ratio, call images.setAspectRatio with { id: "${selectedThread.id}", aspectRatio }. Use images.get to inspect iteration history.`
-      : `Images app grid is open. Drive this app only through app RPC methods. To create a new image thread, call images.generate with { prompt, aspectRatio } when the user specifies a ratio; otherwise omit aspectRatio. To retry a failed generation, call images.retry with { id }. To cancel stuck pending work, call images.cancel with { id }. Use images.list or images.get to inspect existing image history.`
+          : `Images app is open to image thread ${selectedThread.id}. Drive this app only through app RPC methods. To add another iteration to this same thread, call images.edit with { id: "${selectedThread.id}", prompt, aspectRatio? }. To remove the displayed image background, call images.removeBackground with { id: "${selectedThread.id}" }. To save a chat-generated image into this thread, call images.importGenerated with { id: "${selectedThread.id}", imagePath, prompt? }. To cancel stuck pending work, call images.cancel with { id: "${selectedThread.id}" }. To change ratio, call images.setAspectRatio with { id: "${selectedThread.id}", aspectRatio }. Use images.get to inspect iteration history.`
+      : `Images app grid is open. Drive this app only through app RPC methods. To create a new image thread, call images.generate with { prompt, aspectRatio } when the user specifies a ratio; otherwise omit aspectRatio. To save a chat-generated image as a new image thread, call images.importGenerated with { imagePath, prompt? }. To retry a failed generation, call images.retry with { id }. To cancel stuck pending work, call images.cancel with { id }. Use images.list or images.get to inspect existing image history.`
 
     sendChatInstructions(context)
   }, [selectedIteration, selectedThread])
@@ -945,6 +1066,136 @@ export function App() {
         mutationError instanceof Error
           ? mutationError.message
           : 'Failed to retry image generation',
+      )
+    },
+  })
+
+  const deleteIteration = useMutation({
+    mutationFn: async ({
+      threadId,
+      iterationIds,
+    }: {
+      threadId: string
+      iterationIds: string[]
+    }) => {
+      const response = await fetchWithWorkspace('/api/moldable/rpc', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method: 'images.deleteIteration',
+          params: { id: threadId, iterationId: iterationIds },
+        }),
+      })
+      const rpc = await parseResponse<RpcResponse<DeleteIterationResult>>(
+        response,
+        'Failed to delete image',
+      )
+      if (!rpc.ok) {
+        throw new Error(rpc.error?.message ?? 'Failed to delete image')
+      }
+      return rpc.result
+    },
+    onSuccess: (result, variables) => {
+      setError(null)
+      setPendingDeleteIterationId(null)
+      setDeleteDescendants(false)
+      closeThumbnailFlyout()
+
+      if (result.deletedThread) {
+        queryClient.setQueryData<ImageThread[]>(
+          ['images', workspaceId],
+          (current) =>
+            (current ?? []).filter(
+              (thread) => thread.id !== variables.threadId,
+            ),
+        )
+        setSelectedThreadId(null)
+        setSelectedIterationId(null)
+      } else if (result.thread) {
+        const updatedThread = result.thread
+        queryClient.setQueryData<ImageThread[]>(
+          ['images', workspaceId],
+          (current) => upsertThread(current, updatedThread),
+        )
+        setSelectedThreadId(updatedThread.id)
+        setSelectedIterationId(selectedIterationIdForThread(updatedThread))
+      }
+
+      void queryClient.invalidateQueries({ queryKey: ['images', workspaceId] })
+    },
+    onError: (mutationError) => {
+      setError(
+        mutationError instanceof Error
+          ? mutationError.message
+          : 'Failed to delete image',
+      )
+    },
+  })
+
+  const removeBackground = useMutation({
+    mutationFn: async ({
+      threadId,
+      iterationId,
+    }: {
+      threadId: string
+      iterationId?: string
+    }) => {
+      const response = await fetchWithWorkspace('/api/remove-bg', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: threadId, iterationId }),
+      })
+      return parseResponse<ImageThread>(response, 'Failed to remove background')
+    },
+    onSuccess: (thread) => {
+      setError(null)
+      queryClient.setQueryData<ImageThread[]>(
+        ['images', workspaceId],
+        (current) => upsertThread(current, thread),
+      )
+      setSelectedIterationId(selectedIterationIdForThread(thread))
+      void queryClient.invalidateQueries({ queryKey: ['images', workspaceId] })
+    },
+    onError: (mutationError) => {
+      setError(
+        mutationError instanceof Error
+          ? mutationError.message
+          : 'Failed to remove background',
+      )
+    },
+  })
+
+  const saveRemoveBgKey = useMutation({
+    mutationFn: async (apiKey: string) => {
+      const response = await fetchWithWorkspace('/api/remove-bg/key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey }),
+      })
+      return parseResponse<RemoveBgStatus>(
+        response,
+        'Failed to save remove.bg key',
+      )
+    },
+    onSuccess: () => {
+      setRemoveBgApiKey('')
+      setRemoveBgKeyError(null)
+      setRemoveBgKeyDialogOpen(false)
+      void queryClient.invalidateQueries({
+        queryKey: ['remove-bg-status', workspaceId],
+      })
+      if (selectedThread && selectedIteration) {
+        removeBackground.mutate({
+          threadId: selectedThread.id,
+          iterationId: selectedIteration.id,
+        })
+      }
+    },
+    onError: (mutationError) => {
+      setRemoveBgKeyError(
+        mutationError instanceof Error
+          ? mutationError.message
+          : 'Failed to save remove.bg key',
       )
     },
   })
@@ -1116,7 +1367,10 @@ export function App() {
   )
 
   const busy =
-    setAspectRatio.isPending || Boolean(pendingAspectRatio(selectedThread))
+    setAspectRatio.isPending ||
+    removeBackground.isPending ||
+    deleteIteration.isPending ||
+    pendingIterationsForThread(selectedThread).length > 0
   const importPending = importImages.isPending || importImagePaths.isPending
   const failedDialogThread =
     selectedThread &&
@@ -1217,21 +1471,20 @@ export function App() {
           ),
         }
       }),
-      ...(pendingAspectRatio(selectedThread)
-        ? [
-            {
-              id: PENDING_ITERATION_ID,
-              type: 'pending' as const,
-              imageUrl: null,
-              aspectRatio: displayedAspectRatio,
-              label: pendingMainLabel(selectedThread, displayedAspectRatio),
-              iteration: null,
-              children: [] as ImageIteration[],
-              selectedBranchIteration: null,
-              isSelected: Boolean(selectedPendingAspectRatio),
-            },
-          ]
-        : []),
+      ...pendingIterationsForThread(selectedThread).map((pending, index) => {
+        const id = pendingThumbnailId(pending, index)
+        return {
+          id,
+          type: 'pending' as const,
+          imageUrl: null,
+          aspectRatio: pending.aspectRatio,
+          label: pendingMainLabel(selectedThread, pending.aspectRatio),
+          iteration: null,
+          children: [] as ImageIteration[],
+          selectedBranchIteration: null,
+          isSelected: selectedIterationId === id,
+        }
+      }),
     ]
     let thumbnailOffset = 0
     const thumbnailStack = thumbnailItems.map((item) => {
@@ -1279,6 +1532,31 @@ export function App() {
       sendToChatInput('Remix this image: ')
     }
 
+    function handleRemoveBackground() {
+      if (!selectedIteration || removeBackground.isPending) return
+      setError(null)
+      setRemoveBgKeyError(null)
+
+      if (!removeBgStatusQuery.data?.available) {
+        setRemoveBgKeyDialogOpen(true)
+        return
+      }
+
+      removeBackground.mutate({
+        threadId: activeThreadId,
+        iterationId: selectedIteration.id,
+      })
+    }
+
+    function handleSaveRemoveBgKey() {
+      const apiKey = removeBgApiKey.trim()
+      if (!apiKey) {
+        setRemoveBgKeyError('Enter a remove.bg API key.')
+        return
+      }
+      saveRemoveBgKey.mutate(apiKey)
+    }
+
     const hoveredThumbnail = thumbnailStack.find(
       (item) => item.id === hoveredThumbnailId,
     )
@@ -1297,6 +1575,221 @@ export function App() {
         hoveredFlyoutItemCount * THUMBNAIL_SIZE +
           Math.max(0, hoveredFlyoutItemCount - 1) * THUMBNAIL_GAP,
       )
+    const pendingDeleteIteration = pendingDeleteIterationId
+      ? (selectedThread.iterations.find(
+          (iteration) => iteration.id === pendingDeleteIterationId,
+        ) ?? null)
+      : null
+    const pendingDeleteChildren = pendingDeleteIteration
+      ? childIterationsForThread(selectedThread, pendingDeleteIteration.id)
+      : []
+    const pendingDeleteIterationIds = pendingDeleteIteration
+      ? [
+          pendingDeleteIteration.id,
+          ...(deleteDescendants
+            ? pendingDeleteChildren.map((iteration) => iteration.id)
+            : []),
+        ]
+      : []
+    const pendingDeleteCount = pendingDeleteIterationIds.length
+    const canDeleteSelectedIteration =
+      Boolean(selectedIteration) &&
+      pendingIterationsForThread(selectedThread).length === 0
+    const closeDeleteDialog = () => {
+      if (deleteIteration.isPending) return
+      setPendingDeleteIterationId(null)
+      setDeleteDescendants(false)
+    }
+    const deleteIterationDialog = (
+      <AlertDialog
+        open={Boolean(pendingDeleteIteration)}
+        onOpenChange={(open) => {
+          if (!open) closeDeleteDialog()
+        }}
+      >
+        <AlertDialogContent className="w-[min(24rem,calc(100vw-2rem))]">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete image?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDeleteCount > 1
+                ? `This will delete this image and ${pendingDeleteCount - 1} child ${pendingDeleteCount === 2 ? 'image' : 'images'}.`
+                : 'This will delete the currently shown image.'}{' '}
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {pendingDeleteIteration ? (
+            <div className="border-border bg-muted/25 flex items-center gap-3 rounded-lg border p-3">
+              <div
+                className={cn(
+                  'bg-muted ring-border/55 shrink-0 overflow-hidden rounded-md ring-1',
+                  ASPECT_PREVIEW_CLASS[pendingDeleteIteration.aspectRatio],
+                  pendingDeleteIteration.aspectRatio === 'story'
+                    ? 'h-24 w-[54px]'
+                    : pendingDeleteIteration.aspectRatio === 'portrait'
+                      ? 'h-24 w-[72px]'
+                      : pendingDeleteIteration.aspectRatio === 'landscape'
+                        ? 'h-[72px] w-24'
+                        : pendingDeleteIteration.aspectRatio === 'widescreen'
+                          ? 'h-[54px] w-24'
+                          : 'size-20',
+                )}
+              >
+                <img
+                  src={pendingDeleteIteration.imageUrl}
+                  alt="Image selected for deletion"
+                  className="size-full object-cover"
+                  draggable="false"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-foreground line-clamp-2 text-sm font-medium leading-5">
+                  {pendingDeleteIteration.prompt || selectedThread.title}
+                </p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  {aspectLabel(pendingDeleteIteration.aspectRatio).ratio} ·{' '}
+                  {pendingDeleteIteration.kind}
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          {pendingDeleteChildren.length > 0 ? (
+            <div className="border-border bg-muted/30 flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div className="min-w-0 space-y-1">
+                <label
+                  htmlFor="delete-image-children"
+                  className="text-foreground block cursor-pointer text-sm font-medium"
+                >
+                  Delete children too
+                </label>
+                <p className="text-muted-foreground text-xs leading-5">
+                  Also remove {pendingDeleteChildren.length} child{' '}
+                  {pendingDeleteChildren.length === 1 ? 'image' : 'images'} in
+                  this thread.
+                </p>
+              </div>
+              <Switch
+                id="delete-image-children"
+                checked={deleteDescendants}
+                disabled={deleteIteration.isPending}
+                onCheckedChange={(checked: boolean) =>
+                  setDeleteDescendants(checked)
+                }
+              />
+            </div>
+          ) : null}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              className="cursor-pointer"
+              disabled={deleteIteration.isPending}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              className="cursor-pointer"
+              disabled={
+                deleteIteration.isPending ||
+                pendingDeleteIterationIds.length === 0
+              }
+              onClick={(event) => {
+                event.preventDefault()
+                if (
+                  !pendingDeleteIteration ||
+                  pendingDeleteIterationIds.length === 0
+                )
+                  return
+                deleteIteration.mutate({
+                  threadId: selectedThread.id,
+                  iterationIds: pendingDeleteIterationIds,
+                })
+              }}
+            >
+              {deleteIteration.isPending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="size-3.5" />
+              )}
+              Delete{' '}
+              {pendingDeleteCount > 1
+                ? `${pendingDeleteCount} images`
+                : 'image'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    )
+
+    const removeBgKeyDialog = (
+      <Dialog
+        open={removeBgKeyDialogOpen}
+        onOpenChange={(open) => {
+          if (saveRemoveBgKey.isPending) return
+          setRemoveBgKeyDialogOpen(open)
+          if (!open) setRemoveBgKeyError(null)
+        }}
+      >
+        <DialogContent className="w-[min(24rem,calc(100vw-2rem))] rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <div className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-full">
+              <KeyRound className="size-4" />
+            </div>
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="space-y-1">
+                <DialogTitle className="text-sm font-medium">
+                  Add remove.bg key
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                  Save a remove.bg API key in aivault to enable background
+                  removal for Images.
+                </DialogDescription>
+              </div>
+              <Input
+                type="password"
+                value={removeBgApiKey}
+                placeholder="REMOVE_BG_API_KEY"
+                className="font-mono text-sm"
+                disabled={saveRemoveBgKey.isPending}
+                onChange={(event) => {
+                  setRemoveBgApiKey(event.target.value)
+                  setRemoveBgKeyError(null)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') handleSaveRemoveBgKey()
+                }}
+              />
+              {removeBgKeyError ? (
+                <p className="text-destructive text-xs">{removeBgKeyError}</p>
+              ) : null}
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="cursor-pointer"
+                  disabled={saveRemoveBgKey.isPending}
+                  onClick={() => setRemoveBgKeyDialogOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  className="cursor-pointer"
+                  disabled={saveRemoveBgKey.isPending}
+                  onClick={handleSaveRemoveBgKey}
+                >
+                  {saveRemoveBgKey.isPending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : null}
+                  Save
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    )
 
     return (
       <main
@@ -1307,19 +1800,21 @@ export function App() {
         onDrop={handleDrop}
       >
         <header className="border-border/70 flex h-12 shrink-0 items-center justify-between border-b px-4">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="cursor-pointer"
-            aria-label="Close image"
-            onClick={() => {
-              setSelectedThreadId(null)
-              setSelectedIterationId(null)
-            }}
-          >
-            <X className="size-3.5" />
-          </Button>
+          <HeaderTooltip label="Close image">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="cursor-pointer"
+              aria-label="Close image"
+              onClick={() => {
+                setSelectedThreadId(null)
+                setSelectedIterationId(null)
+              }}
+            >
+              <X className="size-3.5" />
+            </Button>
+          </HeaderTooltip>
           <div className="flex items-center gap-2">
             <AspectRatioMenu
               value={displayedAspectRatio}
@@ -1350,69 +1845,125 @@ export function App() {
               }}
             />
             <div className="flex shrink-0 items-center gap-1.5">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="cursor-pointer"
-                aria-label="Remix image"
-                title="Remix image"
-                disabled={!selectedIteration}
-                onClick={() => remixIteration(selectedIteration)}
-              >
-                <Shuffle className="size-3.5" />
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="cursor-pointer"
-                aria-label="Copy prompt"
-                title="Copy prompt"
-                disabled={!canCopyPrompt}
-                onClick={() => void handleCopyPrompt()}
-              >
-                {isPromptCopied ? (
-                  <Check className="size-3.5" />
-                ) : (
-                  <Copy className="size-3.5" />
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="cursor-pointer"
-                disabled={
-                  !selectedIteration ||
-                  downloadingIterationId === selectedIteration.id
+              <HeaderTooltip
+                label={
+                  removeBgStatusQuery.data?.available
+                    ? 'Remove background'
+                    : 'Add remove.bg key'
                 }
-                aria-label="Download image"
-                title="Download image"
-                onClick={async () => {
-                  if (!selectedIteration) return
-                  setError(null)
-                  setDownloadingIterationId(selectedIteration.id)
-                  try {
-                    await downloadImage(selectedIteration)
-                  } catch (downloadError) {
-                    setError(
-                      downloadError instanceof Error
-                        ? downloadError.message
-                        : 'Failed to download image',
-                    )
-                  } finally {
-                    setDownloadingIterationId(null)
-                  }
-                }}
               >
-                {selectedIteration &&
-                downloadingIterationId === selectedIteration.id ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Download className="size-3.5" />
-                )}
-              </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="cursor-pointer"
+                  aria-label="Remove background"
+                  disabled={!selectedIteration || removeBackground.isPending}
+                  onClick={handleRemoveBackground}
+                >
+                  {removeBackground.isPending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Eraser className="size-3.5" />
+                  )}
+                </Button>
+              </HeaderTooltip>
+              <HeaderTooltip label="Remix image">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="cursor-pointer"
+                  aria-label="Remix image"
+                  disabled={!selectedIteration}
+                  onClick={() => remixIteration(selectedIteration)}
+                >
+                  <Shuffle className="size-3.5" />
+                </Button>
+              </HeaderTooltip>
+              <HeaderTooltip label="Copy prompt">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="cursor-pointer"
+                  aria-label="Copy prompt"
+                  disabled={!canCopyPrompt}
+                  onClick={() => void handleCopyPrompt()}
+                >
+                  {isPromptCopied ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
+                </Button>
+              </HeaderTooltip>
+              <HeaderTooltip label="Download image">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="cursor-pointer"
+                  disabled={
+                    !selectedIteration ||
+                    downloadingIterationId === selectedIteration.id
+                  }
+                  aria-label="Download image"
+                  onClick={async () => {
+                    if (!selectedIteration) return
+                    setError(null)
+                    setDownloadingIterationId(selectedIteration.id)
+                    try {
+                      await downloadImage(selectedIteration)
+                    } catch (downloadError) {
+                      setError(
+                        downloadError instanceof Error
+                          ? downloadError.message
+                          : 'Failed to download image',
+                      )
+                    } finally {
+                      setDownloadingIterationId(null)
+                    }
+                  }}
+                >
+                  {selectedIteration &&
+                  downloadingIterationId === selectedIteration.id ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Download className="size-3.5" />
+                  )}
+                </Button>
+              </HeaderTooltip>
+              <HeaderTooltip
+                label={
+                  canDeleteSelectedIteration
+                    ? 'Delete image'
+                    : 'Finish pending work before deleting'
+                }
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+                  disabled={
+                    !canDeleteSelectedIteration || deleteIteration.isPending
+                  }
+                  aria-label="Delete image"
+                  onClick={() => {
+                    if (!selectedIteration) return
+                    setError(null)
+                    setDeleteDescendants(false)
+                    setPendingDeleteIterationId(selectedIteration.id)
+                  }}
+                >
+                  {deleteIteration.isPending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="size-3.5" />
+                  )}
+                </Button>
+              </HeaderTooltip>
             </div>
           </div>
         </header>
@@ -1682,7 +2233,16 @@ export function App() {
           </div>
         ) : null}
 
+        {removeBackground.isPending ? (
+          <div className="text-muted-foreground bg-background/85 fixed bottom-[calc(var(--chat-safe-padding,0px)+1rem)] left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full border px-3 py-1.5 text-xs shadow-sm">
+            <Loader2 className="size-3 animate-spin" />
+            Removing background
+          </div>
+        ) : null}
+
         {importChoiceDialog}
+        {deleteIterationDialog}
+        {removeBgKeyDialog}
       </main>
     )
   }
@@ -1723,7 +2283,8 @@ export function App() {
               const isGenerating = thread.status === 'generating'
               const isFailed = thread.status === 'failed'
               const generatingAspectRatio =
-                pendingAspectRatio(thread) ?? thread.aspectRatio
+                pendingIterationsForThread(thread).at(-1)?.aspectRatio ??
+                thread.aspectRatio
               const canOpen = Boolean(thread.latestImageUrl) || isFailed
               const displayedIteration = thread.coverIterationId
                 ? thread.iterations.find(
@@ -1841,7 +2402,7 @@ export function App() {
                     }}
                   >
                     <span className="bg-muted ring-border/35 relative z-20 block aspect-square w-full overflow-hidden rounded-[1.35rem] shadow-sm ring-1 transition-[translate,scale,box-shadow] duration-[260ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover:-translate-y-1 group-hover:scale-[1.018] group-hover:shadow-xl group-focus-visible:-translate-y-1 group-focus-visible:scale-[1.018] motion-reduce:transition-none">
-                      {isGenerating ? (
+                      {isGenerating && !displayedIteration ? (
                         <GenerationLoadingPreview
                           aspectRatio={generatingAspectRatio}
                           className="size-full rounded-none"
