@@ -1,0 +1,820 @@
+{
+  "name": "Tasks",
+  "version": "0.1.0",
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "Linear-style local project and task management",
+  "author": "",
+  "license": "MIT",
+  "icon": "✅",
+  "widgetSize": "large",
+  "category": "productivity",
+  "tags": [],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.10",
+    "@moldable-ai/storage": "^0.1.5"
+  },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "tasks.projects",
+        "name": "Projects",
+        "description": "Read and manage local task projects in the active workspace.",
+        "scopes": [
+          {
+            "id": "projects.list",
+            "name": "List projects",
+            "description": "List projects with optional text filtering and task summaries.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "includeTasks": {
+                  "type": "boolean"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200
+                }
+              }
+            }
+          },
+          {
+            "id": "projects.search",
+            "name": "Search projects",
+            "description": "Search project names, keys, summaries, descriptions, and website URLs.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "includeTasks": {
+                  "type": "boolean"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200
+                }
+              }
+            }
+          },
+          {
+            "id": "projects.get",
+            "name": "Get project",
+            "description": "Get one project by ID, key, or exact name, including its tasks.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "projectId": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "projectName": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "projects.create",
+            "name": "Create project",
+            "description": "Create a new local project.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string",
+                  "description": "Three-letter project key."
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "websiteUrl": {
+                  "type": "string"
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "color": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["name", "color"]
+                  }
+                }
+              },
+              "required": ["name"]
+            }
+          },
+          {
+            "id": "projects.update",
+            "name": "Update project",
+            "description": "Update project name, key, summary, description, website, logo, or labels.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "projectId": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "projectName": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "key": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "logoUrl": {
+                  "type": ["string", "null"]
+                },
+                "websiteUrl": {
+                  "type": "string"
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "color": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["name", "color"]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "projects.delete",
+            "name": "Delete project",
+            "description": "Delete a project and all of its tasks.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "projectId": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "projectName": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "tasks.tasks",
+        "name": "Tasks",
+        "description": "Read and manage local tasks, including status, priority, labels, comments, and attachments.",
+        "scopes": [
+          {
+            "id": "tasks.list",
+            "name": "List tasks",
+            "description": "List tasks with project, status, priority, label, completion, and text filters.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "projectId": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "projectName": {
+                  "type": "string"
+                },
+                "query": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "backlog",
+                    "open",
+                    "in_progress",
+                    "completed",
+                    "closed"
+                  ]
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": ["none", "low", "medium", "high"]
+                },
+                "labelId": {
+                  "type": "string"
+                },
+                "labelName": {
+                  "type": "string"
+                },
+                "includeCompleted": {
+                  "type": "boolean"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500
+                }
+              }
+            }
+          },
+          {
+            "id": "tasks.search",
+            "name": "Search tasks",
+            "description": "Search task titles, descriptions, acceptance criteria, and labels.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "projectId": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "backlog",
+                    "open",
+                    "in_progress",
+                    "completed",
+                    "closed"
+                  ]
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": ["none", "low", "medium", "high"]
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500
+                }
+              }
+            }
+          },
+          {
+            "id": "tasks.get",
+            "name": "Get task",
+            "description": "Get one task by task ID or task key, such as TES-1.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string"
+                },
+                "taskKey": {
+                  "type": "string"
+                },
+                "projectId": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "number": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          {
+            "id": "tasks.create",
+            "name": "Create task",
+            "description": "Create a task in a project.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "projectId": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "projectName": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "acceptanceCriteria": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "backlog",
+                    "open",
+                    "in_progress",
+                    "completed",
+                    "closed"
+                  ]
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": ["none", "low", "medium", "high"]
+                },
+                "labelIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "labelNames": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "color": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["name", "color"]
+                  }
+                },
+                "attachments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "size": {
+                        "type": "number"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "dataUrl": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["name", "size"]
+                  }
+                }
+              },
+              "required": ["title"]
+            }
+          },
+          {
+            "id": "tasks.update",
+            "name": "Update task",
+            "description": "Update task title, body, acceptance criteria, attachments, labels, status, priority, or completion state.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string"
+                },
+                "taskKey": {
+                  "type": "string"
+                },
+                "projectId": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "number": {
+                  "type": "number"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "acceptanceCriteria": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "backlog",
+                    "open",
+                    "in_progress",
+                    "completed",
+                    "closed"
+                  ]
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": ["none", "low", "medium", "high"]
+                },
+                "completed": {
+                  "type": "boolean"
+                },
+                "labelIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "labelNames": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "labels": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "color": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["name", "color"]
+                  }
+                },
+                "attachments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "size": {
+                        "type": "number"
+                      },
+                      "type": {
+                        "type": "string"
+                      },
+                      "dataUrl": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "createdAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["name", "size"]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "tasks.delete",
+            "name": "Delete task",
+            "description": "Delete one task.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string"
+                },
+                "taskKey": {
+                  "type": "string"
+                },
+                "projectId": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "number": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "tasks.labels",
+        "name": "Labels",
+        "description": "Manage project labels and apply them to tasks.",
+        "scopes": [
+          {
+            "id": "labels.list",
+            "name": "List labels",
+            "description": "List labels for a project.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "projectId": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "projectName": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "labels.create",
+            "name": "Create label",
+            "description": "Create a project label.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "projectId": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "projectName": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "color": {
+                  "type": "string"
+                }
+              },
+              "required": ["name", "color"]
+            }
+          },
+          {
+            "id": "labels.update",
+            "name": "Update label",
+            "description": "Update a label name or color.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "projectId": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "projectName": {
+                  "type": "string"
+                },
+                "labelId": {
+                  "type": "string"
+                },
+                "labelName": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "color": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "labels.delete",
+            "name": "Delete label",
+            "description": "Delete a label and remove it from tasks.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "projectId": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "projectName": {
+                  "type": "string"
+                },
+                "labelId": {
+                  "type": "string"
+                },
+                "labelName": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "id": "tasks.comments",
+        "name": "Comments",
+        "description": "Read and write comments on local tasks.",
+        "scopes": [
+          {
+            "id": "comments.list",
+            "name": "List comments",
+            "description": "List comments for a task.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string"
+                },
+                "taskKey": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "number": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          {
+            "id": "comments.create",
+            "name": "Create comment",
+            "description": "Add a markdown comment to a task.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string"
+                },
+                "taskKey": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "number": {
+                  "type": "number"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "authorName": {
+                  "type": "string"
+                }
+              },
+              "required": ["content"]
+            }
+          },
+          {
+            "id": "comments.update",
+            "name": "Update comment",
+            "description": "Update a task comment.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string"
+                },
+                "taskKey": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "number": {
+                  "type": "number"
+                },
+                "commentId": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                }
+              },
+              "required": ["commentId", "content"]
+            }
+          },
+          {
+            "id": "comments.delete",
+            "name": "Delete comment",
+            "description": "Delete a task comment.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string"
+                },
+                "taskKey": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "number": {
+                  "type": "number"
+                },
+                "commentId": {
+                  "type": "string"
+                }
+              },
+              "required": ["commentId"]
+            }
+          }
+        ]
+      },
+      {
+        "id": "tasks.attachments",
+        "name": "Attachments",
+        "description": "Read task attachment metadata, including local disk paths.",
+        "scopes": [
+          {
+            "id": "attachments.list",
+            "name": "List attachments",
+            "description": "List attachment names, sizes, MIME types, and saved local paths for a task.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string"
+                },
+                "taskKey": {
+                  "type": "string"
+                },
+                "projectKey": {
+                  "type": "string"
+                },
+                "number": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "env": [],
+  "iconPath": "public/icon.png"
+}

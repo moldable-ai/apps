@@ -1,0 +1,126 @@
+@import 'tailwindcss';
+@import '@moldable-ai/ui/styles';
+@import '@moldable-ai/editor/styles';
+@source './**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/editor/dist/**/*.{js,jsx,ts,tsx}';
+
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist';
+  src: url('/fonts/Geist-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/fonts/GeistMono-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/fonts/GeistMono-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: Geist, system-ui, -apple-system, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  --radius: 0.65rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.141 0.005 285.823);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.141 0.005 285.823);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.141 0.005 285.823);
+  --primary: oklch(0.6574 0.135 237.09);
+  --primary-foreground: oklch(0.97 0.014 254.604);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+  --muted: oklch(0.967 0.001 286.375);
+  --muted-foreground: oklch(0.552 0.016 285.938);
+  --accent: oklch(1 0 0 / 50%);
+  --accent-foreground: oklch(0.21 0.006 285.885);
+  --destructive: oklch(0.5866 0.1994 31.76);
+  --border: oklch(0.92 0.004 286.32);
+  --input: oklch(0.92 0.004 286.32);
+  --ring: oklch(0.6574 0.135 237.09);
+}
+
+.dark {
+  --background: oklch(0.235 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.269 0.0018 286.28);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.269 0.0018 286.28);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.6574 0.135 237.09);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.3375 0.0035 286.21);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.3375 0.0035 286.21);
+  --muted-foreground: oklch(0.705 0.015 286.067);
+  --accent: oklch(0.235 0 0 / 50%);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.6574 0.135 237.09);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  ::selection {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+input[data-slot='input'],
+textarea[data-slot='textarea'] {
+  background-color: transparent;
+}
+
+.dark input[data-slot='input'],
+.dark textarea[data-slot='textarea'] {
+  background-color: transparent;
+}
+
+[data-lexical-editor-container]
+  .pointer-events-none.absolute.left-0.top-1.text-sm {
+  top: 0.125rem;
+}

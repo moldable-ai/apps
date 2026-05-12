@@ -1,7 +1,7 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-05-04T21:30:18.576Z",
+  "generatedAt": "2026-05-12T20:40:12.545Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
@@ -22,10 +22,10 @@
       "path": "calendar",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.6",
-        "@moldable-ai/storage": "^0.1.3"
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     },
     {
       "id": "code-editor",
@@ -40,10 +40,10 @@
       "path": "code-editor",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.6",
-        "@moldable-ai/storage": "^0.1.3"
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     },
     {
       "id": "affirmations",
@@ -58,10 +58,10 @@
       "path": "affirmations",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.6",
-        "@moldable-ai/storage": "^0.1.3"
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     },
     {
       "id": "db-browser",
@@ -76,10 +76,10 @@
       "path": "db-browser",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.8",
-        "@moldable-ai/storage": "^0.1.4"
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     },
     {
       "id": "git-flow",
@@ -99,10 +99,10 @@
       "path": "git-flow",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.6",
-        "@moldable-ai/storage": "^0.1.3"
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     },
     {
       "id": "hello-moldables",
@@ -121,9 +121,9 @@
       "path": "hello-moldables",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.6"
+        "@moldable-ai/ui": "^0.2.10"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     },
     {
       "id": "images",
@@ -143,10 +143,10 @@
       "path": "images",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.8",
-        "@moldable-ai/storage": "^0.1.4"
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     },
     {
       "id": "mail",
@@ -166,10 +166,10 @@
       "path": "mail",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.6",
-        "@moldable-ai/storage": "^0.1.3"
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     },
     {
       "id": "meetings",
@@ -189,11 +189,11 @@
       "path": "meetings",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.6",
-        "@moldable-ai/editor": "^0.1.8",
-        "@moldable-ai/storage": "^0.1.3"
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/editor": "^0.1.9",
+        "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     },
     {
       "id": "notes",
@@ -213,11 +213,11 @@
       "path": "notes",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.6",
-        "@moldable-ai/editor": "^0.1.8",
-        "@moldable-ai/storage": "^0.1.3"
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/editor": "^0.1.9",
+        "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     },
     {
       "id": "remotion",
@@ -232,10 +232,10 @@
       "path": "remotion",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.6",
-        "@moldable-ai/storage": "^0.1.3"
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     },
     {
       "id": "scribo",
@@ -255,11 +255,29 @@
       "path": "scribo",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.6",
-        "@moldable-ai/editor": "^0.1.8",
-        "@moldable-ai/storage": "^0.1.3"
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/editor": "^0.1.9",
+        "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
+    },
+    {
+      "id": "tasks",
+      "name": "Tasks",
+      "version": "0.1.0",
+      "description": "Linear-style local project and task management",
+      "icon": "✅",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/tasks/public/icon.png",
+      "widgetSize": "large",
+      "category": "productivity",
+      "tags": [],
+      "path": "tasks",
+      "requiredEnv": [],
+      "moldableDependencies": {
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/storage": "^0.1.5"
+      },
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     },
     {
       "id": "time-tracker",
@@ -274,10 +292,10 @@
       "path": "time-tracker",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.6",
-        "@moldable-ai/storage": "^0.1.3"
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     },
     {
       "id": "todo",
@@ -297,10 +315,34 @@
       "path": "todo",
       "requiredEnv": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.1.0",
-        "@moldable-ai/storage": "^0.1.0"
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "2b37d2a5b1e5f65551461defd26527cdbc62f523"
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
+    },
+    {
+      "id": "wiki",
+      "name": "Wiki",
+      "version": "0.1.0",
+      "description": "Create, edit, and organize a Markdown knowledge base.",
+      "icon": "📚",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/wiki/public/icon.png",
+      "widgetSize": "large",
+      "category": "knowledge",
+      "tags": [
+        "markdown",
+        "notes",
+        "wiki",
+        "knowledge-base"
+      ],
+      "path": "wiki",
+      "requiredEnv": [],
+      "moldableDependencies": {
+        "@moldable-ai/editor": "^0.1.9",
+        "@moldable-ai/ui": "^0.2.10",
+        "@moldable-ai/storage": "^0.1.5"
+      },
+      "commit": "84cd98131c0290a1802c198cad68dd917208210a"
     }
   ],
   "categories": [
