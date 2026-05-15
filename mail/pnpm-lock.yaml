@@ -12,14 +12,14 @@ importers:
         specifier: ^1.19.14
         version: 1.19.14(hono@4.12.14)
       '@moldable-ai/editor':
-        specifier: ^0.1.9
-        version: 0.1.9(@moldable-ai/ui@0.2.10(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)
+        specifier: ^0.1.11
+        version: 0.1.11(@moldable-ai/ui@0.2.12(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)
       '@moldable-ai/storage':
         specifier: ^0.1.5
         version: 0.1.5
       '@moldable-ai/ui':
-        specifier: ^0.2.10
-        version: 0.2.10(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        specifier: ^0.2.12
+        version: 0.2.12(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@tanstack/react-query':
         specifier: ^5.99.2
         version: 5.99.2(react@19.2.5)
@@ -665,10 +665,10 @@ packages:
     peerDependencies:
       yjs: '>=13.5.22'
 
-  '@moldable-ai/editor@0.1.9':
-    resolution: {integrity: sha512-BBNErGB52gLMpH+1vJS4GB2FYFf46kmCu36lAJAYPFtP/n3bM8fej/cqjG+fQlMMXb+Xf+VOW6i0kAV4uQvgYQ==}
+  '@moldable-ai/editor@0.1.11':
+    resolution: {integrity: sha512-gvSjh4B8cVpzeZo6QMO9+zNIJYtQt31bEEzD5seE3SG/oa11+0Zcc4fpHJO/fhOGR1IHmYZfl3qxOfcQiq82nw==}
     peerDependencies:
-      '@moldable-ai/ui': '>=0.2.10'
+      '@moldable-ai/ui': '>=0.2.12'
       react: ^19.0.0
       react-dom: ^19.0.0
 
@@ -684,8 +684,8 @@ packages:
   '@moldable-ai/typescript-config@0.1.4':
     resolution: {integrity: sha512-eSRLkG4oqtIH9H75AFusRRlaQLBPNMSp4IiCaJf5TU9NC5LM8awvEtlLOoknlKSwugZZ+Grt7VagSJ9nTqZvLQ==}
 
-  '@moldable-ai/ui@0.2.10':
-    resolution: {integrity: sha512-95ULk9d99fLQ5UBTC2gfRJmZ8zcQ9TxKt5dsDNOd4egtCjHheA/ji08RPkHYkrAum12hTMnZyKC121YLM2d4iw==}
+  '@moldable-ai/ui@0.2.12':
+    resolution: {integrity: sha512-Dhz+2lCOZXfZHvedZMcpamb91tSzghdneltmBYzsYZJvu89EjqEdlmRu3KXR10/M99JzlZpayI9kQCmjdxGx2g==}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
@@ -4179,7 +4179,7 @@ snapshots:
       lexical: 0.39.0
       yjs: 13.6.30
 
-  '@moldable-ai/editor@0.1.9(@moldable-ai/ui@0.2.10(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)':
+  '@moldable-ai/editor@0.1.11(@moldable-ai/ui@0.2.12(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(yjs@13.6.30)':
     dependencies:
       '@lexical/clipboard': 0.39.0
       '@lexical/code': 0.39.0
@@ -4194,7 +4194,7 @@ snapshots:
       '@lexical/rich-text': 0.39.0
       '@lexical/selection': 0.39.0
       '@lexical/utils': 0.39.0
-      '@moldable-ai/ui': 0.2.10(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@moldable-ai/ui': 0.2.12(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       lexical: 0.39.0
       lucide-react: 0.473.0(react@19.2.5)
       react: 19.2.5
@@ -4229,7 +4229,7 @@ snapshots:
 
   '@moldable-ai/typescript-config@0.1.4': {}
 
-  '@moldable-ai/ui@0.2.10(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@moldable-ai/ui@0.2.12(@date-fns/tz@1.4.1)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@base-ui/react': 1.4.1(@date-fns/tz@1.4.1)(@types/react@19.2.14)(date-fns@4.1.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@dnd-kit/core': 6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)

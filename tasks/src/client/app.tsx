@@ -9,7 +9,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  popMoldableNavigation,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
   useMoldableCommands,
+  useMoldableNavigationPop,
   useWorkspace,
 } from '@moldable-ai/ui'
 import {
@@ -80,6 +84,79 @@ export function App() {
   const selectedProject =
     projects.find((project) => project.id === selectedProjectId) ?? null
 
+  const openProjects = useCallback((sync: 'reset' | 'none' = 'reset') => {
+    if (sync === 'reset') resetMoldableNavigation()
+    setActiveEditor(null)
+    setSelectedProjectId(null)
+  }, [])
+
+  const openProject = useCallback(
+    (projectId: string, sync: 'push' | 'none' = 'push') => {
+      const project = projects.find((item) => item.id === projectId)
+      if (sync === 'push') {
+        pushMoldableNavigation({
+          id: `project:${projectId}`,
+          title: project?.name ?? 'Project',
+        })
+      }
+      setActiveEditor(null)
+      setSelectedProjectId(projectId)
+    },
+    [projects],
+  )
+
+  const closeEditor = useCallback((sync: 'pop' | 'none' = 'pop') => {
+    if (sync === 'pop') popMoldableNavigation()
+    setActiveEditor(null)
+  }, [])
+
+  const openProjectEditor = useCallback(
+    (mode: 'create' | 'edit', project?: Project) => {
+      pushMoldableNavigation({
+        id: project ? `project-edit:${project.id}` : 'project:create',
+        title: project ? `Edit ${project.name}` : 'New project',
+      })
+      setActiveEditor({ type: 'project', mode, project })
+    },
+    [],
+  )
+
+  const openTaskEditor = useCallback((mode: 'create' | 'edit', task?: Task) => {
+    pushMoldableNavigation({
+      id: task ? `task-edit:${task.id}` : 'task:create',
+      title: task ? `Edit ${task.title}` : 'New task',
+    })
+    setActiveEditor({ type: 'task', mode, task })
+  }, [])
+
+  const openTaskDetail = useCallback(
+    (task: Task, sync: 'push' | 'none' = 'push') => {
+      if (sync === 'push') {
+        pushMoldableNavigation({
+          id: `task:${task.id}`,
+          title: task.title,
+        })
+      }
+      setActiveEditor({ type: 'task-detail', task })
+    },
+    [],
+  )
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
+
+  useMoldableNavigationPop(() => {
+    if (activeEditor) {
+      closeEditor('none')
+      return
+    }
+
+    if (selectedProjectId) {
+      openProjects('none')
+    }
+  })
+
   useEffect(() => {
     if (
       selectedProjectId &&
@@ -100,12 +177,12 @@ export function App() {
     const project = projects.find((item) => item.id === parsed.projectId)
     if (!project) return
 
-    setSelectedProjectId(project.id)
+    openProject(project.id)
     if (parsed.type === 'task') {
       const task = project.tasks.find((item) => item.id === parsed.taskId)
-      if (task) setActiveEditor({ type: 'task-detail', task })
+      if (task) openTaskDetail(task)
     }
-  }, [projects])
+  }, [openProject, openTaskDetail, projects])
 
   useEffect(() => {
     const url = new URL(window.location.href)
@@ -210,8 +287,8 @@ export function App() {
       return parseJsonResponse<{ project: Project }>(res)
     },
     onSuccess: ({ project }) => {
-      setSelectedProjectId(project.id)
-      setActiveEditor(null)
+      popMoldableNavigation()
+      openProject(project.id)
       void invalidateProjects()
     },
   })
@@ -243,7 +320,8 @@ export function App() {
       return parseJsonResponse<{ project: Project }>(res)
     },
     onSuccess: () => {
-      setActiveEditor(null)
+      if (activeEditor) closeEditor('pop')
+      else setActiveEditor(null)
       void invalidateProjects()
     },
   })
@@ -256,7 +334,7 @@ export function App() {
       return parseJsonResponse<{ ok: boolean }>(res)
     },
     onSuccess: () => {
-      setSelectedProjectId(null)
+      openProjects('reset')
       void invalidateProjects()
     },
   })
@@ -291,7 +369,8 @@ export function App() {
       return parseJsonResponse<{ task: Task }>(res)
     },
     onSuccess: ({ task }) => {
-      setActiveEditor({ type: 'task-detail', task })
+      popMoldableNavigation()
+      openTaskDetail(task)
       void invalidateProjects()
     },
   })
@@ -325,7 +404,8 @@ export function App() {
       return parseJsonResponse<{ task: Task }>(res)
     },
     onSuccess: ({ task }) => {
-      setActiveEditor({ type: 'task-detail', task })
+      closeEditor('pop')
+      openTaskDetail(task, 'none')
       void invalidateProjects()
     },
   })
@@ -424,7 +504,8 @@ export function App() {
       return parseJsonResponse<{ ok: boolean }>(res)
     },
     onSuccess: () => {
-      setActiveEditor(null)
+      if (activeEditor) closeEditor('pop')
+      else setActiveEditor(null)
       void invalidateProjects()
     },
   })
@@ -446,15 +527,14 @@ export function App() {
 
   useMoldableCommands({
     'new-task': () => {
-      if (selectedProject) setActiveEditor({ type: 'task', mode: 'create' })
+      if (selectedProject) openTaskEditor('create')
     },
     'open-projects': () => {
-      setActiveEditor(null)
-      setSelectedProjectId(null)
+      openProjects()
     },
     'open-project': (payload) => {
       const projectId = (payload as { projectId?: unknown } | null)?.projectId
-      if (typeof projectId === 'string') setSelectedProjectId(projectId)
+      if (typeof projectId === 'string') openProject(projectId)
     },
   })
 
@@ -504,7 +584,7 @@ export function App() {
           project={activeEditor.project}
           isPending={createProject.isPending || updateProject.isPending}
           error={createProject.error ?? updateProject.error}
-          onCancel={() => setActiveEditor(null)}
+          onCancel={() => closeEditor('pop')}
           onSubmit={(form) => {
             if (activeEditor.mode === 'edit' && activeEditor.project) {
               updateProject.mutate({ project: activeEditor.project, form })
@@ -527,7 +607,7 @@ export function App() {
           labels={projectLabels}
           isPending={createTask.isPending || updateTask.isPending}
           error={createTask.error ?? updateTask.error}
-          onCancel={() => setActiveEditor(null)}
+          onCancel={() => closeEditor('pop')}
           onUploadAttachment={(file) =>
             uploadAttachment(file).then(({ attachment }) => attachment)
           }
@@ -559,14 +639,8 @@ export function App() {
             updateComment.isPending ||
             deleteComment.isPending
           }
-          onBack={() => setActiveEditor(null)}
-          onEdit={() =>
-            setActiveEditor({
-              type: 'task',
-              mode: 'edit',
-              task: activeEditor.task,
-            })
-          }
+          onBack={() => closeEditor('pop')}
+          onEdit={() => openTaskEditor('edit', activeEditor.task)}
           onPatchTask={(patch) =>
             patchTask.mutate({ task: activeEditor.task, patch })
           }
@@ -597,10 +671,8 @@ export function App() {
       <ProjectDirectory
         projects={projects}
         isLoading={projectsQuery.isLoading}
-        onCreateProject={() =>
-          setActiveEditor({ type: 'project', mode: 'create' })
-        }
-        onSelectProject={setSelectedProjectId}
+        onCreateProject={() => openProjectEditor('create')}
+        onSelectProject={(projectId) => openProject(projectId)}
       />
     )
   }
@@ -616,14 +688,11 @@ export function App() {
           <>
             <ProjectPageHeader
               selectedProject={selectedProject}
-              onBackToProjects={() => setSelectedProjectId(null)}
-              onEditProject={() =>
-                setActiveEditor({
-                  type: 'project',
-                  mode: 'edit',
-                  project: selectedProject,
-                })
-              }
+              onBackToProjects={() => {
+                popMoldableNavigation()
+                setSelectedProjectId(null)
+              }}
+              onEditProject={() => openProjectEditor('edit', selectedProject)}
               onDeleteProject={() =>
                 setDeleteTarget({ type: 'project', project: selectedProject })
               }
@@ -641,12 +710,8 @@ export function App() {
                 onFiltersChange={setFilters}
                 visibleTasks={filteredTasks}
                 hasActiveFilters={hasActiveTaskFilters(filters)}
-                onCreateTask={() =>
-                  setActiveEditor({ type: 'task', mode: 'create' })
-                }
-                onEditTask={(task) =>
-                  setActiveEditor({ type: 'task-detail', task })
-                }
+                onCreateTask={() => openTaskEditor('create')}
+                onEditTask={(task) => openTaskDetail(task)}
                 onPatchTask={(task, patch) => patchTask.mutate({ task, patch })}
                 onDeleteTask={(task) => setDeleteTarget({ type: 'task', task })}
               />

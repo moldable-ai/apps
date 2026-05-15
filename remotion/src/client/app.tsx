@@ -1,6 +1,12 @@
 import { Film, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
-import { useState } from 'react'
-import { Button } from '@moldable-ai/ui'
+import { useEffect, useState } from 'react'
+import {
+  Button,
+  popMoldableNavigation,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
+  useMoldableNavigationPop,
+} from '@moldable-ai/ui'
 import { ProjectEditor } from '@/components/project-editor'
 import { ProjectList } from '@/components/project-list'
 
@@ -9,6 +15,20 @@ export default function App() {
     null,
   )
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+
+  const selectProject = (projectId: string) => {
+    if (selectedProjectId) popMoldableNavigation()
+    pushMoldableNavigation({ id: `project:${projectId}`, title: 'Project' })
+    setSelectedProjectId(projectId)
+  }
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
+
+  useMoldableNavigationPop(() => {
+    setSelectedProjectId(null)
+  })
 
   return (
     <div className="bg-background text-foreground flex h-screen overflow-hidden">
@@ -22,7 +42,7 @@ export default function App() {
         <div className="h-full w-80">
           <ProjectList
             selectedProjectId={selectedProjectId}
-            onSelectProject={setSelectedProjectId}
+            onSelectProject={selectProject}
           />
         </div>
       </div>

@@ -14,7 +14,7 @@
   "category": "creative",
   "tags": ["images", "generation", "openai", "gpt-image-2"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.10",
+    "@moldable-ai/ui": "^0.2.12",
     "@moldable-ai/storage": "^0.1.5"
   },
   "appApi": {

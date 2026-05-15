@@ -11,7 +11,7 @@
   "category": "productivity",
   "tags": [],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.10",
+    "@moldable-ai/ui": "^0.2.12",
     "@moldable-ai/storage": "^0.1.5"
   },
   "appApi": {

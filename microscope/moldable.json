@@ -1,0 +1,174 @@
+{
+  "name": "Microscope",
+  "version": "0.1.0",
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "Explore the natural world through generated images, transparent 2D relief layers, procedural 3D models, and optional fal Hunyuan3D or Tripo renders.",
+  "author": "Moldable",
+  "license": "MIT",
+  "icon": "🔬",
+  "iconPath": "public/icon.png",
+  "widgetSize": "large",
+  "widgetTint": "teal",
+  "category": "knowledge",
+  "tags": ["science", "learning", "images", "gpt-image-2", "3d"],
+  "aliases": [
+    "magic scope",
+    "science explorer",
+    "3d nature viewer",
+    "microscope"
+  ],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.12",
+    "@moldable-ai/storage": "^0.1.5"
+  },
+  "env": [],
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "microscope.explore",
+        "name": "Microscope",
+        "description": "List library specimens and generated explorations, create GPT Image 2 science images, remove their backgrounds, and inspect the resulting 2D relief or generated 3D model.",
+        "scopes": [
+          {
+            "id": "microscope.list",
+            "name": "List explorations",
+            "description": "List built-in specimens and generated workspace explorations."
+          },
+          {
+            "id": "microscope.generate",
+            "name": "Generate exploration",
+            "description": "Generate a new educational exploration. Microscope infers the category and metadata, creates a GPT Image 2 image, removes its background, and starts a background 3D render.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "prompt": {
+                  "type": "string"
+                },
+                "quality": {
+                  "type": "string",
+                  "enum": ["medium", "high"]
+                },
+                "modelProvider": {
+                  "type": "string",
+                  "enum": ["fal", "tripo"]
+                }
+              },
+              "required": ["prompt"]
+            }
+          },
+          {
+            "id": "microscope.materialize",
+            "name": "Generate real specimen",
+            "description": "Create a real generated exploration from a built-in specimen id.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "quality": {
+                  "type": "string",
+                  "enum": ["medium", "high"]
+                },
+                "modelProvider": {
+                  "type": "string",
+                  "enum": ["fal", "tripo"]
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "microscope.regenerate",
+            "name": "Regenerate exploration",
+            "description": "Regenerate an existing generated exploration in place.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "modelProvider": {
+                  "type": "string",
+                  "enum": ["fal", "tripo"]
+                },
+                "quality": {
+                  "type": "string",
+                  "enum": ["medium", "high"]
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "microscope.regenerateModel",
+            "name": "Regenerate 3D model",
+            "description": "Regenerate only the 3D model for an existing generated exploration, preserving the current 2D layer.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "modelProvider": {
+                  "type": "string",
+                  "enum": ["fal", "tripo"]
+                },
+                "quality": {
+                  "type": "string",
+                  "enum": ["medium", "high"]
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "microscope.cancel",
+            "name": "Cancel generation",
+            "description": "Cancel a stuck or unwanted generated exploration and keep any finished 2D layer available.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "microscope.prompts",
+            "name": "Prompt ideas",
+            "description": "Return sample prompts and category metadata for chat-driven exploration."
+          },
+          {
+            "id": "microscope.settings",
+            "name": "Read settings",
+            "description": "Return Microscope settings including the selected 3D model provider and default quality."
+          },
+          {
+            "id": "microscope.updateSettings",
+            "name": "Update settings",
+            "description": "Update Microscope settings such as the selected 3D model provider and default quality.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "modelProvider": {
+                  "type": "string",
+                  "enum": ["fal", "tripo"]
+                },
+                "quality": {
+                  "type": "string",
+                  "enum": ["medium", "high"]
+                }
+              },
+              "required": ["modelProvider", "quality"]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

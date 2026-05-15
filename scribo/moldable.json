@@ -15,8 +15,8 @@
   "category": "productivity",
   "tags": ["languages", "translation", "learning", "journal"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.10",
-    "@moldable-ai/editor": "^0.1.9",
+    "@moldable-ai/ui": "^0.2.12",
+    "@moldable-ai/editor": "^0.1.11",
     "@moldable-ai/storage": "^0.1.5"
   },
   "appApi": {

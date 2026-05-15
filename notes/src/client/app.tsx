@@ -36,6 +36,10 @@ import {
   Markdown,
   ScrollArea,
   cn,
+  popMoldableNavigation,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
+  useMoldableNavigationPop,
   useWorkspace,
 } from '@moldable-ai/ui'
 import type { Note } from '../lib/types'
@@ -69,6 +73,26 @@ export default function NotesPage() {
       if (!res.ok) throw new Error('Failed to fetch')
       return res.json()
     },
+  })
+
+  const closeEditor = useCallback((sync: 'pop' | 'none' = 'pop') => {
+    if (sync === 'pop') popMoldableNavigation()
+    setEditingNote(null)
+    setIsCreating(false)
+  }, [])
+
+  const openCreateNote = useCallback(() => {
+    pushMoldableNavigation({ id: 'note:create', title: 'New note' })
+    setEditingNote(null)
+    setIsCreating(true)
+  }, [])
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
+
+  useMoldableNavigationPop(() => {
+    closeEditor('none')
   })
 
   // Grouping labels
@@ -119,8 +143,7 @@ export default function NotesPage() {
     }
 
     saveNotesMutation.mutate(updatedNotes)
-    setEditingNote(null)
-    setIsCreating(false)
+    closeEditor('pop')
   }
 
   const handleMoveToTrash = useCallback(
@@ -177,7 +200,12 @@ export default function NotesPage() {
   )
 
   const handleEditNote = useCallback((note: Note) => {
+    pushMoldableNavigation({
+      id: `note:${note.id}`,
+      title: note.title || 'Note',
+    })
     setEditingNote(note)
+    setIsCreating(false)
   }, [])
 
   // When searching, search across ALL non-deleted notes and group by label
@@ -356,11 +384,7 @@ export default function NotesPage() {
                 Empty Trash
               </Button>
             )}
-            <Button
-              size="sm"
-              onClick={() => setIsCreating(true)}
-              className="gap-2"
-            >
+            <Button size="sm" onClick={openCreateNote} className="gap-2">
               <Plus className="size-4" />
               New Note
             </Button>
@@ -391,10 +415,7 @@ export default function NotesPage() {
           initialNote={editingNote ?? undefined}
           allLabels={allLabels}
           onSave={handleSaveNote}
-          onCancel={() => {
-            setEditingNote(null)
-            setIsCreating(false)
-          }}
+          onCancel={() => closeEditor('pop')}
         />
       )}
     </div>

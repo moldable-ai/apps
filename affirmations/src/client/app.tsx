@@ -10,7 +10,13 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useWorkspace } from '@moldable-ai/ui'
+import {
+  popMoldableNavigation,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
+  useMoldableNavigationPop,
+  useWorkspace,
+} from '@moldable-ai/ui'
 import { categories, getAffirmations } from '@/lib/affirmations'
 import {
   useFavorites,
@@ -113,6 +119,49 @@ export default function DailyAffirmations() {
     [selectedCategory],
   )
 
+  const openCategory = useCallback(
+    (categoryId: string) => {
+      const category = categories.find((item) => item.id === categoryId)
+      pushMoldableNavigation({
+        id: `category:${categoryId}`,
+        title: category?.name ?? 'Affirmation',
+      })
+      setSelectedCategory(categoryId)
+      generateNew(categoryId)
+    },
+    [generateNew],
+  )
+
+  const closeCategory = useCallback((sync: 'pop' | 'none' = 'pop') => {
+    if (sync === 'pop') popMoldableNavigation()
+    setSelectedCategory(null)
+  }, [])
+
+  const openFavorites = useCallback(() => {
+    pushMoldableNavigation({ id: 'favorites', title: 'Favorites' })
+    setShowFavorites(true)
+  }, [])
+
+  const closeFavorites = useCallback((sync: 'pop' | 'none' = 'pop') => {
+    if (sync === 'pop') popMoldableNavigation('favorites')
+    setShowFavorites(false)
+  }, [])
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
+
+  useMoldableNavigationPop((message) => {
+    const entryId = message.entry?.id ?? ''
+
+    if (entryId === 'favorites' || showFavorites) {
+      closeFavorites('none')
+      return
+    }
+
+    closeCategory('none')
+  })
+
   if (isLoading || !isMigrated) {
     return (
       <div className="bg-background flex h-screen items-center justify-center">
@@ -146,10 +195,7 @@ export default function DailyAffirmations() {
                     <button
                       key={category.id}
                       type="button"
-                      onClick={() => {
-                        setSelectedCategory(category.id)
-                        generateNew(category.id)
-                      }}
+                      onClick={() => openCategory(category.id)}
                       className="bg-card border-border hover:border-primary/50 group relative cursor-pointer rounded-2xl border p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
                     >
                       <div
@@ -170,7 +216,7 @@ export default function DailyAffirmations() {
               {favorites.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setShowFavorites(true)}
+                  onClick={openFavorites}
                   className="text-primary mt-12 flex cursor-pointer items-center gap-2 font-medium hover:underline"
                 >
                   View Saved Affirmations ({favorites.length})
@@ -189,7 +235,7 @@ export default function DailyAffirmations() {
             <div className="flex items-center justify-between p-8">
               <button
                 type="button"
-                onClick={() => setSelectedCategory(null)}
+                onClick={() => closeCategory('pop')}
                 className="bg-muted/80 hover:bg-muted flex size-10 cursor-pointer items-center justify-center rounded-full backdrop-blur-md transition-colors"
               >
                 <ArrowLeft size={20} />
@@ -258,7 +304,7 @@ export default function DailyAffirmations() {
               <h2 className="text-3xl font-semibold">Your Favorites</h2>
               <button
                 type="button"
-                onClick={() => setShowFavorites(false)}
+                onClick={() => closeFavorites('pop')}
                 className="bg-muted hover:bg-muted/80 flex size-10 cursor-pointer items-center justify-center rounded-full"
               >
                 <X size={20} />

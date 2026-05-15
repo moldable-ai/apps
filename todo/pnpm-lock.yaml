@@ -12,8 +12,8 @@ importers:
         specifier: ^0.1.5
         version: 0.1.5
       '@moldable-ai/ui':
-        specifier: ^0.2.10
-        version: 0.2.10(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        specifier: ^0.2.12
+        version: 0.2.12(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@tanstack/react-query':
         specifier: ^5.99.2
         version: 5.99.2(react@19.2.5)
@@ -634,8 +634,8 @@ packages:
   '@moldable-ai/typescript-config@0.1.4':
     resolution: {integrity: sha512-eSRLkG4oqtIH9H75AFusRRlaQLBPNMSp4IiCaJf5TU9NC5LM8awvEtlLOoknlKSwugZZ+Grt7VagSJ9nTqZvLQ==}
 
-  '@moldable-ai/ui@0.2.10':
-    resolution: {integrity: sha512-95ULk9d99fLQ5UBTC2gfRJmZ8zcQ9TxKt5dsDNOd4egtCjHheA/ji08RPkHYkrAum12hTMnZyKC121YLM2d4iw==}
+  '@moldable-ai/ui@0.2.12':
+    resolution: {integrity: sha512-Dhz+2lCOZXfZHvedZMcpamb91tSzghdneltmBYzsYZJvu89EjqEdlmRu3KXR10/M99JzlZpayI9kQCmjdxGx2g==}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
@@ -3955,7 +3955,7 @@ snapshots:
 
   '@moldable-ai/typescript-config@0.1.4': {}
 
-  '@moldable-ai/ui@0.2.10(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@moldable-ai/ui@0.2.12(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@base-ui/react': 1.1.0(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@dnd-kit/core': 6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)

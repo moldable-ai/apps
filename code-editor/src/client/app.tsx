@@ -1,6 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import {
+  popMoldableNavigation,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
+  useMoldableNavigationPop,
+} from '@moldable-ai/ui'
 import { useProject } from '@/hooks/use-project'
 import { IDELayout } from '@/components/layout'
 import { ProjectSelector } from '@/components/project'
@@ -9,6 +15,10 @@ type PendingOpenFile = {
   nonce: number
   projectPath: string
   filePath: string
+}
+
+function projectTitle(path: string) {
+  return path.split(/[\\/]/).filter(Boolean).at(-1) ?? 'Project'
 }
 
 export default function App() {
@@ -27,6 +37,14 @@ export default function App() {
 
   const [pendingOpenFile, setPendingOpenFile] =
     useState<PendingOpenFile | null>(null)
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
+
+  useMoldableNavigationPop(() => {
+    void closeProject()
+  })
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -48,6 +66,11 @@ export default function App() {
       })
 
       if (rootPath !== projectPath) {
+        if (rootPath) popMoldableNavigation()
+        pushMoldableNavigation({
+          id: `project:${projectPath}`,
+          title: projectTitle(projectPath),
+        })
         void openProject(projectPath)
       }
     }
@@ -63,9 +86,14 @@ export default function App() {
       currentActiveFile: string | null,
     ) => {
       await saveCurrentProjectTabs(currentOpenFiles, currentActiveFile)
+      if (rootPath) popMoldableNavigation()
+      pushMoldableNavigation({
+        id: `project:${path}`,
+        title: projectTitle(path),
+      })
       await openProject(path)
     },
-    [saveCurrentProjectTabs, openProject],
+    [rootPath, saveCurrentProjectTabs, openProject],
   )
 
   const handleOpenFolder = useCallback(
@@ -79,6 +107,7 @@ export default function App() {
   const handleCloseProject = useCallback(
     async (currentOpenFiles: string[], currentActiveFile: string | null) => {
       await saveCurrentProjectTabs(currentOpenFiles, currentActiveFile)
+      popMoldableNavigation()
       await closeProject()
     },
     [saveCurrentProjectTabs, closeProject],
@@ -97,7 +126,13 @@ export default function App() {
         <ProjectSelector
           recentProjects={recentProjects}
           isLoading={isLoading}
-          onSelectProject={openProject}
+          onSelectProject={(path) => {
+            pushMoldableNavigation({
+              id: `project:${path}`,
+              title: projectTitle(path),
+            })
+            void openProject(path)
+          }}
           onOpenFolder={openFolderPicker}
         />
       </div>
