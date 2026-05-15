@@ -17,6 +17,7 @@ import type {
   ModelRecipe,
   ModelVariant,
   Specimen,
+  VisualStyle,
 } from '../shared/types'
 import {
   type AivaultRequest,
@@ -43,14 +44,6 @@ const DEFAULT_SETTINGS: MicroscopeSettings = {
   quality: DEFAULT_QUALITY,
 }
 const activeModelRenderTokens = new Map<string, string>()
-const IMAGE_GENERATION_FRAME = [
-  'Create one isolated, high-quality educational specimen render for a magic microscope app.',
-  'The output must be suitable for remove.bg and image-to-3D conversion.',
-  'Show exactly one primary subject. If the request asks for a comparison, process, ecosystem, scene, lifecycle, or many objects, choose one representative physical specimen or cutaway that is well known and likely to have strong model training data.',
-  'Prefer common, visually recognizable subjects over obscure or out-of-distribution subjects.',
-  'Use a centered 3/4 view or clean cutaway, complete silhouette, clear margins, rich texture, strong contour separation, and realistic educational structure.',
-  'Use a plain white or very light neutral background with no environment, landscape, people, hands, tools, labels, arrows, callouts, text, inset diagrams, duplicate subjects, or decorative props.',
-].join('\n')
 
 type OpenAIImageResponse = {
   data?: Array<{
@@ -75,6 +68,46 @@ type ExplorationMetadata = {
   details: Array<{ label: string; value: string }>
   prompts: string[]
   imagePrompt: string
+  visualStyle: VisualStyle
+}
+
+const EDUCATIONAL_BY_DEFAULT_CATEGORIES = new Set([
+  'cells-microbes',
+  'human-body',
+  'chemistry-matter',
+  'water-worlds',
+])
+
+function defaultVisualStyleFor(categoryId: string | undefined): VisualStyle {
+  if (!categoryId) return 'realistic'
+  return EDUCATIONAL_BY_DEFAULT_CATEGORIES.has(categoryId)
+    ? 'educational'
+    : 'realistic'
+}
+
+const EDUCATIONAL_IMAGE_FRAME = [
+  'Create one isolated, high-end educational science render for a magic microscope app.',
+  'Style: stylized 3D digital illustration in the spirit of a premium biology textbook or museum learning asset — clean, slightly exaggerated, distinctively colored, painterly-but-precise. NOT photorealistic, NOT a real photograph, NOT a medical scan.',
+  'Apply rich saturated educational colors that visually separate organelles, structures, and regions from each other. Each major sub-structure should be clearly identifiable by colour and form. Soft global illumination, gentle highlights, no harsh shadows.',
+  'Show one primary subject as a clean cutaway, cross-section, or expanded structural diagram so internal anatomy is visible. Smooth surfaces with subtle texture, expressive contours, exaggerated but accurate proportions.',
+  'Plain white or very light neutral background. No environment, no labels, no arrows, no text, no callouts, no hands, no tools, no rulers, no duplicate specimens, no decorative props.',
+  'The output must be one complete subject with a clear silhouette, suitable for remove.bg and image-to-3D conversion.',
+].join('\n')
+
+const REALISTIC_IMAGE_FRAME = [
+  'Create one isolated, high-quality realistic specimen render for a magic microscope app.',
+  'Style: photorealistic, naturalistic, scientifically faithful. True-to-life colours, textures, proportions, and surface detail. Like a museum specimen, wildlife reference photograph, or anatomical study.',
+  'Soft natural studio lighting from a single key direction with a gentle fill. No stylization, no exaggeration, no painterly effects.',
+  'Show exactly one primary subject. If the request asks for a comparison, process, ecosystem, scene, lifecycle, or many objects, choose one representative physical specimen that is well known and likely to have strong model training data.',
+  'Centered 3/4 view or clean anatomical cutaway with complete silhouette, clear margins, rich surface texture, strong contour separation, and biologically realistic structure.',
+  'Plain white or very light neutral background. No environment, no labels, no arrows, no text, no callouts, no hands, no tools, no duplicate specimens, no decorative props.',
+  'The output must be suitable for remove.bg and image-to-3D conversion.',
+].join('\n')
+
+function imageFrameFor(visualStyle: VisualStyle): string {
+  return visualStyle === 'educational'
+    ? EDUCATIONAL_IMAGE_FRAME
+    : REALISTIC_IMAGE_FRAME
 }
 
 const modelProviderSchema = z.enum(['fal', 'tripo'])
@@ -138,6 +171,7 @@ const explorationMetadataSchema = z
       .max(6),
     prompts: z.array(z.string().trim().min(1)).min(3).max(6),
     imagePrompt: z.string().trim().min(12),
+    visualStyle: z.enum(['educational', 'realistic']),
   })
   .strict()
 
@@ -523,6 +557,7 @@ function fallbackMetadata(
     ],
     prompts: category.prompts.slice(0, 4),
     imagePrompt: input.prompt,
+    visualStyle: input.visualStyle ?? defaultVisualStyleFor(category.id),
   }
 }
 
@@ -564,6 +599,10 @@ const explorationMetadataJsonSchema = {
       items: { type: 'string' },
     },
     imagePrompt: { type: 'string' },
+    visualStyle: {
+      type: 'string',
+      enum: ['educational', 'realistic'],
+    },
   },
   required: [
     'title',
@@ -574,6 +613,7 @@ const explorationMetadataJsonSchema = {
     'details',
     'prompts',
     'imagePrompt',
+    'visualStyle',
   ],
 }
 
@@ -654,19 +694,36 @@ prompts
   - Do not suggest subjects already listed in RECENTLY GENERATED IN THIS WORKSPACE. Prefer adjacent, surprising, high-curiosity subjects that are still one isolated object or clean cutaway.
 
 imagePrompt
-  - Full visual prompt for GPT Image 2.
-  - Exactly one centered primary subject, complete silhouette, strong contours, rich texture, plain white or very light neutral background.
-  - Suitable for remove.bg and image-to-3D conversion.
-  - No environment, no labels, no arrows, no text, no callouts, no hands, no tools, no duplicate specimens, no scenes.
+  - Full visual prompt for GPT Image 2 describing the SUBJECT only — its anatomy, materials, distinguishing features, structural details, colours, and orientation. ~2-4 sentences.
+  - Do NOT prescribe overall art style, lighting, background, or framing here. The pipeline appends those based on visualStyle.
+  - Exactly one centered primary subject, complete silhouette, no labels, no text, no callouts, no scenes.
+
+visualStyle
+  - "educational" or "realistic". Pick the render aesthetic best suited to teaching about THIS specific subject.
+  - Use "educational" when the subject is normally invisible to the naked eye, abstract, or only really intelligible through diagrammatic cutaway — for example:
+      cells and organelles, microbes, viruses, bacteria, protozoa, plankton, pollen, gut/skin microbiome, blood components,
+      organ-internal anatomy (heart chambers, kidney nephron, neuron with myelin, lung alveoli),
+      molecular structures (atoms, DNA, proteins, crystals, soap molecules),
+      chemistry processes, photosynthesis, digestion, immune attack scenes,
+      water-scale microbiology (a drop of pond water, microplastics).
+    For these, prefer a stylized 3D textbook-illustration aesthetic with saturated colours, exaggerated structures, and clean cutaway — like a top-tier biology textbook or museum diorama.
+  - Use "realistic" when the subject is a real-world organism, object, place, or material that the user would expect to look like itself — for example:
+      whole animals (shrimp, anglerfish, T-rex, hummingbird, butterfly), whole plants, fungi, mushrooms,
+      ecosystems and landscapes, geological features, weather phenomena, astronomical bodies (moons, planets, comets),
+      foods and everyday materials, instruments and machines, cultural artefacts.
+    For these, prefer photorealistic specimen / wildlife / museum reference style.
+  - Never describe rendering style inside imagePrompt. Just pick the right visualStyle and leave the style framing to the pipeline.
 
 EXAMPLE OF THE VOICE YOU SHOULD MATCH
 
-For a request like "show me a healthy coral reef":
+For a request like "show me a healthy coral reef" (animal subject → realistic):
 {
   "title": "Coral polyp",
   "subtitle": "Reef-building cnidarian",
   "description": "A single stony coral polyp, the tentacled animal that builds reef skeletons by secreting calcium carbonate around its base.",
   "categoryId": "animals",
+  "visualStyle": "realistic",
+  "imagePrompt": "A single stony coral polyp extended from a calcium carbonate cup, with a translucent column, fine retractable tentacles ringing the oral disc, and visible mesenterial filaments inside. Pinkish-tan body with hints of brown zooxanthellae freckles, captured in three-quarter view.",
   "observations": [
     "Polyps live in colonies and share a connected gastrovascular cavity.",
     "Each polyp hosts photosynthetic algae called zooxanthellae in its tissue.",
@@ -683,6 +740,33 @@ For a request like "show me a healthy coral reef":
     "Coral bleaching close-up",
     "Branching staghorn coral colony",
     "Crown-of-thorns starfish"
+  ]
+}
+
+For a request like "animal cell" (microscopic / textbook subject → educational):
+{
+  "title": "Animal cell",
+  "subtitle": "Eukaryotic somatic cell",
+  "description": "A generalised animal cell, the building block of vertebrate tissues, with a nucleus and membrane-bound organelles suspended in cytoplasm.",
+  "categoryId": "cells-microbes",
+  "visualStyle": "educational",
+  "imagePrompt": "A generalised animal cell shown as a clean three-quarter cutaway. A prominent purple nucleus with a darker nucleolus dominates one side, surrounded by ribbon-like rough endoplasmic reticulum, a stack of Golgi cisternae, several mitochondria with visible inner cristae, round lysosomes, and a microtubule cytoskeleton threading through the cytoplasm. Outer membrane in pale blue, organelles in distinct saturated colours.",
+  "observations": [
+    "The nucleus stores DNA and directs protein synthesis through messenger RNA.",
+    "Mitochondria generate ATP via oxidative phosphorylation in their inner membrane.",
+    "The Golgi apparatus modifies and packages proteins from the endoplasmic reticulum."
+  ],
+  "details": [
+    { "label": "Diameter", "value": "10-30 µm" },
+    { "label": "Domain", "value": "Eukaryota" },
+    { "label": "DNA location", "value": "Membrane-bound nucleus" },
+    { "label": "Cell wall", "value": "Absent" }
+  ],
+  "prompts": [
+    "Mitochondrion cutaway",
+    "Rough endoplasmic reticulum",
+    "Cell membrane bilayer",
+    "Lysosome digesting debris"
   ]
 }
 
@@ -740,8 +824,10 @@ async function generateExplorationMetadata(
 
 function composeImagePrompt(input: GenerateExplorationInput): string {
   const category = CATEGORIES.find((item) => item.id === input.categoryId)
+  const visualStyle =
+    input.visualStyle ?? defaultVisualStyleFor(input.categoryId)
   return [
-    IMAGE_GENERATION_FRAME,
+    imageFrameFor(visualStyle),
     category
       ? `Domain: ${category.name}. ${category.description}`
       : 'Domain: broad natural world, from microscopic to cosmic scale.',
@@ -984,6 +1070,10 @@ async function queueGeneration(
   const metadata = await generateExplorationMetadata(workspaceId, input)
   const category =
     CATEGORIES.find((item) => item.id === metadata.categoryId) ?? CATEGORIES[0]
+  const visualStyle =
+    metadata.visualStyle ??
+    input.visualStyle ??
+    defaultVisualStyleFor(category.id)
   const exploration: GeneratedExploration = {
     id: randomUUID(),
     source: 'generated',
@@ -993,6 +1083,7 @@ async function queueGeneration(
     prompt: input.prompt,
     categoryId: category.id,
     scale: category.scale,
+    visualStyle,
     status: 'generating',
     backgroundStatus: 'pending',
     modelStatus: 'pending',
@@ -1019,6 +1110,7 @@ async function queueGeneration(
     categoryId: category.id,
     modelProvider,
     quality,
+    visualStyle,
   })
   return exploration
 }
@@ -1055,15 +1147,22 @@ async function queueRegeneration(
     const category = CATEGORIES.find(
       (candidate) => candidate.id === item.categoryId,
     )
+    const visualStyle =
+      item.visualStyle ?? defaultVisualStyleFor(item.categoryId)
     return {
       ...item,
       subtitle: category?.name ?? 'Generated exploration',
+      visualStyle,
       status: 'generating',
       backgroundStatus: 'pending',
       modelStatus: 'pending',
       errorMessage: undefined,
       backgroundErrorMessage: undefined,
       modelErrorMessage: undefined,
+      imageFileName: undefined,
+      sourceImageFileName: undefined,
+      imageUrl: null,
+      sourceImageUrl: null,
       modelFileName: undefined,
       modelMaterialFileName: undefined,
       modelTextureFileName: undefined,
@@ -1080,11 +1179,22 @@ async function queueRegeneration(
 
   if (!updated) return null
 
+  // Drop the stale asset directory so the previous image and model files are
+  // not served while the new generation is in flight. `saveImageAsset` will
+  // recreate the directory when the new image is written.
+  await rm(assetDir(workspaceId, explorationId), {
+    recursive: true,
+    force: true,
+  }).catch(() => undefined)
+  activeModelRenderTokens.delete(modelRenderKey(workspaceId, explorationId))
+
   void finishGeneration(workspaceId, explorationId, {
     prompt: updated.prompt,
     categoryId: updated.categoryId,
     quality,
     modelProvider,
+    visualStyle:
+      updated.visualStyle ?? defaultVisualStyleFor(updated.categoryId),
   })
   return updated
 }

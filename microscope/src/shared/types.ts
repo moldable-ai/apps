@@ -53,6 +53,8 @@ export type Specimen = {
   prompts: string[]
 }
 
+export type VisualStyle = 'educational' | 'realistic'
+
 export type GeneratedExploration = {
   id: string
   source: 'generated'
@@ -62,6 +64,7 @@ export type GeneratedExploration = {
   prompt: string
   categoryId: string
   scale: ScaleLevel
+  visualStyle?: VisualStyle
   status: 'generating' | 'ready' | 'failed' | 'canceled'
   backgroundStatus?: 'pending' | 'removing' | 'ready' | 'failed' | 'skipped'
   modelStatus?: 'pending' | 'rendering' | 'ready' | 'failed' | 'skipped'
@@ -121,6 +124,7 @@ export type GenerateExplorationInput = {
   categoryId?: string
   quality?: ImageQuality
   modelProvider?: ModelProvider
+  visualStyle?: VisualStyle
 }
 
 export type GenerateExplorationResponse = {
