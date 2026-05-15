@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertTriangle,
   ArrowLeft,
   Ban,
   Box,
@@ -230,6 +231,12 @@ function statusLabel(exploration: GeneratedExploration): string | null {
   if (exploration.status === 'generating') return 'Generating image'
   if (exploration.status === 'canceled') return 'Canceled'
   if (exploration.backgroundStatus === 'removing') return 'Removing background'
+  if (
+    exploration.backgroundStatus === 'failed' &&
+    exploration.modelStatus !== 'failed'
+  ) {
+    return 'Original image'
+  }
   if (exploration.modelStatus === 'rendering') return 'Rendering 3D'
   if (exploration.modelStatus === 'failed') return 'Image only'
   return null
@@ -311,6 +318,36 @@ function generatedPreviewImagesInCategory(
     .slice(0, 8)
 }
 
+function PreviewImage({
+  src,
+  fallbackSrc,
+  className,
+}: {
+  src: string
+  fallbackSrc?: string | null
+  className?: string
+}) {
+  const [usingFallback, setUsingFallback] = useState(false)
+  const displaySrc = usingFallback && fallbackSrc ? fallbackSrc : src
+
+  useEffect(() => {
+    setUsingFallback(false)
+  }, [fallbackSrc, src])
+
+  return (
+    <img
+      src={displaySrc}
+      alt=""
+      className={className}
+      onError={() => {
+        if (!usingFallback && fallbackSrc && fallbackSrc !== src) {
+          setUsingFallback(true)
+        }
+      }}
+    />
+  )
+}
+
 function PreviewArt({
   exploration,
   className,
@@ -320,9 +357,9 @@ function PreviewArt({
 }) {
   if (isGenerated(exploration) && exploration.imageUrl) {
     return (
-      <img
+      <PreviewImage
         src={exploration.imageUrl}
-        alt=""
+        fallbackSrc={exploration.sourceImageUrl}
         className={cn('size-full object-cover', className)}
       />
     )
@@ -836,10 +873,12 @@ function SpecimenView({
   onPromptGenerate,
   onRegenerateAll,
   onRegenerateModel,
+  onRetryBackground,
   onMoveCategory,
   onDelete,
   onCancel,
   regenerating,
+  retryingBackground,
   moving,
   deleting,
   canceling,
@@ -852,10 +891,12 @@ function SpecimenView({
   onPromptGenerate: PromptGenerateHandler
   onRegenerateAll?: () => void
   onRegenerateModel?: (provider?: ModelProvider) => void
+  onRetryBackground?: () => void
   onMoveCategory?: (categoryId: string) => void
   onDelete?: () => void
   onCancel?: () => void
   regenerating?: boolean
+  retryingBackground?: boolean
   moving?: boolean
   deleting?: boolean
   canceling?: boolean
@@ -891,6 +932,8 @@ function SpecimenView({
   const generating = generated?.status === 'generating' && !generated.imageUrl
   const failed = isGenerated(exploration) && exploration.status === 'failed'
   const failedMessage = generated ? explorationErrorMessage(generated) : null
+  const nonBlockingIssue =
+    generated && !failed && !generating && failedMessage ? failedMessage : null
   const canToggleLayer = isGenerated(exploration) && !!exploration.imageUrl
   const working = generated ? isExplorationWorking(generated) : false
   const canShow3d =
@@ -1120,6 +1163,23 @@ function SpecimenView({
         </div>
       ) : null}
 
+      {nonBlockingIssue ? (
+        <div
+          className="animate-chrome-in pointer-events-none absolute left-0 top-20 z-20 flex justify-center px-4 transition-[right] duration-300 ease-out"
+          style={{ right: sidePanelOpen ? INSPECTOR_WIDTH : 0 }}
+        >
+          <div className="border-destructive/35 bg-background/90 text-foreground pointer-events-auto flex max-w-[min(34rem,calc(100vw-2rem))] items-start gap-2 rounded-lg border px-3 py-2 text-xs shadow-lg backdrop-blur-xl">
+            <AlertTriangle className="text-destructive mt-0.5 size-4 shrink-0" />
+            <div className="min-w-0">
+              <p className="font-medium">Image available with issue</p>
+              <p className="text-muted-foreground mt-0.5 line-clamp-2 leading-4">
+                {nonBlockingIssue}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {generated?.modelStatus === 'rendering' && generated.imageUrl ? (
         <div
           className="animate-chrome-in pointer-events-none absolute left-0 top-20 z-10 flex justify-center px-4 transition-[right] duration-300 ease-out"
@@ -1328,10 +1388,12 @@ function SpecimenView({
               }
               onRegenerateModel?.(provider)
             }}
+            onRetryBackground={onRetryBackground}
             onMoveCategory={onMoveCategory}
             onDelete={onDelete}
             onCancel={onCancel}
             regenerating={regenerating}
+            retryingBackground={retryingBackground}
             moving={moving}
             deleting={deleting}
             canceling={canceling}
@@ -1575,10 +1637,12 @@ function Inspector({
   onPromptGenerate,
   onRegenerateAll,
   onRegenerateModel,
+  onRetryBackground,
   onMoveCategory,
   onDelete,
   onCancel,
   regenerating = false,
+  retryingBackground = false,
   moving = false,
   deleting = false,
   canceling = false,
@@ -1589,10 +1653,12 @@ function Inspector({
   onPromptGenerate: PromptGenerateHandler
   onRegenerateAll?: () => void
   onRegenerateModel?: (provider?: ModelProvider) => void
+  onRetryBackground?: () => void
   onMoveCategory?: (categoryId: string) => void
   onDelete?: () => void
   onCancel?: () => void
   regenerating?: boolean
+  retryingBackground?: boolean
   moving?: boolean
   deleting?: boolean
   canceling?: boolean
@@ -1605,11 +1671,17 @@ function Inspector({
   const [moveOpen, setMoveOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const canRegenerate = !!onRegenerateAll && !working
+  const showRetryBackground =
+    !!generated &&
+    generated.backgroundStatus === 'failed' &&
+    !!generated.sourceImageUrl &&
+    !!onRetryBackground
+  const canRetryBackground = showRetryBackground && !working
   const canRegenerateModel =
     !!generated && !!generated.imageUrl && !!onRegenerateModel && !working
   const canMove = !!generated && !!onMoveCategory && !working
   const canDelete = !!generated && !!onDelete
-  const actionPending = regenerating || moving || deleting
+  const actionPending = regenerating || retryingBackground || moving || deleting
 
   return (
     <>
@@ -1660,6 +1732,24 @@ function Inspector({
                     <RotateCw className="size-3.5" />
                     <span>Regenerate all</span>
                   </button>
+                  {showRetryBackground ? (
+                    <button
+                      type="button"
+                      disabled={!canRetryBackground}
+                      className="text-foreground hover:bg-muted/60 flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => {
+                        setActionsMenuOpen(false)
+                        onRetryBackground?.()
+                      }}
+                    >
+                      {retryingBackground ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <ImageIcon className="size-3.5" />
+                      )}
+                      <span>Retry removing bg</span>
+                    </button>
+                  ) : null}
                   <div className="text-muted-foreground px-2 pb-1 pt-2 text-[10px] font-medium uppercase tracking-wider">
                     Regenerate 3D model
                   </div>
@@ -2458,6 +2548,9 @@ export function App() {
   const [quality, setQuality] = useState<ImageQuality>('medium')
   const [sampleIndex, setSampleIndex] = useState(0)
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null)
+  const [retryingBackgroundId, setRetryingBackgroundId] = useState<
+    string | null
+  >(null)
   const [cancelingId, setCancelingId] = useState<string | null>(null)
   const [movingId, setMovingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -2646,6 +2739,33 @@ export function App() {
       selectExploration(response.exploration, 'none')
     },
     onSettled: () => setRegeneratingId(null),
+  })
+
+  const retryBackgroundMutation = useMutation({
+    mutationFn: async (id: string) => {
+      setRetryingBackgroundId(id)
+      return parseJson<GenerateExplorationResponse>(
+        await fetchWithWorkspace(
+          `/api/explorations/${encodeURIComponent(id)}/retry-background`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              quality: settings.quality,
+              modelProvider: settings.modelProvider,
+            }),
+          },
+        ),
+        'Microscope could not retry background removal.',
+      )
+    },
+    onSuccess: (response) => {
+      void queryClient.invalidateQueries({
+        queryKey: ['microscope-library', workspaceId],
+      })
+      selectExploration(response.exploration, 'none')
+    },
+    onSettled: () => setRetryingBackgroundId(null),
   })
 
   const cancelMutation = useMutation({
@@ -3109,6 +3229,11 @@ export function App() {
                     })
                 : undefined
             }
+            onRetryBackground={
+              isGenerated(selected)
+                ? () => retryBackgroundMutation.mutate(selected.id)
+                : undefined
+            }
             onMoveCategory={
               isGenerated(selected)
                 ? (categoryId) =>
@@ -3130,6 +3255,10 @@ export function App() {
               (regenerateMutation.isPending ||
                 regenerateModelMutation.isPending ||
                 materializeMutation.isPending)
+            }
+            retryingBackground={
+              retryingBackgroundId === selected.id &&
+              retryBackgroundMutation.isPending
             }
             moving={movingId === selected.id && moveMutation.isPending}
             deleting={deletingId === selected.id && deleteMutation.isPending}

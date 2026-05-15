@@ -254,6 +254,68 @@ function contentTypeForFile(fileName: string): string {
   return 'image/png'
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function stringField(
+  value: Record<string, unknown>,
+  key: string,
+): string | null {
+  const field = value[key]
+  return typeof field === 'string' && field.trim() ? field.trim() : null
+}
+
+function providerErrorFromJson(value: unknown): string | null {
+  if (!isRecord(value)) return null
+
+  const errors = value.errors
+  if (Array.isArray(errors)) {
+    const first = errors.find(isRecord)
+    if (first) {
+      const title = stringField(first, 'title') ?? stringField(first, 'message')
+      const code = stringField(first, 'code')
+      if (title && code) return `${title} (${code})`
+      if (title) return title
+    }
+  }
+
+  const error = value.error
+  if (isRecord(error)) {
+    const message = stringField(error, 'message') ?? stringField(error, 'title')
+    const code = stringField(error, 'code')
+    if (message && code) return `${message} (${code})`
+    if (message) return message
+  }
+
+  return stringField(value, 'message') ?? stringField(value, 'title')
+}
+
+function providerErrorFromBuffer(buffer: Buffer): string | null {
+  const body = buffer.toString('utf8').trim()
+  if (!body || (!body.startsWith('{') && !body.startsWith('['))) return null
+
+  try {
+    return providerErrorFromJson(JSON.parse(body))
+  } catch {
+    return null
+  }
+}
+
+function isPngBuffer(buffer: Buffer): boolean {
+  return (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a
+  )
+}
+
 async function loadGenerated(
   workspaceId?: string,
 ): Promise<GeneratedExploration[]> {
@@ -1045,18 +1107,33 @@ async function removeBackground(
   workspaceId: string | undefined,
   sourcePath: string,
 ): Promise<Buffer> {
-  return invokeAivaultStream(workspaceId, REMOVE_BG_CAPABILITY_ID, {
-    method: 'POST',
-    path: '/v1.0/removebg',
-    multipartFields: {
-      size: 'auto',
-      format: 'png',
+  const buffer = await invokeAivaultStream(
+    workspaceId,
+    REMOVE_BG_CAPABILITY_ID,
+    {
+      method: 'POST',
+      path: '/v1.0/removebg',
+      multipartFields: {
+        size: 'auto',
+        format: 'png',
+      },
+      multipartFiles: {
+        image_file: sourcePath,
+      },
+      timeoutMs: REMOVE_BG_TIMEOUT_MS,
     },
-    multipartFiles: {
-      image_file: sourcePath,
-    },
-    timeoutMs: REMOVE_BG_TIMEOUT_MS,
-  })
+  )
+
+  if (!isPngBuffer(buffer)) {
+    const providerMessage = providerErrorFromBuffer(buffer)
+    throw new Error(
+      providerMessage
+        ? `Background removal failed: ${providerMessage}`
+        : 'Background removal did not return a PNG image.',
+    )
+  }
+
+  return buffer
 }
 
 async function queueGeneration(
@@ -1257,6 +1334,49 @@ async function queueModelRegeneration(
   return updated
 }
 
+async function queueBackgroundRemovalRetry(
+  workspaceId: string | undefined,
+  explorationId: string,
+  requestedProvider?: ModelProvider,
+  requestedQuality?: ImageQuality,
+): Promise<GeneratedExploration | null> {
+  const settings = await loadSettings(workspaceId)
+  let sourceImageFileName: string | undefined
+  let modelProvider: ModelProvider = requestedProvider ?? settings.modelProvider
+  let quality: ImageQuality = requestedQuality ?? settings.quality
+
+  const updated = await patchExploration(workspaceId, explorationId, (item) => {
+    sourceImageFileName = item.sourceImageFileName
+    modelProvider =
+      requestedProvider ?? item.modelProvider ?? settings.modelProvider
+    quality = requestedQuality ?? item.quality ?? settings.quality
+    if (!sourceImageFileName || item.status === 'canceled') return item
+    return {
+      ...item,
+      status: 'ready',
+      backgroundStatus: 'removing',
+      backgroundErrorMessage: undefined,
+      imageFileName: sourceImageFileName,
+      imageUrl: imageUrl(explorationId, sourceImageFileName, workspaceId),
+      modelProvider,
+      quality,
+    }
+  })
+
+  if (!updated || !sourceImageFileName || updated.status === 'canceled') {
+    return updated
+  }
+
+  void finishBackgroundRemovalRetry(
+    workspaceId,
+    explorationId,
+    sourceImageFileName,
+    modelProvider,
+    quality,
+  )
+  return updated
+}
+
 async function cancelGeneration(
   workspaceId: string | undefined,
   explorationId: string,
@@ -1437,6 +1557,91 @@ async function finishGeneration(
     }
     console.error(
       `[Microscope] generation_failed workspace=${workspaceLabel(workspaceId)} id=${explorationId} message=${errorMessage(error, 'unknown')}`,
+    )
+  }
+}
+
+async function finishBackgroundRemovalRetry(
+  workspaceId: string | undefined,
+  explorationId: string,
+  sourceFileName: string,
+  modelProvider: ModelProvider,
+  quality?: ImageQuality,
+): Promise<void> {
+  try {
+    if (await isExplorationCanceled(workspaceId, explorationId)) return
+    const removed = await removeBackground(
+      workspaceId,
+      assetPath(workspaceId, explorationId, sourceFileName),
+    )
+    const layerFileName = await saveBufferAsset({
+      workspaceId,
+      explorationId,
+      fileName: 'microscope-layer.png',
+      buffer: removed,
+    })
+    const updated = await patchExploration(
+      workspaceId,
+      explorationId,
+      (item) => {
+        if (item.status === 'canceled') return item
+        return {
+          ...item,
+          status: 'ready',
+          backgroundStatus: 'ready',
+          backgroundErrorMessage: undefined,
+          modelStatus: 'rendering',
+          modelProvider,
+          modelTaskId: undefined,
+          modelFileName: undefined,
+          modelMaterialFileName: undefined,
+          modelTextureFileName: undefined,
+          modelUrl: null,
+          modelMaterialUrl: null,
+          modelTextureUrl: null,
+          modelErrorMessage: undefined,
+          imageFileName: layerFileName,
+          imageUrl: imageUrl(explorationId, layerFileName, workspaceId),
+          modelVariants: upsertModelVariant(item, modelProvider, {
+            status: 'rendering',
+            taskId: undefined,
+            fileName: undefined,
+            materialFileName: undefined,
+            textureFileName: undefined,
+            url: null,
+            materialUrl: null,
+            textureUrl: null,
+            errorMessage: undefined,
+          }),
+        }
+      },
+    )
+    if (!updated || updated.status === 'canceled') return
+
+    void finishModelRender(
+      workspaceId,
+      explorationId,
+      layerFileName,
+      modelProvider,
+      quality,
+    )
+  } catch (error) {
+    await patchExploration(workspaceId, explorationId, (item) => {
+      if (item.status === 'canceled') return item
+      return {
+        ...item,
+        status: 'ready',
+        backgroundStatus: 'failed',
+        backgroundErrorMessage: errorMessage(
+          error,
+          'Background removal failed.',
+        ),
+        imageFileName: sourceFileName,
+        imageUrl: imageUrl(explorationId, sourceFileName, workspaceId),
+      }
+    })
+    console.error(
+      `[Microscope] background_retry_failed workspace=${workspaceLabel(workspaceId)} id=${explorationId} message=${errorMessage(error, 'unknown')}`,
     )
   }
 }
@@ -1865,6 +2070,36 @@ app.post('/api/explorations/:id/regenerate-model', async (c) => {
   return c.json(response, 202)
 })
 
+app.post('/api/explorations/:id/retry-background', async (c) => {
+  const workspaceId = getWorkspaceId(c.req.raw)
+  const parsed = regenerateModelSchema
+    .omit({ id: true })
+    .safeParse(await c.req.json().catch(() => ({})))
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid background retry options.' }, 400)
+  }
+  const exploration = await queueBackgroundRemovalRetry(
+    workspaceId,
+    c.req.param('id'),
+    parsed.data.modelProvider,
+    parsed.data.quality,
+  )
+  if (!exploration) {
+    return c.json({ error: 'Generated exploration not found.' }, 404)
+  }
+  if (!exploration.sourceImageFileName) {
+    return c.json(
+      { error: 'No original image exists for this exploration.' },
+      409,
+    )
+  }
+
+  const response: { exploration: GeneratedExploration } = {
+    exploration: serializeGenerated(exploration, workspaceId),
+  }
+  return c.json(response, 202)
+})
+
 app.post('/api/explorations/:id/cancel', async (c) => {
   const workspaceId = getWorkspaceId(c.req.raw)
   const exploration = await cancelGeneration(workspaceId, c.req.param('id'))
@@ -2092,6 +2327,44 @@ app.post('/api/moldable/rpc', async (c) => {
         {
           ok: false,
           error: { message: 'No 2D layer exists for this exploration yet.' },
+        },
+        409,
+      )
+    }
+    return c.json({
+      ok: true,
+      result: serializeGenerated(exploration, workspaceId),
+    })
+  }
+
+  if (request.data.method === 'microscope.retryBackground') {
+    const parsed = regenerateModelSchema.safeParse(request.data.params)
+    if (!parsed.success) {
+      return c.json(
+        {
+          ok: false,
+          error: { message: 'Generated exploration id is required.' },
+        },
+        400,
+      )
+    }
+    const exploration = await queueBackgroundRemovalRetry(
+      workspaceId,
+      parsed.data.id,
+      parsed.data.modelProvider,
+      parsed.data.quality,
+    )
+    if (!exploration) {
+      return c.json(
+        { ok: false, error: { message: 'Generated exploration not found.' } },
+        404,
+      )
+    }
+    if (!exploration.sourceImageFileName) {
+      return c.json(
+        {
+          ok: false,
+          error: { message: 'No original image exists for this exploration.' },
         },
         409,
       )

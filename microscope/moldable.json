@@ -125,6 +125,28 @@
             }
           },
           {
+            "id": "microscope.retryBackground",
+            "name": "Retry removing background",
+            "description": "Retry background removal from the preserved original image for an existing generated exploration.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "modelProvider": {
+                  "type": "string",
+                  "enum": ["fal", "tripo"]
+                },
+                "quality": {
+                  "type": "string",
+                  "enum": ["medium", "high"]
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
             "id": "microscope.cancel",
             "name": "Cancel generation",
             "description": "Cancel a stuck or unwanted generated exploration and keep any finished 2D layer available.",

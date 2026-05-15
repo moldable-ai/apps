@@ -1,5 +1,8 @@
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 export type AivaultRequest = {
   method?: string
@@ -9,6 +12,13 @@ export type AivaultRequest = {
   multipartFields?: Record<string, string>
   multipartFiles?: Record<string, string>
   timeoutMs?: number
+}
+
+const REQUEST_FILE_ARG_THRESHOLD_BYTES = 96_000
+
+type AivaultPreparedArgs = {
+  args: string[]
+  cleanup: () => Promise<void>
 }
 
 function aivaultBinary(): string {
@@ -122,21 +132,67 @@ function runAivault(
   })
 }
 
-function addRequestArgs(args: string[], request: AivaultRequest): void {
+function requestHeadersForEnvelope(
+  headers: Record<string, string> | undefined,
+) {
+  return Object.entries(headers ?? {}).map(([name, value]) => ({
+    name,
+    value,
+  }))
+}
+
+async function prepareRequestArgs(
+  args: string[],
+  capabilityId: string,
+  request: AivaultRequest,
+): Promise<AivaultPreparedArgs> {
+  const body =
+    request.body === undefined ? undefined : JSON.stringify(request.body)
+  const hasLargeBody =
+    body !== undefined &&
+    Buffer.byteLength(body, 'utf8') > REQUEST_FILE_ARG_THRESHOLD_BYTES
+
+  if (hasLargeBody) {
+    const dir = await mkdtemp(join(tmpdir(), 'microscope-aivault-'))
+    const requestFile = join(dir, 'request.json')
+    await writeFile(
+      requestFile,
+      JSON.stringify({
+        capability: capabilityId,
+        request: {
+          method: request.method ?? 'POST',
+          path: request.path ?? '/',
+          headers: requestHeadersForEnvelope(request.headers),
+          body,
+        },
+      }),
+      { mode: 0o600 },
+    )
+    if (request.timeoutMs) args.push('--timeout-ms', String(request.timeoutMs))
+    args.push('--request-file', requestFile, capabilityId)
+    return {
+      args,
+      cleanup: () => rm(dir, { recursive: true, force: true }),
+    }
+  }
+
   if (request.method) args.push('--method', request.method)
   if (request.path) args.push('--path', request.path)
   if (request.timeoutMs) args.push('--timeout-ms', String(request.timeoutMs))
   for (const [name, value] of Object.entries(request.headers ?? {})) {
     args.push('--header', `${name}=${value}`)
   }
-  if (request.body !== undefined) {
-    args.push('--body', JSON.stringify(request.body))
-  }
+  if (body !== undefined) args.push('--body', body)
   for (const [name, value] of Object.entries(request.multipartFields ?? {})) {
     args.push('--multipart-field', `${name}=${value}`)
   }
   for (const [name, value] of Object.entries(request.multipartFiles ?? {})) {
     args.push('--multipart-file', `${name}=${value}`)
+  }
+  args.push(capabilityId)
+  return {
+    args,
+    cleanup: async () => undefined,
   }
 }
 
@@ -145,11 +201,14 @@ export async function invokeAivaultJson<T>(
   capabilityId: string,
   request: AivaultRequest,
 ): Promise<T> {
-  const args = ['json', ...aivaultContextArgs(workspaceId)]
-  addRequestArgs(args, request)
-  args.push(capabilityId)
-
-  const output = await runAivault(args, { timeoutMs: request.timeoutMs })
+  const prepared = await prepareRequestArgs(
+    ['json', ...aivaultContextArgs(workspaceId)],
+    capabilityId,
+    request,
+  )
+  const output = await runAivault(prepared.args, {
+    timeoutMs: request.timeoutMs,
+  }).finally(prepared.cleanup)
   const parsed = JSON.parse(output.toString('utf8')) as {
     response?: { json?: unknown; status?: number }
     error?: { message?: string }
@@ -176,8 +235,9 @@ export async function invokeAivaultStream(
   capabilityId: string,
   request: AivaultRequest,
 ): Promise<Buffer> {
-  const args = ['invoke', ...aivaultContextArgs(workspaceId)]
-  addRequestArgs(args, request)
-  args.push('--stream', capabilityId)
-  return runAivault(args, { timeoutMs: request.timeoutMs })
+  const args = ['invoke', ...aivaultContextArgs(workspaceId), '--stream']
+  const prepared = await prepareRequestArgs(args, capabilityId, request)
+  return runAivault(prepared.args, { timeoutMs: request.timeoutMs }).finally(
+    prepared.cleanup,
+  )
 }

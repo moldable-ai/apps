@@ -1,7 +1,7 @@
 /* eslint-disable react/no-unknown-property */
 import { OrbitControls, RoundedBox, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
-import { RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
+import { ImageOff, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import {
   Suspense,
   useCallback,
@@ -807,12 +807,21 @@ function SceneContents({
   )
 }
 
-function ZoomableImage({ imageUrl }: { imageUrl: string }) {
+function ZoomableImage({
+  imageUrl,
+  fallbackUrl,
+}: {
+  imageUrl: string
+  fallbackUrl?: string | null
+}) {
   const [scale, setScale] = useState(MIN_IMAGE_SCALE)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [controlsVisible, setControlsVisible] = useState(true)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [usingFallback, setUsingFallback] = useState(false)
   const dragRef = useRef<DragState | null>(null)
   const controlsTimerRef = useRef<number | null>(null)
+  const displayUrl = usingFallback && fallbackUrl ? fallbackUrl : imageUrl
 
   const clearControlsTimer = useCallback(() => {
     if (controlsTimerRef.current !== null) {
@@ -833,9 +842,11 @@ function ZoomableImage({ imageUrl }: { imageUrl: string }) {
   useEffect(() => {
     setScale(MIN_IMAGE_SCALE)
     setPan({ x: 0, y: 0 })
+    setLoadFailed(false)
+    setUsingFallback(false)
     dragRef.current = null
     revealControls()
-  }, [imageUrl, revealControls])
+  }, [fallbackUrl, imageUrl, revealControls])
 
   useEffect(() => clearControlsTimer, [clearControlsTimer])
 
@@ -927,16 +938,37 @@ function ZoomableImage({ imageUrl }: { imageUrl: string }) {
         }}
       >
         <img
-          src={imageUrl}
+          src={displayUrl}
           alt=""
           draggable={false}
+          onError={() => {
+            if (!usingFallback && fallbackUrl && fallbackUrl !== imageUrl) {
+              setUsingFallback(true)
+              return
+            }
+            setLoadFailed(true)
+          }}
+          onLoad={() => setLoadFailed(false)}
           className="max-h-full max-w-full select-none object-contain drop-shadow-2xl transition-transform duration-100 ease-out"
           style={{
             transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${scale})`,
             transformOrigin: 'center',
             touchAction: 'none',
+            visibility: loadFailed ? 'hidden' : 'visible',
           }}
         />
+        {loadFailed ? (
+          <div className="border-destructive/45 bg-background/90 text-foreground absolute left-1/2 top-1/2 flex max-w-[min(24rem,calc(100%-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2 rounded-lg border p-4 text-center shadow-xl backdrop-blur-xl">
+            <ImageOff className="text-destructive size-5" />
+            <div>
+              <p className="text-sm font-medium">Image could not be loaded</p>
+              <p className="text-muted-foreground mt-1 text-xs leading-5">
+                The saved image file is missing or invalid. Regenerate this
+                exploration to replace it.
+              </p>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div
@@ -1000,6 +1032,10 @@ export function SceneViewer(props: SceneViewerProps) {
     props.exploration.source === 'generated' && props.exploration.imageUrl
       ? props.exploration.imageUrl
       : null
+  const fallbackImageUrl =
+    props.exploration.source === 'generated' && props.exploration.sourceImageUrl
+      ? props.exploration.sourceImageUrl
+      : null
   const modelUrl =
     props.exploration.source === 'generated' &&
     props.exploration.status === 'ready' &&
@@ -1013,12 +1049,12 @@ export function SceneViewer(props: SceneViewerProps) {
   ].join(':')
 
   if (props.viewMode === '2d' && imageUrl) {
-    return <ZoomableImage imageUrl={imageUrl} />
+    return <ZoomableImage imageUrl={imageUrl} fallbackUrl={fallbackImageUrl} />
   }
 
   const hasRealModel = props.viewMode === '3d' && modelUrl
   if (!hasRealModel && imageUrl) {
-    return <ZoomableImage imageUrl={imageUrl} />
+    return <ZoomableImage imageUrl={imageUrl} fallbackUrl={fallbackImageUrl} />
   }
 
   if (!hasRealModel) {
