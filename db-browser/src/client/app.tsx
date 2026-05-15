@@ -33,6 +33,7 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
+  resetMoldableNavigation,
   useMoldableAppCommands,
   useMoldableCommands,
   useWorkspace,
@@ -167,6 +168,10 @@ function connectionFormFromSummary(
 export function App() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
 
   const [objectSearch, setObjectSearch] = useState('')
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>('objects')

@@ -1,7 +1,7 @@
 'use client'
 
 import { ArrowLeftRight, Loader2, Trash2, Volume2, VolumeX } from 'lucide-react'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { MarkdownEditor } from '@moldable-ai/editor'
 import {
   AlertDialog,
@@ -17,6 +17,9 @@ import {
   Input,
   ScrollArea,
   cn,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
+  useMoldableNavigationPop,
 } from '@moldable-ai/ui'
 import { LANGUAGES, Language, isRTL } from '@/lib/languages'
 import { TranslationError, translateText } from '@/lib/translate'
@@ -50,6 +53,7 @@ export default function Home() {
   const [translationError, setTranslationError] = useState<ErrorState | null>(
     null,
   )
+  const [entryBackStack, setEntryBackStack] = useState<string[]>([])
 
   // Derive current entry from entries list
   const currentEntry = entries.find((e) => e.id === currentEntryId) ?? null
@@ -74,6 +78,35 @@ export default function Home() {
     isPlaying: isSpeaking,
     isLoading: isTTSLoading,
   } = useElevenLabsTTS()
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
+
+  const applyEntrySelection = useCallback(
+    (entry: JournalEntry) => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
+
+      stopTTS()
+      setCurrentEntryId(entry.id)
+      setSourceLanguage(entry.sourceLanguage)
+      setTargetLanguage(entry.targetLanguage)
+      setTranslationError(null)
+      setIsTranslating(false)
+    },
+    [stopTTS],
+  )
+
+  useMoldableNavigationPop(() => {
+    const previousEntryId = entryBackStack[entryBackStack.length - 1]
+    const previousEntry = entries.find((entry) => entry.id === previousEntryId)
+    if (!previousEntry) return
+
+    setEntryBackStack((stack) => stack.slice(0, -1))
+    applyEntrySelection(previousEntry)
+  })
 
   const doTranslate = useCallback(
     async (
@@ -304,9 +337,16 @@ export default function Home() {
       return newEntries
     })
 
+    if (currentEntryId) {
+      setEntryBackStack((stack) => [...stack, currentEntryId].slice(-50))
+      pushMoldableNavigation({
+        id: `entry:${newEntry.id}`,
+        title: newEntry.title,
+      })
+    }
     setCurrentEntryId(newEntry.id)
     setTranslationError(null)
-  }, [sourceLanguage, targetLanguage, updateCache, saveEntries])
+  }, [currentEntryId, sourceLanguage, targetLanguage, updateCache, saveEntries])
 
   const handleTitleChange = useCallback(
     (title: string) => {
@@ -359,21 +399,19 @@ export default function Home() {
 
   const selectEntry = useCallback(
     (entry: JournalEntry) => {
-      // Cancel any in-flight translation
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
+      if (entry.id === currentEntryId) return
+
+      if (currentEntryId) {
+        setEntryBackStack((stack) => [...stack, currentEntryId].slice(-50))
+        pushMoldableNavigation({
+          id: `entry:${entry.id}`,
+          title: entry.title || 'Entry',
+        })
       }
 
-      // Stop any playing TTS
-      stopTTS()
-
-      setCurrentEntryId(entry.id)
-      setSourceLanguage(entry.sourceLanguage)
-      setTargetLanguage(entry.targetLanguage)
-      setTranslationError(null)
-      setIsTranslating(false)
+      applyEntrySelection(entry)
     },
-    [stopTTS],
+    [applyEntrySelection, currentEntryId],
   )
 
   const handleSwapLanguages = useCallback(() => {

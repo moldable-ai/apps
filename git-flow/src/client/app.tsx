@@ -73,8 +73,12 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  popMoldableNavigation,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
   sendToMoldable,
   useMoldableCommands,
+  useMoldableNavigationPop,
   useWorkspace,
 } from '@moldable-ai/ui'
 import { cn } from '@/lib/utils'
@@ -524,6 +528,10 @@ export default function GitFlowPage() {
   }, [imagePreviewBlob])
 
   const diffLines = useMemo(() => fileDiff?.split('\n') ?? [], [fileDiff])
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
 
   // Mutation for generating a commit message from selected diffs
   const generateCommitMessageMutation = useMutation({
@@ -1080,7 +1088,11 @@ export default function GitFlowPage() {
     setSelectedCommitFile(null)
   }
 
-  const handleChangesTabSelect = () => {
+  const handleChangesTabSelect = (syncValue?: 'pop' | 'none' | unknown) => {
+    const sync = syncValue === 'none' ? 'none' : 'pop'
+    if (sync === 'pop' && view === 'history') {
+      popMoldableNavigation('history')
+    }
     const nextPath = filteredFiles[0]?.path ?? data?.files?.[0]?.path ?? null
     setView('changes')
     setSelectedCommit(null)
@@ -1091,12 +1103,21 @@ export default function GitFlowPage() {
   }
 
   const handleHistoryTabSelect = () => {
+    if (view !== 'history') {
+      pushMoldableNavigation({ id: 'history', title: 'History' })
+    }
     setView('history')
     setSelectedFile(null)
     setSelectedActionFiles(new Set())
     setSelectedCommit(history?.[0]?.hash ?? null)
     setSelectedCommitFile(null)
   }
+
+  useMoldableNavigationPop((message) => {
+    if (message.entry?.id === 'history' || view === 'history') {
+      handleChangesTabSelect('none')
+    }
+  })
 
   const handleHistoryScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {

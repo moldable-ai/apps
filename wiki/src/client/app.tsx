@@ -101,9 +101,13 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
+  popMoldableNavigation,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
   sendToMoldable,
   useMoldableAppCommands,
   useMoldableCommands,
+  useMoldableNavigationPop,
   useWorkspace,
 } from '@moldable-ai/ui'
 import type {
@@ -1586,6 +1590,7 @@ export function App() {
   }, [queryClient, workspaceId])
 
   const resetVaultUi = useCallback(() => {
+    resetMoldableNavigation()
     setSelectedPath(null)
     setBackStack([])
     setForwardStack([])
@@ -1642,6 +1647,10 @@ export function App() {
     return () => window.removeEventListener('message', handleAppApiChanged)
   }, [activeVaultId, invalidateWiki, queryClient, resetVaultUi, workspaceId])
 
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
+
   const navigateToPath = useCallback(
     (path: string) => {
       if (path === selectedPath) return
@@ -1654,24 +1663,32 @@ export function App() {
           return nextStack.slice(-NAVIGATION_HISTORY_LIMIT)
         })
         setForwardStack([])
+        pushMoldableNavigation({
+          id: `note:${path}`,
+          title: entryTitleByPath.get(path) ?? titleFromPath(path),
+        })
       }
       setSelectedPath(path)
     },
-    [selectedPath],
+    [entryTitleByPath, selectedPath],
   )
 
-  const navigateBack = useCallback(() => {
-    const previousPath = backStack[backStack.length - 1]
-    if (!previousPath) return
+  const navigateBack = useCallback(
+    (sync: 'pop' | 'none' = 'pop') => {
+      const previousPath = backStack[backStack.length - 1]
+      if (!previousPath) return
 
-    setBackStack((stack) => stack.slice(0, -1))
-    if (selectedPath) {
-      setForwardStack((stack) =>
-        [selectedPath, ...stack].slice(0, NAVIGATION_HISTORY_LIMIT),
-      )
-    }
-    setSelectedPath(previousPath)
-  }, [backStack, selectedPath])
+      if (sync === 'pop') popMoldableNavigation()
+      setBackStack((stack) => stack.slice(0, -1))
+      if (selectedPath) {
+        setForwardStack((stack) =>
+          [selectedPath, ...stack].slice(0, NAVIGATION_HISTORY_LIMIT),
+        )
+      }
+      setSelectedPath(previousPath)
+    },
+    [backStack, selectedPath],
+  )
 
   const navigateForward = useCallback(() => {
     const nextPath = forwardStack[0]
@@ -1685,6 +1702,10 @@ export function App() {
     }
     setSelectedPath(nextPath)
   }, [forwardStack, selectedPath])
+
+  useMoldableNavigationPop(() => {
+    navigateBack('none')
+  })
 
   const saveMutation = useMutation({
     mutationFn: (payload: { path: string; content: string }) =>

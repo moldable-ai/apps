@@ -10,13 +10,16 @@ import {
   LogOut,
   MapPin,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Button,
   Popover,
   PopoverContent,
   PopoverTrigger,
   ScrollArea,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
+  useMoldableNavigationPop,
   useWorkspace,
 } from '@moldable-ai/ui'
 import { cn } from '@/lib/utils'
@@ -68,6 +71,7 @@ export default function FullPage() {
   const [error, setError] = useState<string | null>(null)
   const [authenticated, setAuthenticated] = useState(false)
   const [selectedDate, setSelectedDate] = useState(new Date())
+  const [selectedDateStack, setSelectedDateStack] = useState<Date[]>([])
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const queryClient = useQueryClient()
   const touchStartRef = useRef<number | null>(null)
@@ -111,6 +115,34 @@ export default function FullPage() {
 
   const events = useMemo(() => eventsData || [], [eventsData])
   const loading = queryLoading && !eventsData
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
+
+  const selectDate = useCallback(
+    (day: Date, sync: 'push' | 'none' = 'push') => {
+      if (isSameDay(day, selectedDate)) return
+      if (sync === 'push') {
+        setSelectedDateStack((stack) => [...stack, selectedDate].slice(-50))
+        pushMoldableNavigation({
+          id: `date:${format(day, 'yyyy-MM-dd')}`,
+          title: format(day, 'MMM d'),
+        })
+      }
+      setSelectedDate(day)
+    },
+    [selectedDate],
+  )
+
+  useMoldableNavigationPop(() => {
+    const previousDate = selectedDateStack[selectedDateStack.length - 1]
+    if (!previousDate) return
+
+    setSelectedDateStack((stack) => stack.slice(0, -1))
+    setSelectedDate(previousDate)
+    setCurrentMonth(previousDate)
+  })
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -199,7 +231,7 @@ export default function FullPage() {
   const goToToday = () => {
     const today = new Date()
     setCurrentMonth(today)
-    setSelectedDate(today)
+    selectDate(today)
   }
 
   const isScrollingRef = useRef(false)
@@ -513,7 +545,7 @@ export default function FullPage() {
                 return (
                   <button
                     key={day.toISOString()}
-                    onClick={() => setSelectedDate(day)}
+                    onClick={() => selectDate(day)}
                     className={cn(
                       'border-border hover:bg-muted/50 group relative flex min-h-[100px] flex-col border-b border-r p-2 text-left transition-all focus:outline-none',
                       !isCurrentMonth && 'bg-muted/5 text-muted-foreground/40',

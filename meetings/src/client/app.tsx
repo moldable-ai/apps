@@ -2,7 +2,14 @@
 
 import { Plus, Settings } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Button, useWorkspace } from '@moldable-ai/ui'
+import {
+  Button,
+  popMoldableNavigation,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
+  useMoldableNavigationPop,
+  useWorkspace,
+} from '@moldable-ai/ui'
 import { normalizeGeneratedMarkdown } from '@/lib/markdown'
 import { callMoldableApp } from '@/lib/moldable-apps'
 import { DEFAULT_MEETING_TEMPLATE_ID } from '@/lib/templates'
@@ -106,6 +113,38 @@ export default function MeetingsPage() {
   const deepgramSendAudioRef = useRef<
     ((data: ArrayBuffer | Blob) => void) | null
   >(null)
+
+  const closeSelectedMeeting = useCallback((sync: 'pop' | 'none' = 'pop') => {
+    if (sync === 'pop') popMoldableNavigation()
+    setSelectedMeeting(null)
+    setPreferredDetailView(null)
+  }, [])
+
+  const openSelectedMeeting = useCallback(
+    (
+      nextMeeting: Meeting,
+      preferredView: MeetingViewMode | null = null,
+      sync: 'push' | 'none' = 'push',
+    ) => {
+      if (sync === 'push') {
+        pushMoldableNavigation({
+          id: `meeting:${nextMeeting.id}`,
+          title: nextMeeting.title,
+        })
+      }
+      setSelectedMeeting(nextMeeting)
+      setPreferredDetailView(preferredView)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
+
+  useMoldableNavigationPop(() => {
+    if (selectedMeeting) closeSelectedMeeting('none')
+  })
 
   // Hooks
   const { meetings, addMeeting, updateMeeting, deleteMeeting } = useMeetings()
@@ -664,8 +703,7 @@ export default function MeetingsPage() {
       activeDurationBaseRef.current = 0
       activeMeetingIdRef.current = newMeeting.id
       addMeeting(newMeeting)
-      setSelectedMeeting(null) // Clear any selection, show active meeting
-      setPreferredDetailView(null)
+      closeSelectedMeeting('none') // Clear any selection, show active meeting
       setCurrentInterim(null)
       setIsMeetingPaused(false)
       setIsAppendingTranscript(false)
@@ -676,6 +714,7 @@ export default function MeetingsPage() {
     },
     [
       addMeeting,
+      closeSelectedMeeting,
       createRecordingSession,
       resetAudioSessionPersistence,
       audioSource,
@@ -702,8 +741,7 @@ export default function MeetingsPage() {
       activeMeetingIdRef.current = resumedMeeting.id
       updateActiveMeeting(resumedMeeting)
       updateMeeting(resumedMeeting)
-      setSelectedMeeting(null)
-      setPreferredDetailView('transcript')
+      closeSelectedMeeting('none')
       setCurrentInterim(null)
       setIsMeetingPaused(false)
       setIsAppendingTranscript(false)
@@ -715,6 +753,7 @@ export default function MeetingsPage() {
     },
     [
       audioSource,
+      closeSelectedMeeting,
       createRecordingSession,
       meeting,
       resetAudioSessionPersistence,
@@ -772,8 +811,7 @@ export default function MeetingsPage() {
       }
 
       updateMeeting(stoppedMeeting)
-      setSelectedMeeting(stoppedMeeting)
-      setPreferredDetailView('transcript')
+      openSelectedMeeting(stoppedMeeting, 'transcript')
     }
 
     clearMeeting()
@@ -788,6 +826,7 @@ export default function MeetingsPage() {
     finishActiveRecordingSession,
     finalizeSessionAudio,
     meeting,
+    openSelectedMeeting,
     stopActiveCapture,
     updateMeeting,
   ])
@@ -990,8 +1029,10 @@ export default function MeetingsPage() {
       }
 
       updateMeeting(endedMeeting)
-      setSelectedMeeting(endedMeeting)
-      setPreferredDetailView(isAppendingTranscript ? 'transcript' : 'enhanced')
+      openSelectedMeeting(
+        endedMeeting,
+        isAppendingTranscript ? 'transcript' : 'enhanced',
+      )
       clearMeeting()
       activeDurationBaseRef.current = 0
       activeMeetingIdRef.current = null
@@ -1011,14 +1052,17 @@ export default function MeetingsPage() {
     clearMeeting,
     runEnhancement,
     isAppendingTranscript,
+    openSelectedMeeting,
     stopActiveCapture,
   ])
 
   // View a past meeting
-  const handleSelectMeeting = useCallback((m: Meeting) => {
-    setSelectedMeeting(m)
-    setPreferredDetailView(null)
-  }, [])
+  const handleSelectMeeting = useCallback(
+    (m: Meeting) => {
+      openSelectedMeeting(m)
+    },
+    [openSelectedMeeting],
+  )
 
   // Update meeting handler (for notes changes)
   const handleUpdateMeeting = useCallback(
@@ -1125,14 +1169,10 @@ export default function MeetingsPage() {
             enhancement={enhancement}
             currentInterim={null}
             currentRecordingSessionId={null}
-            onBack={() => {
-              setSelectedMeeting(null)
-              setPreferredDetailView(null)
-            }}
+            onBack={() => closeSelectedMeeting('pop')}
             onMoveToTrash={() => {
               deleteMeeting(selectedMeeting.id)
-              setSelectedMeeting(null)
-              setPreferredDetailView(null)
+              closeSelectedMeeting('pop')
             }}
             onResumeRecording={() =>
               void handleResumeExistingMeeting(selectedMeeting)

@@ -2,7 +2,12 @@
 
 import { ListFilter, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, ScrollArea, useMoldableCommands } from '@moldable-ai/ui'
+import {
+  Button,
+  ScrollArea,
+  resetMoldableNavigation,
+  useMoldableCommands,
+} from '@moldable-ai/ui'
 import type { Priority, Todo } from '@/lib/types'
 import {
   generateId,
@@ -29,6 +34,10 @@ export default function Home() {
   const addTodoRef = useRef<AddTodoHandle>(null)
   // Track which todo should receive focus after render
   const pendingFocusId = useRef<string | null>(null)
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
 
   // Focus the pending todo after render
   useEffect(() => {

@@ -38,6 +38,10 @@ import {
   TooltipTrigger,
   cn,
   downloadFile,
+  popMoldableNavigation,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
+  useMoldableNavigationPop,
   useWorkspace,
 } from '@moldable-ai/ui'
 import { ZoomableImage } from './components/zoomable-image'
@@ -854,12 +858,43 @@ export function App() {
       selectedThread?.iterations.at(-1) ??
       null)
 
+  const closeSelectedThread = useCallback((sync: 'pop' | 'none' = 'pop') => {
+    if (sync === 'pop') popMoldableNavigation()
+    setSelectedThreadId(null)
+    setSelectedIterationId(null)
+  }, [])
+
+  const openThread = useCallback(
+    (
+      thread: ImageThread,
+      iterationId: string | null = selectedIterationIdForThread(thread),
+      sync: 'push' | 'none' = 'push',
+    ) => {
+      if (sync === 'push') {
+        pushMoldableNavigation({
+          id: `thread:${thread.id}`,
+          title: thread.title || 'Image',
+        })
+      }
+      setSelectedThreadId(thread.id)
+      setSelectedIterationId(iterationId)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
+
+  useMoldableNavigationPop(() => {
+    closeSelectedThread('none')
+  })
+
   useEffect(() => {
     if (selectedThreadId && !selectedThread && threads.length > 0) {
-      setSelectedThreadId(null)
-      setSelectedIterationId(null)
+      closeSelectedThread('none')
     }
-  }, [selectedThread, selectedThreadId, threads.length])
+  }, [closeSelectedThread, selectedThread, selectedThreadId, threads.length])
 
   useEffect(() => {
     if (selectedThread && !selectedIterationId) {
@@ -1109,16 +1144,18 @@ export function App() {
               (thread) => thread.id !== variables.threadId,
             ),
         )
-        setSelectedThreadId(null)
-        setSelectedIterationId(null)
+        closeSelectedThread('pop')
       } else if (result.thread) {
         const updatedThread = result.thread
         queryClient.setQueryData<ImageThread[]>(
           ['images', workspaceId],
           (current) => upsertThread(current, updatedThread),
         )
-        setSelectedThreadId(updatedThread.id)
-        setSelectedIterationId(selectedIterationIdForThread(updatedThread))
+        openThread(
+          updatedThread,
+          selectedIterationIdForThread(updatedThread),
+          'none',
+        )
       }
 
       void queryClient.invalidateQueries({ queryKey: ['images', workspaceId] })
@@ -1807,10 +1844,7 @@ export function App() {
               size="icon-xs"
               className="cursor-pointer"
               aria-label="Close image"
-              onClick={() => {
-                setSelectedThreadId(null)
-                setSelectedIterationId(null)
-              }}
+              onClick={() => closeSelectedThread('pop')}
             >
               <X className="size-3.5" />
             </Button>
@@ -2395,10 +2429,7 @@ export function App() {
                         : `Open ${thread.title}`
                     }
                     onClick={() => {
-                      setSelectedThreadId(thread.id)
-                      setSelectedIterationId(
-                        selectedIterationIdForThread(thread),
-                      )
+                      openThread(thread)
                     }}
                   >
                     <span className="bg-muted ring-border/35 relative z-20 block aspect-square w-full overflow-hidden rounded-[1.35rem] shadow-sm ring-1 transition-[translate,scale,box-shadow] duration-[260ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform group-hover:-translate-y-1 group-hover:scale-[1.018] group-hover:shadow-xl group-focus-visible:-translate-y-1 group-focus-visible:scale-[1.018] motion-reduce:transition-none">
@@ -2515,8 +2546,8 @@ export function App() {
                                 }
                                 onClick={(event) => {
                                   event.stopPropagation()
-                                  setSelectedThreadId(thread.id)
-                                  setSelectedIterationId(
+                                  openThread(
+                                    thread,
                                     item.type === 'image'
                                       ? item.iteration.id
                                       : selectedIterationIdForThread(thread),
@@ -2550,8 +2581,7 @@ export function App() {
                       className="border-border/60 bg-muted/35 text-muted-foreground hover:bg-muted hover:text-foreground mt-2 flex h-7 w-full cursor-pointer items-center justify-center gap-1.5 rounded-md border text-xs font-medium transition-colors disabled:cursor-default disabled:opacity-60"
                       disabled={retryGeneration.isPending}
                       onClick={() => {
-                        setSelectedThreadId(thread.id)
-                        setSelectedIterationId(null)
+                        openThread(thread, null)
                         retryGeneration.mutate(thread.id)
                       }}
                     >
@@ -2596,8 +2626,7 @@ export function App() {
         open={Boolean(failedDialogThread)}
         onOpenChange={(open) => {
           if (!open) {
-            setSelectedThreadId(null)
-            setSelectedIterationId(null)
+            closeSelectedThread('pop')
           }
         }}
       >
@@ -2619,10 +2648,7 @@ export function App() {
               size="icon-xs"
               className="absolute right-4 top-4 z-20 cursor-pointer shadow-sm"
               aria-label="Close failed image dialog"
-              onClick={() => {
-                setSelectedThreadId(null)
-                setSelectedIterationId(null)
-              }}
+              onClick={() => closeSelectedThread('pop')}
             >
               <X className="size-3.5" />
             </Button>

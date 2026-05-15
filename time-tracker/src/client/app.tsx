@@ -1,7 +1,7 @@
 'use client'
 
 import { CalendarDays, ChevronLeft, ChevronRight, List } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Button,
   ScrollArea,
@@ -9,6 +9,10 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
+  popMoldableNavigation,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
+  useMoldableNavigationPop,
 } from '@moldable-ai/ui'
 import { cn } from '@/lib/utils'
 import { ExportDialog } from '@/components/export-dialog'
@@ -29,6 +33,10 @@ export default function HomePage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date())
   const [showProjectManager, setShowProjectManager] = useState(false)
   const [showNewProject, setShowNewProject] = useState(false)
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
 
   const weekEnd = endOfWeek(currentWeek, { weekStartsOn: 0 })
   const startDate = format(currentWeek, 'yyyy-MM-dd')
@@ -57,6 +65,41 @@ export default function HomePage() {
     setCurrentWeek((prev) => addWeeks(prev, 1))
   }
 
+  const openProjectManager = useCallback(() => {
+    if (showProjectManager) return
+    pushMoldableNavigation({ id: 'projects', title: 'Projects' })
+    setShowProjectManager(true)
+  }, [showProjectManager])
+
+  const closeProjectManager = useCallback((sync: 'pop' | 'none' = 'pop') => {
+    if (sync === 'pop') popMoldableNavigation()
+    setShowProjectManager(false)
+  }, [])
+
+  const selectViewMode = useCallback(
+    (mode: ViewMode) => {
+      if (mode === viewMode) return
+      if (mode === 'calendar') {
+        pushMoldableNavigation({ id: 'calendar', title: 'Week' })
+      } else {
+        popMoldableNavigation('calendar')
+      }
+      setViewMode(mode)
+    },
+    [viewMode],
+  )
+
+  useMoldableNavigationPop(() => {
+    if (showProjectManager) {
+      closeProjectManager('none')
+      return
+    }
+
+    if (viewMode === 'calendar') {
+      setViewMode('list')
+    }
+  })
+
   return (
     <div className="bg-background flex h-screen flex-col">
       {/* Header with Timer */}
@@ -64,7 +107,7 @@ export default function HomePage() {
         <div className="flex items-center gap-4">
           <Timer
             onNewProject={() => setShowNewProject(true)}
-            onManageProjects={() => setShowProjectManager(true)}
+            onManageProjects={openProjectManager}
           />
           <div className="bg-border h-8 w-px shrink-0" />
           <ExportDialog />
@@ -78,7 +121,13 @@ export default function HomePage() {
       />
 
       {/* Project Manager Sheet */}
-      <Sheet open={showProjectManager} onOpenChange={setShowProjectManager}>
+      <Sheet
+        open={showProjectManager}
+        onOpenChange={(open) => {
+          if (open) openProjectManager()
+          else closeProjectManager('pop')
+        }}
+      >
         <SheetContent className="flex flex-col px-6">
           <SheetHeader className="px-0">
             <SheetTitle>Manage Projects</SheetTitle>
@@ -115,7 +164,7 @@ export default function HomePage() {
             {/* View toggle */}
             <div className="bg-muted flex rounded-lg p-1">
               <button
-                onClick={() => setViewMode('list')}
+                onClick={() => selectViewMode('list')}
                 className={cn(
                   'flex cursor-pointer items-center gap-1.5 rounded px-3 py-1.5 text-sm transition-colors',
                   viewMode === 'list'
@@ -127,7 +176,7 @@ export default function HomePage() {
                 List
               </button>
               <button
-                onClick={() => setViewMode('calendar')}
+                onClick={() => selectViewMode('calendar')}
                 className={cn(
                   'flex cursor-pointer items-center gap-1.5 rounded px-3 py-1.5 text-sm transition-colors',
                   viewMode === 'calendar'

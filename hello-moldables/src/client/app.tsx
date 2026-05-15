@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { resetMoldableNavigation } from '@moldable-ai/ui'
 
 const WELCOME_MESSAGE = 'Welcome!'
 const YOUR_NAME = 'friend'
@@ -33,6 +34,10 @@ function useModKey() {
 
 export function App() {
   const modKey = useModKey()
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
 
   return (
     <main className="bg-background text-foreground selection:bg-primary/10 min-h-screen p-8 pb-[var(--chat-safe-padding)]">

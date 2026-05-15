@@ -32,6 +32,10 @@ import {
   TooltipContent,
   TooltipTrigger,
   cn,
+  popMoldableNavigation,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
+  useMoldableNavigationPop,
   useWorkspace,
 } from '@moldable-ai/ui'
 import { folders } from './lib/folders'
@@ -448,6 +452,7 @@ export function App() {
       } else {
         window.history.pushState(nextState, '')
         readerHistoryOpenRef.current = true
+        pushMoldableNavigation({ id: `message:${id}`, title: 'Email' })
       }
       setSelectedId(id)
     },
@@ -472,25 +477,26 @@ export function App() {
     [cancelReaderCloseAnimation],
   )
 
-  const dismissReader = useCallback(() => {
-    cancelReaderCloseAnimation()
-    readerHistoryOpenRef.current = false
-    replaceReaderHistoryWithInbox()
-    setSelectedId(null)
-  }, [cancelReaderCloseAnimation, replaceReaderHistoryWithInbox])
-
-  const closeReader = useCallback(() => {
-    if (
-      readerHistoryOpenRef.current &&
-      window.history.state?.mailView === 'message'
-    ) {
+  const dismissReader = useCallback(
+    (sync: 'pop' | 'none' = 'pop') => {
+      cancelReaderCloseAnimation()
+      if (sync === 'pop') popMoldableNavigation()
       readerHistoryOpenRef.current = false
+      replaceReaderHistoryWithInbox()
+      setSelectedId(null)
+    },
+    [cancelReaderCloseAnimation, replaceReaderHistoryWithInbox],
+  )
+
+  const closeReader = useCallback(
+    (sync: 'pop' | 'none' = 'pop') => {
+      if (sync === 'pop') popMoldableNavigation()
+      readerHistoryOpenRef.current = false
+      replaceReaderHistoryWithInbox()
       animateReaderClose()
-      window.history.back()
-      return
-    }
-    animateReaderClose()
-  }, [animateReaderClose])
+    },
+    [animateReaderClose, replaceReaderHistoryWithInbox],
+  )
 
   const actionMutation = useMessageAction({
     onRemoveCurrent: dismissReader,
@@ -512,9 +518,30 @@ export function App() {
     [actionMutation],
   )
 
+  const openComposer = useCallback(
+    (nextComposer: ComposerState) => {
+      if (!composer) {
+        pushMoldableNavigation({
+          id: nextComposer.draftId
+            ? `compose:${nextComposer.draftId}`
+            : 'compose:new',
+          title: 'Compose',
+        })
+      }
+      setComposer(nextComposer)
+    },
+    [composer],
+  )
+
+  const closeComposer = useCallback((sync: 'pop' | 'none' = 'pop') => {
+    if (sync === 'pop') popMoldableNavigation()
+    setComposer(null)
+    setDraftClosePromptOpen(false)
+  }, [])
+
   const openReply = useCallback(
-    (message: MailMessageDetail) => setComposer(replyComposer(message)),
-    [],
+    (message: MailMessageDetail) => openComposer(replyComposer(message)),
+    [openComposer],
   )
 
   const handleReplyFromRow = useCallback(
@@ -555,7 +582,7 @@ export function App() {
 
       if (showingDrafts && id?.startsWith('draft:')) {
         const draft = drafts.find((item) => `draft:${item.id}` === id)
-        if (draft) setComposer(draft.composer)
+        if (draft) openComposer(draft.composer)
         dismissReader()
         return
       }
@@ -571,6 +598,7 @@ export function App() {
       closeReader,
       dismissReader,
       drafts,
+      openComposer,
       openReaderMessage,
       showingDrafts,
     ],
@@ -700,6 +728,30 @@ export function App() {
     onSelect: handleSelectMessage,
     onAction: runAction,
     onReply: openReply,
+  })
+
+  useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
+
+  useMoldableNavigationPop(() => {
+    if (composer) {
+      if (hasDraftContent(composer)) {
+        setDraftClosePromptOpen(true)
+        pushMoldableNavigation({
+          id: composer.draftId ? `compose:${composer.draftId}` : 'compose:new',
+          title: 'Compose',
+        })
+        return
+      }
+
+      closeComposer('none')
+      return
+    }
+
+    if (selectedIdRef.current) {
+      closeReader('none')
+    }
   })
 
   useEffect(() => {
@@ -937,8 +989,7 @@ export function App() {
     const draftId = composer.draftId
     sendMutation.mutate(composer, {
       onSuccess: () => {
-        setComposer(null)
-        setDraftClosePromptOpen(false)
+        closeComposer('pop')
         if (draftId) deleteDraftMutation.mutate(draftId)
       },
     })
@@ -948,8 +999,7 @@ export function App() {
     if (!composer) return
     if (!hasDraftContent(composer)) {
       if (composer.draftId) deleteDraftMutation.mutate(composer.draftId)
-      setComposer(null)
-      setDraftClosePromptOpen(false)
+      closeComposer('pop')
       return
     }
     setDraftClosePromptOpen(true)
@@ -959,16 +1009,14 @@ export function App() {
     if (!composer) return
     saveDraftMutation.mutate(composer, {
       onSuccess: () => {
-        setComposer(null)
-        setDraftClosePromptOpen(false)
+        closeComposer('pop')
       },
     })
   }
 
   const handleDiscardDraftAndClose = () => {
     const draftId = composer?.draftId
-    setComposer(null)
-    setDraftClosePromptOpen(false)
+    closeComposer('pop')
     if (draftId) deleteDraftMutation.mutate(draftId)
   }
 
@@ -977,7 +1025,7 @@ export function App() {
     disconnectGmail.mutate(undefined, {
       onSuccess: () => {
         dismissReader()
-        setComposer(null)
+        closeComposer('pop')
         setQuery('')
         setSearchInput('')
         setGeneratedSearch(null)
@@ -1030,7 +1078,7 @@ export function App() {
 
       switch (event.data.command) {
         case 'mail.compose':
-          setComposer(emptyComposer())
+          openComposer(emptyComposer())
           break
         case 'mail.search':
           dismissReader()
@@ -1118,6 +1166,7 @@ export function App() {
     handleFolderChange,
     messageQuery.data,
     refetchMessages,
+    openComposer,
     openReply,
     runAction,
     selectedId,
@@ -1218,7 +1267,7 @@ export function App() {
             searchTranslating={generateSearchQuery.isPending}
             generatedSearch={generatedSearch}
             searchError={searchError}
-            onCompose={() => setComposer(emptyComposer())}
+            onCompose={() => openComposer(emptyComposer())}
             onDisconnect={handleDisconnect}
             onFolderChange={handleFolderChange}
             onRefresh={() => {
