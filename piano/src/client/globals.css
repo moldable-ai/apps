@@ -1,0 +1,212 @@
+@import 'tailwindcss';
+@import '@moldable-ai/ui/styles';
+@source './**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif:
+    'New York', 'Cambria', 'Palatino', Georgia, 'Times New Roman', serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    overflow: hidden;
+  }
+}
+
+@layer components {
+  .piano-serif {
+    font-family: var(--font-serif);
+    letter-spacing: -0.01em;
+  }
+
+  .piano-mono {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  .piano-card-tone {
+    background:
+      radial-gradient(
+        120% 90% at 0% 0%,
+        color-mix(in oklch, var(--card-tone, var(--primary)) 38%, transparent)
+          0%,
+        transparent 55%
+      ),
+      radial-gradient(
+        120% 90% at 100% 100%,
+        color-mix(in oklch, var(--card-tone, var(--primary)) 22%, transparent)
+          0%,
+        transparent 55%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(
+          in oklch,
+          var(--card) 92%,
+          var(--card-tone, var(--primary)) 8%
+        ),
+        var(--card)
+      );
+  }
+
+  .piano-scrollbar::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+  .piano-scrollbar::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklch, var(--foreground) 14%, transparent);
+    border-radius: 999px;
+  }
+  .piano-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklch, var(--foreground) 24%, transparent);
+  }
+  .piano-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .piano-no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .piano-no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes piano-view-forward {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes piano-view-back {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0) scale(1.015);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes piano-card-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes piano-chrome-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes piano-key-glow {
+  0% {
+    box-shadow:
+      0 0 0 0
+        color-mix(in oklch, var(--key-tone, var(--primary)) 65%, transparent),
+      0 4px 14px
+        color-mix(in oklch, var(--key-tone, var(--primary)) 45%, transparent);
+  }
+  60% {
+    box-shadow:
+      0 0 0 4px
+        color-mix(in oklch, var(--key-tone, var(--primary)) 0%, transparent),
+      0 6px 18px
+        color-mix(in oklch, var(--key-tone, var(--primary)) 30%, transparent);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0
+        color-mix(in oklch, var(--key-tone, var(--primary)) 0%, transparent),
+      0 4px 14px
+        color-mix(in oklch, var(--key-tone, var(--primary)) 35%, transparent);
+  }
+}
+
+@keyframes piano-hit-pulse {
+  0% {
+    opacity: 0.55;
+    transform: scaleX(1);
+  }
+  60% {
+    opacity: 0.15;
+    transform: scaleX(1.04);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes piano-mini-drift {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.animate-piano-view-forward {
+  animation: piano-view-forward 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-piano-view-back {
+  animation: piano-view-back 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-piano-card-in {
+  animation: piano-card-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-piano-chrome-in {
+  animation: piano-chrome-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-piano-mini-drift {
+  animation: piano-mini-drift 4.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-piano-view-forward,
+  .animate-piano-view-back,
+  .animate-piano-card-in,
+  .animate-piano-chrome-in,
+  .animate-piano-mini-drift {
+    animation: none;
+  }
+}

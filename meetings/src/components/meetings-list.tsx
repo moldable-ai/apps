@@ -17,11 +17,29 @@ import type { Meeting } from '@/types'
 
 export interface CalendarEvent {
   id?: string | null
+  iCalUID?: string | null
   title?: string
   start?: string
   end?: string
   isAllDay?: boolean
   location?: string
+  link?: string | null
+  organizer?: {
+    email?: string | null
+    displayName?: string | null
+    self?: boolean | null
+  } | null
+  attendees?: {
+    email?: string | null
+    displayName?: string | null
+    responseStatus?: string | null
+    optional?: boolean | null
+    organizer?: boolean | null
+    self?: boolean | null
+  }[]
+  selfResponseStatus?: string | null
+  conferenceUrl?: string | null
+  conferenceProvider?: string | null
 }
 
 interface CalendarEventDay {

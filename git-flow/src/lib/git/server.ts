@@ -41,11 +41,22 @@ const GithubUserSchema = z.object({
   avatar_url: z.string().nullable().optional(),
 })
 
+const GithubPullRequestSchema = z.object({
+  url: z.string().optional(),
+  number: z.number().optional(),
+  title: z.string().optional(),
+  state: z.string().optional(),
+  baseRefName: z.string().optional(),
+  headRefName: z.string().optional(),
+})
+
 const SettingsSchema = z.object({
   currentRepoPath: z.string().default(''),
   recentRepos: z.array(RepoEntrySchema).default([]),
   preferredEditorId: z.string().optional(),
-  preferredCommitAction: z.enum(['commit', 'commit-and-push']).optional(),
+  preferredCommitAction: z
+    .enum(['commit', 'commit-and-push', 'commit-and-open-pr'])
+    .optional(),
 })
 
 type Settings = z.infer<typeof SettingsSchema>
@@ -58,6 +69,7 @@ const DEFAULT_SETTINGS: Settings = {
 }
 
 const MAX_GIT_OUTPUT_CHARS = 16000
+const MAX_UNTRACKED_DIFF_BYTES = 350000
 const MAX_IMAGE_PREVIEW_BYTES = 25 * 1024 * 1024
 const GITHUB_AVATAR_CACHE_TTL_MS = 5 * 60 * 1000
 const IMAGE_MIME_TYPES: Record<string, string> = {
@@ -140,6 +152,59 @@ type WorkspaceAppConfig = {
 type GithubRemote = {
   owner: string
   repo: string
+}
+
+export type ExistingPullRequest = {
+  url: string
+  number?: number
+  title?: string
+  state?: string
+  baseBranch?: string
+  headBranch?: string
+}
+
+export type PullRequestStatus = {
+  canOpen: boolean
+  reason?: string
+  provider?: 'github'
+  owner?: string
+  repo?: string
+  remoteName?: string
+  baseBranch?: string
+  headBranch?: string
+  compareUrl?: string
+  isPushed?: boolean
+  branchCommitCount?: number
+  existingPullRequest?: ExistingPullRequest
+}
+
+export type PullRequestContext = PullRequestStatus & {
+  canOpen: true
+  commits: Array<{
+    hash: string
+    message: string
+    body?: string
+  }>
+  diffStat: string
+  diff: string
+}
+
+export type PullRequestDraft = {
+  title: string
+  body: string
+  url: string
+  baseBranch: string
+  headBranch: string
+}
+
+export type PreferredCommitAction =
+  | 'commit'
+  | 'commit-and-push'
+  | 'commit-and-open-pr'
+
+type RemoteRef = {
+  remoteName: string
+  branchName: string
 }
 
 type GithubUserProfile = {
@@ -231,6 +296,13 @@ function appendCappedOutput(current: string, chunk: string) {
   const next = current + chunk
   if (next.length <= MAX_GIT_OUTPUT_CHARS) return next
   return next.slice(-MAX_GIT_OUTPUT_CHARS)
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  const kib = bytes / 1024
+  if (kib < 1024) return `${kib.toFixed(1)} KiB`
+  return `${(kib / 1024).toFixed(1)} MiB`
 }
 
 function formatGitFailure(args: string[], stdout: string, stderr: string) {
@@ -354,11 +426,267 @@ function parseGithubRemoteUrl(remoteUrl: string): GithubRemote | undefined {
   return undefined
 }
 
+function parseRemoteRef(value?: string | null): RemoteRef | undefined {
+  const trimmed = value?.trim()
+  if (!trimmed || !trimmed.includes('/')) return undefined
+
+  const slashIndex = trimmed.indexOf('/')
+  const remoteName = trimmed.slice(0, slashIndex)
+  const branchName = trimmed.slice(slashIndex + 1)
+
+  return remoteName && branchName ? { remoteName, branchName } : undefined
+}
+
+function encodeGithubCompareBranch(branch: string) {
+  return encodeURIComponent(branch)
+}
+
+export function buildPullRequestUrl({
+  owner,
+  repo,
+  baseBranch,
+  headBranch,
+  title,
+  body,
+}: {
+  owner: string
+  repo: string
+  baseBranch: string
+  headBranch: string
+  title?: string
+  body?: string
+}) {
+  const url = new URL(
+    `https://github.com/${encodeURIComponent(owner)}/${encodeURIComponent(
+      repo,
+    )}/compare/${encodeGithubCompareBranch(baseBranch)}...${encodeGithubCompareBranch(
+      headBranch,
+    )}`,
+  )
+  url.searchParams.set('expand', '1')
+  if (title?.trim()) url.searchParams.set('title', title.trim())
+  if (body?.trim()) url.searchParams.set('body', body.trim())
+  return url.toString()
+}
+
 async function getGithubRemote(g: ReturnType<typeof simpleGit>) {
   const remoteUrl = await g
     .raw(['remote', 'get-url', 'origin'])
     .catch(() => undefined)
   return remoteUrl ? parseGithubRemoteUrl(remoteUrl) : undefined
+}
+
+async function getGithubRemoteForName(
+  g: ReturnType<typeof simpleGit>,
+  remoteName: string,
+) {
+  const remoteUrl = await g
+    .raw(['remote', 'get-url', remoteName])
+    .catch(() => undefined)
+  return remoteUrl ? parseGithubRemoteUrl(remoteUrl) : undefined
+}
+
+async function getExistingPullRequest(
+  repoPath: string | undefined,
+  currentBranch: string,
+): Promise<ExistingPullRequest | undefined> {
+  if (!repoPath || !currentBranch || currentBranch === 'HEAD') return undefined
+
+  return execFileAsync(
+    'gh',
+    [
+      'pr',
+      'view',
+      currentBranch,
+      '--json',
+      'url,number,title,state,baseRefName,headRefName',
+    ],
+    {
+      cwd: repoPath,
+      encoding: 'utf8',
+      timeout: 3000,
+    },
+  )
+    .then(({ stdout }) => {
+      const parsed = GithubPullRequestSchema.safeParse(JSON.parse(stdout))
+      if (!parsed.success || !parsed.data.url) return undefined
+
+      return {
+        url: parsed.data.url,
+        number: parsed.data.number,
+        title: parsed.data.title,
+        state: parsed.data.state,
+        baseBranch: parsed.data.baseRefName,
+        headBranch: parsed.data.headRefName,
+      }
+    })
+    .catch(() => undefined)
+}
+
+async function getRemoteDefaultBranch(
+  g: ReturnType<typeof simpleGit>,
+  remoteName: string,
+  branches: string[] = [],
+) {
+  const symbolicRef = await g
+    .raw([
+      'symbolic-ref',
+      '--quiet',
+      '--short',
+      `refs/remotes/${remoteName}/HEAD`,
+    ])
+    .then((value) => value.trim())
+    .catch(() => '')
+  const symbolicBranch = parseRemoteRef(symbolicRef)?.branchName
+  if (symbolicBranch) return symbolicBranch
+
+  const remoteShow = await g
+    .raw(['remote', 'show', '-n', remoteName])
+    .then((value) => value.trim())
+    .catch(() => '')
+  const headBranch = remoteShow.match(/HEAD branch:\s*(.+)/)?.[1]?.trim()
+  if (headBranch && headBranch !== '(unknown)') return headBranch
+
+  if (branches.includes(`${remoteName}/main`) || branches.includes('main')) {
+    return 'main'
+  }
+  if (
+    branches.includes(`${remoteName}/master`) ||
+    branches.includes('master')
+  ) {
+    return 'master'
+  }
+
+  return 'main'
+}
+
+async function refExists(g: ReturnType<typeof simpleGit>, ref: string) {
+  return g
+    .raw(['rev-parse', '--verify', '--quiet', ref])
+    .then(() => true)
+    .catch(() => false)
+}
+
+async function countRevisions(
+  g: ReturnType<typeof simpleGit>,
+  range: string,
+): Promise<number> {
+  return g
+    .raw(['rev-list', '--count', range])
+    .then((value) => Number.parseInt(value.trim(), 10))
+    .then((value) => (Number.isFinite(value) ? value : 0))
+    .catch(() => 0)
+}
+
+async function getPullRequestStatusForRepo(
+  g: ReturnType<typeof simpleGit>,
+  currentBranch: string,
+  branches: string[] = [],
+  repoPath?: string,
+): Promise<PullRequestStatus> {
+  if (
+    !currentBranch ||
+    currentBranch === 'HEAD' ||
+    currentBranch === 'unknown'
+  ) {
+    return { canOpen: false, reason: 'No named branch is checked out.' }
+  }
+
+  const upstreamRef = await g
+    .revparse(['--abbrev-ref', '--symbolic-full-name', '@{u}'])
+    .then((value) => value.trim())
+    .catch(() => '')
+  const upstream = parseRemoteRef(upstreamRef)
+
+  if (!upstream) {
+    return {
+      canOpen: false,
+      reason: 'Push this branch and set an upstream before opening a PR.',
+      isPushed: false,
+    }
+  }
+
+  const remote = await getGithubRemoteForName(g, upstream.remoteName)
+  if (!remote) {
+    return {
+      canOpen: false,
+      reason: 'The upstream remote is not a GitHub repository.',
+      remoteName: upstream.remoteName,
+      headBranch: upstream.branchName,
+      isPushed: false,
+    }
+  }
+
+  const [baseBranch, existingPullRequest] = await Promise.all([
+    getRemoteDefaultBranch(g, upstream.remoteName, branches),
+    getExistingPullRequest(repoPath, currentBranch),
+  ])
+  const localAheadOfUpstream = await countRevisions(g, '@{u}..HEAD')
+  const isPushed = localAheadOfUpstream === 0
+  const remoteBaseRef = `refs/remotes/${upstream.remoteName}/${baseBranch}`
+  const baseRef = (await refExists(g, remoteBaseRef))
+    ? remoteBaseRef
+    : `${upstream.remoteName}/${baseBranch}`
+  const branchCommitCount = await countRevisions(g, `${baseRef}..HEAD`)
+  const compareUrl = buildPullRequestUrl({
+    owner: remote.owner,
+    repo: remote.repo,
+    baseBranch,
+    headBranch: upstream.branchName,
+  })
+
+  const common = {
+    provider: 'github' as const,
+    owner: remote.owner,
+    repo: remote.repo,
+    remoteName: upstream.remoteName,
+    baseBranch,
+    headBranch: upstream.branchName,
+    compareUrl,
+    isPushed,
+    branchCommitCount,
+    existingPullRequest:
+      existingPullRequest?.state === 'OPEN' ? existingPullRequest : undefined,
+  }
+
+  if (existingPullRequest?.state === 'OPEN') {
+    return {
+      ...common,
+      baseBranch: existingPullRequest.baseBranch ?? baseBranch,
+      headBranch: existingPullRequest.headBranch ?? upstream.branchName,
+      canOpen: false,
+      reason: 'A pull request is already open for this branch.',
+    }
+  }
+
+  if (currentBranch === baseBranch || upstream.branchName === baseBranch) {
+    return {
+      ...common,
+      canOpen: false,
+      reason: 'The current branch is the base branch.',
+    }
+  }
+
+  if (!isPushed) {
+    return {
+      ...common,
+      canOpen: false,
+      reason: 'Push local commits before opening a PR.',
+    }
+  }
+
+  if (branchCommitCount <= 0) {
+    return {
+      ...common,
+      canOpen: false,
+      reason: `No branch commits found ahead of ${baseBranch}.`,
+    }
+  }
+
+  return {
+    ...common,
+    canOpen: true,
+  }
 }
 
 async function getGithubUserProfile() {
@@ -498,7 +826,7 @@ function requireRepoPath(repoPath?: string | null) {
   return repoPath
 }
 
-async function runGit(args: string[], cwd: string) {
+async function runGit(args: string[], cwd: string, timeoutMs = 120_000) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn('git', args, {
       cwd,
@@ -508,6 +836,18 @@ async function runGit(args: string[], cwd: string) {
 
     let stdout = ''
     let stderr = ''
+    let settled = false
+    const timeout = setTimeout(() => {
+      if (settled) return
+      child.kill('SIGTERM')
+      reject(
+        new Error(
+          `git ${args.join(' ')} timed out after ${Math.round(
+            timeoutMs / 1000,
+          )} seconds.`,
+        ),
+      )
+    }, timeoutMs)
 
     child.stdin.end()
 
@@ -519,8 +859,16 @@ async function runGit(args: string[], cwd: string) {
       stderr = appendCappedOutput(stderr, chunk.toString('utf8'))
     })
 
-    child.on('error', reject)
+    child.on('error', (error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      reject(error)
+    })
     child.on('close', (code, signal) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
       if (code === 0) {
         resolve({ stdout, stderr })
         return
@@ -619,6 +967,12 @@ export async function getStatus(repoPath?: string, workspaceId?: string) {
   try {
     const status = await g.status()
     const branchView = await g.branch()
+    const pullRequest = await getPullRequestStatusForRepo(
+      g,
+      branchView.current,
+      branchView.all,
+      pathToUse,
+    )
 
     return {
       currentBranch: branchView.current,
@@ -627,6 +981,7 @@ export async function getStatus(repoPath?: string, workspaceId?: string) {
       isClean: status.isClean(),
       repoName: path.basename(pathToUse),
       repoPath: pathToUse,
+      pullRequest,
     }
   } catch (error) {
     console.error('Git status error:', error)
@@ -638,6 +993,215 @@ export async function getStatus(repoPath?: string, workspaceId?: string) {
       repoName: 'Error Loading Repo',
       repoPath: pathToUse,
     }
+  }
+}
+
+export async function getPullRequestContext(
+  workspaceId?: string,
+): Promise<PullRequestContext> {
+  const settings = await getSettings(workspaceId)
+  const repoPath = requireRepoPath(
+    resolveRepoPath(undefined, settings.currentRepoPath),
+  )
+  const g = simpleGit(repoPath)
+  const branchView = await g.branch()
+  const currentBranch = branchView.current
+  const status = await getPullRequestStatusForRepo(
+    g,
+    currentBranch,
+    branchView.all,
+    repoPath,
+  )
+
+  if (status.existingPullRequest?.url) {
+    throw new Error('A pull request is already open for this branch.')
+  }
+
+  if (!status.canOpen) {
+    throw new Error(
+      status.reason ?? 'This branch is not ready for a pull request.',
+    )
+  }
+
+  const baseRefName = `refs/remotes/${status.remoteName}/${status.baseBranch}`
+  const baseRef = (await refExists(g, baseRefName))
+    ? baseRefName
+    : `${status.remoteName}/${status.baseBranch}`
+  const range = `${baseRef}..HEAD`
+  const diffRange = `${baseRef}...HEAD`
+  const [logOutput, diffStat, diff] = await Promise.all([
+    g.raw(['log', '--reverse', '--format=%H%x1f%s%x1f%b%x1e', range]),
+    g.diff(['--stat', diffRange]).catch(() => ''),
+    g.diff(['--find-renames', '--name-status', diffRange]).catch(() => ''),
+  ])
+
+  const commits = logOutput
+    .split('\x1e')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const [hash = '', message = '', body = ''] = entry.split('\x1f')
+      return {
+        hash: hash.trim(),
+        message: message.trim(),
+        body: body.trim() || undefined,
+      }
+    })
+    .filter((commit) => commit.hash && commit.message)
+
+  return {
+    ...status,
+    canOpen: true,
+    commits,
+    diffStat: diffStat.trim(),
+    diff: diff.trim(),
+  }
+}
+
+export function sanitizeBranchName(value: string) {
+  const sanitized = value
+    .trim()
+    .toLowerCase()
+    .replace(/^refs\/heads\//, '')
+    .replace(/[^a-z0-9/_-]+/g, '-')
+    .replace(/\/+/g, '/')
+    .replace(/-+/g, '-')
+    .replace(/(^[-/._]+)|([-/._]+$)/g, '')
+    .slice(0, 80)
+
+  return sanitized || 'changes'
+}
+
+export async function createBranchFromBaseIfNeeded(
+  proposedBranchName: string,
+  workspaceId?: string,
+) {
+  const settings = await getSettings(workspaceId)
+  const repoPath = requireRepoPath(
+    resolveRepoPath(undefined, settings.currentRepoPath),
+  )
+
+  console.info('[git-flow] Commit & open PR: checking current branch')
+  const currentBranch = (
+    await runGit(['branch', '--show-current'], repoPath, 10_000)
+  ).stdout.trim()
+
+  if (!currentBranch || currentBranch === 'HEAD') {
+    throw new Error('Cannot create a PR while HEAD is detached.')
+  }
+
+  const upstream = await runGit(
+    ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
+    repoPath,
+    10_000,
+  )
+    .then((result) => parseRemoteRef(result.stdout.trim()))
+    .catch(() => undefined)
+  const branchList = await runGit(
+    ['branch', '--list', '--format=%(refname:short)'],
+    repoPath,
+    10_000,
+  )
+    .then((result) => result.stdout.split(/\r?\n/).map((line) => line.trim()))
+    .catch(() => [] as string[])
+
+  const baseBranch =
+    currentBranch === 'main' || currentBranch === 'master'
+      ? currentBranch
+      : upstream?.branchName === 'main' || upstream?.branchName === 'master'
+        ? upstream.branchName
+        : branchList.includes('main')
+          ? 'main'
+          : branchList.includes('master')
+            ? 'master'
+            : undefined
+
+  const existingPullRequest = await getExistingPullRequest(
+    repoPath,
+    currentBranch,
+  )
+
+  if (existingPullRequest?.url) {
+    return {
+      created: false,
+      branchName: currentBranch,
+      baseBranch: existingPullRequest.baseBranch ?? baseBranch,
+      existingPullRequest,
+    }
+  }
+
+  if (!baseBranch || currentBranch !== baseBranch) {
+    return {
+      created: false,
+      branchName: currentBranch,
+      baseBranch,
+    }
+  }
+
+  let branchName = sanitizeBranchName(proposedBranchName)
+  if (!branchName.includes('/')) {
+    branchName = `changes/${branchName}`
+  }
+
+  let candidate = branchName
+  let suffix = 2
+  while (
+    await runGit(
+      ['rev-parse', '--verify', '--quiet', candidate],
+      repoPath,
+      5_000,
+    )
+      .then(() => true)
+      .catch(() => false)
+  ) {
+    candidate = `${branchName}-${suffix}`
+    suffix += 1
+  }
+
+  console.info(`[git-flow] Commit & open PR: creating branch ${candidate}`)
+  await runGit(['checkout', '-b', candidate], repoPath, 20_000)
+
+  return {
+    created: true,
+    branchName: candidate,
+    baseBranch,
+  }
+}
+
+export function createPullRequestDraft({
+  context,
+  title,
+  body,
+}: {
+  context: PullRequestContext
+  title: string
+  body: string
+}): PullRequestDraft {
+  if (
+    !context.owner ||
+    !context.repo ||
+    !context.baseBranch ||
+    !context.headBranch
+  ) {
+    throw new Error('Pull request target could not be resolved.')
+  }
+
+  const normalizedTitle =
+    title.trim() || context.commits[0]?.message || 'Update branch'
+  const normalizedBody = body.trim()
+  return {
+    title: normalizedTitle,
+    body: normalizedBody,
+    url: buildPullRequestUrl({
+      owner: context.owner,
+      repo: context.repo,
+      baseBranch: context.baseBranch,
+      headBranch: context.headBranch,
+      title: normalizedTitle,
+      body: normalizedBody,
+    }),
+    baseBranch: context.baseBranch,
+    headBranch: context.headBranch,
   }
 }
 
@@ -693,7 +1257,7 @@ export async function pushCommits(workspaceId?: string) {
       .catch(() => null)
 
     if (upstream) {
-      const result = await g.push()
+      const result = await runGit(['push'], repoPath)
       return { success: true, result, upstreamSet: false }
     }
 
@@ -930,15 +1494,22 @@ export async function getDiff(
 
     let untrackedDiff = ''
     if (untracked.trim()) {
-      // For untracked files, we generate a synthetic diff
+      // For untracked files, generate a synthetic diff. Avoid reading very large
+      // files into memory just to render a preview in the UI.
       try {
-        const fs = await import('fs')
         const fullPath = path.join(pathToUse, filePath)
-        if (fs.existsSync(fullPath)) {
-          const fileContent = fs.readFileSync(fullPath, 'utf8')
-          const lines = fileContent.split('\n')
-          untrackedDiff = lines.map((line: string) => `+${line}`).join('\n')
-          untrackedDiff = `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n${untrackedDiff}`
+        if (existsSync(fullPath)) {
+          const fileStat = await stat(fullPath)
+          if (fileStat.size > MAX_UNTRACKED_DIFF_BYTES) {
+            untrackedDiff = `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1 @@\n+[Untracked file is ${formatBytes(
+              fileStat.size,
+            )}. Preview skipped to keep Git Flow responsive. Open the file in your editor for full contents.]`
+          } else {
+            const fileContent = await readFile(fullPath, 'utf8')
+            const lines = fileContent.split('\n')
+            untrackedDiff = lines.map((line: string) => `+${line}`).join('\n')
+            untrackedDiff = `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n${untrackedDiff}`
+          }
         }
       } catch (e) {
         console.error('Error reading untracked file:', e)
@@ -1356,7 +1927,7 @@ export async function setPreferredEditor(
 }
 
 export async function setPreferredCommitAction(
-  preferredCommitAction: 'commit' | 'commit-and-push',
+  preferredCommitAction: PreferredCommitAction,
   workspaceId?: string,
 ) {
   const settings = await getSettings(workspaceId)

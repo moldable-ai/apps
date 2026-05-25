@@ -101,6 +101,30 @@ const DEFAULT_SQL_EDITOR_HEIGHT = 128
 const MIN_SQL_EDITOR_HEIGHT = 96
 const MAX_SQL_EDITOR_HEIGHT = 520
 const SQL_QUERY_COMMAND_LIMIT = 10
+const SIDEBAR_MODE_STORAGE_PREFIX = 'db-browser:sidebar-mode:'
+
+function isSidebarMode(value: unknown): value is SidebarMode {
+  return value === 'objects' || value === 'dashboards' || value === 'sql'
+}
+
+function sidebarModeStorageKey(workspaceId: string) {
+  return `${SIDEBAR_MODE_STORAGE_PREFIX}${workspaceId}`
+}
+
+function readStoredSidebarMode(workspaceId: string): SidebarMode {
+  if (typeof window === 'undefined') return 'objects'
+
+  const value = window.sessionStorage.getItem(
+    sidebarModeStorageKey(workspaceId),
+  )
+  return isSidebarMode(value) ? value : 'objects'
+}
+
+function writeStoredSidebarMode(workspaceId: string, mode: SidebarMode) {
+  if (typeof window === 'undefined') return
+
+  window.sessionStorage.setItem(sidebarModeStorageKey(workspaceId), mode)
+}
 
 function buildActivity(message: string, detail?: string): ActivityEntry {
   return {
@@ -174,7 +198,9 @@ export function App() {
   }, [])
 
   const [objectSearch, setObjectSearch] = useState('')
-  const [sidebarMode, setSidebarMode] = useState<SidebarMode>('objects')
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(() =>
+    readStoredSidebarMode(workspaceId),
+  )
   const [showNewConnectionDialog, setShowNewConnectionDialog] = useState(false)
   const [showSettingsDialog, setShowSettingsDialog] = useState(false)
   const [showExportDialog, setShowExportDialog] = useState(false)
@@ -281,6 +307,10 @@ export function App() {
     },
     [queryClient, savePreferences, sqlEditorHeight, workspaceId],
   )
+
+  useEffect(() => {
+    setSidebarMode(readStoredSidebarMode(workspaceId))
+  }, [workspaceId])
 
   useEffect(() => {
     if (preferencesQuery.data) {
@@ -899,6 +929,11 @@ export function App() {
     setActivityLog((current) => [buildActivity(message, detail), ...current])
   }
 
+  function changeSidebarMode(mode: SidebarMode) {
+    setSidebarMode(mode)
+    writeStoredSidebarMode(workspaceId, mode)
+  }
+
   function handleCreateConnection(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (editingConnectionId) {
@@ -978,7 +1013,7 @@ export function App() {
     const nextTab = createSqlTab(sqlTabs.length + 1, '')
     setSqlTabs((current) => [...current, nextTab])
     setActiveSqlTabId(nextTab.id)
-    setSidebarMode('sql')
+    changeSidebarMode('sql')
     setResultMode('query')
     setQueryResult(null)
   }
@@ -1015,7 +1050,7 @@ export function App() {
 
   function selectSqlTab(tabId: string) {
     setActiveSqlTabId(tabId)
-    setSidebarMode('sql')
+    changeSidebarMode('sql')
     setResultMode('query')
     setQueryResult(null)
     setSelectedRowIndex(null)
@@ -1029,12 +1064,12 @@ export function App() {
     const nextDashboard = createDashboard(dashboards.length + 1)
     setDashboards((current) => [...current, nextDashboard])
     setActiveDashboardId(nextDashboard.id)
-    setSidebarMode('dashboards')
+    changeSidebarMode('dashboards')
   }
 
   function selectDashboard(dashboardId: string) {
     setActiveDashboardId(dashboardId)
-    setSidebarMode('dashboards')
+    changeSidebarMode('dashboards')
     setSelectedRowIndex(null)
   }
 
@@ -1177,7 +1212,7 @@ export function App() {
     const nextSql = previewSql(schema, table, 0)
 
     setSelectedSchema(schema)
-    setSidebarMode('objects')
+    changeSidebarMode('objects')
     setSelectedTable({ schema, table })
     setPreviewOffset(0)
     setResultMode('preview')
@@ -1398,9 +1433,9 @@ export function App() {
 
   useMoldableAppCommands('db-browser', dbBrowserCommands)
   useMoldableCommands({
-    'db-browser.show-objects': () => setSidebarMode('objects'),
-    'db-browser.show-dashboards': () => setSidebarMode('dashboards'),
-    'db-browser.show-sql-queries': () => setSidebarMode('sql'),
+    'db-browser.show-objects': () => changeSidebarMode('objects'),
+    'db-browser.show-dashboards': () => changeSidebarMode('dashboards'),
+    'db-browser.show-sql-queries': () => changeSidebarMode('sql'),
     'db-browser.new-sql-query': () => openNewSqlTab(),
     'db-browser.new-dashboard': () => openNewDashboard(),
     'db-browser.new-connection': () => openNewConnectionDialog(),
@@ -1431,7 +1466,7 @@ export function App() {
       if (typeof schema !== 'string') return
       if (!schemas.some((entry) => entry.name === schema)) return
       setSelectedSchema(schema)
-      setSidebarMode('objects')
+      changeSidebarMode('objects')
     },
   })
 
@@ -1567,7 +1602,7 @@ export function App() {
                     activeSqlTabId={activeSqlTabId}
                     dashboardsLoading={dashboardWorkspaceQuery.isLoading}
                     sqlWorkspaceLoading={sqlWorkspaceQuery.isLoading}
-                    onModeChange={setSidebarMode}
+                    onModeChange={changeSidebarMode}
                     onObjectSearchChange={setObjectSearch}
                     onSchemaChange={setSelectedSchema}
                     onRefreshObjects={() => void explorerQuery.refetch()}

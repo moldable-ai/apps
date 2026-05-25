@@ -7,6 +7,8 @@ import {
   addFileToGitignore,
   addRepo,
   commitFiles,
+  createBranchFromBaseIfNeeded,
+  createPullRequestDraft,
   discardChanges,
   getCommitDiff,
   getCommitFiles,
@@ -16,10 +18,12 @@ import {
   getEditorIconPngPath,
   getHistory,
   getImagePreview,
+  getPullRequestContext,
   getRecentRepos,
   getStatus,
   openFileInEditor,
   pushCommits,
+  sanitizeBranchName,
   setPreferredCommitAction,
   setPreferredEditor,
   undoUnpushedCommit,
@@ -32,8 +36,25 @@ import path from 'path'
 
 const MAX_COMMIT_DIFF_CHARS = 60000
 const MAX_REVIEW_DIFF_CHARS = 120000
+const MAX_PR_DIFF_CHARS = 100000
+const MAX_UI_DIFF_CHARS = 350000
 const DEFAULT_HISTORY_LIMIT = 50
 const MAX_HISTORY_LIMIT = 100
+
+function createUiDiffResponse(diff: string) {
+  if (diff.length <= MAX_UI_DIFF_CHARS) {
+    return { diff, truncated: false, originalLength: diff.length }
+  }
+
+  return {
+    diff: `${diff.slice(
+      0,
+      MAX_UI_DIFF_CHARS,
+    )}\n\n[Diff preview truncated by Git Flow after ${MAX_UI_DIFF_CHARS.toLocaleString()} characters.]`,
+    truncated: true,
+    originalLength: diff.length,
+  }
+}
 
 function truncateDiff(diff: string, maxChars = MAX_COMMIT_DIFF_CHARS) {
   if (diff.length <= maxChars) return diff
@@ -62,6 +83,15 @@ type CodeReviewJson = {
   findings?: unknown
 }
 
+type PullRequestJson = {
+  title?: unknown
+  body?: unknown
+}
+
+type BranchNameJson = {
+  branchName?: unknown
+}
+
 type GitPostBody = {
   action?: string
   paths?: string[]
@@ -70,13 +100,13 @@ type GitPostBody = {
   hash?: string
   path?: string
   editorId?: string
-  preferredCommitAction?: 'commit' | 'commit-and-push'
+  preferredCommitAction?: 'commit' | 'commit-and-push' | 'commit-and-open-pr'
 }
 
 type GitEditorsResponse = {
   editors: Awaited<ReturnType<typeof getDetectedEditors>>
   preferredEditorId?: string
-  preferredCommitAction?: 'commit' | 'commit-and-push'
+  preferredCommitAction?: 'commit' | 'commit-and-push' | 'commit-and-open-pr'
 }
 
 type RpcRequest = {
@@ -141,6 +171,36 @@ const codeReviewSchema = {
           },
         },
       },
+    },
+  },
+}
+
+const branchNameSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['branchName'],
+  properties: {
+    branchName: {
+      type: 'string',
+      description:
+        'Short git branch name in kebab-case, optionally with a type prefix like feat/, fix/, chore/.',
+    },
+  },
+}
+
+const pullRequestSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['title', 'body'],
+  properties: {
+    title: {
+      type: 'string',
+      description: 'Concise GitHub pull request title, <= 80 chars.',
+    },
+    body: {
+      type: 'string',
+      description:
+        'Markdown pull request body with summary, key changes, and testing notes.',
     },
   },
 }
@@ -317,6 +377,215 @@ If there are no actionable issues, return an empty findings array.`,
   }
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string) {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      setTimeout(
+        () => reject(new Error(`${label} timed out after ${timeoutMs}ms.`)),
+        timeoutMs,
+      )
+    }),
+  ])
+}
+
+function createFallbackPullRequestBody(
+  context: Awaited<ReturnType<typeof getPullRequestContext>>,
+) {
+  const commitList = context.commits
+    .map((commit) => `- ${commit.message} (${commit.hash.slice(0, 7)})`)
+    .join('\n')
+
+  return [
+    '## Summary',
+    commitList || '- Updates this branch.',
+    '',
+    '## Changes',
+    context.diffStat
+      ? `\`\`\`text\n${context.diffStat}\n\`\`\``
+      : '- See diff.',
+    '',
+    '## Testing',
+    '- Commit hooks run automatically before commits.',
+    '- CI will run automatically when the pull request is opened.',
+  ].join('\n')
+}
+
+async function generateBranchName(input: {
+  summary: string
+  description?: string
+  workspaceId?: string
+}) {
+  const fallback = sanitizeBranchName(input.summary || 'changes')
+  const prefixedFallback = fallback.includes('/')
+    ? fallback
+    : `changes/${fallback}`
+  const prompt = `Commit summary: ${input.summary}
+
+Commit description:
+${input.description || '(none)'}`
+
+  try {
+    const generated = await withTimeout(
+      generateAppJson<BranchNameJson>({
+        workspaceId: input.workspaceId,
+        purpose: 'git.branch-name',
+        schema: branchNameSchema,
+        schemaName: 'branch_name',
+        schemaDescription: 'A concise git branch name for a pull request.',
+        maxOutputTokens: 100,
+        timeoutMs: 4_000,
+        system: `Generate a concise git branch name.
+
+Rules:
+- Use lowercase kebab-case.
+- Prefer a prefix such as feat/, fix/, chore/, refactor/, docs/, test/, build/, or ci/.
+- No spaces, punctuation other than / and -.
+- Maximum 50 characters.
+- Do not include ticket numbers unless present in the input.`,
+        prompt,
+      }),
+      4_500,
+      'Branch name generation',
+    )
+    const branchName =
+      typeof generated?.branchName === 'string'
+        ? sanitizeBranchName(generated.branchName)
+        : prefixedFallback
+
+    return branchName || prefixedFallback
+  } catch (error) {
+    console.warn('Falling back to deterministic branch name:', error)
+    return prefixedFallback
+  }
+}
+
+async function commitAndOpenPullRequest(input: {
+  paths: string[]
+  summary: string
+  description: string
+  workspaceId?: string
+}) {
+  console.info('[git-flow] Commit & open PR: starting')
+  const branchName = await generateBranchName({
+    summary: input.summary,
+    description: input.description,
+    workspaceId: input.workspaceId,
+  })
+  console.info(`[git-flow] Commit & open PR: branch candidate ${branchName}`)
+  const branch = await createBranchFromBaseIfNeeded(
+    branchName,
+    input.workspaceId,
+  )
+  console.info(
+    `[git-flow] Commit & open PR: branch ready ${branch.branchName}${
+      branch.created ? ' (created)' : ''
+    }`,
+  )
+
+  const commit = await commitFiles(
+    input.paths,
+    input.summary,
+    input.description,
+    input.workspaceId,
+  )
+  console.info(`[git-flow] Commit & open PR: committed ${commit.commit}`)
+  await pushCommits(input.workspaceId)
+  console.info('[git-flow] Commit & open PR: pushed')
+
+  if (branch.existingPullRequest?.url) {
+    return {
+      commit,
+      draft: {
+        title: branch.existingPullRequest.title ?? 'Pull request',
+        body: '',
+        url: branch.existingPullRequest.url,
+        baseBranch:
+          branch.existingPullRequest.baseBranch ?? branch.baseBranch ?? '',
+        headBranch: branch.existingPullRequest.headBranch ?? branch.branchName,
+      },
+      branch,
+      existing: true,
+    }
+  }
+
+  const draft = await generatePullRequestDraft(input.workspaceId)
+  console.info('[git-flow] Commit & open PR: draft ready')
+
+  return {
+    commit,
+    draft,
+    branch,
+    existing: false,
+  }
+}
+
+async function generatePullRequestDraft(workspaceId?: string) {
+  const context = await getPullRequestContext(workspaceId)
+  const prompt = `Repository: ${context.owner}/${context.repo}
+Base branch: ${context.baseBranch}
+Head branch: ${context.headBranch}
+
+Commits:
+${context.commits
+  .map((commit) => {
+    const body = commit.body ? `\n${commit.body}` : ''
+    return `- ${commit.hash.slice(0, 12)} ${commit.message}${body}`
+  })
+  .join('\n')}
+
+Diff stat:
+${context.diffStat || '(none)'}
+
+Diff:
+${truncateDiff(context.diff, MAX_PR_DIFF_CHARS)}`
+
+  try {
+    const generated = await withTimeout(
+      generateAppJson<PullRequestJson>({
+        workspaceId,
+        purpose: 'git.pull-request',
+        schema: pullRequestSchema,
+        schemaName: 'pull_request',
+        schemaDescription: 'A GitHub pull request title and markdown body.',
+        maxOutputTokens: 1800,
+        timeoutMs: 18_000,
+        system: `You write clear, review-ready GitHub pull request descriptions.
+
+Rules:
+- Title: concise, imperative or noun phrase, <= 80 chars.
+- Body: Markdown with these headings exactly: ## Summary, ## Changes, ## Testing.
+- Summary should explain user-visible intent in 1-3 bullets.
+- Changes should group the most important implementation changes.
+- Testing should not say "Not run" or "Not run (not requested)".
+- Testing should mention that commit hooks run automatically before commits and CI runs automatically on pull requests.
+- If specific test files, commands, or CI config are evident in the diff, mention them as additional context without inventing results.
+- Do not invent issue numbers, reviewers, deployment notes, screenshots, or manual test results that are not present.`,
+        prompt,
+      }),
+      20_000,
+      'Pull request generation',
+    )
+    const title =
+      typeof generated?.title === 'string' ? generated.title.trim() : ''
+    const body =
+      typeof generated?.body === 'string' ? generated.body.trim() : ''
+
+    return createPullRequestDraft({
+      context,
+      title,
+      body: body || createFallbackPullRequestBody(context),
+    })
+  } catch (error) {
+    console.warn('Falling back to deterministic PR details:', error)
+    return createPullRequestDraft({
+      context,
+      title: context.commits[0]?.message ?? `Merge ${context.headBranch}`,
+      body: createFallbackPullRequestBody(context),
+    })
+  }
+}
+
 app.get('/api/moldable/health', (c) => {
   const portRaw = process.env.MOLDABLE_PORT
   const port = portRaw ? Number(portRaw) : null
@@ -381,12 +650,18 @@ app.get('/api/git', async (c) => {
       const detectedEditors = await getDetectedEditors(workspaceId)
       const settings = (await readJson<{
         preferredEditorId?: string
-        preferredCommitAction?: 'commit' | 'commit-and-push'
+        preferredCommitAction?:
+          | 'commit'
+          | 'commit-and-push'
+          | 'commit-and-open-pr'
       }>(path.join(getAppDataDir(workspaceId), 'settings.json'), {}).catch(
         () => ({}),
       )) as {
         preferredEditorId?: string
-        preferredCommitAction?: 'commit' | 'commit-and-push'
+        preferredCommitAction?:
+          | 'commit'
+          | 'commit-and-push'
+          | 'commit-and-open-pr'
       }
 
       return c.json({
@@ -396,9 +671,11 @@ app.get('/api/git', async (c) => {
             ? settings.preferredEditorId
             : undefined,
         preferredCommitAction:
-          settings?.preferredCommitAction === 'commit-and-push'
-            ? 'commit-and-push'
-            : 'commit',
+          settings?.preferredCommitAction === 'commit-and-open-pr'
+            ? 'commit-and-open-pr'
+            : settings?.preferredCommitAction === 'commit-and-push'
+              ? 'commit-and-push'
+              : 'commit',
       } satisfies GitEditorsResponse)
     }
 
@@ -430,12 +707,12 @@ app.get('/api/git', async (c) => {
       }
 
       const diff = await getCommitDiff(hash, undefined, workspaceId, filePath)
-      return c.json({ diff })
+      return c.json(createUiDiffResponse(diff))
     }
 
     if (filePath) {
       const diff = await getDiff(undefined, filePath, workspaceId)
-      return c.json({ diff })
+      return c.json(createUiDiffResponse(diff))
     }
 
     if (history !== undefined) {
@@ -493,6 +770,21 @@ app.post('/api/git', async (c) => {
       return c.json(result)
     }
 
+    if (body.action === 'openPullRequest') {
+      const result = await generatePullRequestDraft(workspaceId)
+      return c.json(result)
+    }
+
+    if (body.action === 'commitAndOpenPullRequest') {
+      const result = await commitAndOpenPullRequest({
+        paths: body.paths ?? [],
+        summary: body.summary ?? '',
+        description: body.description ?? '',
+        workspaceId,
+      })
+      return c.json(result)
+    }
+
     if (body.action === 'undo') {
       const result = await undoUnpushedCommit(body.hash ?? '', workspaceId)
       return c.json(result)
@@ -524,9 +816,11 @@ app.post('/api/git', async (c) => {
 
     if (body.action === 'setPreferredCommitAction') {
       const result = await setPreferredCommitAction(
-        body.preferredCommitAction === 'commit-and-push'
-          ? 'commit-and-push'
-          : 'commit',
+        body.preferredCommitAction === 'commit-and-open-pr'
+          ? 'commit-and-open-pr'
+          : body.preferredCommitAction === 'commit-and-push'
+            ? 'commit-and-push'
+            : 'commit',
         workspaceId,
       )
       return c.json(result)

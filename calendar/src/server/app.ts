@@ -31,7 +31,17 @@ interface CalendarEvent {
     displayName?: string | null
     self?: boolean | null
   } | null
+  attendees?: {
+    email?: string | null
+    displayName?: string | null
+    responseStatus?: string | null
+    optional?: boolean | null
+    organizer?: boolean | null
+    self?: boolean | null
+  }[]
   selfResponseStatus?: string | null
+  conferenceUrl?: string | null
+  conferenceProvider?: string | null
 }
 
 interface CalendarListResponse {
@@ -92,6 +102,10 @@ const eventRsvpParamsSchema = z
 
 function mapGoogleEvent(event: calendar_v3.Schema$Event): CalendarEvent {
   const selfAttendee = event.attendees?.find((attendee) => attendee.self)
+  const conferenceEntryPoint = event.conferenceData?.entryPoints?.find(
+    (entryPoint) =>
+      entryPoint.entryPointType === 'video' && Boolean(entryPoint.uri),
+  )
 
   return {
     id: event.id,
@@ -111,7 +125,17 @@ function mapGoogleEvent(event: calendar_v3.Schema$Event): CalendarEvent {
           self: event.organizer.self,
         }
       : null,
+    attendees: event.attendees?.map((attendee) => ({
+      email: attendee.email,
+      displayName: attendee.displayName,
+      responseStatus: attendee.responseStatus,
+      optional: attendee.optional,
+      organizer: attendee.organizer,
+      self: attendee.self,
+    })),
     selfResponseStatus: selfAttendee?.responseStatus ?? null,
+    conferenceUrl: conferenceEntryPoint?.uri ?? event.hangoutLink ?? null,
+    conferenceProvider: event.conferenceData?.conferenceSolution?.name ?? null,
   }
 }
 
@@ -346,7 +370,19 @@ function filterEventsByQuery(events: CalendarEvent[], query?: string) {
   if (!query?.trim()) return events
   const normalized = query.toLowerCase()
   return events.filter((event) =>
-    [event.title, event.location, event.status]
+    [
+      event.title,
+      event.location,
+      event.status,
+      event.conferenceProvider,
+      event.conferenceUrl,
+      event.organizer?.displayName,
+      event.organizer?.email,
+      ...(event.attendees ?? []).flatMap((attendee) => [
+        attendee.displayName,
+        attendee.email,
+      ]),
+    ]
       .filter(Boolean)
       .join('\n')
       .toLowerCase()

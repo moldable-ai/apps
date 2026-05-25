@@ -2,6 +2,17 @@
   "name": "Meetings",
   "version": "0.1.3",
   "aliases": ["transcripts", "recording"],
+  "intents": [
+    {
+      "id": "meeting.record",
+      "name": "Record meetings",
+      "description": "Start a meeting recording when Moldable detects a live call.",
+      "events": {
+        "start": "moldable:meeting-recording-start",
+        "stop": "moldable:meeting-recording-stop"
+      }
+    }
+  ],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Record, transcribe, and summarize meetings with real-time transcription",

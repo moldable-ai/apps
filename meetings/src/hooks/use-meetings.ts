@@ -136,7 +136,12 @@ export function useActiveMeeting() {
   const [meeting, setMeeting] = useState<Meeting | null>(null)
 
   const startMeeting = useCallback(
-    (id: string, title: string, initialRecordingSession?: RecordingSession) => {
+    (
+      id: string,
+      title: string,
+      initialRecordingSession?: RecordingSession,
+      metadata?: Pick<Meeting, 'calendarContext'>,
+    ) => {
       const newMeeting: Meeting = {
         id,
         title,
@@ -147,6 +152,7 @@ export function useActiveMeeting() {
         recordingSessions: initialRecordingSession
           ? [initialRecordingSession]
           : [],
+        ...metadata,
       }
       setMeeting(newMeeting)
       return newMeeting

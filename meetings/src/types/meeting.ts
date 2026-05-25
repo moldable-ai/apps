@@ -19,6 +19,31 @@ export interface RecordingSession {
   audioMimeType?: string
 }
 
+export interface MeetingParticipant {
+  name?: string
+  email?: string
+  responseStatus?: string
+  optional?: boolean
+  organizer?: boolean
+  self?: boolean
+}
+
+export interface MeetingCalendarContext {
+  eventId?: string
+  iCalUID?: string
+  title?: string
+  start?: string
+  end?: string
+  isAllDay?: boolean
+  location?: string
+  link?: string
+  organizer?: MeetingParticipant
+  attendees?: MeetingParticipant[]
+  selfResponseStatus?: string
+  conferenceUrl?: string
+  conferenceProvider?: string
+}
+
 export interface Meeting {
   id: string
   title: string
@@ -32,6 +57,7 @@ export interface Meeting {
   enhancedNotes?: string // Generated structured notes (markdown)
   enhancedTemplateId?: string // Template used for the current enhanced note
   enhancedAt?: Date
+  calendarContext?: MeetingCalendarContext
 }
 
 export type RecordingState = 'idle' | 'recording' | 'paused'

@@ -61,7 +61,11 @@ import {
   saveCustomTemplate,
 } from './template-selector/template-storage'
 import { TranscriptView } from './transcript-view'
-import type { Meeting } from '@/types'
+import type {
+  Meeting,
+  MeetingCalendarContext,
+  MeetingParticipant,
+} from '@/types'
 
 export type MeetingViewMode = 'manual' | 'enhanced' | 'transcript'
 
@@ -110,6 +114,61 @@ function getPrimaryParticipant(title: string) {
     .filter(Boolean)
 
   return parts.length > 1 ? parts.at(-1) : null
+}
+
+function participantDisplayName(participant: MeetingParticipant) {
+  return participant.name || participant.email || ''
+}
+
+function getCalendarParticipantsLabel(
+  calendarContext: MeetingCalendarContext | undefined,
+) {
+  if (!calendarContext) return null
+
+  const attendees =
+    calendarContext.attendees
+      ?.filter(
+        (participant) =>
+          !participant.self &&
+          participant.responseStatus !== 'declined' &&
+          Boolean(participantDisplayName(participant)),
+      )
+      .map(participantDisplayName) ?? []
+
+  const organizer = calendarContext.organizer
+  const organizerName =
+    organizer && !organizer.self ? participantDisplayName(organizer) : ''
+  const names = Array.from(
+    new Set([organizerName, ...attendees].filter(Boolean)),
+  )
+
+  if (names.length === 0) return null
+  if (names.length <= 2) return names.join(', ')
+  return `${names.slice(0, 2).join(', ')} +${names.length - 2}`
+}
+
+function formatCalendarContextTime(
+  calendarContext: MeetingCalendarContext | undefined,
+) {
+  if (calendarContext?.isAllDay) return 'All day'
+  if (!calendarContext?.start) return null
+  const start = new Date(calendarContext.start)
+  if (Number.isNaN(start.getTime())) return null
+
+  const startText = start.toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  })
+
+  if (!calendarContext.end) return startText
+
+  const end = new Date(calendarContext.end)
+  if (Number.isNaN(end.getTime())) return startText
+
+  return `${startText} - ${end.toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
+  })}`
 }
 
 export function MeetingView({
@@ -334,7 +393,10 @@ export function MeetingView({
     setCurrentMatchIndex(0)
   }, [activeView, findMatchCount, findQuery, replaceQuery])
 
-  const participant = getPrimaryParticipant(titleDraft)
+  const participant =
+    getCalendarParticipantsLabel(meeting.calendarContext) ??
+    getPrimaryParticipant(titleDraft)
+  const calendarTime = formatCalendarContextTime(meeting.calendarContext)
   const enhancementContent = activeEnhancement?.content ?? ''
   const originalEnhancementNotes = enhancedNotes || manualNotes
   const showEnhancingEditor = Boolean(
@@ -674,6 +736,9 @@ export function MeetingView({
                 onOpenChange={setIsDatePickerOpen}
                 onSelectDate={handleMeetingDateChange}
               />
+              {calendarTime ? (
+                <MetadataPill icon={CalendarIcon} label={calendarTime} />
+              ) : null}
               {participant && <MetadataPill icon={Users} label={participant} />}
             </div>
           </header>

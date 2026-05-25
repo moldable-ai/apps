@@ -139,6 +139,7 @@ interface MeetingApiRecord {
   transcript?: string
   segmentCount: number
   recordingSessionCount: number
+  calendarContext?: Meeting['calendarContext']
 }
 
 function getRpcWorkspaceId(request: Request): string | undefined {
@@ -189,6 +190,7 @@ function toMeetingApiRecord(
     transcript: options.includeTranscript ? transcript : undefined,
     segmentCount: meeting.segments.length,
     recordingSessionCount: meeting.recordingSessions?.length ?? 0,
+    calendarContext: meeting.calendarContext,
   }
 }
 
@@ -197,6 +199,13 @@ function searchableMeetingText(meeting: Meeting): string {
     meeting.title,
     meeting.notes,
     meeting.enhancedNotes,
+    meeting.calendarContext?.title,
+    meeting.calendarContext?.organizer?.name,
+    meeting.calendarContext?.organizer?.email,
+    ...(meeting.calendarContext?.attendees ?? []).flatMap((attendee) => [
+      attendee.name,
+      attendee.email,
+    ]),
     meetingTranscript(meeting),
   ]
     .filter(Boolean)

@@ -130,11 +130,11 @@ export function Widget() {
             <SceneViewer
               exploration={active}
               autoRotate
-              cameraFov={34}
-              cameraPosition={[0, 0.12, 3.35]}
+              cameraFov={40}
+              cameraPosition={[0, 0.12, 5.1]}
               enableControls={false}
               rotationMode="widget"
-              sceneScale={2.35}
+              sceneScale={1.35}
               showGround={false}
               viewMode="3d"
             />

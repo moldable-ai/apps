@@ -13,6 +13,7 @@ type GenerateAppJsonOptions = {
   schemaName?: string
   schemaDescription?: string
   maxOutputTokens?: number
+  timeoutMs?: number
 }
 
 function getAppLlmConfig() {
@@ -35,6 +36,7 @@ export async function generateAppJson<T>(
 
   const res = await fetch(`${aiServerUrl}/api/llm/generate-json`, {
     method: 'POST',
+    signal: AbortSignal.timeout(options.timeoutMs ?? 45_000),
     headers: {
       'Content-Type': 'application/json',
       'x-moldable-app-id': appId,

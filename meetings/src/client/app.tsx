@@ -7,6 +7,7 @@ import {
   popMoldableNavigation,
   pushMoldableNavigation,
   resetMoldableNavigation,
+  sendToMoldable,
   useMoldableNavigationPop,
   useWorkspace,
 } from '@moldable-ai/ui'
@@ -34,6 +35,8 @@ import {
 } from '@/hooks'
 import type {
   Meeting,
+  MeetingCalendarContext,
+  MeetingParticipant,
   MeetingSettings,
   RecordingSession,
   TranscriptSegment,
@@ -56,6 +59,236 @@ function calendarErrorMessage(code: string | undefined, error: unknown) {
 }
 
 type AudioSource = 'microphone' | 'both' | 'system'
+
+const RECORDING_BACKGROUND_TASK_KIND = 'meeting-recording'
+
+interface MeetingRecordingStartMessage {
+  type: 'moldable:meeting-recording-start'
+  title?: string
+  provider?: string
+  bundleId?: string
+  detectedAt?: string
+  source?: string
+  sessionKey?: string
+}
+
+interface MeetingRecordingStopMessage {
+  type: 'moldable:meeting-recording-stop'
+  title?: string
+  provider?: string
+  bundleId?: string
+  detectedAt?: string
+  endedAt?: string
+  source?: string
+  reason?: string
+  sessionKey?: string
+}
+
+interface StartMeetingOptions {
+  title?: string
+  calendarEvent?: CalendarEvent | null
+  detection?: MeetingRecordingStartMessage | null
+}
+
+function cleanString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function normalizeParticipant(
+  attendee:
+    | NonNullable<CalendarEvent['attendees']>[number]
+    | NonNullable<CalendarEvent['organizer']>
+    | undefined
+    | null,
+): MeetingParticipant | undefined {
+  if (!attendee) return undefined
+
+  const name = cleanString(
+    'displayName' in attendee ? attendee.displayName : undefined,
+  )
+  const email = cleanString('email' in attendee ? attendee.email : undefined)
+
+  if (!name && !email) return undefined
+
+  return {
+    name,
+    email,
+    responseStatus:
+      'responseStatus' in attendee
+        ? cleanString(attendee.responseStatus)
+        : undefined,
+    optional:
+      'optional' in attendee && typeof attendee.optional === 'boolean'
+        ? attendee.optional
+        : undefined,
+    organizer:
+      'organizer' in attendee && typeof attendee.organizer === 'boolean'
+        ? attendee.organizer
+        : undefined,
+    self:
+      'self' in attendee && typeof attendee.self === 'boolean'
+        ? attendee.self
+        : undefined,
+  }
+}
+
+function calendarEventToMeetingContext(
+  event: CalendarEvent,
+): MeetingCalendarContext {
+  const organizer = normalizeParticipant(event.organizer)
+  const attendees = event.attendees
+    ?.map((attendee) => normalizeParticipant(attendee))
+    .filter((attendee): attendee is MeetingParticipant => Boolean(attendee))
+
+  return {
+    eventId: cleanString(event.id),
+    iCalUID: cleanString(event.iCalUID),
+    title: cleanString(event.title),
+    start: cleanString(event.start),
+    end: cleanString(event.end),
+    isAllDay: event.isAllDay,
+    location: cleanString(event.location),
+    link: cleanString(event.link),
+    organizer,
+    attendees,
+    selfResponseStatus: cleanString(event.selfResponseStatus),
+    conferenceUrl: cleanString(event.conferenceUrl),
+    conferenceProvider: cleanString(event.conferenceProvider),
+  }
+}
+
+function isStartMeetingOptions(value: unknown): value is StartMeetingOptions {
+  return Boolean(
+    value &&
+      typeof value === 'object' &&
+      ('title' in value || 'calendarEvent' in value || 'detection' in value),
+  )
+}
+
+function eventDate(value: string | undefined): Date | null {
+  if (!value) return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function meetingDetectionDate(message?: MeetingRecordingStartMessage | null) {
+  if (!message?.detectedAt) return new Date()
+  const date = new Date(message.detectedAt)
+  return Number.isNaN(date.getTime()) ? new Date() : date
+}
+
+function meetingTitleTokens(title: string | undefined) {
+  return new Set(
+    (title ?? '')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .map((token) => token.trim())
+      .filter(
+        (token) =>
+          token.length > 2 &&
+          ![
+            'call',
+            'detected',
+            'google',
+            'meet',
+            'meeting',
+            'microsoft',
+            'teams',
+            'video',
+            'webex',
+            'zoom',
+          ].includes(token),
+      ),
+  )
+}
+
+function providerNeedles(provider: string | undefined) {
+  const normalized = provider?.toLowerCase() ?? ''
+  if (normalized.includes('zoom')) return ['zoom', 'zoom.us']
+  if (normalized.includes('meet')) return ['meet.google', 'google meet']
+  if (normalized.includes('teams')) return ['teams.microsoft', 'teams']
+  if (normalized.includes('webex')) return ['webex']
+  return normalized ? [normalized] : []
+}
+
+function scoreCalendarEventMatch(
+  event: CalendarEvent,
+  detection: MeetingRecordingStartMessage | null | undefined,
+  detectedAt: Date,
+) {
+  const start = eventDate(event.start)
+  const end = eventDate(event.end)
+  if (!start || !end) return 0
+
+  const detectedTime = detectedAt.getTime()
+  const startTime = start.getTime()
+  const endTime = end.getTime()
+  const tenMinutes = 10 * 60 * 1000
+  const fifteenMinutes = 15 * 60 * 1000
+  let score = 0
+
+  if (detectedTime >= startTime && detectedTime <= endTime) {
+    score += 100
+  } else if (
+    detectedTime >= startTime - tenMinutes &&
+    detectedTime <= endTime + fifteenMinutes
+  ) {
+    score += 70
+  } else if (
+    detectedTime < startTime &&
+    startTime - detectedTime <= 30 * 60 * 1000
+  ) {
+    score += 30
+  } else {
+    return 0
+  }
+
+  const eventText = [
+    event.title,
+    event.location,
+    event.link,
+    event.conferenceUrl,
+    event.conferenceProvider,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  for (const needle of providerNeedles(detection?.provider)) {
+    if (eventText.includes(needle)) {
+      score += 18
+      break
+    }
+  }
+
+  const detectionTokens = meetingTitleTokens(detection?.title)
+  const eventTokens = meetingTitleTokens(event.title)
+  let titleMatches = 0
+  for (const token of detectionTokens) {
+    if (eventTokens.has(token)) titleMatches += 1
+  }
+  score += Math.min(titleMatches * 8, 24)
+
+  return score
+}
+
+function findMatchingCalendarEvent(
+  events: CalendarEvent[],
+  detection?: MeetingRecordingStartMessage | null,
+) {
+  const detectedAt = meetingDetectionDate(detection)
+  const matches = events
+    .map((event) => ({
+      event,
+      score: scoreCalendarEventMatch(event, detection, detectedAt),
+    }))
+    .filter((match) => match.score >= 70)
+    .sort((a, b) => b.score - a.score)
+
+  return matches[0]?.event ?? null
+}
 
 export default function MeetingsPage() {
   // Workspace
@@ -109,10 +342,38 @@ export default function MeetingsPage() {
   const nativeDurationIntervalRef = useRef<ReturnType<
     typeof setInterval
   > | null>(null)
+  const activeDetectionSessionKeyRef = useRef<string | null>(null)
+  const detectedStopInFlightRef = useRef(false)
   const hasLoggedFirstNativeAudioChunkRef = useRef(false)
+  const recordingBackgroundTaskIdRef = useRef<string | null>(null)
   const deepgramSendAudioRef = useRef<
     ((data: ArrayBuffer | Blob) => void) | null
   >(null)
+
+  const startRecordingBackgroundTask = useCallback((nextMeeting: Meeting) => {
+    const taskId = `${RECORDING_BACKGROUND_TASK_KIND}:${nextMeeting.id}`
+    recordingBackgroundTaskIdRef.current = taskId
+    sendToMoldable({
+      type: 'moldable:background-task-start',
+      id: taskId,
+      kind: RECORDING_BACKGROUND_TASK_KIND,
+      title: nextMeeting.title,
+      meetingId: nextMeeting.id,
+      startedAt: new Date().toISOString(),
+    })
+  }, [])
+
+  const endRecordingBackgroundTask = useCallback(() => {
+    const taskId = recordingBackgroundTaskIdRef.current
+    if (!taskId) return
+
+    sendToMoldable({
+      type: 'moldable:background-task-end',
+      id: taskId,
+      kind: RECORDING_BACKGROUND_TASK_KIND,
+    })
+    recordingBackgroundTaskIdRef.current = null
+  }, [])
 
   const closeSelectedMeeting = useCallback((sync: 'pop' | 'none' = 'pop') => {
     if (sync === 'pop') popMoldableNavigation()
@@ -438,28 +699,28 @@ export default function MeetingsPage() {
 
   const startPreferredCapture = useCallback(
     async (selectedSource: AudioSource, options: { resume?: boolean } = {}) => {
-      const useBlendedCapture =
+      const useCallAudioCapture =
         selectedSource === 'both' && systemAudio.isAvailable
       const useSystemOnlyNativeCapture =
         selectedSource === 'system' && systemAudio.isAvailable
 
-      if (useBlendedCapture) {
+      if (useCallAudioCapture) {
         console.log(
-          '[Meetings] Starting native blended capture with system audio + microphone sidecar',
+          '[Meetings] Starting native call audio capture with system tap only',
         )
         audioStreamingEnabledRef.current = true
         hasLoggedFirstNativeAudioChunkRef.current = false
         stopNativeDurationTimer()
-        activeCaptureSourceRef.current = 'both'
+        activeCaptureSourceRef.current = 'system'
         await deepgram.connect('linear16')
 
-        const started = await systemAudio.start('both')
+        const started = await systemAudio.start('systemAudio')
         if (started) {
-          return 'both'
+          return 'system'
         }
 
         console.warn(
-          '[Meetings] Native blended capture failed, falling back to microphone-only capture',
+          '[Meetings] Native call audio capture failed, falling back to microphone-only capture',
         )
         activeCaptureSourceRef.current = null
         deepgram.disconnect()
@@ -557,12 +818,13 @@ export default function MeetingsPage() {
     }
   }, [stopNativeDurationTimer])
 
-  // Auto-select mixed capture if available
+  // Prefer the native system tap when available. It avoids opening a second
+  // microphone stream while Zoom/Meet/Teams is already using the input device.
   useEffect(() => {
     if (systemAudio.isAvailable) {
-      setAudioSource('both')
+      setAudioSource('system')
       console.log(
-        '[Meetings] Native audio available in Moldable, using blended capture by default',
+        '[Meetings] Native audio available in Moldable, using system tap capture by default',
       )
     }
   }, [systemAudio.isAvailable])
@@ -650,6 +912,61 @@ export default function MeetingsPage() {
     [],
   )
 
+  const fetchCalendarEventsForDetection = useCallback(
+    async (detection?: MeetingRecordingStartMessage | null) => {
+      const detectedAt = meetingDetectionDate(detection)
+      const timeMin = new Date(
+        detectedAt.getTime() - 4 * 60 * 60 * 1000,
+      ).toISOString()
+      const timeMax = new Date(
+        detectedAt.getTime() + 8 * 60 * 60 * 1000,
+      ).toISOString()
+
+      try {
+        return await callMoldableApp<CalendarEvent[]>(
+          'calendar',
+          'events.list',
+          {
+            timeMin,
+            timeMax,
+            includeDeclined: false,
+            maxResults: 20,
+          },
+          {
+            scopes: ['events.list'],
+            timeoutMs: 12_000,
+            requestAccess: false,
+          },
+        )
+      } catch (error) {
+        console.warn(
+          '[Meetings] Could not load calendar context for detected meeting:',
+          error,
+        )
+        return []
+      }
+    },
+    [],
+  )
+
+  const resolveCalendarEventForStart = useCallback(
+    async (options: StartMeetingOptions) => {
+      if (options.calendarEvent) return options.calendarEvent
+      if (!options.detection) return null
+
+      const cachedMatch =
+        calendarEvents.status === 'ready'
+          ? findMatchingCalendarEvent(calendarEvents.events, options.detection)
+          : null
+
+      if (cachedMatch) return cachedMatch
+
+      const events = await fetchCalendarEventsForDetection(options.detection)
+      return findMatchingCalendarEvent(events, options.detection)
+    },
+    [calendarEvents, fetchCalendarEventsForDetection],
+  )
+
   useEffect(() => {
     if (!meeting) {
       void loadCalendarEvents({ requestAccess: false })
@@ -690,19 +1007,38 @@ export default function MeetingsPage() {
 
   // Start a new meeting
   const handleStartMeeting = useCallback(
-    async (titleOverride?: unknown) => {
+    async (input?: unknown) => {
+      const startOptions: StartMeetingOptions =
+        typeof input === 'string'
+          ? { title: input }
+          : isStartMeetingOptions(input)
+            ? input
+            : {}
+      const matchedCalendarEvent =
+        await resolveCalendarEventForStart(startOptions)
+      const calendarContext = matchedCalendarEvent
+        ? calendarEventToMeetingContext(matchedCalendarEvent)
+        : undefined
       const id = uuidv4()
-      const calendarTitle =
-        typeof titleOverride === 'string' ? titleOverride.trim() : ''
+      const requestedTitle = cleanString(startOptions.title)
       const title =
-        calendarTitle || `Meeting ${new Date().toLocaleDateString()}`
+        calendarContext?.title ||
+        requestedTitle ||
+        cleanString(startOptions.detection?.title) ||
+        `Meeting ${new Date().toLocaleDateString()}`
       const initialRecordingSession = createRecordingSession()
-      const newMeeting = startMeeting(id, title, initialRecordingSession)
+      const newMeeting = startMeeting(id, title, initialRecordingSession, {
+        calendarContext,
+      })
 
       // Add to meetings list immediately so it appears in sidebar
       activeDurationBaseRef.current = 0
       activeMeetingIdRef.current = newMeeting.id
+      activeDetectionSessionKeyRef.current =
+        cleanString(startOptions.detection?.sessionKey) ?? null
+      detectedStopInFlightRef.current = false
       addMeeting(newMeeting)
+      startRecordingBackgroundTask(newMeeting)
       closeSelectedMeeting('none') // Clear any selection, show active meeting
       setCurrentInterim(null)
       setIsMeetingPaused(false)
@@ -720,8 +1056,27 @@ export default function MeetingsPage() {
       audioSource,
       startMeeting,
       startPreferredCapture,
+      startRecordingBackgroundTask,
+      resolveCalendarEventForStart,
     ],
   )
+
+  useEffect(() => {
+    function handleMeetingRecordingStart(event: MessageEvent) {
+      if (event.data?.type !== 'moldable:meeting-recording-start') return
+      if (meeting) return
+
+      const message = event.data as MeetingRecordingStartMessage
+      void handleStartMeeting({
+        title: message.title || 'Detected meeting',
+        detection: message,
+      })
+    }
+
+    window.addEventListener('message', handleMeetingRecordingStart)
+    return () =>
+      window.removeEventListener('message', handleMeetingRecordingStart)
+  }, [handleStartMeeting, meeting])
 
   const handleResumeExistingMeeting = useCallback(
     async (targetMeeting: Meeting) => {
@@ -739,8 +1094,11 @@ export default function MeetingsPage() {
 
       activeDurationBaseRef.current = targetMeeting.duration
       activeMeetingIdRef.current = resumedMeeting.id
+      activeDetectionSessionKeyRef.current = null
+      detectedStopInFlightRef.current = false
       updateActiveMeeting(resumedMeeting)
       updateMeeting(resumedMeeting)
+      startRecordingBackgroundTask(resumedMeeting)
       closeSelectedMeeting('none')
       setCurrentInterim(null)
       setIsMeetingPaused(false)
@@ -758,6 +1116,7 @@ export default function MeetingsPage() {
       meeting,
       resetAudioSessionPersistence,
       startPreferredCapture,
+      startRecordingBackgroundTask,
       updateActiveMeeting,
       updateMeeting,
       upsertRecordingSession,
@@ -783,6 +1142,7 @@ export default function MeetingsPage() {
     audioStreamingEnabledRef.current = false
     setIsMeetingPaused(false)
     setCurrentInterim(null)
+    endRecordingBackgroundTask()
 
     await stopActiveCapture({ reason: 'stop-appending-transcript' })
     deepgram.disconnect()
@@ -817,6 +1177,8 @@ export default function MeetingsPage() {
     clearMeeting()
     activeDurationBaseRef.current = 0
     activeMeetingIdRef.current = null
+    activeDetectionSessionKeyRef.current = null
+    detectedStopInFlightRef.current = false
     appendTranscriptActivatedAtRef.current = null
     setIsAppendingTranscript(false)
   }, [
@@ -825,6 +1187,7 @@ export default function MeetingsPage() {
     deepgram,
     finishActiveRecordingSession,
     finalizeSessionAudio,
+    endRecordingBackgroundTask,
     meeting,
     openSelectedMeeting,
     stopActiveCapture,
@@ -1000,6 +1363,7 @@ export default function MeetingsPage() {
     audioStreamingEnabledRef.current = false
     setIsMeetingPaused(false)
     appendTranscriptActivatedAtRef.current = null
+    endRecordingBackgroundTask()
 
     await stopActiveCapture({ reason: 'end-meeting' })
     deepgram.disconnect()
@@ -1036,6 +1400,8 @@ export default function MeetingsPage() {
       clearMeeting()
       activeDurationBaseRef.current = 0
       activeMeetingIdRef.current = null
+      activeDetectionSessionKeyRef.current = null
+      detectedStopInFlightRef.current = false
       setIsAppendingTranscript(false)
 
       if (!isAppendingTranscript) {
@@ -1050,11 +1416,38 @@ export default function MeetingsPage() {
     meeting,
     updateMeeting,
     clearMeeting,
+    endRecordingBackgroundTask,
     runEnhancement,
     isAppendingTranscript,
     openSelectedMeeting,
     stopActiveCapture,
   ])
+
+  useEffect(() => {
+    function handleMeetingRecordingStop(event: MessageEvent) {
+      if (event.data?.type !== 'moldable:meeting-recording-stop') return
+      if (!meeting || detectedStopInFlightRef.current) return
+
+      const message = event.data as MeetingRecordingStopMessage
+      const sessionKey = cleanString(message.sessionKey)
+      if (!sessionKey || sessionKey !== activeDetectionSessionKeyRef.current) {
+        return
+      }
+
+      detectedStopInFlightRef.current = true
+      void handleEndMeeting().catch((error) => {
+        detectedStopInFlightRef.current = false
+        console.error(
+          '[Meetings] Failed to auto-stop after detected call ended:',
+          error,
+        )
+      })
+    }
+
+    window.addEventListener('message', handleMeetingRecordingStop)
+    return () =>
+      window.removeEventListener('message', handleMeetingRecordingStop)
+  }, [handleEndMeeting, meeting])
 
   // View a past meeting
   const handleSelectMeeting = useCallback(
@@ -1207,7 +1600,10 @@ export default function MeetingsPage() {
             meetings={meetings}
             calendarEvents={calendarEvents}
             onStartEvent={(event) =>
-              void handleStartMeeting(event.title || 'Calendar meeting')
+              void handleStartMeeting({
+                title: event.title || 'Calendar meeting',
+                calendarEvent: event,
+              })
             }
             onGrantCalendarAccess={() =>
               void loadCalendarEvents({ requestAccess: true })

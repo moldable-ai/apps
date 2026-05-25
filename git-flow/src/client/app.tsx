@@ -88,11 +88,14 @@ import {
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select'
 import { formatDistanceToNow } from 'date-fns'
 
 const HISTORY_PAGE_SIZE = 50
+const INITIAL_DIFF_LINE_LIMIT = 800
+const DIFF_LINE_INCREMENT = 800
+const MAX_RENDERED_DIFF_LINES = 4000
+const MAX_RENDERED_DIFF_CHARS = 350000
 const IMAGE_FILE_EXTENSIONS = new Set([
   'apng',
   'avif',
@@ -121,6 +124,30 @@ interface RecentRepo {
   isDirty?: boolean
 }
 
+interface ExistingPullRequest {
+  url: string
+  number?: number
+  title?: string
+  state?: string
+  baseBranch?: string
+  headBranch?: string
+}
+
+interface PullRequestStatus {
+  canOpen: boolean
+  reason?: string
+  provider?: 'github'
+  owner?: string
+  repo?: string
+  remoteName?: string
+  baseBranch?: string
+  headBranch?: string
+  compareUrl?: string
+  isPushed?: boolean
+  branchCommitCount?: number
+  existingPullRequest?: ExistingPullRequest
+}
+
 interface GitData {
   currentBranch: string
   repoName: string
@@ -129,6 +156,7 @@ interface GitData {
   recentRepos: RecentRepo[]
   branches: string[]
   isClean?: boolean
+  pullRequest?: PullRequestStatus
 }
 
 interface DetectedEditor {
@@ -169,7 +197,7 @@ interface CommitInput {
   description: string
 }
 
-type PreferredCommitAction = 'commit' | 'commit-and-push'
+type PreferredCommitAction = 'commit' | 'commit-and-push' | 'commit-and-open-pr'
 
 interface GeneratedCommitMessage {
   summary: string
@@ -187,6 +215,52 @@ interface CodeReviewFinding {
 interface CodeReviewResult {
   summary: string
   findings: CodeReviewFinding[]
+}
+
+interface FileDiffResponse {
+  diff?: string | null
+  truncated?: boolean
+  originalLength?: number
+}
+
+interface DiffPreview {
+  lines: string[]
+  hasMore: boolean
+  clippedByCharacterLimit: boolean
+}
+
+function getDiffPreviewLines(
+  diff: string | null | undefined,
+  lineLimit: number,
+): DiffPreview {
+  if (!diff) {
+    return { lines: [], hasMore: false, clippedByCharacterLimit: false }
+  }
+
+  const lines: string[] = []
+  const maxChars = Math.min(diff.length, MAX_RENDERED_DIFF_CHARS)
+  let start = 0
+
+  while (start < maxChars && lines.length < lineLimit) {
+    const nextNewline = diff.indexOf('\n', start)
+    const rawEnd = nextNewline === -1 ? diff.length : nextNewline
+    const end = Math.min(rawEnd, maxChars)
+    lines.push(diff.slice(start, end))
+
+    if (nextNewline === -1 || rawEnd >= maxChars) {
+      start = end
+      break
+    }
+
+    start = nextNewline + 1
+  }
+
+  return {
+    lines,
+    hasMore: start < diff.length && lines.length > 0,
+    clippedByCharacterLimit:
+      start >= MAX_RENDERED_DIFF_CHARS && start < diff.length,
+  }
 }
 
 function getAppMonogram(name: string) {
@@ -440,40 +514,39 @@ export default function GitFlowPage() {
   const selectedDiffIsImage = isPreviewableImagePath(selectedDiffPath)
 
   // Query for File Diff
-  const { data: fileDiff, isLoading: loadingDiff } = useQuery<string | null>({
-    queryKey: [
-      'git-diff',
-      workspaceId,
-      selectedFile,
-      selectedCommit,
-      selectedCommitFile,
-    ],
-    queryFn: async () => {
-      if (selectedCommit) {
-        if (!selectedCommitFile) return null
+  const { data: fileDiffResponse, isLoading: loadingDiff } =
+    useQuery<FileDiffResponse | null>({
+      queryKey: [
+        'git-diff',
+        workspaceId,
+        selectedFile,
+        selectedCommit,
+        selectedCommitFile,
+      ],
+      queryFn: async () => {
+        if (selectedCommit) {
+          if (!selectedCommitFile) return null
 
+          const res = await fetchWithWorkspace(
+            `/api/git?hash=${encodeURIComponent(
+              selectedCommit,
+            )}&file=${encodeURIComponent(selectedCommitFile)}`,
+          )
+          if (!res.ok) throw new Error('Failed to fetch commit diff')
+          return (await res.json()) as FileDiffResponse
+        }
+
+        if (!selectedFile) return null
         const res = await fetchWithWorkspace(
-          `/api/git?hash=${encodeURIComponent(
-            selectedCommit,
-          )}&file=${encodeURIComponent(selectedCommitFile)}`,
+          `/api/git?file=${encodeURIComponent(selectedFile)}`,
         )
-        if (!res.ok) throw new Error('Failed to fetch commit diff')
-        const json = await res.json()
-        return json.diff || null
-      }
-
-      if (!selectedFile) return null
-      const res = await fetchWithWorkspace(
-        `/api/git?file=${encodeURIComponent(selectedFile)}`,
-      )
-      if (!res.ok) throw new Error('Failed to fetch diff')
-      const json = await res.json()
-      return json.diff || null
-    },
-    enabled:
-      !selectedDiffIsImage &&
-      (selectedCommit ? !!selectedCommitFile : !!selectedFile),
-  })
+        if (!res.ok) throw new Error('Failed to fetch diff')
+        return (await res.json()) as FileDiffResponse
+      },
+      enabled:
+        !selectedDiffIsImage &&
+        (selectedCommit ? !!selectedCommitFile : !!selectedFile),
+    })
 
   const imagePreviewParams = useMemo(() => {
     if (!selectedDiffIsImage || !selectedDiffPath) return null
@@ -527,7 +600,21 @@ export default function GitFlowPage() {
     return () => URL.revokeObjectURL(objectUrl)
   }, [imagePreviewBlob])
 
-  const diffLines = useMemo(() => fileDiff?.split('\n') ?? [], [fileDiff])
+  const [diffLineLimit, setDiffLineLimit] = useState(INITIAL_DIFF_LINE_LIMIT)
+  const fileDiff = fileDiffResponse?.diff ?? null
+  const diffPreview = useMemo(
+    () => getDiffPreviewLines(fileDiff, diffLineLimit),
+    [diffLineLimit, fileDiff],
+  )
+  const diffLines = diffPreview.lines
+  const diffPreviewIsCapped =
+    Boolean(fileDiffResponse?.truncated) ||
+    diffPreview.hasMore ||
+    diffPreview.clippedByCharacterLimit
+
+  useEffect(() => {
+    setDiffLineLimit(INITIAL_DIFF_LINE_LIMIT)
+  }, [selectedCommit, selectedDiffPath])
 
   useEffect(() => {
     resetMoldableNavigation()
@@ -640,6 +727,83 @@ export default function GitFlowPage() {
     },
   })
 
+  const commitAndOpenPullRequestMutation = useMutation({
+    mutationFn: async (input: CommitInput) => {
+      const res = await fetchWithWorkspace('/api/git', {
+        method: 'POST',
+        signal: AbortSignal.timeout(180_000),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'commitAndOpenPullRequest',
+          paths: Array.from(selectedFiles),
+          summary: input.summary,
+          description: input.description,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to commit and open pull request')
+      }
+      return json as {
+        draft: {
+          title: string
+          body: string
+          url: string
+          baseBranch: string
+          headBranch: string
+        }
+        branch?: { created?: boolean; branchName?: string; baseBranch?: string }
+      }
+    },
+    onSuccess: (result) => {
+      setSummary('')
+      setDescription('')
+      setSelectedFiles(new Set())
+      setSelectedActionFiles(new Set())
+      setSelectedFile(null)
+      setSelectedCommit(null)
+      setSelectedCommitFile(null)
+      queryClient.invalidateQueries({ queryKey: ['git-status', workspaceId] })
+      queryClient.invalidateQueries({ queryKey: ['git-history', workspaceId] })
+      sendToMoldable({
+        type: 'moldable:open-url',
+        url: result.draft.url,
+      })
+    },
+    onError: (err: Error) => {
+      setError(err.message)
+    },
+  })
+
+  const openPullRequestMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetchWithWorkspace('/api/git', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'openPullRequest' }),
+      })
+      const json = await res.json()
+      if (!res.ok)
+        throw new Error(json.error || 'Failed to prepare pull request')
+      return json as {
+        title: string
+        body: string
+        url: string
+        baseBranch: string
+        headBranch: string
+      }
+    },
+    onSuccess: (draft) => {
+      sendToMoldable({
+        type: 'moldable:open-url',
+        url: draft.url,
+      })
+    },
+    onError: (err: Error) => {
+      setError(err.message)
+    },
+  })
+
   // Mutation for Undoing Commit
   const undoMutation = useMutation({
     mutationFn: async (commit: LogEntry) => {
@@ -725,6 +889,8 @@ export default function GitFlowPage() {
   const repositoryControlsDisabled =
     commitMutation.isPending ||
     pushMutation.isPending ||
+    commitAndOpenPullRequestMutation.isPending ||
+    openPullRequestMutation.isPending ||
     undoMutation.isPending ||
     repoMutation.isPending
 
@@ -1183,6 +1349,13 @@ export default function GitFlowPage() {
     })
   }
 
+  const handleCommitAndOpenPullRequest = async () => {
+    const input = await prepareCommitInput()
+    if (!input) return
+
+    commitAndOpenPullRequestMutation.mutate(input)
+  }
+
   const copyError = () => {
     if (error) {
       navigator.clipboard.writeText(error)
@@ -1476,8 +1649,20 @@ export default function GitFlowPage() {
 
   const hasUnpushedCommits =
     history?.some((commit) => commit.isUnpushed) ?? false
+  const existingPullRequest = data?.pullRequest?.existingPullRequest
+  const canViewPullRequest = Boolean(existingPullRequest?.url)
+  const canOpenPullRequest = data?.pullRequest?.canOpen === true
+  const pullRequestTitle = canViewPullRequest
+    ? `View PR #${existingPullRequest?.number ?? ''}`.trim()
+    : canOpenPullRequest
+      ? `Open PR into ${data?.pullRequest?.baseBranch ?? 'base'}`
+      : (data?.pullRequest?.reason ?? 'Branch is not ready for a PR')
   const preferredCommitLabel =
-    preferredCommitAction === 'commit-and-push' ? 'Commit & push' : 'Commit'
+    preferredCommitAction === 'commit-and-open-pr'
+      ? 'Commit & open PR'
+      : preferredCommitAction === 'commit-and-push'
+        ? 'Commit & push'
+        : 'Commit'
   const changedFileCount = data?.files?.length ?? 0
   const hasChangedFiles = changedFileCount > 0
   const hasVisibleChangedFiles = visibleChangedFileCount > 0
@@ -1503,6 +1688,8 @@ export default function GitFlowPage() {
     if (reviewCodeMutation.isError) return 'Review Failed'
     if (commitMutation.isError) return 'Commit Failed'
     if (pushMutation.isError) return 'Push Failed'
+    if (commitAndOpenPullRequestMutation.isError) return 'Pull Request Failed'
+    if (openPullRequestMutation.isError) return 'Pull Request Failed'
     if (undoMutation.isError) return 'Undo Failed'
     if (repoMutation.isError) return 'Repository Failed'
     return 'Action Failed'
@@ -1637,49 +1824,89 @@ export default function GitFlowPage() {
       ) : (
         <div className="min-w-fit py-4 font-mono text-[13px] leading-relaxed">
           {diffLines.length > 0 ? (
-            diffLines.map((line: string, i: number) => {
-              const isAddition = line.startsWith('+') && !line.startsWith('+++')
-              const isDeletion = line.startsWith('-') && !line.startsWith('---')
-              const isHeader =
-                line.startsWith('diff') ||
-                line.startsWith('index') ||
-                line.startsWith('@@') ||
-                line.startsWith('---') ||
-                line.startsWith('+++')
+            <>
+              {diffLines.map((line: string, i: number) => {
+                const isAddition =
+                  line.startsWith('+') && !line.startsWith('+++')
+                const isDeletion =
+                  line.startsWith('-') && !line.startsWith('---')
+                const isHeader =
+                  line.startsWith('diff') ||
+                  line.startsWith('index') ||
+                  line.startsWith('@@') ||
+                  line.startsWith('---') ||
+                  line.startsWith('+++')
 
-              return (
-                <div
-                  key={i}
-                  className={cn(
-                    'hover:bg-foreground/[0.03] group grid grid-cols-[50px_1fr] border-l-4 border-transparent',
-                    isAddition &&
-                      'border-l-green-600/50 bg-green-500/10 dark:border-l-green-500/60',
-                    isDeletion &&
-                      'border-l-red-600/50 bg-red-500/10 dark:border-l-red-500/60',
-                    isHeader &&
-                      'text-muted-foreground bg-sky-500/5 py-0.5 font-bold tracking-tight',
-                  )}
-                >
-                  <div className="border-foreground/5 table-cell select-none border-r pr-5 text-right align-middle font-sans text-[10px] opacity-40 dark:opacity-20">
-                    {i + 1}
-                  </div>
+                return (
                   <div
+                    key={i}
                     className={cn(
-                      'whitespace-pre px-5 tabular-nums',
-                      isAddition && 'text-green-700 dark:text-green-400',
-                      isDeletion && 'text-red-700 dark:text-red-400',
-                      isHeader && 'text-sky-700 dark:text-sky-300',
-                      !isAddition &&
-                        !isDeletion &&
-                        !isHeader &&
-                        'text-foreground/80 dark:text-zinc-300',
+                      'hover:bg-foreground/[0.03] group grid grid-cols-[50px_1fr] border-l-4 border-transparent',
+                      isAddition &&
+                        'border-l-green-600/50 bg-green-500/10 dark:border-l-green-500/60',
+                      isDeletion &&
+                        'border-l-red-600/50 bg-red-500/10 dark:border-l-red-500/60',
+                      isHeader &&
+                        'text-muted-foreground bg-sky-500/5 py-0.5 font-bold tracking-tight',
                     )}
                   >
-                    {line || ' '}
+                    <div className="border-foreground/5 table-cell select-none border-r pr-5 text-right align-middle font-sans text-[10px] opacity-40 dark:opacity-20">
+                      {i + 1}
+                    </div>
+                    <div
+                      className={cn(
+                        'whitespace-pre px-5 tabular-nums',
+                        isAddition && 'text-green-700 dark:text-green-400',
+                        isDeletion && 'text-red-700 dark:text-red-400',
+                        isHeader && 'text-sky-700 dark:text-sky-300',
+                        !isAddition &&
+                          !isDeletion &&
+                          !isHeader &&
+                          'text-foreground/80 dark:text-zinc-300',
+                      )}
+                    >
+                      {line || ' '}
+                    </div>
                   </div>
+                )
+              })}
+              {diffPreviewIsCapped && (
+                <div className="border-border/70 bg-background/80 sticky bottom-0 mt-3 flex min-w-[560px] items-center justify-between gap-4 border-t px-5 py-3 font-sans text-[12px] shadow-sm backdrop-blur">
+                  <div className="text-muted-foreground min-w-0">
+                    Previewing {diffLines.length.toLocaleString()} lines
+                    {fileDiffResponse?.truncated
+                      ? ' from a large diff.'
+                      : diffPreview.clippedByCharacterLimit
+                        ? ' from a large diff.'
+                        : '.'}{' '}
+                    {diffLineLimit >= MAX_RENDERED_DIFF_LINES ||
+                    fileDiffResponse?.truncated ||
+                    diffPreview.clippedByCharacterLimit
+                      ? 'Open the file in your editor for the full context.'
+                      : 'Load more only when you need additional context.'}
+                  </div>
+                  {diffPreview.hasMore &&
+                    diffLineLimit < MAX_RENDERED_DIFF_LINES &&
+                    !diffPreview.clippedByCharacterLimit &&
+                    !fileDiffResponse?.truncated && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDiffLineLimit((current) =>
+                            Math.min(
+                              current + DIFF_LINE_INCREMENT,
+                              MAX_RENDERED_DIFF_LINES,
+                            ),
+                          )
+                        }
+                        className="bg-secondary text-secondary-foreground hover:bg-secondary/80 shrink-0 rounded-md px-3 py-1.5 text-[11px] font-semibold transition-colors"
+                      >
+                        Show more
+                      </button>
+                    )}
                 </div>
-              )
-            })
+              )}
+            </>
           ) : (
             <div className="flex min-h-[400px] items-center justify-center font-sans italic opacity-20">
               No changes to display
@@ -1763,8 +1990,8 @@ export default function GitFlowPage() {
 
       {/* Header */}
       <header className="bg-muted/30 flex h-12 shrink-0 items-center justify-between border-b pl-2 pr-4 backdrop-blur-md">
-        <div className="flex items-center gap-1.5">
-          <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <div className="flex min-w-0 items-center gap-2">
             <Select
               value={data?.repoPath || undefined}
               onValueChange={handleRepoChange}
@@ -1772,24 +1999,22 @@ export default function GitFlowPage() {
             >
               <SelectTrigger
                 className={cn(
-                  'hover:bg-muted/35 border-border/60 bg-background [&>svg]:text-muted-foreground h-9 min-w-[200px] max-w-[320px] rounded-[15px] border shadow-sm transition-colors [&>svg]:size-3.5 [&>svg]:opacity-100',
+                  'hover:bg-muted/35 border-border/60 bg-background [&>svg]:text-muted-foreground h-9 min-w-[200px] max-w-[320px] overflow-hidden rounded-[15px] border px-2.5 shadow-sm transition-colors [&>svg]:size-3.5 [&>svg]:shrink-0 [&>svg]:opacity-100',
                   repositoryControlsDisabled && 'cursor-not-allowed opacity-60',
                 )}
               >
-                <div className="flex flex-col items-start gap-0">
-                  <div className="flex items-center gap-1.5">
-                    <FolderGit className="text-foreground size-3.5 shrink-0" />
-                    <span className="text-foreground text-sm font-bold leading-none">
-                      {data?.repoName || data?.repoPath?.split('/').pop()}
-                    </span>
-                    {data?.isClean === false ? (
-                      <span
-                        className="bg-primary inline-block size-2 rounded-full"
-                        aria-label="Repository has uncommitted changes"
-                        title="Repository has uncommitted changes"
-                      />
-                    ) : null}
-                  </div>
+                <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+                  <FolderGit className="text-foreground size-3.5 shrink-0" />
+                  <span className="text-foreground min-w-0 flex-1 truncate whitespace-nowrap text-left text-[11px] font-bold leading-none">
+                    {data?.repoName || data?.repoPath?.split('/').pop()}
+                  </span>
+                  {data?.isClean === false ? (
+                    <span
+                      className="bg-primary inline-block size-2 shrink-0 rounded-full"
+                      aria-label="Repository has uncommitted changes"
+                      title="Repository has uncommitted changes"
+                    />
+                  ) : null}
                 </div>
               </SelectTrigger>
               <SelectContent>
@@ -1837,13 +2062,15 @@ export default function GitFlowPage() {
             >
               <SelectTrigger
                 className={cn(
-                  'hover:bg-muted/35 border-border/60 bg-background [&>svg]:text-muted-foreground h-9 w-[160px] rounded-[15px] border font-medium shadow-sm transition-colors [&>svg]:size-3.5 [&>svg]:opacity-100',
+                  'hover:bg-muted/35 border-border/60 bg-background [&>svg]:text-muted-foreground h-9 w-[160px] overflow-hidden rounded-[15px] border px-2.5 font-medium shadow-sm transition-colors [&>svg]:size-3.5 [&>svg]:shrink-0 [&>svg]:opacity-100',
                   repositoryControlsDisabled && 'cursor-not-allowed opacity-60',
                 )}
               >
-                <div className="flex items-center gap-2">
-                  <GitBranch className="text-muted-foreground size-3.5" />
-                  <SelectValue placeholder="Select branch" />
+                <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+                  <GitBranch className="text-muted-foreground size-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1 overflow-hidden truncate whitespace-nowrap text-left text-[11px] leading-none">
+                    {data?.currentBranch || 'Select branch'}
+                  </span>
                 </div>
               </SelectTrigger>
               <SelectContent>
@@ -1904,7 +2131,32 @@ export default function GitFlowPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
+          {canViewPullRequest || canOpenPullRequest ? (
+            <button
+              onClick={() => {
+                if (existingPullRequest?.url) {
+                  sendToMoldable({
+                    type: 'moldable:open-url',
+                    url: existingPullRequest.url,
+                  })
+                  return
+                }
+
+                openPullRequestMutation.mutate()
+              }}
+              disabled={repositoryControlsDisabled && !canViewPullRequest}
+              title={pullRequestTitle}
+              className="hover:bg-primary/10 text-primary flex h-8 cursor-pointer items-center gap-2 rounded-md px-3 text-xs font-bold transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {openPullRequestMutation.isPending ? (
+                <RefreshCw className="size-3.5 shrink-0 animate-spin" />
+              ) : (
+                <GitPullRequest className="size-3.5 shrink-0" />
+              )}
+              {canViewPullRequest ? 'View PR' : 'Open PR'}
+            </button>
+          ) : null}
           <button
             onClick={() => pushMutation.mutate()}
             disabled={repositoryControlsDisabled || !hasUnpushedCommits}
@@ -2468,7 +2720,8 @@ export default function GitFlowPage() {
                         disabled={
                           commitMutation.isPending ||
                           generateCommitMessageMutation.isPending ||
-                          reviewCodeMutation.isPending
+                          reviewCodeMutation.isPending ||
+                          commitAndOpenPullRequestMutation.isPending
                         }
                         className="bg-background focus:ring-primary placeholder:text-muted-foreground/50 w-full rounded-md border px-3 py-1.5 text-xs font-medium shadow-sm outline-none focus:ring-1 disabled:opacity-50"
                       />
@@ -2480,7 +2733,8 @@ export default function GitFlowPage() {
                         disabled={
                           commitMutation.isPending ||
                           generateCommitMessageMutation.isPending ||
-                          reviewCodeMutation.isPending
+                          reviewCodeMutation.isPending ||
+                          commitAndOpenPullRequestMutation.isPending
                         }
                         className="bg-background focus:ring-primary placeholder:text-muted-foreground/50 w-full resize-none rounded-md border px-3 py-1.5 text-xs shadow-sm outline-none focus:ring-1 disabled:opacity-50"
                       />
@@ -2507,7 +2761,8 @@ export default function GitFlowPage() {
                             commitMutation.isPending ||
                             generateCommitMessageMutation.isPending ||
                             reviewCodeMutation.isPending ||
-                            pushMutation.isPending
+                            pushMutation.isPending ||
+                            commitAndOpenPullRequestMutation.isPending
                           }
                         >
                           {reviewCodeMutation.isPending ? (
@@ -2525,9 +2780,11 @@ export default function GitFlowPage() {
                         <div className="bg-primary text-primary-foreground flex overflow-hidden rounded-md shadow-md">
                           <button
                             onClick={
-                              preferredCommitAction === 'commit-and-push'
-                                ? handleCommitAndPush
-                                : handleCommit
+                              preferredCommitAction === 'commit-and-open-pr'
+                                ? handleCommitAndOpenPullRequest
+                                : preferredCommitAction === 'commit-and-push'
+                                  ? handleCommitAndPush
+                                  : handleCommit
                             }
                             className="flex flex-1 cursor-pointer items-center justify-center gap-2 py-2 text-xs font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={
@@ -2535,7 +2792,8 @@ export default function GitFlowPage() {
                               commitMutation.isPending ||
                               generateCommitMessageMutation.isPending ||
                               reviewCodeMutation.isPending ||
-                              pushMutation.isPending
+                              pushMutation.isPending ||
+                              commitAndOpenPullRequestMutation.isPending
                             }
                           >
                             {generateCommitMessageMutation.isPending ? (
@@ -2548,13 +2806,18 @@ export default function GitFlowPage() {
                                 <RefreshCw className="size-3 animate-spin" />
                                 Committing...
                               </>
+                            ) : commitAndOpenPullRequestMutation.isPending ? (
+                              <>
+                                <RefreshCw className="size-3 animate-spin" />
+                                Preparing PR...
+                              </>
                             ) : pushMutation.isPending ? (
                               <>
                                 <RefreshCw className="size-3 animate-spin" />
                                 Pushing...
                               </>
                             ) : (
-                              `${preferredCommitLabel} ${selectedFiles.size} ${selectedFiles.size === 1 ? 'file' : 'files'}${data?.currentBranch ? ` to ${data.currentBranch}` : ''}`
+                              preferredCommitLabel
                             )}
                           </button>
                           <div className="bg-primary-foreground/20 my-2 w-px shrink-0" />
@@ -2569,13 +2832,14 @@ export default function GitFlowPage() {
                                   commitMutation.isPending ||
                                   generateCommitMessageMutation.isPending ||
                                   reviewCodeMutation.isPending ||
-                                  pushMutation.isPending
+                                  pushMutation.isPending ||
+                                  commitAndOpenPullRequestMutation.isPending
                                 }
                               >
                                 <ChevronDown className="size-3.5" />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuContent align="end" className="w-64">
                               <DropdownMenuItem
                                 onClick={() =>
                                   void handlePreferredCommitActionChange(
@@ -2601,6 +2865,22 @@ export default function GitFlowPage() {
                                 <ArrowUp className="size-3.5" />
                                 Commit &amp; push
                                 {preferredCommitAction === 'commit-and-push' ? (
+                                  <span className="text-muted-foreground ml-auto text-[11px]">
+                                    Default
+                                  </span>
+                                ) : null}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  void handlePreferredCommitActionChange(
+                                    'commit-and-open-pr',
+                                  )
+                                }
+                              >
+                                <GitPullRequest className="size-3.5" />
+                                Commit &amp; open PR
+                                {preferredCommitAction ===
+                                'commit-and-open-pr' ? (
                                   <span className="text-muted-foreground ml-auto text-[11px]">
                                     Default
                                   </span>

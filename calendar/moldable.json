@@ -29,7 +29,7 @@
           {
             "id": "events.today",
             "name": "Today's calendar events",
-            "description": "See event titles, times, and availability for today's schedule in this workspace.",
+            "description": "See event titles, times, attendees, organizers, conferencing links, and availability for today's schedule in this workspace.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -53,7 +53,7 @@
           {
             "id": "events.upcoming",
             "name": "Upcoming calendar events",
-            "description": "See upcoming events over the next N days.",
+            "description": "See upcoming event titles, times, attendees, organizers, conferencing links, and availability over the next N days.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -76,7 +76,7 @@
           {
             "id": "events.list",
             "name": "Calendar events in a date range",
-            "description": "See event titles, start and end times, and availability for a requested date range so the app can show upcoming schedule context.",
+            "description": "See event titles, start and end times, attendees, organizers, conferencing links, and availability for a requested date range so the app can show schedule context.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -105,7 +105,7 @@
           {
             "id": "events.search",
             "name": "Search calendar events",
-            "description": "Search calendar event title, location, and status within an optional date range.",
+            "description": "Search calendar event title, location, attendees, organizer, conferencing links, and status within an optional date range.",
             "inputSchema": {
               "type": "object",
               "properties": {
