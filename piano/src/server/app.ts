@@ -1,4 +1,4 @@
-import { readJson, safePath, writeJson } from '@moldable-ai/storage'
+import { generateId, readJson, safePath, writeJson } from '@moldable-ai/storage'
 import {
   DEFAULT_PIANO_PRESET_ID,
   PIANO_INSTRUMENT_PACKS,
@@ -10,6 +10,7 @@ import {
   defaultPianoAudioSettings,
   pianoPresetById,
 } from '../shared/audio'
+import { type Folder, toneFromSeed } from '../shared/folder'
 import {
   type PianoSong,
   type SongSummary,
@@ -49,6 +50,40 @@ function songPath(dataDir: string, songId: string) {
 
 function audioSettingsPath(dataDir: string) {
   return safePath(dataDir, 'audio-settings.json')
+}
+
+function foldersPath(dataDir: string) {
+  return safePath(dataDir, 'folders.json')
+}
+
+async function readFolders(dataDir: string): Promise<Folder[]> {
+  const raw = await readJson<Folder[] | null>(foldersPath(dataDir), null)
+  if (!Array.isArray(raw)) return []
+  return raw
+    .filter(
+      (folder): folder is Folder =>
+        !!folder &&
+        typeof folder.id === 'string' &&
+        typeof folder.name === 'string' &&
+        Array.isArray(folder.songIds),
+    )
+    .map((folder) => ({
+      id: folder.id,
+      name: folder.name,
+      tone:
+        typeof folder.tone === 'string' && folder.tone
+          ? folder.tone
+          : toneFromSeed(folder.name),
+      songIds: folder.songIds.filter((id) => typeof id === 'string'),
+      createdAt: folder.createdAt ?? new Date().toISOString(),
+      updatedAt:
+        folder.updatedAt ?? folder.createdAt ?? new Date().toISOString(),
+    }))
+}
+
+async function writeFolders(dataDir: string, folders: Folder[]) {
+  await mkdir(dataDir, { recursive: true })
+  await writeJson(foldersPath(dataDir), folders)
 }
 
 function isValidSongId(songId: string) {
@@ -378,6 +413,157 @@ app.patch('/api/audio/settings', async (c) => {
     return jsonError(
       c,
       error instanceof Error ? error.message : 'Failed to write audio settings',
+    )
+  }
+})
+
+app.get('/api/folders', async (c) => {
+  try {
+    const folders = await readFolders(getDataDir(c))
+    return c.json({ folders })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to read folders',
+    )
+  }
+})
+
+app.post('/api/folders', async (c) => {
+  try {
+    const body = (await c.req.json().catch(() => null)) as {
+      name?: unknown
+      tone?: unknown
+    } | null
+    const rawName = typeof body?.name === 'string' ? body.name.trim() : ''
+    if (!rawName) return jsonError(c, 'Folder name is required', 400)
+    const name = rawName.slice(0, 80)
+    const tone =
+      typeof body?.tone === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(body.tone)
+        ? body.tone
+        : toneFromSeed(name)
+
+    const dataDir = getDataDir(c)
+    const folders = await readFolders(dataDir)
+    const now = new Date().toISOString()
+    const folder: Folder = {
+      id: generateId(),
+      name,
+      tone,
+      songIds: [],
+      createdAt: now,
+      updatedAt: now,
+    }
+    await writeFolders(dataDir, [folder, ...folders])
+    return c.json(folder, 201)
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to create folder',
+    )
+  }
+})
+
+app.patch('/api/folders/:folderId', async (c) => {
+  try {
+    const folderId = c.req.param('folderId')
+    const body = (await c.req.json().catch(() => null)) as {
+      name?: unknown
+      tone?: unknown
+    } | null
+    if (!body) return jsonError(c, 'Body required', 400)
+
+    const dataDir = getDataDir(c)
+    const folders = await readFolders(dataDir)
+    const target = folders.find((folder) => folder.id === folderId)
+    if (!target) return jsonError(c, 'Folder not found', 404)
+
+    if (typeof body.name === 'string') {
+      const trimmed = body.name.trim().slice(0, 80)
+      if (trimmed) target.name = trimmed
+    }
+    if (
+      typeof body.tone === 'string' &&
+      /^#[0-9a-fA-F]{3,8}$/.test(body.tone)
+    ) {
+      target.tone = body.tone
+    }
+    target.updatedAt = new Date().toISOString()
+
+    await writeFolders(dataDir, folders)
+    return c.json(target)
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to update folder',
+    )
+  }
+})
+
+app.delete('/api/folders/:folderId', async (c) => {
+  try {
+    const folderId = c.req.param('folderId')
+    const dataDir = getDataDir(c)
+    const folders = await readFolders(dataDir)
+    const next = folders.filter((folder) => folder.id !== folderId)
+    if (next.length === folders.length) {
+      return jsonError(c, 'Folder not found', 404)
+    }
+    await writeFolders(dataDir, next)
+    return c.json({ ok: true })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to delete folder',
+    )
+  }
+})
+
+app.post('/api/folders/move', async (c) => {
+  try {
+    const body = (await c.req.json().catch(() => null)) as {
+      songId?: unknown
+      folderId?: unknown
+    } | null
+    if (!body || typeof body.songId !== 'string' || !body.songId) {
+      return jsonError(c, 'songId is required', 400)
+    }
+    const targetFolderId =
+      typeof body.folderId === 'string' && body.folderId ? body.folderId : null
+
+    const dataDir = getDataDir(c)
+    const folders = await readFolders(dataDir)
+
+    if (
+      targetFolderId &&
+      !folders.some((folder) => folder.id === targetFolderId)
+    ) {
+      return jsonError(c, 'Folder not found', 404)
+    }
+
+    const now = new Date().toISOString()
+    const updated = folders.map((folder) => {
+      const had = folder.songIds.includes(body.songId as string)
+      const willHave = folder.id === targetFolderId
+      if (had === willHave) return folder
+      return {
+        ...folder,
+        songIds: willHave
+          ? [
+              ...folder.songIds.filter((id) => id !== body.songId),
+              body.songId as string,
+            ]
+          : folder.songIds.filter((id) => id !== body.songId),
+        updatedAt: now,
+      }
+    })
+
+    await writeFolders(dataDir, updated)
+    return c.json({ folders: updated })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to move song',
     )
   }
 })

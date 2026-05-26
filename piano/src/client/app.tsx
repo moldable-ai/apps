@@ -1,6 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useWorkspace } from '@moldable-ai/ui'
+import {
+  popMoldableNavigation,
+  pushMoldableNavigation,
+  resetMoldableNavigation,
+  useMoldableNavigationPop,
+  useWorkspace,
+} from '@moldable-ai/ui'
 import { LibraryView } from './components/library-view'
 import { PracticeView } from './components/practice-view'
 import {
@@ -14,6 +20,7 @@ import {
   type PianoInstrumentPack,
   SPLENDID_GRAND_SAMPLE_SET_ID,
 } from '../shared/audio'
+import type { Folder } from '../shared/folder'
 import type { PianoSong, SongSummary } from '../shared/song'
 import { getSongDuration } from '../shared/song'
 import { type PianoPresetId } from './audio-presets'
@@ -41,6 +48,7 @@ export function App() {
   const queryClient = useQueryClient()
   const [presetId, setPresetId] = useState<PianoPresetId>('classic-grand')
   const [activeSongId, setActiveSongId] = useState<string | null>(null)
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
   const [cursor, setCursor] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isScrubbing, setIsScrubbing] = useState(false)
@@ -365,6 +373,10 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
   }, [chatInstructions])
 
   useEffect(() => {
+    resetMoldableNavigation()
+  }, [])
+
+  useEffect(() => {
     if (activeSongId) return
     if (audioOptionsQuery.isLoading || audioSettingsQuery.isLoading) return
     void prewarm().catch(() => undefined)
@@ -520,12 +532,47 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
     [playMidi, prepare, resume],
   )
 
-  const exitToLibrary = useCallback(() => {
-    setIsPlaying(false)
-    stopAll()
-    setCursor(0)
-    setActiveSongId(null)
-  }, [stopAll])
+  const closeSong = useCallback(
+    (sync: 'pop' | 'none' = 'pop') => {
+      if (sync === 'pop') popMoldableNavigation()
+      setIsPlaying(false)
+      stopAll()
+      setCursor(0)
+      setActiveSongId(null)
+    },
+    [stopAll],
+  )
+
+  const closeFolder = useCallback((sync: 'pop' | 'none' = 'pop') => {
+    if (sync === 'pop') popMoldableNavigation()
+    setActiveFolderId(null)
+  }, [])
+
+  const openFolder = useCallback((folder: Folder) => {
+    pushMoldableNavigation({
+      id: `folder:${folder.id}`,
+      title: folder.name,
+    })
+    setActiveFolderId(folder.id)
+  }, [])
+
+  const openSong = useCallback((nextSong: SongSummary) => {
+    pushMoldableNavigation({
+      id: `song:${nextSong.id}`,
+      title: nextSong.title,
+    })
+    setActiveSongId(nextSong.id)
+  }, [])
+
+  useMoldableNavigationPop(() => {
+    if (activeSongId) {
+      closeSong('none')
+      return
+    }
+    if (activeFolderId) {
+      closeFolder('none')
+    }
+  })
 
   return (
     <main className="bg-background text-foreground flex h-full min-h-0 flex-col overflow-hidden">
@@ -543,7 +590,7 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
           loadState={loadState}
           isSongLoading={songQuery.isLoading}
           isSongError={songQuery.isError}
-          onBack={exitToLibrary}
+          onBack={closeSong}
           onTogglePlay={togglePlay}
           onRestart={restartPlayback}
           onSeek={seekTo}
@@ -565,7 +612,10 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
           isLoading={songsQuery.isLoading}
           isError={songsQuery.isError}
           notePreviewBySong={notePreviewBySong}
-          onSelect={setActiveSongId}
+          openFolderId={activeFolderId}
+          onOpenFolder={openFolder}
+          onCloseFolder={closeFolder}
+          onSelect={openSong}
         />
       )}
     </main>
