@@ -85,12 +85,13 @@ export function App() {
       null
     )
   }, [activeInstrumentId, activePack])
-  const { loadState, playMidi, prepare, resume, stopAll } = usePianoAudio(
-    presetId,
-    activePack,
-    activeInstrument?.id ?? null,
-    fetchWithWorkspace,
-  )
+  const { loadState, playMidi, prepare, prewarm, resume, stopAll } =
+    usePianoAudio(
+      presetId,
+      activePack,
+      activeInstrument?.id ?? null,
+      fetchWithWorkspace,
+    )
 
   const persistAudioSettings = useCallback(
     async (settings: Partial<PianoAudioSettings>) => {
@@ -362,6 +363,17 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
       '*',
     )
   }, [chatInstructions])
+
+  useEffect(() => {
+    if (activeSongId) return
+    if (audioOptionsQuery.isLoading || audioSettingsQuery.isLoading) return
+    void prewarm().catch(() => undefined)
+  }, [
+    activeSongId,
+    audioOptionsQuery.isLoading,
+    audioSettingsQuery.isLoading,
+    prewarm,
+  ])
 
   const activeMidi = useMemo(() => {
     if (!song) return new Set<number>()

@@ -11,13 +11,27 @@ interface SongsResponse {
 const GHOST_EXAMPLES: Array<{
   id: string
   title: string
-  bpm: number
+  byline: string
   tone: string
 }> = [
-  { id: 'g-1', title: 'Clair de Lune', bpm: 60, tone: midiToTone(60) },
-  { id: 'g-2', title: 'Fur Elise', bpm: 72, tone: midiToTone(64) },
-  { id: 'g-3', title: 'Practice roll', bpm: 0, tone: midiToTone(67) },
+  {
+    id: 'g-1',
+    title: 'Clair de Lune',
+    byline: 'C. Debussy',
+    tone: midiToTone(60),
+  },
+  {
+    id: 'g-2',
+    title: 'Fur Elise',
+    byline: 'L. V. Beethoven',
+    tone: midiToTone(64),
+  },
+  { id: 'g-3', title: 'Practice roll', byline: 'Ready', tone: midiToTone(67) },
 ]
+
+function songByline(song: SongSummary) {
+  return song.composer?.trim() || song.artist?.trim() || null
+}
 
 function MiniRoll({
   notes,
@@ -78,7 +92,7 @@ function MiniRoll({
 
 function SongCard({
   title,
-  bpm,
+  byline,
   noteCount,
   duration,
   tone,
@@ -86,7 +100,7 @@ function SongCard({
   ghost,
 }: {
   title: string
-  bpm: number
+  byline?: string | null
   noteCount?: number
   duration?: number
   tone: string
@@ -102,12 +116,17 @@ function SongCard({
       style={style}
     >
       <div className="flex items-baseline justify-between gap-2 px-2.5 pb-1 pt-2">
-        <p
-          className="piano-mono text-[8.5px] font-medium uppercase tracking-[0.16em]"
-          style={{ color: tone }}
-        >
-          {bpm > 0 ? `${bpm} bpm` : '—'}
-        </p>
+        {byline ? (
+          <p
+            className="truncate text-[8.5px] font-medium tracking-[0.08em]"
+            style={{ color: tone }}
+            title={byline}
+          >
+            {byline}
+          </p>
+        ) : (
+          <span />
+        )}
         {duration !== undefined ? (
           <span className="piano-mono text-muted-foreground/85 text-[9px]">
             {formatDuration(duration)}
@@ -182,7 +201,7 @@ export function Widget() {
             <SongCard
               key={item.id}
               title={item.title}
-              bpm={item.bpm}
+              byline={item.byline}
               tone={item.tone}
               ghost
             />
@@ -195,7 +214,7 @@ export function Widget() {
               <SongCard
                 key={song.id}
                 title={song.title}
-                bpm={song.bpm}
+                byline={songByline(song)}
                 noteCount={song.noteCount}
                 duration={song.duration}
                 tone={tone}

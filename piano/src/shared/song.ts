@@ -19,8 +19,12 @@ export interface PianoSong {
     midiUrl?: string
     license: string
     composer?: string
+    artist?: string
     editor?: string
     mutopiaId?: string
+    lilypondPath?: string
+    lilypondUrl?: string
+    sourceRepository?: string
   }
   bpm: number
   beatsPerBar: number
@@ -34,6 +38,8 @@ export interface SongSummary {
   id: string
   title: string
   source?: string
+  composer?: string
+  artist?: string
   bpm: number
   beatsPerBar: number
   noteCount: number

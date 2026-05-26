@@ -22,7 +22,15 @@ import {
   withInstrumentInstallStates,
 } from './instrument-installer'
 import { getDataDir, jsonError } from './moldable'
+import {
+  ensureMutopiaPianoIndex,
+  fetchMutopiaMidi,
+  readMutopiaPianoIndexStatus,
+  rebuildMutopiaPianoIndex,
+  searchMutopiaPianoIndex,
+} from './mutopia-catalog'
 import { readSfzInstrumentPreset } from './sfz-preset'
+import { midiBytesToSong } from './song-importer'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { mkdir, readdir, rm } from 'node:fs/promises'
@@ -166,12 +174,19 @@ function summarizeSong(song: PianoSong): SongSummary {
     id: song.id,
     title: song.title,
     source: song.source,
+    composer: song.sourceInfo?.composer,
+    artist: song.sourceInfo?.artist,
     bpm: song.bpm,
     beatsPerBar: song.beatsPerBar,
     noteCount: song.notes.length,
     duration: getSongDuration(song),
     updatedAt: song.updatedAt,
   }
+}
+
+function catalogSongTitle(title: string, opus: string | undefined) {
+  if (!opus || title.toLowerCase().includes(opus.toLowerCase())) return title
+  return `${title}, ${opus}`
 }
 
 async function ensureSeedSongs(dataDir: string) {
@@ -380,6 +395,156 @@ app.get('/api/songs', async (c) => {
     return jsonError(
       c,
       error instanceof Error ? error.message : 'Failed to read songs',
+    )
+  }
+})
+
+app.get('/api/song-catalog/mutopia/status', async (c) => {
+  try {
+    return c.json(await readMutopiaPianoIndexStatus(getDataDir(c)))
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error
+        ? error.message
+        : 'Failed to read Mutopia catalog status',
+    )
+  }
+})
+
+app.post('/api/song-catalog/mutopia/rebuild', async (c) => {
+  try {
+    const index = await rebuildMutopiaPianoIndex(getDataDir(c))
+    return c.json({
+      repository: index.repository,
+      repositoryCommit: index.repositoryCommit,
+      generatedAt: index.generatedAt,
+      entryCount: index.entries.length,
+    })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error
+        ? error.message
+        : 'Failed to rebuild Mutopia catalog',
+      502,
+    )
+  }
+})
+
+app.get('/api/song-catalog/search', async (c) => {
+  try {
+    const query = c.req.query('q') ?? ''
+    const limit = Number(c.req.query('limit') ?? 40)
+    const dataDir = getDataDir(c)
+    const index = await ensureMutopiaPianoIndex(dataDir)
+    const installedSongs = await readSongs(dataDir)
+    const installedMutopiaIds = new Set(
+      installedSongs
+        .map((song) => song.sourceInfo?.mutopiaId)
+        .filter((id): id is string => Boolean(id)),
+    )
+
+    return c.json({
+      provider: 'mutopia',
+      repository: index.repository,
+      repositoryCommit: index.repositoryCommit,
+      generatedAt: index.generatedAt,
+      results: searchMutopiaPianoIndex(index, query, limit).map((entry) => ({
+        ...entry,
+        installed: installedMutopiaIds.has(entry.mutopiaId),
+      })),
+    })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error
+        ? error.message
+        : 'Failed to search Mutopia catalog',
+      502,
+    )
+  }
+})
+
+app.post('/api/song-catalog/install', async (c) => {
+  try {
+    const body = (await c.req.json().catch(() => null)) as {
+      provider?: unknown
+      mutopiaId?: unknown
+      id?: unknown
+    } | null
+
+    if (
+      !body ||
+      (body.provider !== undefined && body.provider !== 'mutopia') ||
+      (typeof body.mutopiaId !== 'string' && typeof body.id !== 'string')
+    ) {
+      return jsonError(c, 'A Mutopia catalog song id is required', 400)
+    }
+
+    const requestedId =
+      typeof body.mutopiaId === 'string' ? body.mutopiaId : body.id
+    const dataDir = getDataDir(c)
+    const index = await ensureMutopiaPianoIndex(dataDir)
+    const entry = index.entries.find(
+      (candidate) =>
+        candidate.mutopiaId === requestedId || candidate.id === requestedId,
+    )
+    if (!entry) return jsonError(c, 'Catalog song not found', 404)
+
+    await ensureSeedSongs(dataDir)
+    const installedSong = (await readSongs(dataDir)).find(
+      (song) => song.sourceInfo?.mutopiaId === entry.mutopiaId,
+    )
+    if (installedSong) {
+      return c.json({
+        installed: true,
+        song: summarizeSong(installedSong),
+      })
+    }
+
+    const existing = await readJson<PianoSong | null>(
+      songPath(dataDir, entry.id),
+      null,
+    )
+    if (existing) {
+      return c.json({
+        installed: true,
+        song: summarizeSong(existing),
+      })
+    }
+
+    const now = new Date().toISOString()
+    const midiBytes = await fetchMutopiaMidi(entry)
+    const song = midiBytesToSong(midiBytes, {
+      id: entry.id,
+      title: catalogSongTitle(entry.title, entry.opus),
+      source: `${entry.composer}; ${entry.source ?? 'Mutopia Project'}; Mutopia Project`,
+      sourceInfo: {
+        provider: 'Mutopia Project',
+        sourceUrl: entry.sourceUrl,
+        midiUrl: entry.midiUrl,
+        license: entry.license,
+        composer: entry.composer,
+        mutopiaId: entry.mutopiaId,
+        lilypondPath: entry.lilypondPath,
+        lilypondUrl: entry.lilypondUrl,
+        sourceRepository: entry.repository,
+      },
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    await writeJson(songPath(dataDir, song.id), song)
+    return c.json({
+      installed: true,
+      song: summarizeSong(song),
+    })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to install song',
+      502,
     )
   }
 })

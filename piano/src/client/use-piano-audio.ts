@@ -197,9 +197,18 @@ export function usePianoAudio(
   )
 
   const prepare = useCallback(async () => {
+    setLoadState((current) =>
+      current.status === 'ready'
+        ? current
+        : { status: 'loading', loaded: 0, total: 0, error: null },
+    )
     await resume()
     await loadPreset(presetId, activePack)
   }, [activePack, loadPreset, presetId, resume])
+
+  const prewarm = useCallback(async () => {
+    await loadPreset(presetId, activePack)
+  }, [activePack, loadPreset, presetId])
 
   const playMidi = useCallback(
     (midi: number, duration: number, velocity = 0.72, delay = 0) => {
@@ -240,7 +249,7 @@ export function usePianoAudio(
     }
   }, [])
 
-  return { loadState, playMidi, prepare, resume, stopAll }
+  return { loadState, playMidi, prepare, prewarm, resume, stopAll }
 }
 
 async function loadSfzInstrument(

@@ -5,8 +5,11 @@ import type { PianoInstrumentPack } from '../../shared/audio'
 import type { PianoSong } from '../../shared/song'
 import { PIANO_PRESETS, type PianoPresetId } from '../audio-presets'
 import {
+  BLACK_KEY_WIDTH,
   KEYBOARD_HEIGHT,
   KEYBOARD_WIDTH,
+  PIANO_KEYS,
+  WHITE_KEY_WIDTH,
   formatDuration,
   midiToTone,
 } from '../piano-utils'
@@ -46,6 +49,20 @@ interface PracticeViewProps {
 
 const MIN_FALL_HEIGHT = 240
 const MAX_FALL_HEIGHT = 540
+const KEY_CENTER_BY_MIDI = new Map(
+  PIANO_KEYS.map((key) => [
+    key.midi,
+    key.left + (key.isBlack ? BLACK_KEY_WIDTH : WHITE_KEY_WIDTH) / 2,
+  ]),
+)
+
+function clampScrollTarget(
+  target: number,
+  totalWidth: number,
+  visibleWidth: number,
+) {
+  return Math.max(0, Math.min(totalWidth - visibleWidth, target))
+}
 
 export function PracticeView({
   song,
@@ -111,25 +128,51 @@ export function PracticeView({
     return () => observer.disconnect()
   }, [])
 
-  // Auto-scroll horizontally to keep active range visible
+  // Auto-scroll horizontally only when the played range nears the visible edge.
   useEffect(() => {
     if (!stageRef.current) return
-    const allMidi = [...activeMidi, ...upcomingMidi]
-    if (allMidi.length === 0) return
-    const avgMidi = allMidi.reduce((s, m) => s + m, 0) / allMidi.length
+    const trackedMidi =
+      activeMidi.size > 0 ? [...activeMidi] : [...upcomingMidi]
+    if (trackedMidi.length === 0) return
     const stage = stageRef.current
     const totalWidth = stage.scrollWidth
     const visibleWidth = stage.clientWidth
     if (totalWidth <= visibleWidth) return
-    const ratio = (avgMidi - 21) / (108 - 21)
-    const target = Math.max(
-      0,
-      Math.min(
-        totalWidth - visibleWidth,
-        ratio * totalWidth - visibleWidth / 2,
-      ),
+
+    const centers = trackedMidi
+      .map((midi) => KEY_CENTER_BY_MIDI.get(midi))
+      .filter((center): center is number => center !== undefined)
+    if (centers.length === 0) return
+
+    const minX = Math.min(...centers)
+    const maxX = Math.max(...centers)
+    const currentLeft = stage.scrollLeft
+    const currentRight = currentLeft + visibleWidth
+    const edgePadding = Math.min(
+      Math.max(visibleWidth * 0.18, 56),
+      visibleWidth * 0.34,
     )
-    stage.scrollTo({ left: target, behavior: 'smooth' })
+    const safeLeft = currentLeft + edgePadding
+    const safeRight = currentRight - edgePadding
+
+    let target: number | null = null
+    if (minX < safeLeft) {
+      target = minX - edgePadding
+    } else if (maxX > safeRight) {
+      target = maxX - visibleWidth + edgePadding
+    }
+
+    if (target === null) return
+    const nextLeft = clampScrollTarget(target, totalWidth, visibleWidth)
+    if (Math.abs(nextLeft - currentLeft) < 8) return
+
+    stage.scrollTo({
+      left: nextLeft,
+      behavior:
+        Math.abs(nextLeft - currentLeft) > visibleWidth * 0.6
+          ? 'auto'
+          : 'smooth',
+    })
   }, [activeMidi, upcomingMidi])
 
   // Netflix-style: auto-hide controls 2s after playback starts; show on activity
@@ -188,12 +231,10 @@ export function PracticeView({
     const totalWidth = stage.scrollWidth
     const visibleWidth = stage.clientWidth
     if (totalWidth <= visibleWidth) return
-    stage.scrollLeft = Math.max(
-      0,
-      Math.min(
-        totalWidth - visibleWidth,
-        ratio * totalWidth - visibleWidth / 2,
-      ),
+    stage.scrollLeft = clampScrollTarget(
+      ratio * totalWidth - visibleWidth / 2,
+      totalWidth,
+      visibleWidth,
     )
   }, [song.id, song.notes])
 
@@ -201,6 +242,10 @@ export function PracticeView({
     loadState.status === 'loading' && loadState.total > 0
       ? Math.round((loadState.loaded / loadState.total) * 100)
       : null
+  const loadingSamplesLabel =
+    loadingSamples === null
+      ? 'Loading piano samples…'
+      : `Loading piano samples · ${loadingSamples}%`
 
   const progress = duration > 0 ? Math.min(1, cursor / duration) : 0
 
@@ -260,11 +305,11 @@ export function PracticeView({
       </header>
 
       {/* Overlay toasts — absolute so they don't shift the stage layout */}
-      {loadState.status === 'loading' && loadingSamples !== null ? (
+      {loadState.status === 'loading' ? (
         <div className="pointer-events-none absolute inset-x-0 top-14 z-30 flex justify-center px-4">
           <div className="border-border/50 bg-background/90 text-muted-foreground pointer-events-auto inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] shadow-sm backdrop-blur">
             <Loader2 className="size-3 animate-spin" />
-            Loading piano samples · {loadingSamples}%
+            {loadingSamplesLabel}
           </div>
         </div>
       ) : null}
