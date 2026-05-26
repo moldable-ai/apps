@@ -18,12 +18,14 @@ import {
 import {
   type PianoAudioSettings,
   type PianoInstrumentPack,
+  type PianoSoundChoice,
   SPLENDID_GRAND_SAMPLE_SET_ID,
+  type SongSoundSettingsResponse,
 } from '../shared/audio'
 import type { Folder } from '../shared/folder'
 import type { PianoSong, SongSummary } from '../shared/song'
 import { getSongDuration } from '../shared/song'
-import { type PianoPresetId } from './audio-presets'
+import { PIANO_PRESETS, type PianoPresetId } from './audio-presets'
 import { formatDuration } from './piano-utils'
 import { useAudioOptions } from './use-audio-options'
 import { usePianoAudio } from './use-piano-audio'
@@ -35,6 +37,10 @@ interface SongsResponse {
 
 interface AudioSettingsResponse {
   settings: PianoAudioSettings
+}
+
+function isPianoPresetId(value: string | undefined): value is PianoPresetId {
+  return Boolean(value && PIANO_PRESETS.some((preset) => preset.id === value))
 }
 
 const APP_SOURCE_PATH = '/Users/rob/.moldable/shared/apps/piano'
@@ -52,6 +58,9 @@ export function App() {
   const [cursor, setCursor] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isScrubbing, setIsScrubbing] = useState(false)
+  const [songSoundLoadingLabel, setSongSoundLoadingLabel] = useState<
+    string | null
+  >(null)
 
   const audioOptionsQuery = useAudioOptions()
   const instrumentPacks = useMemo(
@@ -136,22 +145,60 @@ export function App() {
     [persistAudioSettings],
   )
 
+  const persistSongSoundSettings = useCallback(
+    async (
+      songId: string,
+      settings: {
+        suggested?: PianoSoundChoice | null
+        override?: PianoSoundChoice | null
+      },
+    ) => {
+      const res = await fetchWithWorkspace(
+        `/api/songs/${songId}/sound-settings`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings),
+        },
+      )
+      if (!res.ok) return
+      void queryClient.invalidateQueries({
+        queryKey: ['song-sound-settings', songId, workspaceId],
+      })
+    },
+    [fetchWithWorkspace, queryClient, workspaceId],
+  )
+
   const handleActiveInstrumentChange = useCallback(
     (packId: string, instrumentId: string) => {
-      setActiveInstrumentChoice(packId, instrumentId)
+      setActiveInstrumentChoice(packId, instrumentId, {
+        persist: activeSongId ? false : undefined,
+      })
+      if (activeSongId) {
+        void persistSongSoundSettings(activeSongId, {
+          override: { instrumentPackId: packId, instrumentId },
+        })
+      }
     },
-    [setActiveInstrumentChoice],
+    [activeSongId, persistSongSoundSettings, setActiveInstrumentChoice],
   )
 
   const handlePresetChange = useCallback(
     (nextPresetId: PianoPresetId) => {
       setPresetId(nextPresetId)
+      if (activeSongId) {
+        void persistSongSoundSettings(activeSongId, {
+          override: { presetId: nextPresetId },
+        })
+        return
+      }
       void persistAudioSettings({ presetId: nextPresetId })
     },
-    [persistAudioSettings],
+    [activeSongId, persistAudioSettings, persistSongSoundSettings],
   )
 
   useEffect(() => {
+    if (activeSongId) return
     const settings = audioSettingsQuery.data?.settings
     if (!settings) return
     setPresetId(settings.presetId as PianoPresetId)
@@ -186,6 +233,7 @@ export function App() {
   }, [
     activeInstrumentId,
     activePackId,
+    activeSongId,
     audioSettingsQuery.data?.settings,
     instrumentPacks,
     setActiveInstrumentChoice,
@@ -230,7 +278,10 @@ export function App() {
   ])
 
   const handleInstallPack = useCallback(
-    async (packId: string) => {
+    async (
+      packId: string,
+      options: { select?: boolean; persist?: boolean } = {},
+    ) => {
       setInstallingPackIds((current) => new Set(current).add(packId))
       try {
         const res = await fetchWithWorkspace(
@@ -251,13 +302,17 @@ export function App() {
           installedPack?.instruments.find(
             (instrument) => instrument.playable,
           ) ?? null
-        if (defaultInstrument) {
-          setActiveInstrumentChoice(body.pack.id, defaultInstrument.id)
-        } else {
-          setActivePackId(body.pack.id)
-          writeActivePackId(body.pack.id)
+        if (options.select !== false) {
+          if (defaultInstrument) {
+            setActiveInstrumentChoice(body.pack.id, defaultInstrument.id, {
+              persist: options.persist,
+            })
+          } else {
+            setActivePackId(body.pack.id)
+            writeActivePackId(body.pack.id)
+          }
         }
-        void queryClient.invalidateQueries({
+        await queryClient.invalidateQueries({
           queryKey: ['audio-options', workspaceId],
         })
       } finally {
@@ -277,6 +332,7 @@ export function App() {
     ],
   )
 
+  const automaticSongSoundInstallRef = useRef<Set<string>>(new Set())
   const playedNotesRef = useRef<Set<string>>(new Set())
   const rafRef = useRef<number | null>(null)
   const playStartCursorRef = useRef(0)
@@ -299,6 +355,18 @@ export function App() {
       const res = await fetchWithWorkspace(`/api/songs/${activeSongId}`)
       if (!res.ok) throw new Error('Failed to load song')
       return (await res.json()) as PianoSong
+    },
+  })
+
+  const songSoundSettingsQuery = useQuery({
+    queryKey: ['song-sound-settings', activeSongId, workspaceId],
+    enabled: Boolean(activeSongId),
+    queryFn: async () => {
+      const res = await fetchWithWorkspace(
+        `/api/songs/${activeSongId}/sound-settings`,
+      )
+      if (!res.ok) throw new Error('Failed to load song sound settings')
+      return (await res.json()) as SongSoundSettingsResponse
     },
   })
 
@@ -335,6 +403,75 @@ export function App() {
     isPlaying && !isScrubbing
       ? Math.max(0, cursor - AUDIO_VISUAL_SYNC_OFFSET_SECONDS)
       : cursor
+
+  useEffect(() => {
+    if (!activeSongId) {
+      setSongSoundLoadingLabel(null)
+      return
+    }
+    const effective = songSoundSettingsQuery.data?.effective
+    if (!effective) return
+
+    if (
+      isPianoPresetId(effective.presetId) &&
+      presetId !== effective.presetId
+    ) {
+      setPresetId(effective.presetId)
+    }
+
+    if (!effective.instrumentPackId || !effective.instrumentId) return
+    const pack = instrumentPacks.find(
+      (candidate) => candidate.id === effective.instrumentPackId,
+    )
+    if (!pack) return
+
+    if (pack.status !== 'installed') {
+      if (
+        pack.download.enabled &&
+        pack.downloadUrl &&
+        !installingPackIds.has(pack.id) &&
+        !automaticSongSoundInstallRef.current.has(pack.id)
+      ) {
+        automaticSongSoundInstallRef.current.add(pack.id)
+        setSongSoundLoadingLabel(`Installing suggested piano · ${pack.name}…`)
+        void handleInstallPack(pack.id, { select: false, persist: false })
+          .catch((error) => {
+            setSongSoundLoadingLabel(
+              error instanceof Error
+                ? error.message
+                : `Could not install ${pack.name}`,
+            )
+          })
+          .finally(() => {
+            automaticSongSoundInstallRef.current.delete(pack.id)
+            setTimeout(() => setSongSoundLoadingLabel(null), 1200)
+          })
+      }
+      return
+    }
+
+    const instrument =
+      pack.instruments.find(
+        (candidate) =>
+          candidate.id === effective.instrumentId && candidate.playable,
+      ) ?? pack.instruments.find((candidate) => candidate.playable)
+    if (!instrument) return
+
+    if (activePackId !== pack.id || activeInstrumentId !== instrument.id) {
+      setActiveInstrumentChoice(pack.id, instrument.id, { persist: false })
+    }
+    setSongSoundLoadingLabel(null)
+  }, [
+    activeInstrumentId,
+    activePackId,
+    activeSongId,
+    handleInstallPack,
+    installingPackIds,
+    instrumentPacks,
+    presetId,
+    setActiveInstrumentChoice,
+    songSoundSettingsQuery.data?.effective,
+  ])
 
   const chatInstructions = useMemo(() => {
     const downloadablePacks = instrumentPacks
@@ -588,6 +725,7 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
           upcomingMidi={upcomingMidi}
           presetId={presetId}
           loadState={loadState}
+          soundLoadingLabel={songSoundLoadingLabel}
           isSongLoading={songQuery.isLoading}
           isSongError={songQuery.isError}
           onBack={closeSong}

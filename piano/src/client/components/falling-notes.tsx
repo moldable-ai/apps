@@ -26,6 +26,49 @@ function noteGeometry(midi: number) {
   return { x: key.left + 1.5, width: WHITE_KEY_WIDTH - 3 }
 }
 
+function ActiveKeyEffect({
+  centerX,
+  hitLine,
+  tone,
+}: {
+  centerX: number
+  hitLine: number
+  tone: string
+}) {
+  return (
+    <g className="piano-active-key-effect" aria-hidden>
+      <ellipse
+        cx={centerX}
+        cy={hitLine - 1}
+        rx="9"
+        ry="4"
+        fill="white"
+        opacity="0.65"
+        filter="url(#hit-bloom)"
+      />
+      <ellipse
+        cx={centerX}
+        cy={hitLine - 10}
+        rx="16"
+        ry="18"
+        fill={tone}
+        opacity="0.18"
+        filter="url(#hit-bloom)"
+      />
+      <rect
+        x={centerX - 1}
+        y={hitLine - 54}
+        width="2"
+        height="44"
+        rx="1"
+        fill={tone}
+        opacity="0.18"
+        filter="url(#hit-bloom)"
+      />
+    </g>
+  )
+}
+
 export function FallingNotes({
   notes,
   cursor,
@@ -44,6 +87,12 @@ export function FallingNotes({
       ),
     [notes, cursor, lookAheadSeconds],
   )
+
+  const activeNotes = useMemo(() => {
+    return notes.filter(
+      (note) => cursor >= note.start && cursor < note.start + note.duration,
+    )
+  }, [cursor, notes])
 
   return (
     <div
@@ -85,6 +134,20 @@ export function FallingNotes({
             <feGaussianBlur stdDeviation="2.5" result="blur" />
             <feMerge>
               <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+
+          <filter id="hit-bloom" x="-160%" y="-160%" width="420%" height="420%">
+            <feGaussianBlur stdDeviation="3.2" result="blur" />
+            <feColorMatrix
+              in="blur"
+              type="matrix"
+              values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 1.65 0"
+              result="bright"
+            />
+            <feMerge>
+              <feMergeNode in="bright" />
               <feMergeNode in="SourceGraphic" />
             </feMerge>
           </filter>
@@ -231,11 +294,10 @@ export function FallingNotes({
         {/* hit line — luminous bar */}
         <rect
           x="0"
-          y={hitLine - 1}
+          y={hitLine}
           width={KEYBOARD_WIDTH}
-          height="2"
-          fill="var(--foreground)"
-          opacity="0.85"
+          height="1"
+          fill="rgba(255,255,255,0.92)"
         />
         <rect
           x="0"
@@ -244,6 +306,18 @@ export function FallingNotes({
           height="12"
           fill="url(#hit-glow)"
         />
+
+        {activeNotes.map((note) => {
+          const { x, width } = noteGeometry(note.midi)
+          return (
+            <ActiveKeyEffect
+              key={`active-effect-${note.id}`}
+              centerX={x + width / 2}
+              hitLine={hitLine}
+              tone={note.color ?? midiToTone(note.midi)}
+            />
+          )
+        })}
 
         {/* top fade so notes appear out of nothing */}
         <rect

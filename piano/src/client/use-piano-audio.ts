@@ -6,7 +6,6 @@ import {
   type PianoPresetId,
   pianoPresetById,
 } from './audio-presets'
-import decodeFlac from '@audio/decode-flac'
 import {
   CacheStorage,
   type LoadProgress,
@@ -303,22 +302,7 @@ function createSfzSampleLoader(
         }
         return response.arrayBuffer()
       })
-      .then(async (arrayBuffer) => {
-        if (!url.toLowerCase().endsWith('.flac')) {
-          return audioContext.decodeAudioData(arrayBuffer.slice(0))
-        }
-
-        const decoded = await decodeFlac(arrayBuffer)
-        const audioBuffer = audioContext.createBuffer(
-          decoded.channelData.length,
-          decoded.channelData[0]?.length ?? 0,
-          decoded.sampleRate,
-        )
-        decoded.channelData.forEach((channel, index) => {
-          audioBuffer.copyToChannel(new Float32Array(channel), index)
-        })
-        return audioBuffer
-      })
+      .then(async (arrayBuffer) => audioContext.decodeAudioData(arrayBuffer))
 
     cache.set(url, promise)
     return promise

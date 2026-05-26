@@ -129,6 +129,26 @@ export interface PianoAudioOptionsResponse {
   controls: PianoSettingControl[]
 }
 
+export interface PianoSoundChoice {
+  presetId?: string
+  instrumentPackId?: string
+  instrumentId?: string
+}
+
+export interface SongSoundSettings {
+  songId: string
+  suggested?: PianoSoundChoice
+  override?: PianoSoundChoice
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SongSoundSettingsResponse {
+  settings: SongSoundSettings | null
+  effective: PianoSoundChoice
+  source: 'global' | 'suggested' | 'override'
+}
+
 export interface PianoAudioSettings {
   presetId: string
   instrumentPackId: string

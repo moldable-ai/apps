@@ -2,7 +2,7 @@ import { ArrowLeft, Loader2, Pause, Play, RotateCcw } from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Button, cn } from '@moldable-ai/ui'
 import type { PianoInstrumentPack } from '../../shared/audio'
-import type { PianoSong } from '../../shared/song'
+import { type PianoSong, getMeterLabel, getTempoLabel } from '../../shared/song'
 import { PIANO_PRESETS, type PianoPresetId } from '../audio-presets'
 import {
   BLACK_KEY_WIDTH,
@@ -28,6 +28,7 @@ interface PracticeViewProps {
   upcomingMidi: Set<number>
   presetId: PianoPresetId
   loadState: AudioLoadState
+  soundLoadingLabel?: string | null
   isSongLoading: boolean
   isSongError: boolean
   onBack: () => void
@@ -74,6 +75,7 @@ export function PracticeView({
   upcomingMidi,
   presetId,
   loadState,
+  soundLoadingLabel,
   isSongLoading,
   isSongError,
   onBack,
@@ -273,7 +275,8 @@ export function PracticeView({
           </h2>
         </div>
         <div className="text-muted-foreground/80 piano-mono hidden text-[11px] sm:block">
-          {song.notes.length} notes · {song.bpm} bpm · {song.beatsPerBar}/4
+          {song.notes.length} notes · {getTempoLabel(song)} ·{' '}
+          {getMeterLabel(song)}
         </div>
         <SoundPicker
           packs={instrumentPacks}
@@ -305,11 +308,11 @@ export function PracticeView({
       </header>
 
       {/* Overlay toasts — absolute so they don't shift the stage layout */}
-      {loadState.status === 'loading' ? (
+      {soundLoadingLabel || loadState.status === 'loading' ? (
         <div className="pointer-events-none absolute inset-x-0 top-14 z-30 flex justify-center px-4">
           <div className="border-border/50 bg-background/90 text-muted-foreground pointer-events-auto inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] shadow-sm backdrop-blur">
             <Loader2 className="size-3 animate-spin" />
-            {loadingSamplesLabel}
+            {soundLoadingLabel ?? loadingSamplesLabel}
           </div>
         </div>
       ) : null}

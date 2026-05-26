@@ -13,7 +13,12 @@ import {
   Button,
   cn,
 } from '@moldable-ai/ui'
-import type { PianoNote, SongSummary } from '../../shared/song'
+import {
+  type PianoNote,
+  type SongSummary,
+  getMeterLabel,
+  getTempoLabel,
+} from '../../shared/song'
 import { formatDuration, midiToTone } from '../piano-utils'
 import { type Folder, useFolders } from '../use-folders'
 import { CatalogSearchDialog } from './catalog-search-dialog'
@@ -176,7 +181,8 @@ function SongCard({
         <MiniRoll notes={preview} tone={tone} />
         <div className="text-muted-foreground mt-1 flex items-center justify-between text-[11px]">
           <span className="piano-mono">
-            {song.noteCount} notes · {formatDuration(song.duration)}
+            {song.noteCount} notes · {formatDuration(song.duration)} ·{' '}
+            {getTempoLabel(song)} · {getMeterLabel(song)}
           </span>
           <span
             className={cn(

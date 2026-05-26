@@ -7,6 +7,9 @@ import {
   PIANO_SETTING_CONTROLS,
   type PianoAudioSettings,
   type PianoPresetParameters,
+  type PianoSoundChoice,
+  type SongSoundSettings,
+  type SongSoundSettingsResponse,
   defaultPianoAudioSettings,
   pianoPresetById,
 } from '../shared/audio'
@@ -34,7 +37,9 @@ import { readSfzInstrumentPreset } from './sfz-preset'
 import { midiBytesToSong } from './song-importer'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { mkdir, readdir, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { copyFile, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { basename, extname, parse } from 'node:path'
 
 export const app = new Hono()
 
@@ -44,12 +49,30 @@ function songsDir(dataDir: string) {
   return safePath(dataDir, 'songs')
 }
 
+function songSourcesDir(dataDir: string) {
+  return safePath(dataDir, 'song-sources')
+}
+
 function songPath(dataDir: string, songId: string) {
   return safePath(songsDir(dataDir), `${songId}.json`)
 }
 
+function copiedMidiPath(dataDir: string, songId: string, filePath: string) {
+  const extension =
+    extname(filePath).toLowerCase() === '.midi' ? '.midi' : '.mid'
+  return safePath(songSourcesDir(dataDir), `${songId}${extension}`)
+}
+
 function audioSettingsPath(dataDir: string) {
   return safePath(dataDir, 'audio-settings.json')
+}
+
+function songSoundSettingsDir(dataDir: string) {
+  return safePath(dataDir, 'song-sounds')
+}
+
+function songSoundSettingsPath(dataDir: string, songId: string) {
+  return safePath(songSoundSettingsDir(dataDir), `${songId}.json`)
 }
 
 function foldersPath(dataDir: string) {
@@ -88,6 +111,16 @@ async function writeFolders(dataDir: string, folders: Folder[]) {
 
 function isValidSongId(songId: string) {
   return /^[a-z0-9-]+$/.test(songId)
+}
+
+function slugifySongId(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
 }
 
 function isPresetId(value: unknown): value is string {
@@ -204,6 +237,98 @@ async function readAudioSettings(dataDir: string) {
   return normalizeAudioSettings(settings)
 }
 
+function sanitizeSoundChoice(value: unknown): PianoSoundChoice {
+  if (!value || typeof value !== 'object') return {}
+  const source = value as Record<string, unknown>
+  const choice: PianoSoundChoice = {}
+
+  if (source.presetId === undefined || isPresetId(source.presetId)) {
+    if (typeof source.presetId === 'string') choice.presetId = source.presetId
+  }
+
+  const hasPack = typeof source.instrumentPackId === 'string'
+  const hasInstrument = typeof source.instrumentId === 'string'
+  if (hasPack || hasInstrument) {
+    const instrumentChoice = normalizeInstrumentChoice(
+      source.instrumentPackId,
+      source.instrumentId,
+    )
+    choice.instrumentPackId = instrumentChoice.instrumentPackId
+    choice.instrumentId = instrumentChoice.instrumentId
+  }
+
+  return choice
+}
+
+function mergeSoundChoice(
+  base: PianoSoundChoice,
+  next: PianoSoundChoice | undefined,
+): PianoSoundChoice {
+  if (!next) return base
+  return {
+    presetId: next.presetId ?? base.presetId,
+    instrumentPackId: next.instrumentPackId ?? base.instrumentPackId,
+    instrumentId: next.instrumentId ?? base.instrumentId,
+  }
+}
+
+function hasSoundChoice(choice: PianoSoundChoice | undefined) {
+  return Boolean(
+    choice?.presetId || choice?.instrumentPackId || choice?.instrumentId,
+  )
+}
+
+function optionalSoundChoice(value: unknown) {
+  const choice = sanitizeSoundChoice(value)
+  return hasSoundChoice(choice) ? choice : undefined
+}
+
+async function readSongSoundSettings(dataDir: string, songId: string) {
+  const settings = await readJson<SongSoundSettings | null>(
+    songSoundSettingsPath(dataDir, songId),
+    null,
+  )
+  if (!settings || settings.songId !== songId) return null
+  return {
+    songId,
+    suggested: optionalSoundChoice(settings.suggested),
+    override: optionalSoundChoice(settings.override),
+    createdAt: settings.createdAt ?? new Date().toISOString(),
+    updatedAt:
+      settings.updatedAt ?? settings.createdAt ?? new Date().toISOString(),
+  } satisfies SongSoundSettings
+}
+
+async function writeSongSoundSettings(
+  dataDir: string,
+  settings: SongSoundSettings,
+) {
+  await mkdir(songSoundSettingsDir(dataDir), { recursive: true })
+  await writeJson(songSoundSettingsPath(dataDir, settings.songId), settings)
+}
+
+async function getSongSoundSettingsResponse(
+  dataDir: string,
+  songId: string,
+): Promise<SongSoundSettingsResponse> {
+  const globalSettings = await readAudioSettings(dataDir)
+  const settings = await readSongSoundSettings(dataDir, songId)
+  const globalChoice: PianoSoundChoice = {
+    presetId: globalSettings.presetId,
+    instrumentPackId: globalSettings.instrumentPackId,
+    instrumentId: globalSettings.instrumentId,
+  }
+  const suggested = mergeSoundChoice(globalChoice, settings?.suggested)
+  const effective = mergeSoundChoice(suggested, settings?.override)
+  const source = hasSoundChoice(settings?.override)
+    ? 'override'
+    : hasSoundChoice(settings?.suggested)
+      ? 'suggested'
+      : 'global'
+
+  return { settings, effective, source }
+}
+
 function summarizeSong(song: PianoSong): SongSummary {
   return {
     id: song.id,
@@ -213,6 +338,9 @@ function summarizeSong(song: PianoSong): SongSummary {
     artist: song.sourceInfo?.artist,
     bpm: song.bpm,
     beatsPerBar: song.beatsPerBar,
+    beatUnit: song.beatUnit,
+    tempoMap: song.tempoMap,
+    timeSignatureMap: song.timeSignatureMap,
     noteCount: song.notes.length,
     duration: getSongDuration(song),
     updatedAt: song.updatedAt,
@@ -222,6 +350,209 @@ function summarizeSong(song: PianoSong): SongSummary {
 function catalogSongTitle(title: string, opus: string | undefined) {
   if (!opus || title.toLowerCase().includes(opus.toLowerCase())) return title
   return `${title}, ${opus}`
+}
+
+interface ImportMidiFileParams {
+  filePath?: unknown
+  path?: unknown
+  songId?: unknown
+  title?: unknown
+  folderId?: unknown
+  folderName?: unknown
+  createFolder?: unknown
+  replaceSongId?: unknown
+  overwrite?: unknown
+  source?: unknown
+  composer?: unknown
+  artist?: unknown
+  license?: unknown
+}
+
+class ImportMidiError extends Error {
+  constructor(
+    message: string,
+    readonly code: string,
+    readonly status: 400 | 404 | 409 | 422 = 400,
+  ) {
+    super(message)
+  }
+}
+
+function stringParam(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function normalizeImportMidiParams(params: ImportMidiFileParams) {
+  const filePath = stringParam(params.filePath) || stringParam(params.path)
+  if (!filePath) {
+    throw new ImportMidiError(
+      'A MIDI filePath is required',
+      'file_path_required',
+    )
+  }
+
+  const extension = extname(filePath).toLowerCase()
+  if (extension !== '.mid' && extension !== '.midi') {
+    throw new ImportMidiError(
+      'Only .mid and .midi files can be imported',
+      'invalid_file_type',
+    )
+  }
+
+  const rawTitle = stringParam(params.title)
+  const title = rawTitle || parse(filePath).name.replace(/[-_]+/g, ' ')
+  const rawSongId =
+    stringParam(params.songId) || slugifySongId(parse(filePath).name)
+  const songId = slugifySongId(rawSongId)
+  if (!isValidSongId(songId)) {
+    throw new ImportMidiError('A valid songId is required', 'invalid_song_id')
+  }
+
+  const replaceSongId = stringParam(params.replaceSongId)
+  if (replaceSongId && !isValidSongId(replaceSongId)) {
+    throw new ImportMidiError(
+      'replaceSongId is invalid',
+      'invalid_replace_song_id',
+    )
+  }
+
+  return {
+    filePath,
+    songId,
+    title,
+    folderId: stringParam(params.folderId),
+    folderName: stringParam(params.folderName),
+    createFolder: params.createFolder === true,
+    replaceSongId,
+    overwrite: params.overwrite === true,
+    source: stringParam(params.source),
+    composer: stringParam(params.composer),
+    artist: stringParam(params.artist),
+    license: stringParam(params.license),
+  }
+}
+
+async function findImportFolder(
+  dataDir: string,
+  params: ReturnType<typeof normalizeImportMidiParams>,
+) {
+  if (!params.folderId && !params.folderName) return null
+
+  const folders = await readFolders(dataDir)
+  const existing = folders.find((folder) => {
+    if (params.folderId) return folder.id === params.folderId
+    return folder.name.toLowerCase() === params.folderName.toLowerCase()
+  })
+
+  if (existing) return { folder: existing, folders }
+  if (!params.folderName || !params.createFolder) {
+    throw new ImportMidiError('Folder not found', 'folder_not_found', 404)
+  }
+
+  const now = new Date().toISOString()
+  const folder: Folder = {
+    id: generateId(),
+    name: params.folderName.slice(0, 80),
+    tone: toneFromSeed(params.folderName),
+    songIds: [],
+    createdAt: now,
+    updatedAt: now,
+  }
+  return { folder, folders: [folder, ...folders] }
+}
+
+async function importMidiFile(
+  dataDir: string,
+  rawParams: ImportMidiFileParams,
+) {
+  const params = normalizeImportMidiParams(rawParams)
+  const fileStats = await stat(params.filePath).catch(() => null)
+  if (!fileStats?.isFile()) {
+    throw new ImportMidiError('MIDI file not found', 'file_not_found', 404)
+  }
+  if (fileStats.size > 50 * 1024 * 1024) {
+    throw new ImportMidiError(
+      'MIDI file is larger than 50 MB',
+      'file_too_large',
+      422,
+    )
+  }
+
+  const destinationSongPath = songPath(dataDir, params.songId)
+  const existing = await readJson<PianoSong | null>(destinationSongPath, null)
+  const replacingSameSong = params.replaceSongId === params.songId
+  if (existing && !params.overwrite && !replacingSameSong) {
+    throw new ImportMidiError(
+      `Song ${params.songId} already exists. Pass overwrite: true to replace it.`,
+      'song_already_exists',
+      409,
+    )
+  }
+
+  const bytes = await readFile(params.filePath)
+  const sourceHash = createHash('sha256').update(bytes).digest('hex')
+  const sourceMidiPath = copiedMidiPath(dataDir, params.songId, params.filePath)
+  const now = new Date().toISOString()
+  const song = midiBytesToSong(bytes, {
+    id: params.songId,
+    title: params.title,
+    source: params.source || `Imported from MIDI: ${params.filePath}`,
+    sourceInfo: {
+      provider: 'User-provided MIDI',
+      sourceUrl: params.filePath,
+      midiUrl: sourceMidiPath,
+      license: params.license || 'User-provided for personal use',
+      composer: params.composer || undefined,
+      artist: params.artist || undefined,
+    },
+    createdAt: existing?.createdAt ?? now,
+    updatedAt: now,
+    sourceHash,
+    sourceFileName: basename(params.filePath),
+  })
+
+  await mkdir(songsDir(dataDir), { recursive: true })
+  await mkdir(songSourcesDir(dataDir), { recursive: true })
+  await writeJson(destinationSongPath, song)
+  await copyFile(params.filePath, sourceMidiPath)
+
+  let removedSongId: string | undefined
+  if (params.replaceSongId && params.replaceSongId !== params.songId) {
+    await rm(songPath(dataDir, params.replaceSongId), { force: true })
+    removedSongId = params.replaceSongId
+  }
+
+  const folderResult = await findImportFolder(dataDir, params)
+  if (folderResult) {
+    const nowForFolder = new Date().toISOString()
+    for (const folder of folderResult.folders) {
+      folder.songIds = folder.songIds.filter(
+        (id) => id !== params.songId && id !== params.replaceSongId,
+      )
+    }
+    folderResult.folder.songIds = [
+      ...folderResult.folder.songIds,
+      params.songId,
+    ]
+    folderResult.folder.updatedAt = nowForFolder
+    await writeFolders(dataDir, folderResult.folders)
+  } else if (removedSongId) {
+    const folders = await readFolders(dataDir)
+    const updated = folders.map((folder) => ({
+      ...folder,
+      songIds: folder.songIds.filter((id) => id !== removedSongId),
+    }))
+    await writeFolders(dataDir, updated)
+  }
+
+  return {
+    imported: true,
+    song: summarizeSong(song),
+    sourceMidiPath,
+    removedSongId,
+    folder: folderResult?.folder,
+    midiInfo: song.midiInfo,
+  }
 }
 
 async function ensureSeedSongs(dataDir: string) {
@@ -270,6 +601,158 @@ app.get('/api/moldable/health', (c) => {
     appId: process.env.MOLDABLE_APP_ID ?? 'piano',
     status: 'ok',
   })
+})
+
+app.post('/api/moldable/rpc', async (c) => {
+  const body = (await c.req.json().catch(() => null)) as {
+    method?: unknown
+    params?: unknown
+  } | null
+
+  if (!body || typeof body.method !== 'string') {
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'invalid_request',
+          message: 'Piano RPC requires a method string.',
+        },
+      },
+      400,
+    )
+  }
+
+  try {
+    const dataDir = getDataDir(c)
+
+    if (body.method === 'songs.list') {
+      const songs = await readSongs(dataDir)
+      return c.json({ ok: true, result: songs.map(summarizeSong) })
+    }
+
+    if (body.method === 'folders.list') {
+      return c.json({ ok: true, result: await readFolders(dataDir) })
+    }
+
+    if (body.method === 'songs.getSoundSettings') {
+      const params =
+        body.params && typeof body.params === 'object'
+          ? (body.params as { songId?: unknown })
+          : {}
+      if (typeof params.songId !== 'string' || !isValidSongId(params.songId)) {
+        return c.json(
+          {
+            ok: false,
+            error: {
+              code: 'invalid_song_id',
+              message: 'A valid songId is required.',
+            },
+          },
+          400,
+        )
+      }
+      return c.json({
+        ok: true,
+        result: await getSongSoundSettingsResponse(dataDir, params.songId),
+      })
+    }
+
+    if (body.method === 'songs.setSoundSettings') {
+      const params =
+        body.params && typeof body.params === 'object'
+          ? (body.params as {
+              songId?: unknown
+              suggested?: unknown
+              override?: unknown
+            })
+          : {}
+      if (typeof params.songId !== 'string' || !isValidSongId(params.songId)) {
+        return c.json(
+          {
+            ok: false,
+            error: {
+              code: 'invalid_song_id',
+              message: 'A valid songId is required.',
+            },
+          },
+          400,
+        )
+      }
+      const existing = await readSongSoundSettings(dataDir, params.songId)
+      const now = new Date().toISOString()
+      const next: SongSoundSettings = {
+        songId: params.songId,
+        suggested:
+          params.suggested === undefined
+            ? existing?.suggested
+            : params.suggested === null
+              ? undefined
+              : mergeSoundChoice(
+                  existing?.suggested ?? {},
+                  sanitizeSoundChoice(params.suggested),
+                ),
+        override:
+          params.override === undefined
+            ? existing?.override
+            : params.override === null
+              ? undefined
+              : mergeSoundChoice(
+                  existing?.override ?? {},
+                  sanitizeSoundChoice(params.override),
+                ),
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      }
+      await writeSongSoundSettings(dataDir, next)
+      return c.json({
+        ok: true,
+        result: await getSongSoundSettingsResponse(dataDir, params.songId),
+      })
+    }
+
+    if (body.method === 'songs.importMidiFile') {
+      const params =
+        body.params && typeof body.params === 'object'
+          ? (body.params as ImportMidiFileParams)
+          : {}
+      return c.json({ ok: true, result: await importMidiFile(dataDir, params) })
+    }
+
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'method_not_found',
+          message: `Piano does not expose ${body.method}.`,
+        },
+      },
+      404,
+    )
+  } catch (error) {
+    if (error instanceof ImportMidiError) {
+      return c.json(
+        {
+          ok: false,
+          error: {
+            code: error.code,
+            message: error.message,
+          },
+        },
+        error.status,
+      )
+    }
+
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'internal_error',
+          message: error instanceof Error ? error.message : 'Piano RPC failed.',
+        },
+      },
+      500,
+    )
+  }
 })
 
 app.get('/api/audio/options', async (c) => {
@@ -413,6 +896,84 @@ app.patch('/api/audio/settings', async (c) => {
     return jsonError(
       c,
       error instanceof Error ? error.message : 'Failed to write audio settings',
+    )
+  }
+})
+
+app.get('/api/songs/:songId/sound-settings', async (c) => {
+  try {
+    const songId = c.req.param('songId')
+    if (!isValidSongId(songId)) return jsonError(c, 'Invalid song id', 400)
+    const dataDir = getDataDir(c)
+    await ensureSeedSongs(dataDir)
+    const song = await readJson<PianoSong | null>(
+      songPath(dataDir, songId),
+      null,
+    )
+    if (!song) return jsonError(c, 'Song not found', 404)
+    return c.json(await getSongSoundSettingsResponse(dataDir, songId))
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error
+        ? error.message
+        : 'Failed to read song sound settings',
+    )
+  }
+})
+
+app.patch('/api/songs/:songId/sound-settings', async (c) => {
+  try {
+    const songId = c.req.param('songId')
+    if (!isValidSongId(songId)) return jsonError(c, 'Invalid song id', 400)
+    const body = (await c.req.json().catch(() => null)) as {
+      suggested?: unknown
+      override?: unknown
+    } | null
+    if (!body) return jsonError(c, 'JSON body required', 400)
+
+    const dataDir = getDataDir(c)
+    await ensureSeedSongs(dataDir)
+    const song = await readJson<PianoSong | null>(
+      songPath(dataDir, songId),
+      null,
+    )
+    if (!song) return jsonError(c, 'Song not found', 404)
+
+    const existing = await readSongSoundSettings(dataDir, songId)
+    const now = new Date().toISOString()
+    const next: SongSoundSettings = {
+      songId,
+      suggested:
+        body.suggested === undefined
+          ? existing?.suggested
+          : body.suggested === null
+            ? undefined
+            : mergeSoundChoice(
+                existing?.suggested ?? {},
+                sanitizeSoundChoice(body.suggested),
+              ),
+      override:
+        body.override === undefined
+          ? existing?.override
+          : body.override === null
+            ? undefined
+            : mergeSoundChoice(
+                existing?.override ?? {},
+                sanitizeSoundChoice(body.override),
+              ),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    }
+
+    await writeSongSoundSettings(dataDir, next)
+    return c.json(await getSongSoundSettingsResponse(dataDir, songId))
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error
+        ? error.message
+        : 'Failed to write song sound settings',
     )
   }
 })
@@ -581,6 +1142,24 @@ app.get('/api/songs', async (c) => {
     return jsonError(
       c,
       error instanceof Error ? error.message : 'Failed to read songs',
+    )
+  }
+})
+
+app.post('/api/song-import/midi-file', async (c) => {
+  try {
+    const body = (await c.req
+      .json()
+      .catch(() => null)) as ImportMidiFileParams | null
+    if (!body) return jsonError(c, 'JSON body required', 400)
+    return c.json(await importMidiFile(getDataDir(c), body), 201)
+  } catch (error) {
+    if (error instanceof ImportMidiError) {
+      return jsonError(c, error.message, error.status)
+    }
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to import MIDI file',
     )
   }
 })

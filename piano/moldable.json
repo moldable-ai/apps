@@ -15,5 +15,149 @@
     "@moldable-ai/ui": "^0.2.12",
     "@moldable-ai/storage": "^0.1.5"
   },
-  "env": []
+  "env": [],
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "piano.songs",
+        "name": "Piano songs",
+        "description": "Read and import Piano song data in the active workspace.",
+        "scopes": [
+          {
+            "id": "songs.list",
+            "name": "List songs",
+            "description": "List installed Piano songs with summary metadata.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          {
+            "id": "songs.getSoundSettings",
+            "name": "Get song sound settings",
+            "description": "Get a song's suggested/default sound, user override, and effective sound choice.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "songId": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$"
+                }
+              },
+              "required": ["songId"]
+            }
+          },
+          {
+            "id": "songs.setSoundSettings",
+            "name": "Set song sound settings",
+            "description": "Set or clear a song's suggested/default sound and user override sound choice.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "songId": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$"
+                },
+                "suggested": {
+                  "type": ["object", "null"],
+                  "properties": {
+                    "presetId": { "type": "string" },
+                    "instrumentPackId": { "type": "string" },
+                    "instrumentId": { "type": "string" }
+                  }
+                },
+                "override": {
+                  "type": ["object", "null"],
+                  "properties": {
+                    "presetId": { "type": "string" },
+                    "instrumentPackId": { "type": "string" },
+                    "instrumentId": { "type": "string" }
+                  }
+                }
+              },
+              "required": ["songId"]
+            }
+          },
+          {
+            "id": "songs.importMidiFile",
+            "name": "Import MIDI file",
+            "description": "Import an existing local .mid or .midi file as a deterministic Piano song JSON document.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "filePath": {
+                  "type": "string",
+                  "description": "Absolute local path to an existing .mid or .midi file."
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Alias for filePath."
+                },
+                "songId": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$",
+                  "description": "Optional deterministic song id. Defaults to a slug of the MIDI filename."
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Optional display title. Defaults to the MIDI filename."
+                },
+                "folderId": {
+                  "type": "string",
+                  "description": "Optional folder id to assign the imported song to."
+                },
+                "folderName": {
+                  "type": "string",
+                  "description": "Optional existing folder name to assign the imported song to."
+                },
+                "createFolder": {
+                  "type": "boolean",
+                  "description": "Create folderName if it does not already exist. Defaults to false."
+                },
+                "replaceSongId": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$",
+                  "description": "Optional previous song id to remove after importing."
+                },
+                "overwrite": {
+                  "type": "boolean",
+                  "description": "Allow replacing an existing song with the same songId."
+                },
+                "composer": {
+                  "type": "string"
+                },
+                "artist": {
+                  "type": "string"
+                },
+                "license": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": ["filePath"]
+            }
+          }
+        ]
+      },
+      {
+        "id": "piano.folders",
+        "name": "Piano folders",
+        "description": "Read Piano library folders in the active workspace.",
+        "scopes": [
+          {
+            "id": "folders.list",
+            "name": "List folders",
+            "description": "List Piano song folders and their song IDs.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          }
+        ]
+      }
+    ]
+  }
 }
