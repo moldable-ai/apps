@@ -1,6 +1,19 @@
-import { ArrowLeft, Loader2, Pause, Play, RotateCcw } from 'lucide-react'
+import {
+  ArrowLeft,
+  Loader2,
+  Pause,
+  Play,
+  RotateCcw,
+  SkipBack,
+} from 'lucide-react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Button, cn } from '@moldable-ai/ui'
+import {
+  Button,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  cn,
+} from '@moldable-ai/ui'
 import type { PianoInstrumentPack } from '../../shared/audio'
 import { type PianoSong, getMeterLabel, getTempoLabel } from '../../shared/song'
 import { PIANO_PRESETS, type PianoPresetId } from '../audio-presets'
@@ -39,6 +52,8 @@ interface PracticeViewProps {
   onScrubEnd: (cursor: number) => void
   onPresetChange: (preset: PianoPresetId) => void
   onPreviewKey: (midi: number) => void
+  playbackSpeed: number
+  onPlaybackSpeedChange: (speed: number) => void
   instrumentPacks: PianoInstrumentPack[]
   activePackId: string | null
   activeInstrumentId: string | null
@@ -46,6 +61,83 @@ interface PracticeViewProps {
   onInstallPack: (packId: string) => Promise<void>
   installingPackIds: Set<string>
   isAudioOptionsLoading: boolean
+}
+
+const SPEED_OPTIONS = [0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5]
+
+function formatSpeed(speed: number) {
+  if (Number.isInteger(speed)) return `${speed}x`
+  return `${speed.toFixed(2).replace(/0$/, '').replace(/\.$/, '')}x`
+}
+
+function SpeedControl({
+  speed,
+  onChange,
+}: {
+  speed: number
+  onChange: (speed: number) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const isCustom = !SPEED_OPTIONS.includes(speed)
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Playback speed ${formatSpeed(speed)}`}
+          className={cn(
+            'piano-mono inline-flex h-7 cursor-pointer items-center gap-1 rounded-full px-2.5 text-[11.5px] font-medium tabular-nums',
+            'hover:bg-muted/70 transition-colors',
+            speed === 1
+              ? 'text-muted-foreground/90 hover:text-foreground'
+              : 'text-foreground',
+          )}
+        >
+          {formatSpeed(speed)}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        side="top"
+        sideOffset={8}
+        className="w-[140px] p-1"
+      >
+        <p className="text-muted-foreground/80 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em]">
+          Playback speed
+        </p>
+        {SPEED_OPTIONS.map((option) => {
+          const isActive = !isCustom && option === speed
+          return (
+            <button
+              key={option}
+              type="button"
+              onClick={() => {
+                onChange(option)
+                setOpen(false)
+              }}
+              className={cn(
+                'flex w-full cursor-pointer items-center justify-between rounded-md px-2 py-1.5 text-left text-[12.5px]',
+                'hover:bg-muted/55 transition-colors',
+                isActive ? 'text-foreground' : 'text-foreground/80',
+              )}
+            >
+              <span className="piano-mono tabular-nums">
+                {formatSpeed(option)}
+              </span>
+              {option === 1 ? (
+                <span className="text-muted-foreground/70 text-[10px]">
+                  Normal
+                </span>
+              ) : null}
+              {isActive ? (
+                <span className="text-foreground ml-2 text-[10px]">✓</span>
+              ) : null}
+            </button>
+          )
+        })}
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 const MIN_FALL_HEIGHT = 240
@@ -86,6 +178,8 @@ export function PracticeView({
   onScrubEnd,
   onPresetChange,
   onPreviewKey,
+  playbackSpeed,
+  onPlaybackSpeedChange,
   instrumentPacks,
   activePackId,
   activeInstrumentId,
@@ -387,9 +481,25 @@ export function PracticeView({
             className="text-muted-foreground hover:text-foreground size-8 cursor-pointer rounded-full"
             onClick={onRestart}
             aria-label="Restart"
+            title="Restart"
+          >
+            <SkipBack className="size-3.5" fill="currentColor" />
+          </Button>
+          <button
+            type="button"
+            onClick={() => onSeek(Math.max(0, cursor - 10))}
+            aria-label="Back 10 seconds"
+            title="Back 10 seconds"
+            className={cn(
+              'text-muted-foreground hover:text-foreground inline-flex h-8 cursor-pointer items-center gap-0.5 rounded-full px-2 transition-colors',
+              'hover:bg-muted/70',
+            )}
           >
             <RotateCcw className="size-3.5" />
-          </Button>
+            <span className="piano-mono text-[9px] font-semibold tabular-nums">
+              10
+            </span>
+          </button>
           <button
             type="button"
             onClick={onTogglePlay}
@@ -408,7 +518,7 @@ export function PracticeView({
           </button>
 
           {/* Inline scrubber */}
-          <div className="relative mx-1 flex h-8 w-40 items-center sm:w-56">
+          <div className="relative mx-1 flex h-8 w-28 items-center sm:w-40">
             <div className="bg-muted/45 absolute inset-x-0 h-1 rounded-full" />
             <div
               className={cn(
@@ -457,6 +567,13 @@ export function PracticeView({
             <span>/</span>
             <span>{formatDuration(duration)}</span>
           </div>
+
+          <div className="bg-border/60 mx-0.5 h-5 w-px" />
+
+          <SpeedControl
+            speed={playbackSpeed}
+            onChange={onPlaybackSpeedChange}
+          />
         </div>
       </div>
     </div>

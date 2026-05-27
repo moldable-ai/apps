@@ -43,6 +43,14 @@ function createAudioContext() {
   return new AudioContext()
 }
 
+function isClosedAudioContext(audioContext: AudioContext) {
+  return audioContext.state === 'closed'
+}
+
+function isPlayableAudioContext(audioContext: AudioContext) {
+  return audioContext.state === 'running'
+}
+
 function velocityToMidi(velocity: number | undefined, scale: number) {
   const normalized = velocity ?? 0.72
   return Math.min(127, Math.max(1, Math.round(normalized * 127 * scale)))
@@ -68,22 +76,89 @@ export function usePianoAudio(
     error: null,
   })
 
-  const getAudioContext = useCallback(() => {
-    audioContextRef.current ??= createAudioContext()
-    loaderRef.current ??= SampleLoader(audioContextRef.current, {
+  const disposeCachedInstruments = useCallback(() => {
+    activeInstrumentRef.current?.stop()
+    activeInstrumentRef.current?.scheduler.stop()
+    activeInstrumentRef.current = null
+
+    const instrumentPromises = instrumentPromisesRef.current
+    for (const promise of instrumentPromises.values()) {
+      void promise
+        .then((instrument) => instrument.dispose())
+        .catch(() => undefined)
+    }
+    instrumentPromises.clear()
+  }, [])
+
+  const createAudioGraph = useCallback(() => {
+    const audioContext = createAudioContext()
+    audioContextRef.current = audioContext
+    loaderRef.current = SampleLoader(audioContext, {
       storage: CacheStorage('piano-samples'),
     })
-    sfzLoaderRef.current ??= createSfzSampleLoader(
-      audioContextRef.current,
+    sfzLoaderRef.current = createSfzSampleLoader(
+      audioContext,
       fetchWithWorkspace,
     )
-    return audioContextRef.current
+    return audioContext
   }, [fetchWithWorkspace])
 
+  const resetAudioGraph = useCallback(() => {
+    const audioContext = audioContextRef.current
+    disposeCachedInstruments()
+    loaderRef.current = null
+    sfzLoaderRef.current = null
+    audioContextRef.current = null
+
+    if (audioContext && !isClosedAudioContext(audioContext)) {
+      void audioContext.close().catch(() => undefined)
+    }
+
+    setLoadState((current) =>
+      current.status === 'ready'
+        ? { status: 'idle', loaded: 0, total: 0, error: null }
+        : current,
+    )
+  }, [disposeCachedInstruments])
+
+  const getAudioContext = useCallback(() => {
+    const audioContext = audioContextRef.current
+    if (!audioContext) return createAudioGraph()
+    if (isClosedAudioContext(audioContext)) {
+      resetAudioGraph()
+      return createAudioGraph()
+    }
+    return audioContext
+  }, [createAudioGraph, resetAudioGraph])
+
   const resume = useCallback(async () => {
-    const audioContext = getAudioContext()
-    if (audioContext.state === 'suspended') await audioContext.resume()
-  }, [getAudioContext])
+    let audioContext = getAudioContext()
+    if (isPlayableAudioContext(audioContext)) return
+
+    try {
+      await audioContext.resume()
+    } catch {
+      resetAudioGraph()
+      audioContext = getAudioContext()
+      if (!isPlayableAudioContext(audioContext)) {
+        await audioContext.resume().catch(() => undefined)
+      }
+    }
+  }, [getAudioContext, resetAudioGraph])
+
+  const recoverAudio = useCallback(() => {
+    const audioContext = audioContextRef.current
+    if (!audioContext) return
+    if (isClosedAudioContext(audioContext)) {
+      resetAudioGraph()
+      return
+    }
+    if (!isPlayableAudioContext(audioContext)) {
+      void audioContext.resume().catch(() => {
+        resetAudioGraph()
+      })
+    }
+  }, [resetAudioGraph])
 
   const loadPreset = useCallback(
     async (nextPresetId: PianoPresetId, pack: PianoInstrumentPack | null) => {
@@ -214,6 +289,10 @@ export function usePianoAudio(
       const instrument = activeInstrumentRef.current
       const audioContext = audioContextRef.current
       if (!instrument || !audioContext) return
+      if (!isPlayableAudioContext(audioContext)) {
+        void resume()
+        return
+      }
 
       const preset = pianoPresetById(presetId)
       instrument.start({
@@ -223,7 +302,7 @@ export function usePianoAudio(
         velocity: velocityToMidi(velocity, preset.parameters.velocityScale),
       })
     },
-    [presetId],
+    [presetId, resume],
   )
 
   const stopAll = useCallback(() => {
@@ -238,12 +317,36 @@ export function usePianoAudio(
   }, [activePack, activeInstrumentId, loadPreset, loadState.status, presetId])
 
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') recoverAudio()
+    }
+
+    window.addEventListener('focus', recoverAudio)
+    window.addEventListener('pageshow', recoverAudio)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('focus', recoverAudio)
+      window.removeEventListener('pageshow', recoverAudio)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [recoverAudio])
+
+  useEffect(() => {
     const instrumentPromises = instrumentPromisesRef.current
     return () => {
+      activeInstrumentRef.current?.stop()
+      activeInstrumentRef.current?.scheduler.stop()
       for (const promise of instrumentPromises.values()) {
         void promise
           .then((instrument) => instrument.dispose())
           .catch(() => undefined)
+      }
+      if (
+        audioContextRef.current &&
+        !isClosedAudioContext(audioContextRef.current)
+      ) {
+        void audioContextRef.current.close().catch(() => undefined)
       }
     }
   }, [])

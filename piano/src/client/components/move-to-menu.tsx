@@ -1,4 +1,10 @@
-import { Check, FolderInput, FolderPlus, MoreVertical } from 'lucide-react'
+import {
+  Check,
+  FolderInput,
+  FolderPlus,
+  MoreVertical,
+  Trash2,
+} from 'lucide-react'
 import type { MouseEvent, ReactNode } from 'react'
 import { useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger, cn } from '@moldable-ai/ui'
@@ -9,6 +15,7 @@ interface MoveToMenuProps {
   currentFolderId: string | null
   onMove: (folderId: string | null) => void
   onNewFolder: () => void
+  onDelete?: () => void
   triggerClassName?: string
   trigger?: ReactNode
   align?: 'start' | 'end' | 'center'
@@ -19,6 +26,7 @@ export function MoveToMenu({
   currentFolderId,
   onMove,
   onNewFolder,
+  onDelete,
   triggerClassName,
   trigger,
   align = 'end',
@@ -120,6 +128,24 @@ export function MoveToMenu({
           <FolderPlus className="text-muted-foreground size-3.5" />
           New folder…
         </button>
+
+        {onDelete ? (
+          <>
+            <div className="bg-border/40 my-1 h-px" />
+            <button
+              type="button"
+              onClick={(event) => {
+                stop(event)
+                onDelete()
+                setOpen(false)
+              }}
+              className="text-destructive hover:bg-destructive/10 flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12.5px]"
+            >
+              <Trash2 className="size-3.5" />
+              Delete song…
+            </button>
+          </>
+        ) : null}
       </PopoverContent>
     </Popover>
   )

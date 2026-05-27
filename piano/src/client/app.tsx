@@ -28,6 +28,7 @@ import { getSongDuration } from '../shared/song'
 import { PIANO_PRESETS, type PianoPresetId } from './audio-presets'
 import { formatDuration } from './piano-utils'
 import { useAudioOptions } from './use-audio-options'
+import { useFolders } from './use-folders'
 import { usePianoAudio } from './use-piano-audio'
 
 interface SongsResponse {
@@ -37,6 +38,12 @@ interface SongsResponse {
 
 interface AudioSettingsResponse {
   settings: PianoAudioSettings
+}
+
+interface LibraryRevisionResponse {
+  revision: string
+  updatedAt: string | null
+  fileCount: number
 }
 
 function isPianoPresetId(value: string | undefined): value is PianoPresetId {
@@ -52,6 +59,7 @@ const AUDIO_VISUAL_SYNC_OFFSET_SECONDS = 0.12
 export function App() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
+  const { folders } = useFolders()
   const [presetId, setPresetId] = useState<PianoPresetId>('classic-grand')
   const [activeSongId, setActiveSongId] = useState<string | null>(null)
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
@@ -338,6 +346,20 @@ export function App() {
   const playStartCursorRef = useRef(0)
   const playStartPerformanceRef = useRef(0)
   const lastCursorRef = useRef(0)
+  const lastLibraryRevisionRef = useRef<string | null>(null)
+  const [playbackSpeed, setPlaybackSpeedState] = useState(1)
+  const playbackSpeedRef = useRef(1)
+
+  const setPlaybackSpeed = useCallback((nextSpeed: number) => {
+    const clamped = Math.max(0.1, Math.min(2, nextSpeed))
+    setPlaybackSpeedState(clamped)
+    // Re-anchor the playback origin so the cursor doesn't jump when speed changes.
+    if (playStartPerformanceRef.current !== 0) {
+      playStartCursorRef.current = lastCursorRef.current
+      playStartPerformanceRef.current = performance.now()
+    }
+    playbackSpeedRef.current = clamped
+  }, [])
 
   const songsQuery = useQuery({
     queryKey: ['songs', workspaceId],
@@ -346,6 +368,17 @@ export function App() {
       if (!res.ok) throw new Error('Failed to load songs')
       return (await res.json()) as SongsResponse
     },
+  })
+
+  const libraryRevisionQuery = useQuery({
+    queryKey: ['library-revision', workspaceId],
+    queryFn: async () => {
+      const res = await fetchWithWorkspace('/api/library/revision')
+      if (!res.ok) throw new Error('Failed to load library revision')
+      return (await res.json()) as LibraryRevisionResponse
+    },
+    refetchInterval: 2500,
+    refetchIntervalInBackground: true,
   })
 
   const songQuery = useQuery({
@@ -397,8 +430,45 @@ export function App() {
     [songPreviewQueries.data],
   )
 
+  useEffect(() => {
+    const revision = libraryRevisionQuery.data?.revision
+    if (!revision) return
+    if (lastLibraryRevisionRef.current === null) {
+      lastLibraryRevisionRef.current = revision
+      return
+    }
+    if (lastLibraryRevisionRef.current === revision) return
+    lastLibraryRevisionRef.current = revision
+
+    void queryClient.invalidateQueries({ queryKey: ['songs', workspaceId] })
+    void queryClient.invalidateQueries({ queryKey: ['folders', workspaceId] })
+    void queryClient.invalidateQueries({
+      queryKey: ['song-previews', workspaceId],
+    })
+    if (activeSongId) {
+      void queryClient.invalidateQueries({
+        queryKey: ['song', activeSongId, workspaceId],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['song-sound-settings', activeSongId, workspaceId],
+      })
+    }
+  }, [
+    activeSongId,
+    libraryRevisionQuery.data?.revision,
+    queryClient,
+    workspaceId,
+  ])
+
   const song = songQuery.data ?? null
   const duration = song ? getSongDuration(song) : 0
+  const activeFolder = useMemo(
+    () =>
+      activeFolderId
+        ? (folders.find((folder) => folder.id === activeFolderId) ?? null)
+        : null,
+    [activeFolderId, folders],
+  )
   const visualCursor =
     isPlaying && !isScrubbing
       ? Math.max(0, cursor - AUDIO_VISUAL_SYNC_OFFSET_SECONDS)
@@ -478,14 +548,26 @@ export function App() {
       .filter((pack) => pack.download.enabled && pack.downloadUrl)
       .map((pack) => `${pack.name} (${pack.id}) -> ${pack.downloadUrl}`)
       .join('; ')
+    const songsFolder =
+      songsQuery.data?.songsDir ?? 'the Piano app data songs folder'
+    const currentFolderContext = activeFolder
+      ? `Current folder: "${activeFolder.name}" (id ${activeFolder.id}). If creating a song in the current folder, prefer Piano RPC methods such as songs.upsert, songs.patch, songs.upsertFromFile, or songs.patchFromFile and assign folderId ${activeFolder.id}. For large generated songs, write a temporary JSON payload outside the songs folder and call songs.upsertFromFile or songs.patchFromFile so the app validates and persists once.`
+      : `Current folder: Library root (no folder is open). If creating a song in the current folder, prefer Piano RPC methods such as songs.upsert, songs.patch, songs.upsertFromFile, or songs.patchFromFile and do not add it to any folder unless the user names one. For large generated songs, write a temporary JSON payload outside the songs folder and call songs.upsertFromFile or songs.patchFromFile so the app validates and persists once.`
     const songContext = song
-      ? `The user is practicing ${song.title}. Song JSON files are stored in ${songsQuery.data?.songsDir ?? 'the Piano app data songs folder'}. Current cursor: ${formatDuration(cursor)} of ${formatDuration(duration)}.`
-      : 'The user is browsing the Piano app library.'
+      ? `The user is practicing ${song.title}. Song JSON files are stored in ${songsFolder}. Current cursor: ${formatDuration(cursor)} of ${formatDuration(duration)}. ${currentFolderContext}`
+      : `The user is browsing the Piano app library. ${currentFolderContext}`
 
     return `${songContext}
 
 If the user asks to install a piano instrument pack, do not use shell curl/wget. Prefer the app installer endpoint: POST /api/audio/instrument-packs/{pack-id}/install. The app installs packs under ${INSTRUMENTS_STORAGE_PATH}/{pack-id} and then GET /api/audio/options reflects installed status from the local manifest. Playable SFZ instruments expose GET /api/audio/instrument-packs/{pack-id}/instruments/{instrument-id}/preset for the browser sampler. Use only packs returned by GET /api/audio/options with download.enabled=true and a direct downloadUrl. Current downloadable packs: ${downloadablePacks || 'none'}. Preserve license/attribution files. If changing code, run pnpm check-types, pnpm lint, pnpm test, and pnpm build from ${APP_SOURCE_PATH}. Reference model: ${AUDIO_MODEL_PATH}.`
-  }, [cursor, duration, instrumentPacks, song, songsQuery.data?.songsDir])
+  }, [
+    activeFolder,
+    cursor,
+    duration,
+    instrumentPacks,
+    song,
+    songsQuery.data?.songsDir,
+  ])
 
   useEffect(() => {
     setCursor(0)
@@ -623,11 +705,12 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
     if (!isPlaying || !song || isScrubbing) return
 
     const tick = () => {
+      const speed = playbackSpeedRef.current
       const elapsed =
         (performance.now() - playStartPerformanceRef.current) / 1000
       const nextCursor = Math.min(
         duration,
-        playStartCursorRef.current + elapsed,
+        playStartCursorRef.current + elapsed * speed,
       )
       const previousCursor = lastCursorRef.current
 
@@ -637,8 +720,14 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
           note.start >= previousCursor - 0.02 &&
           note.start <= nextCursor + 0.12
         ) {
-          const delay = Math.max(0, note.start - nextCursor)
-          playMidi(note.midi, note.duration, note.velocity, delay)
+          const musicDelay = Math.max(0, note.start - nextCursor)
+          // Audio delay/duration are in wall-clock seconds, so divide by speed.
+          playMidi(
+            note.midi,
+            note.duration / speed,
+            note.velocity,
+            musicDelay / speed,
+          )
           playedNotesRef.current.add(note.id)
         }
       }
@@ -736,6 +825,8 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
           onScrubEnd={endScrubbing}
           onPresetChange={handlePresetChange}
           onPreviewKey={previewKey}
+          playbackSpeed={playbackSpeed}
+          onPlaybackSpeedChange={setPlaybackSpeed}
           instrumentPacks={instrumentPacks}
           activePackId={activePackId}
           activeInstrumentId={activeInstrument?.id ?? null}

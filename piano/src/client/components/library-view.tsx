@@ -1,3 +1,4 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, FolderPlus, Play, Search, Trash2, X } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { useMemo, useState } from 'react'
@@ -12,6 +13,7 @@ import {
   AlertDialogTitle,
   Button,
   cn,
+  useWorkspace,
 } from '@moldable-ai/ui'
 import {
   type PianoNote,
@@ -117,6 +119,7 @@ function SongCard({
   onSelect,
   onMove,
   onRequestNewFolder,
+  onRequestDelete,
 }: {
   song: SongSummary
   preview: PianoNote[]
@@ -126,6 +129,7 @@ function SongCard({
   onSelect: (song: SongSummary) => void
   onMove: (songId: string, folderId: string | null) => void
   onRequestNewFolder: (songId: string) => void
+  onRequestDelete: (song: SongSummary) => void
 }) {
   const tone = songTone(preview)
   const byline = songByline(song)
@@ -159,6 +163,7 @@ function SongCard({
           currentFolderId={currentFolderId}
           onMove={(folderId) => onMove(song.id, folderId)}
           onNewFolder={() => onRequestNewFolder(song.id)}
+          onDelete={() => onRequestDelete(song)}
         />
       </div>
 
@@ -338,6 +343,36 @@ export function LibraryView({
     null,
   )
   const [isDeletingFolder, setIsDeletingFolder] = useState(false)
+  const [songPendingDelete, setSongPendingDelete] =
+    useState<SongSummary | null>(null)
+
+  const { workspaceId, fetchWithWorkspace } = useWorkspace()
+  const queryClient = useQueryClient()
+  const deleteSongMutation = useMutation({
+    mutationFn: async (songId: string) => {
+      const res = await fetchWithWorkspace(`/api/songs/${songId}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as {
+          error?: string
+        } | null
+        throw new Error(body?.error ?? 'Failed to delete song')
+      }
+      return songId
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ['songs', workspaceId],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['song-previews', workspaceId],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['folders', workspaceId],
+      })
+    },
+  })
 
   const songFolderById = useMemo(() => {
     const map = new Map<string, string>()
@@ -414,6 +449,16 @@ export function LibraryView({
 
   const handleMoveSong = (songId: string, folderId: string | null) => {
     void moveSong(songId, folderId)
+  }
+
+  const confirmDeleteSong = async () => {
+    if (!songPendingDelete) return
+    try {
+      await deleteSongMutation.mutateAsync(songPendingDelete.id)
+      setSongPendingDelete(null)
+    } catch {
+      // mutation surfaces the error via isError; leave dialog open
+    }
   }
 
   return (
@@ -645,6 +690,7 @@ export function LibraryView({
                     onSelect={onSelect}
                     onMove={handleMoveSong}
                     onRequestNewFolder={handleRequestNewFolderForSong}
+                    onRequestDelete={(target) => setSongPendingDelete(target)}
                   />
                 )
               })}
@@ -695,6 +741,51 @@ export function LibraryView({
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isDeletingFolder ? 'Deleting…' : 'Delete folder'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={songPendingDelete !== null}
+        onOpenChange={(open) => {
+          if (!open && !deleteSongMutation.isPending) {
+            setSongPendingDelete(null)
+            deleteSongMutation.reset()
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="piano-serif text-foreground text-lg">
+              Delete “{songPendingDelete?.title}”?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the song from your library. You can re-install it
+              from the Mutopia catalog or ask Moldable chat to transcribe it
+              again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deleteSongMutation.isError ? (
+            <p className="text-destructive -mt-2 text-[12px]">
+              {deleteSongMutation.error instanceof Error
+                ? deleteSongMutation.error.message
+                : 'Could not delete song.'}
+            </p>
+          ) : null}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteSongMutation.isPending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteSongMutation.isPending}
+              onClick={(event) => {
+                event.preventDefault()
+                void confirmDeleteSong()
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteSongMutation.isPending ? 'Deleting…' : 'Delete song'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
