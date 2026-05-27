@@ -35,6 +35,17 @@ export interface MidiSongInfo {
   sourceFileName?: string
 }
 
+export interface SongPracticeSettings {
+  splitMidi?: number
+}
+
+export interface SongWorkspacePracticeSettings {
+  songId: string
+  playbackSpeed?: number
+  createdAt: string
+  updatedAt: string
+}
+
 export interface PianoSong {
   id: string
   title: string
@@ -59,6 +70,7 @@ export interface PianoSong {
   tempoMap?: TempoChange[]
   timeSignatureMap?: TimeSignatureChange[]
   midiInfo?: MidiSongInfo
+  practiceSettings?: SongPracticeSettings
   notes: PianoNote[]
   createdAt: string
   updatedAt: string

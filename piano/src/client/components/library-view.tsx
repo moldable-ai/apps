@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, FolderPlus, Play, Search, Trash2, X } from 'lucide-react'
 import type { CSSProperties } from 'react'
-import { useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -320,6 +320,98 @@ function FolderCard({
   )
 }
 
+function EditableFolderTitle({
+  folder,
+  onRename,
+}: {
+  folder: Folder
+  onRename: (name: string) => void
+}) {
+  const ref = useRef<HTMLHeadingElement>(null)
+  const [editing, setEditing] = useState(false)
+
+  // Keep the DOM text in sync with the folder name whenever we are NOT editing.
+  // Writing via ref (rather than JSX children) means React never overwrites
+  // the user's in-progress edit during mid-typing re-renders.
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el || editing) return
+    if (el.textContent !== folder.name) {
+      el.textContent = folder.name
+    }
+  }, [editing, folder.name])
+
+  // On entering edit mode: focus and select the title text so typing replaces it.
+  useEffect(() => {
+    if (!editing) return
+    const el = ref.current
+    if (!el) return
+    el.focus()
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+  }, [editing])
+
+  const commit = () => {
+    const next = (ref.current?.textContent ?? '').replace(/\s+/g, ' ').trim()
+    if (next && next !== folder.name) {
+      onRename(next)
+    } else if (ref.current) {
+      ref.current.textContent = folder.name
+    }
+    setEditing(false)
+  }
+
+  const cancel = () => {
+    if (ref.current) ref.current.textContent = folder.name
+    setEditing(false)
+  }
+
+  return (
+    <h2
+      ref={ref}
+      contentEditable={editing}
+      suppressContentEditableWarning
+      role={editing ? 'textbox' : undefined}
+      aria-label={editing ? 'Folder name' : undefined}
+      spellCheck={editing}
+      onClick={() => {
+        if (!editing) setEditing(true)
+      }}
+      onBlur={() => {
+        if (editing) commit()
+      }}
+      onPaste={(event) => {
+        // Strip rich text on paste so the heading stays plain.
+        event.preventDefault()
+        const text = event.clipboardData.getData('text/plain')
+        const selection = window.getSelection()
+        if (!selection || selection.rangeCount === 0) return
+        const range = selection.getRangeAt(0)
+        range.deleteContents()
+        range.insertNode(document.createTextNode(text))
+        range.collapse(false)
+      }}
+      onKeyDown={(event) => {
+        if (!editing) return
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          ref.current?.blur()
+        } else if (event.key === 'Escape') {
+          event.preventDefault()
+          cancel()
+        }
+      }}
+      className={cn(
+        'piano-serif text-foreground text-3xl font-semibold tracking-tight',
+        'inline cursor-text whitespace-pre-wrap break-words outline-none',
+      )}
+    />
+  )
+}
+
 export function LibraryView({
   songs,
   isLoading,
@@ -331,7 +423,8 @@ export function LibraryView({
   onSelect,
 }: LibraryViewProps) {
   const hasSongs = songs.length > 0
-  const { folders, addFolder, deleteFolder, moveSong } = useFolders()
+  const { folders, addFolder, deleteFolder, moveSong, renameFolder } =
+    useFolders()
 
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [filter, setFilter] = useState('')
@@ -489,9 +582,12 @@ export function LibraryView({
                       ? '1 song'
                       : `${totalSongsInScope} songs`}
                   </p>
-                  <h2 className="piano-serif text-foreground text-3xl font-semibold tracking-tight">
-                    {openFolder.name}
-                  </h2>
+                  <EditableFolderTitle
+                    folder={openFolder}
+                    onRename={(name) => {
+                      void renameFolder(openFolder.id, name)
+                    }}
+                  />
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Button
@@ -525,7 +621,7 @@ export function LibraryView({
                 </h2>
                 <p className="text-muted-foreground mt-2 max-w-xl text-sm leading-6">
                   Search public-domain pieces from the Mutopia Project or ask
-                  Moldable chat to add one from a screenshot of sheet music.
+                  Moldable chat to add one from a MIDI file.
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -610,7 +706,7 @@ export function LibraryView({
               </p>
               <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
                 Browse public-domain pieces or ask Moldable chat to add one from
-                a screenshot of sheet music.
+                a MIDI file.
               </p>
               <Button
                 type="button"

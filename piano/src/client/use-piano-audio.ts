@@ -310,6 +310,12 @@ export function usePianoAudio(
     activeInstrumentRef.current?.scheduler.stop()
   }, [])
 
+  const getCurrentTime = useCallback(() => {
+    const audioContext = audioContextRef.current
+    if (!audioContext || !isPlayableAudioContext(audioContext)) return null
+    return audioContext.currentTime
+  }, [])
+
   useEffect(() => {
     if (loadState.status === 'ready') {
       void loadPreset(presetId, activePack).catch(() => undefined)
@@ -351,7 +357,15 @@ export function usePianoAudio(
     }
   }, [])
 
-  return { loadState, playMidi, prepare, prewarm, resume, stopAll }
+  return {
+    loadState,
+    playMidi,
+    prepare,
+    prewarm,
+    resume,
+    stopAll,
+    getCurrentTime,
+  }
 }
 
 async function loadSfzInstrument(

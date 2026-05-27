@@ -17,6 +17,7 @@ import { type Folder, toneFromSeed } from '../shared/folder'
 import {
   type PianoSong,
   type SongSummary,
+  type SongWorkspacePracticeSettings,
   getSongDuration,
 } from '../shared/song'
 import { defaultSongs, retiredDefaultSongIds } from './default-songs'
@@ -73,6 +74,14 @@ function songSoundSettingsDir(dataDir: string) {
 
 function songSoundSettingsPath(dataDir: string, songId: string) {
   return safePath(songSoundSettingsDir(dataDir), `${songId}.json`)
+}
+
+function songWorkspaceSettingsDir(dataDir: string) {
+  return safePath(dataDir, 'song-workspace-settings')
+}
+
+function songWorkspaceSettingsPath(dataDir: string, songId: string) {
+  return safePath(songWorkspaceSettingsDir(dataDir), `${songId}.json`)
 }
 
 function foldersPath(dataDir: string) {
@@ -305,6 +314,30 @@ async function writeSongSoundSettings(
 ) {
   await mkdir(songSoundSettingsDir(dataDir), { recursive: true })
   await writeJson(songSoundSettingsPath(dataDir, settings.songId), settings)
+}
+
+async function readSongWorkspaceSettings(dataDir: string, songId: string) {
+  const settings = await readJson<SongWorkspacePracticeSettings | null>(
+    songWorkspaceSettingsPath(dataDir, songId),
+    null,
+  )
+  if (!settings || settings.songId !== songId) return null
+  const playbackSpeed = sanitizePlaybackSpeed(settings.playbackSpeed)
+  const now = new Date().toISOString()
+  return {
+    songId,
+    playbackSpeed,
+    createdAt: settings.createdAt ?? now,
+    updatedAt: settings.updatedAt ?? settings.createdAt ?? now,
+  } satisfies SongWorkspacePracticeSettings
+}
+
+async function writeSongWorkspaceSettings(
+  dataDir: string,
+  settings: SongWorkspacePracticeSettings,
+) {
+  await mkdir(songWorkspaceSettingsDir(dataDir), { recursive: true })
+  await writeJson(songWorkspaceSettingsPath(dataDir, settings.songId), settings)
 }
 
 async function getSongSoundSettingsResponse(
@@ -725,6 +758,10 @@ function sanitizeSongDocument(
       ? (source.timeSignatureMap as PianoSong['timeSignatureMap'])
       : existing?.timeSignatureMap,
     midiInfo: existing?.midiInfo,
+    practiceSettings:
+      source.practiceSettings === undefined
+        ? existing?.practiceSettings
+        : sanitizeSongPracticeSettings(source.practiceSettings),
     notes: notes.map((note, index) => ({
       ...note,
       id: note.id || `note-${index + 1}`,
@@ -779,6 +816,22 @@ function stringArrayParam(value: unknown) {
         (item): item is string => typeof item === 'string' && item.length > 0,
       )
     : []
+}
+
+function sanitizeSplitMidi(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.max(21, Math.min(108, Math.round(value)))
+}
+
+function sanitizePlaybackSpeed(value: unknown): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
+  return Math.max(0.1, Math.min(2, value))
+}
+
+function sanitizeSongPracticeSettings(value: unknown) {
+  const source = objectParam(value)
+  const splitMidi = sanitizeSplitMidi(source.splitMidi)
+  return splitMidi === undefined ? undefined : { splitMidi }
 }
 
 function objectParam(value: unknown): Record<string, unknown> {
@@ -901,6 +954,10 @@ function mergePatchedSongMetadata(
       ? (metadata.timeSignatureMap as PianoSong['timeSignatureMap'])
       : existing.timeSignatureMap,
     midiInfo: existing.midiInfo,
+    practiceSettings:
+      metadata.practiceSettings === undefined
+        ? existing.practiceSettings
+        : sanitizeSongPracticeSettings(metadata.practiceSettings),
     notes,
     createdAt: existing.createdAt,
     updatedAt: now,
@@ -1713,6 +1770,113 @@ app.patch('/api/songs/:songId/sound-settings', async (c) => {
       error instanceof Error
         ? error.message
         : 'Failed to write song sound settings',
+    )
+  }
+})
+
+app.get('/api/songs/:songId/workspace-settings', async (c) => {
+  try {
+    const songId = c.req.param('songId')
+    if (!isValidSongId(songId)) return jsonError(c, 'Invalid song id', 400)
+    const dataDir = getDataDir(c)
+    await ensureSeedSongs(dataDir)
+    const song = await readJson<PianoSong | null>(
+      songPath(dataDir, songId),
+      null,
+    )
+    if (!song) return jsonError(c, 'Song not found', 404)
+    const settings = await readSongWorkspaceSettings(dataDir, songId)
+    return c.json({
+      settings: settings ?? null,
+      effective: {
+        playbackSpeed: settings?.playbackSpeed ?? 1,
+      },
+    })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error
+        ? error.message
+        : 'Failed to read song workspace settings',
+    )
+  }
+})
+
+app.patch('/api/songs/:songId/workspace-settings', async (c) => {
+  try {
+    const songId = c.req.param('songId')
+    if (!isValidSongId(songId)) return jsonError(c, 'Invalid song id', 400)
+    const body = (await c.req.json().catch(() => null)) as {
+      playbackSpeed?: unknown
+    } | null
+    if (!body) return jsonError(c, 'JSON body required', 400)
+    const playbackSpeed = sanitizePlaybackSpeed(body.playbackSpeed)
+    if (playbackSpeed === undefined) {
+      return jsonError(c, 'A valid playbackSpeed is required', 400)
+    }
+
+    const dataDir = getDataDir(c)
+    await ensureSeedSongs(dataDir)
+    const song = await readJson<PianoSong | null>(
+      songPath(dataDir, songId),
+      null,
+    )
+    if (!song) return jsonError(c, 'Song not found', 404)
+    const existing = await readSongWorkspaceSettings(dataDir, songId)
+    const now = new Date().toISOString()
+    const settings: SongWorkspacePracticeSettings = {
+      songId,
+      playbackSpeed,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    }
+    await writeSongWorkspaceSettings(dataDir, settings)
+    return c.json({ settings, effective: { playbackSpeed } })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error
+        ? error.message
+        : 'Failed to write song workspace settings',
+    )
+  }
+})
+
+app.patch('/api/songs/:songId/practice-settings', async (c) => {
+  try {
+    const songId = c.req.param('songId')
+    if (!isValidSongId(songId)) return jsonError(c, 'Invalid song id', 400)
+    const body = (await c.req.json().catch(() => null)) as {
+      splitMidi?: unknown
+    } | null
+    if (!body) return jsonError(c, 'JSON body required', 400)
+    const splitMidi = sanitizeSplitMidi(body.splitMidi)
+    if (splitMidi === undefined) {
+      return jsonError(c, 'A valid splitMidi is required', 400)
+    }
+
+    const dataDir = getDataDir(c)
+    await ensureSeedSongs(dataDir)
+    const path = songPath(dataDir, songId)
+    const existing = await readJson<PianoSong | null>(path, null)
+    if (!existing) return jsonError(c, 'Song not found', 404)
+    const now = new Date().toISOString()
+    const song: PianoSong = {
+      ...existing,
+      practiceSettings: {
+        ...existing.practiceSettings,
+        splitMidi,
+      },
+      updatedAt: now,
+    }
+    await writeJson(path, song)
+    return c.json(song)
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error
+        ? error.message
+        : 'Failed to write song practice settings',
     )
   }
 })

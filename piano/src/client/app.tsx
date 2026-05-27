@@ -24,10 +24,16 @@ import {
 } from '../shared/audio'
 import type { Folder } from '../shared/folder'
 import {
+  DEFAULT_SPLIT_MIDI,
   type PracticePart,
   noteMatchesPracticePart,
+  suggestSplitMidi,
 } from '../shared/practice-part'
-import type { PianoSong, SongSummary } from '../shared/song'
+import type {
+  PianoSong,
+  SongSummary,
+  SongWorkspacePracticeSettings,
+} from '../shared/song'
 import { getSongDuration } from '../shared/song'
 import { PIANO_PRESETS, type PianoPresetId } from './audio-presets'
 import { formatDuration } from './piano-utils'
@@ -50,6 +56,13 @@ interface LibraryRevisionResponse {
   fileCount: number
 }
 
+interface SongWorkspaceSettingsResponse {
+  settings: SongWorkspacePracticeSettings | null
+  effective: {
+    playbackSpeed: number
+  }
+}
+
 function isPianoPresetId(value: string | undefined): value is PianoPresetId {
   return Boolean(value && PIANO_PRESETS.some((preset) => preset.id === value))
 }
@@ -69,6 +82,7 @@ export function App() {
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
   const [cursor, setCursor] = useState(0)
   const [practicePart, setPracticePart] = useState<PracticePart>('all')
+  const [splitMidi, setSplitMidi] = useState(DEFAULT_SPLIT_MIDI)
   const [isPlaying, setIsPlaying] = useState(false)
   const [isScrubbing, setIsScrubbing] = useState(false)
   const [songSoundLoadingLabel, setSongSoundLoadingLabel] = useState<
@@ -115,13 +129,20 @@ export function App() {
       null
     )
   }, [activeInstrumentId, activePack])
-  const { loadState, playMidi, prepare, prewarm, resume, stopAll } =
-    usePianoAudio(
-      presetId,
-      activePack,
-      activeInstrument?.id ?? null,
-      fetchWithWorkspace,
-    )
+  const {
+    loadState,
+    playMidi,
+    prepare,
+    prewarm,
+    resume,
+    stopAll,
+    getCurrentTime,
+  } = usePianoAudio(
+    presetId,
+    activePack,
+    activeInstrument?.id ?? null,
+    fetchWithWorkspace,
+  )
 
   const persistAudioSettings = useCallback(
     async (settings: Partial<PianoAudioSettings>) => {
@@ -350,21 +371,52 @@ export function App() {
   const rafRef = useRef<number | null>(null)
   const playStartCursorRef = useRef(0)
   const playStartPerformanceRef = useRef(0)
+  const playStartAudioTimeRef = useRef<number | null>(null)
   const lastCursorRef = useRef(0)
   const lastLibraryRevisionRef = useRef<string | null>(null)
   const [playbackSpeed, setPlaybackSpeedState] = useState(1)
   const playbackSpeedRef = useRef(1)
 
-  const setPlaybackSpeed = useCallback((nextSpeed: number) => {
-    const clamped = Math.max(0.1, Math.min(2, nextSpeed))
-    setPlaybackSpeedState(clamped)
-    // Re-anchor the playback origin so the cursor doesn't jump when speed changes.
-    if (playStartPerformanceRef.current !== 0) {
-      playStartCursorRef.current = lastCursorRef.current
-      playStartPerformanceRef.current = performance.now()
-    }
-    playbackSpeedRef.current = clamped
-  }, [])
+  const setPlaybackSpeed = useCallback(
+    (nextSpeed: number) => {
+      const clamped = Math.max(0.1, Math.min(2, nextSpeed))
+      setPlaybackSpeedState(clamped)
+      // Re-anchor the playback origin so the cursor doesn't jump when speed changes.
+      if (playStartPerformanceRef.current !== 0) {
+        playStartCursorRef.current = lastCursorRef.current
+        playStartPerformanceRef.current = performance.now()
+        playStartAudioTimeRef.current = getCurrentTime()
+      }
+      playbackSpeedRef.current = clamped
+
+      if (activeSongId) {
+        void fetchWithWorkspace(
+          `/api/songs/${activeSongId}/workspace-settings`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ playbackSpeed: clamped }),
+          },
+        )
+          .then((res) => {
+            if (!res.ok) throw new Error('Failed to save playback speed')
+            return queryClient.invalidateQueries({
+              queryKey: ['song-workspace-settings', activeSongId, workspaceId],
+            })
+          })
+          .catch((error) => {
+            console.error('Failed to save playback speed', error)
+          })
+      }
+    },
+    [
+      activeSongId,
+      fetchWithWorkspace,
+      getCurrentTime,
+      queryClient,
+      workspaceId,
+    ],
+  )
 
   const songsQuery = useQuery({
     queryKey: ['songs', workspaceId],
@@ -407,6 +459,30 @@ export function App() {
       return (await res.json()) as SongSoundSettingsResponse
     },
   })
+
+  const songWorkspaceSettingsQuery = useQuery({
+    queryKey: ['song-workspace-settings', activeSongId, workspaceId],
+    enabled: Boolean(activeSongId),
+    queryFn: async () => {
+      const res = await fetchWithWorkspace(
+        `/api/songs/${activeSongId}/workspace-settings`,
+      )
+      if (!res.ok) throw new Error('Failed to load song workspace settings')
+      return (await res.json()) as SongWorkspaceSettingsResponse
+    },
+  })
+
+  useEffect(() => {
+    if (!activeSongId || !songWorkspaceSettingsQuery.data) return
+    const nextSpeed = songWorkspaceSettingsQuery.data.effective.playbackSpeed
+    setPlaybackSpeedState(nextSpeed)
+    playbackSpeedRef.current = nextSpeed
+    if (playStartPerformanceRef.current !== 0) {
+      playStartCursorRef.current = lastCursorRef.current
+      playStartPerformanceRef.current = performance.now()
+      playStartAudioTimeRef.current = getCurrentTime()
+    }
+  }, [activeSongId, getCurrentTime, songWorkspaceSettingsQuery.data])
 
   // Fetch all songs as full data for the library mini-previews
   const songPreviewQueries = useQuery({
@@ -457,6 +533,9 @@ export function App() {
       void queryClient.invalidateQueries({
         queryKey: ['song-sound-settings', activeSongId, workspaceId],
       })
+      void queryClient.invalidateQueries({
+        queryKey: ['song-workspace-settings', activeSongId, workspaceId],
+      })
     }
   }, [
     activeSongId,
@@ -466,6 +545,7 @@ export function App() {
   ])
 
   const song = songQuery.data ?? null
+  const loadedSongId = song?.id ?? null
   const duration = song ? getSongDuration(song) : 0
   const activeFolder = useMemo(
     () =>
@@ -479,9 +559,14 @@ export function App() {
     if (!song) return []
     if (practicePart === 'all') return song.notes
     return song.notes.filter((note) =>
-      noteMatchesPracticePart(note, practicePart),
+      noteMatchesPracticePart(note, practicePart, splitMidi),
     )
-  }, [practicePart, song])
+  }, [practicePart, song, splitMidi])
+  const suggestedSplitMidi = useMemo(() => {
+    if (!song) return DEFAULT_SPLIT_MIDI
+    return suggestSplitMidi(song.notes)
+  }, [song])
+  const songSplitMidi = song?.practiceSettings?.splitMidi ?? DEFAULT_SPLIT_MIDI
 
   useEffect(() => {
     if (!activeSongId) {
@@ -580,20 +665,28 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
 
   useEffect(() => {
     setCursor(0)
+    setPlaybackSpeedState(1)
+    playbackSpeedRef.current = 1
     setIsPlaying(false)
     playedNotesRef.current = new Set()
+    playStartPerformanceRef.current = 0
+    playStartAudioTimeRef.current = null
     lastCursorRef.current = 0
   }, [activeSongId])
+
+  useEffect(() => {
+    if (!loadedSongId) return
+    setSplitMidi(songSplitMidi)
+    playedNotesRef.current = new Set()
+  }, [loadedSongId, songSplitMidi])
 
   useEffect(() => {
     stopAll()
     setIsPlaying(false)
   }, [activeInstrument?.id, activePackId, stopAll])
 
-  const handlePracticePartChange = useCallback(
-    (nextPart: PracticePart) => {
-      setPracticePart(nextPart)
-      stopAll()
+  const resetPlayedNotesForPart = useCallback(
+    (nextPart: PracticePart, nextSplitMidi: number) => {
       if (!song) {
         playedNotesRef.current = new Set()
         return
@@ -602,13 +695,69 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
         song.notes
           .filter(
             (note) =>
-              noteMatchesPracticePart(note, nextPart) &&
+              noteMatchesPracticePart(note, nextPart, nextSplitMidi) &&
               note.start + note.duration < cursor,
           )
           .map((note) => note.id),
       )
     },
-    [cursor, song, stopAll],
+    [cursor, song],
+  )
+
+  const handlePracticePartChange = useCallback(
+    (nextPart: PracticePart) => {
+      setPracticePart(nextPart)
+      stopAll()
+      resetPlayedNotesForPart(nextPart, splitMidi)
+    },
+    [resetPlayedNotesForPart, splitMidi, stopAll],
+  )
+
+  const handleSplitMidiChange = useCallback(
+    (nextSplitMidi: number) => {
+      const bounded = Math.max(21, Math.min(108, nextSplitMidi))
+      setSplitMidi(bounded)
+      stopAll()
+      resetPlayedNotesForPart(practicePart, bounded)
+      if (isPlaying) {
+        stopAll()
+        playStartCursorRef.current = cursor
+        playStartPerformanceRef.current = performance.now()
+        playStartAudioTimeRef.current = getCurrentTime()
+        lastCursorRef.current = cursor
+      }
+      if (activeSongId) {
+        void fetchWithWorkspace(
+          `/api/songs/${activeSongId}/practice-settings`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ splitMidi: bounded }),
+          },
+        )
+          .then((res) => {
+            if (!res.ok) throw new Error('Failed to save split note')
+            return queryClient.invalidateQueries({
+              queryKey: ['song', activeSongId, workspaceId],
+            })
+          })
+          .catch((error) => {
+            console.error('Failed to save split note', error)
+          })
+      }
+    },
+    [
+      activeSongId,
+      cursor,
+      fetchWithWorkspace,
+      getCurrentTime,
+      isPlaying,
+      practicePart,
+      queryClient,
+      resetPlayedNotesForPart,
+      stopAll,
+      workspaceId,
+    ],
   )
 
   useEffect(() => {
@@ -661,6 +810,9 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
 
   const startPlayback = useCallback(async () => {
     if (!song) return
+    // Clear stale scheduled notes before starting. Server restarts can leave the
+    // browser audio graph alive, so each play needs a fresh scheduler anchor.
+    stopAll()
     await prepare()
     const startCursor = cursor >= duration - 0.05 ? 0 : cursor
     setCursor(startCursor)
@@ -671,13 +823,16 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
     )
     playStartCursorRef.current = startCursor
     playStartPerformanceRef.current = performance.now()
+    playStartAudioTimeRef.current = getCurrentTime()
     lastCursorRef.current = startCursor
     setIsPlaying(true)
-  }, [cursor, duration, practiceNotes, prepare, song])
+  }, [cursor, duration, getCurrentTime, practiceNotes, prepare, song, stopAll])
 
   const pausePlayback = useCallback(() => {
     setIsPlaying(false)
     stopAll()
+    playStartPerformanceRef.current = 0
+    playStartAudioTimeRef.current = null
   }, [stopAll])
 
   const togglePlay = useCallback(() => {
@@ -693,6 +848,8 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
     stopAll()
     setCursor(0)
     playedNotesRef.current = new Set()
+    playStartPerformanceRef.current = 0
+    playStartAudioTimeRef.current = null
     lastCursorRef.current = 0
   }, [stopAll])
 
@@ -709,11 +866,13 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
         )
       }
       if (isPlaying) {
+        stopAll()
         playStartCursorRef.current = bounded
         playStartPerformanceRef.current = performance.now()
+        playStartAudioTimeRef.current = getCurrentTime()
       }
     },
-    [duration, isPlaying, practiceNotes, song],
+    [duration, getCurrentTime, isPlaying, practiceNotes, song, stopAll],
   )
 
   const startScrubbing = useCallback(() => {
@@ -734,8 +893,15 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
 
     const tick = () => {
       const speed = playbackSpeedRef.current
+      const audioNow = getCurrentTime()
+      const audioStart = playStartAudioTimeRef.current
       const elapsed =
-        (performance.now() - playStartPerformanceRef.current) / 1000
+        audioNow !== null && audioStart !== null
+          ? Math.max(0, audioNow - audioStart)
+          : Math.max(
+              0,
+              (performance.now() - playStartPerformanceRef.current) / 1000,
+            )
       const nextCursor = Math.min(
         duration,
         playStartCursorRef.current + elapsed * speed,
@@ -766,6 +932,8 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
 
       if (nextCursor >= duration) {
         setIsPlaying(false)
+        playStartPerformanceRef.current = 0
+        playStartAudioTimeRef.current = null
         return
       }
 
@@ -776,7 +944,15 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     }
-  }, [duration, isPlaying, isScrubbing, playMidi, practiceNotes, song])
+  }, [
+    duration,
+    getCurrentTime,
+    isPlaying,
+    isScrubbing,
+    playMidi,
+    practiceNotes,
+    song,
+  ])
 
   const previewKey = useCallback(
     async (midi: number) => {
@@ -837,7 +1013,10 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
           song={song}
           practiceNotes={practiceNotes}
           practicePart={practicePart}
+          splitMidi={splitMidi}
+          suggestedSplitMidi={suggestedSplitMidi}
           onPracticePartChange={handlePracticePartChange}
+          onSplitMidiChange={handleSplitMidiChange}
           duration={duration}
           cursor={cursor}
           visualCursor={visualCursor}

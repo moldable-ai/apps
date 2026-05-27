@@ -8,9 +8,20 @@ import {
   RotateCcw,
   SkipBack,
 } from 'lucide-react'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  type WheelEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import {
   Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -36,6 +47,7 @@ import {
   PIANO_KEYS,
   WHITE_KEY_WIDTH,
   formatDuration,
+  midiToPitch,
   midiToTone,
 } from '../piano-utils'
 import type { AudioLoadState } from '../use-piano-audio'
@@ -47,7 +59,10 @@ interface PracticeViewProps {
   song: PianoSong
   practiceNotes: PianoNote[]
   practicePart: PracticePart
+  splitMidi: number
+  suggestedSplitMidi: number
   onPracticePartChange: (part: PracticePart) => void
+  onSplitMidiChange: (midi: number) => void
   duration: number
   cursor: number
   visualCursor: number
@@ -85,79 +100,252 @@ function formatSpeed(speed: number) {
   return `${speed.toFixed(2).replace(/0$/, '').replace(/\.$/, '')}x`
 }
 
-function PartPicker({
-  value,
+function SplitNoteDialog({
+  open,
+  splitMidi,
+  suggestedSplitMidi,
+  onOpenChange,
   onChange,
 }: {
+  open: boolean
+  splitMidi: number
+  suggestedSplitMidi: number
+  onOpenChange: (open: boolean) => void
+  onChange: (midi: number) => void
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const activeMidi = useMemo(() => new Set([splitMidi]), [splitMidi])
+  const suggestedMidi = useMemo(
+    () => new Set(suggestedSplitMidi === splitMidi ? [] : [suggestedSplitMidi]),
+    [splitMidi, suggestedSplitMidi],
+  )
+
+  useEffect(() => {
+    if (!open || !scrollRef.current) return
+    const key = PIANO_KEYS.find((candidate) => candidate.midi === splitMidi)
+    if (!key) return
+    const visibleWidth = scrollRef.current.clientWidth
+    scrollRef.current.scrollLeft = clampScrollTarget(
+      key.left - visibleWidth / 2,
+      KEYBOARD_WIDTH,
+      visibleWidth,
+    )
+  }, [open, splitMidi])
+
+  const handleKeyboardWheel = (event: WheelEvent<HTMLDivElement>) => {
+    const container = event.currentTarget
+    if (container.scrollWidth <= container.clientWidth) return
+    const delta =
+      Math.abs(event.deltaX) > Math.abs(event.deltaY)
+        ? event.deltaX
+        : event.deltaY
+    if (delta === 0) return
+    event.preventDefault()
+    container.scrollLeft += delta
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        className="max-h-[calc(100vh-var(--chat-safe-padding,0px)-2rem)] !w-[min(1320px,calc(100vw-1rem))] !max-w-[min(1320px,calc(100vw-1rem))] grid-rows-[auto,minmax(0,1fr)] gap-0 overflow-hidden p-0"
+      >
+        <div className="border-border/50 flex min-w-0 flex-col gap-3 border-b px-3 pb-3 pt-4 sm:flex-row sm:items-start sm:justify-between sm:px-4">
+          <div className="min-w-0 flex-1">
+            <DialogTitle className="piano-serif text-foreground text-lg font-semibold tracking-tight">
+              Choose split note
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground mt-1 text-[12px] leading-5">
+              Bass is below the split note; Melody is the split note and above.
+            </DialogDescription>
+          </div>
+          <div className="grid w-full min-w-0 grid-cols-2 items-center gap-2 pt-0.5 sm:flex sm:w-auto sm:shrink-0">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 min-w-0 cursor-pointer rounded-full px-2 text-xs sm:px-3"
+              disabled={suggestedSplitMidi === splitMidi}
+              onClick={() => onChange(suggestedSplitMidi)}
+            >
+              <span className="truncate">Use suggestion</span>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-8 min-w-0 cursor-pointer rounded-full px-2 text-xs sm:px-3"
+              onClick={() => onOpenChange(false)}
+            >
+              Done
+            </Button>
+          </div>
+        </div>
+        <div className="min-w-0 space-y-3 overflow-hidden p-3 sm:p-4">
+          <div>
+            <p className="text-sm font-medium">
+              Split at {midiToPitch(splitMidi)}
+            </p>
+            <p className="text-muted-foreground text-xs">
+              Suggested for this song: {midiToPitch(suggestedSplitMidi)}
+            </p>
+          </div>
+          <div className="min-w-0">
+            <div
+              ref={scrollRef}
+              role="region"
+              aria-label="Scrollable split note keyboard"
+              tabIndex={0}
+              onWheel={handleKeyboardWheel}
+              className="piano-no-scrollbar border-border/50 w-full min-w-0 max-w-full overflow-y-hidden overflow-x-scroll overscroll-contain rounded-xl border bg-black/5 p-3 outline-none [touch-action:pan-x]"
+            >
+              <div
+                className="shrink-0"
+                style={{ width: KEYBOARD_WIDTH, height: KEYBOARD_HEIGHT }}
+              >
+                <PianoKeyboard
+                  activeMidi={activeMidi}
+                  upcomingMidi={suggestedMidi}
+                  onKeyPress={onChange}
+                />
+              </div>
+            </div>
+          </div>
+          <p className="text-muted-foreground text-[11px] leading-4">
+            Tap a key to move the split. The glowing key is the current split;
+            the small dot marks the song suggestion when it differs.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function PartPicker({
+  value,
+  splitMidi,
+  suggestedSplitMidi,
+  onChange,
+  onSplitMidiChange,
+}: {
   value: PracticePart
+  splitMidi: number
+  suggestedSplitMidi: number
   onChange: (part: PracticePart) => void
+  onSplitMidiChange: (midi: number) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [splitDialogOpen, setSplitDialogOpen] = useState(false)
   const selected = getPracticePartOption(value)
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={`Practice part: ${selected.label}`}
-          className={cn(
-            'border-border/50 bg-muted/15 hover:bg-muted/30 inline-flex h-7 max-w-[140px] cursor-pointer items-center gap-1.5 rounded-full border pl-2.5 pr-1.5 text-[11.5px] font-medium transition-colors',
-          )}
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Practice part: ${selected.label}`}
+            className={cn(
+              'border-border/50 bg-muted/15 hover:bg-muted/30 inline-flex h-7 max-w-[170px] cursor-pointer items-center gap-1.5 rounded-full border pl-2.5 pr-1.5 text-[11.5px] font-medium transition-colors',
+            )}
+          >
+            <span className="truncate">{selected.shortLabel}</span>
+            <span className="text-muted-foreground/75 piano-mono hidden text-[10px] sm:inline">
+              {midiToPitch(splitMidi)}
+            </span>
+            <ChevronDown className="size-3 shrink-0 opacity-60" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          side="bottom"
+          sideOffset={8}
+          className="w-[270px] p-1.5"
         >
-          <span className="truncate">{selected.shortLabel}</span>
-          <ChevronDown className="size-3 shrink-0 opacity-60" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="end"
-        side="bottom"
-        sideOffset={8}
-        className="w-[240px] p-1.5"
-      >
-        <p className="text-muted-foreground/80 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em]">
-          Practice part
-        </p>
-        {PRACTICE_PART_OPTIONS.map((option) => {
-          const isActive = option.id === value
-          return (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => {
-                onChange(option.id)
-                setOpen(false)
-              }}
-              className={cn(
-                'flex w-full cursor-pointer items-start gap-2 rounded-md px-2 py-2 text-left transition-colors',
-                'hover:bg-muted/55',
-              )}
-            >
-              <span
+          <p className="text-muted-foreground/80 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em]">
+            Practice part
+          </p>
+          {PRACTICE_PART_OPTIONS.map((option) => {
+            const isActive = option.id === value
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => {
+                  onChange(option.id)
+                  setOpen(false)
+                }}
                 className={cn(
-                  'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors',
-                  isActive
-                    ? 'border-foreground bg-foreground text-background'
-                    : 'border-border/70',
+                  'flex w-full cursor-pointer items-start gap-2 rounded-md px-2 py-2 text-left transition-colors',
+                  'hover:bg-muted/55',
                 )}
               >
-                {isActive ? (
-                  <Check className="size-2.5" strokeWidth={3} />
-                ) : null}
+                <span
+                  className={cn(
+                    'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors',
+                    isActive
+                      ? 'border-foreground bg-foreground text-background'
+                      : 'border-border/70',
+                  )}
+                >
+                  {isActive ? (
+                    <Check className="size-2.5" strokeWidth={3} />
+                  ) : null}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[12.5px] font-medium leading-4">
+                    {option.label}
+                  </span>
+                  <span className="text-muted-foreground block text-[10.5px] leading-4">
+                    {option.description}
+                  </span>
+                </span>
+              </button>
+            )
+          })}
+          <div className="bg-border/60 my-1 h-px" />
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false)
+              setSplitDialogOpen(true)
+            }}
+            className="hover:bg-muted/55 flex w-full cursor-pointer items-center justify-between rounded-md px-2 py-2 text-left transition-colors"
+          >
+            <span>
+              <span className="block text-[12.5px] font-medium leading-4">
+                Split note
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="block text-[12.5px] font-medium leading-4">
-                  {option.label}
-                </span>
-                <span className="text-muted-foreground block text-[10.5px] leading-4">
-                  {option.description}
-                </span>
+              <span className="text-muted-foreground block text-[10.5px] leading-4">
+                Current {midiToPitch(splitMidi)} · Suggested{' '}
+                {midiToPitch(suggestedSplitMidi)}
+              </span>
+            </span>
+            <span className="text-muted-foreground piano-mono text-[11px]">
+              Change
+            </span>
+          </button>
+          {suggestedSplitMidi !== splitMidi ? (
+            <button
+              type="button"
+              onClick={() => onSplitMidiChange(suggestedSplitMidi)}
+              className="text-muted-foreground hover:bg-muted/55 hover:text-foreground flex w-full cursor-pointer items-center justify-between rounded-md px-2 py-1.5 text-left text-[11px] transition-colors"
+            >
+              Use song suggestion
+              <span className="piano-mono">
+                {midiToPitch(suggestedSplitMidi)}
               </span>
             </button>
-          )
-        })}
-      </PopoverContent>
-    </Popover>
+          ) : null}
+        </PopoverContent>
+      </Popover>
+      <SplitNoteDialog
+        open={splitDialogOpen}
+        splitMidi={splitMidi}
+        suggestedSplitMidi={suggestedSplitMidi}
+        onOpenChange={setSplitDialogOpen}
+        onChange={onSplitMidiChange}
+      />
+    </>
   )
 }
 
@@ -252,7 +440,10 @@ export function PracticeView({
   song,
   practiceNotes,
   practicePart,
+  splitMidi,
+  suggestedSplitMidi,
   onPracticePartChange,
+  onSplitMidiChange,
   duration,
   cursor,
   visualCursor,
@@ -468,7 +659,13 @@ export function PracticeView({
             : `${practiceNotes.length}/${song.notes.length} notes`}{' '}
           · {getTempoLabel(song)} · {getMeterLabel(song)}
         </div>
-        <PartPicker value={practicePart} onChange={onPracticePartChange} />
+        <PartPicker
+          value={practicePart}
+          splitMidi={splitMidi}
+          suggestedSplitMidi={suggestedSplitMidi}
+          onChange={onPracticePartChange}
+          onSplitMidiChange={onSplitMidiChange}
+        />
         <SoundPicker
           packs={instrumentPacks}
           activePackId={activePackId}
