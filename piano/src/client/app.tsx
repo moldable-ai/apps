@@ -23,6 +23,10 @@ import {
   type SongSoundSettingsResponse,
 } from '../shared/audio'
 import type { Folder } from '../shared/folder'
+import {
+  type PracticePart,
+  noteMatchesPracticePart,
+} from '../shared/practice-part'
 import type { PianoSong, SongSummary } from '../shared/song'
 import { getSongDuration } from '../shared/song'
 import { PIANO_PRESETS, type PianoPresetId } from './audio-presets'
@@ -54,7 +58,7 @@ const APP_SOURCE_PATH = '/Users/rob/.moldable/shared/apps/piano'
 const INSTRUMENTS_STORAGE_PATH =
   '~/.moldable/workspaces/{workspace-id}/apps/piano/data/instruments'
 const AUDIO_MODEL_PATH = `${APP_SOURCE_PATH}/src/shared/audio.ts`
-const AUDIO_VISUAL_SYNC_OFFSET_SECONDS = 0.12
+const AUDIO_SCHEDULE_LOOKAHEAD_SECONDS = 0.12
 
 export function App() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
@@ -64,6 +68,7 @@ export function App() {
   const [activeSongId, setActiveSongId] = useState<string | null>(null)
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
   const [cursor, setCursor] = useState(0)
+  const [practicePart, setPracticePart] = useState<PracticePart>('all')
   const [isPlaying, setIsPlaying] = useState(false)
   const [isScrubbing, setIsScrubbing] = useState(false)
   const [songSoundLoadingLabel, setSongSoundLoadingLabel] = useState<
@@ -469,10 +474,14 @@ export function App() {
         : null,
     [activeFolderId, folders],
   )
-  const visualCursor =
-    isPlaying && !isScrubbing
-      ? Math.max(0, cursor - AUDIO_VISUAL_SYNC_OFFSET_SECONDS)
-      : cursor
+  const visualCursor = cursor
+  const practiceNotes = useMemo(() => {
+    if (!song) return []
+    if (practicePart === 'all') return song.notes
+    return song.notes.filter((note) =>
+      noteMatchesPracticePart(note, practicePart),
+    )
+  }, [practicePart, song])
 
   useEffect(() => {
     if (!activeSongId) {
@@ -581,6 +590,27 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
     setIsPlaying(false)
   }, [activeInstrument?.id, activePackId, stopAll])
 
+  const handlePracticePartChange = useCallback(
+    (nextPart: PracticePart) => {
+      setPracticePart(nextPart)
+      stopAll()
+      if (!song) {
+        playedNotesRef.current = new Set()
+        return
+      }
+      playedNotesRef.current = new Set(
+        song.notes
+          .filter(
+            (note) =>
+              noteMatchesPracticePart(note, nextPart) &&
+              note.start + note.duration < cursor,
+          )
+          .map((note) => note.id),
+      )
+    },
+    [cursor, song, stopAll],
+  )
+
   useEffect(() => {
     window.parent.postMessage(
       {
@@ -607,9 +637,8 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
   ])
 
   const activeMidi = useMemo(() => {
-    if (!song) return new Set<number>()
     return new Set(
-      song.notes
+      practiceNotes
         .filter(
           (note) =>
             visualCursor >= note.start &&
@@ -617,19 +646,18 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
         )
         .map((note) => note.midi),
     )
-  }, [song, visualCursor])
+  }, [practiceNotes, visualCursor])
 
   const upcomingMidi = useMemo(() => {
-    if (!song) return new Set<number>()
     return new Set(
-      song.notes
+      practiceNotes
         .filter(
           (note) =>
             note.start > visualCursor && note.start <= visualCursor + 1.6,
         )
         .map((note) => note.midi),
     )
-  }, [song, visualCursor])
+  }, [practiceNotes, visualCursor])
 
   const startPlayback = useCallback(async () => {
     if (!song) return
@@ -637,7 +665,7 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
     const startCursor = cursor >= duration - 0.05 ? 0 : cursor
     setCursor(startCursor)
     playedNotesRef.current = new Set(
-      song.notes
+      practiceNotes
         .filter((note) => note.start + note.duration < startCursor)
         .map((note) => note.id),
     )
@@ -645,7 +673,7 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
     playStartPerformanceRef.current = performance.now()
     lastCursorRef.current = startCursor
     setIsPlaying(true)
-  }, [cursor, duration, prepare, song])
+  }, [cursor, duration, practiceNotes, prepare, song])
 
   const pausePlayback = useCallback(() => {
     setIsPlaying(false)
@@ -675,7 +703,7 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
       lastCursorRef.current = bounded
       if (song) {
         playedNotesRef.current = new Set(
-          song.notes
+          practiceNotes
             .filter((note) => note.start + note.duration < bounded)
             .map((note) => note.id),
         )
@@ -685,7 +713,7 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
         playStartPerformanceRef.current = performance.now()
       }
     },
-    [duration, isPlaying, song],
+    [duration, isPlaying, practiceNotes, song],
   )
 
   const startScrubbing = useCallback(() => {
@@ -713,12 +741,13 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
         playStartCursorRef.current + elapsed * speed,
       )
       const previousCursor = lastCursorRef.current
+      const audioLookahead = AUDIO_SCHEDULE_LOOKAHEAD_SECONDS * speed
 
-      for (const note of song.notes) {
+      for (const note of practiceNotes) {
         if (playedNotesRef.current.has(note.id)) continue
         if (
           note.start >= previousCursor - 0.02 &&
-          note.start <= nextCursor + 0.12
+          note.start <= nextCursor + audioLookahead
         ) {
           const musicDelay = Math.max(0, note.start - nextCursor)
           // Audio delay/duration are in wall-clock seconds, so divide by speed.
@@ -747,7 +776,7 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
     return () => {
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
     }
-  }, [duration, isPlaying, isScrubbing, playMidi, song])
+  }, [duration, isPlaying, isScrubbing, playMidi, practiceNotes, song])
 
   const previewKey = useCallback(
     async (midi: number) => {
@@ -806,6 +835,9 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
         <PracticeView
           key={song.id}
           song={song}
+          practiceNotes={practiceNotes}
+          practicePart={practicePart}
+          onPracticePartChange={handlePracticePartChange}
           duration={duration}
           cursor={cursor}
           visualCursor={visualCursor}

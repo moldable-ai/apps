@@ -1,5 +1,7 @@
 import {
   ArrowLeft,
+  Check,
+  ChevronDown,
   Loader2,
   Pause,
   Play,
@@ -15,7 +17,17 @@ import {
   cn,
 } from '@moldable-ai/ui'
 import type { PianoInstrumentPack } from '../../shared/audio'
-import { type PianoSong, getMeterLabel, getTempoLabel } from '../../shared/song'
+import {
+  PRACTICE_PART_OPTIONS,
+  type PracticePart,
+  getPracticePartOption,
+} from '../../shared/practice-part'
+import {
+  type PianoNote,
+  type PianoSong,
+  getMeterLabel,
+  getTempoLabel,
+} from '../../shared/song'
 import { PIANO_PRESETS, type PianoPresetId } from '../audio-presets'
 import {
   BLACK_KEY_WIDTH,
@@ -33,6 +45,9 @@ import { SoundPicker } from './sound-picker'
 
 interface PracticeViewProps {
   song: PianoSong
+  practiceNotes: PianoNote[]
+  practicePart: PracticePart
+  onPracticePartChange: (part: PracticePart) => void
   duration: number
   cursor: number
   visualCursor: number
@@ -68,6 +83,82 @@ const SPEED_OPTIONS = [0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5]
 function formatSpeed(speed: number) {
   if (Number.isInteger(speed)) return `${speed}x`
   return `${speed.toFixed(2).replace(/0$/, '').replace(/\.$/, '')}x`
+}
+
+function PartPicker({
+  value,
+  onChange,
+}: {
+  value: PracticePart
+  onChange: (part: PracticePart) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const selected = getPracticePartOption(value)
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Practice part: ${selected.label}`}
+          className={cn(
+            'border-border/50 bg-muted/15 hover:bg-muted/30 inline-flex h-7 max-w-[140px] cursor-pointer items-center gap-1.5 rounded-full border pl-2.5 pr-1.5 text-[11.5px] font-medium transition-colors',
+          )}
+        >
+          <span className="truncate">{selected.shortLabel}</span>
+          <ChevronDown className="size-3 shrink-0 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="end"
+        side="bottom"
+        sideOffset={8}
+        className="w-[240px] p-1.5"
+      >
+        <p className="text-muted-foreground/80 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.16em]">
+          Practice part
+        </p>
+        {PRACTICE_PART_OPTIONS.map((option) => {
+          const isActive = option.id === value
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => {
+                onChange(option.id)
+                setOpen(false)
+              }}
+              className={cn(
+                'flex w-full cursor-pointer items-start gap-2 rounded-md px-2 py-2 text-left transition-colors',
+                'hover:bg-muted/55',
+              )}
+            >
+              <span
+                className={cn(
+                  'mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border transition-colors',
+                  isActive
+                    ? 'border-foreground bg-foreground text-background'
+                    : 'border-border/70',
+                )}
+              >
+                {isActive ? (
+                  <Check className="size-2.5" strokeWidth={3} />
+                ) : null}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12.5px] font-medium leading-4">
+                  {option.label}
+                </span>
+                <span className="text-muted-foreground block text-[10.5px] leading-4">
+                  {option.description}
+                </span>
+              </span>
+            </button>
+          )
+        })}
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 function SpeedControl({
@@ -159,6 +250,9 @@ function clampScrollTarget(
 
 export function PracticeView({
   song,
+  practiceNotes,
+  practicePart,
+  onPracticePartChange,
   duration,
   cursor,
   visualCursor,
@@ -198,11 +292,11 @@ export function PracticeView({
 
   const noteTones = useMemo(() => {
     const map = new Map<number, string>()
-    for (const note of song.notes) {
+    for (const note of practiceNotes) {
       map.set(note.midi, note.color ?? midiToTone(note.midi))
     }
     return map
-  }, [song.notes])
+  }, [practiceNotes])
 
   // Measure available falling-notes height (reserves space for keyboard + bottom dock)
   // useLayoutEffect + synchronous initial measure so the first paint is correct
@@ -319,9 +413,9 @@ export function PracticeView({
 
   // On mount, scroll to center the song's note range
   useEffect(() => {
-    if (!stageRef.current || song.notes.length === 0) return
+    if (!stageRef.current || practiceNotes.length === 0) return
     const stage = stageRef.current
-    const midiValues = song.notes.map((n) => n.midi)
+    const midiValues = practiceNotes.map((n) => n.midi)
     const avgMidi = midiValues.reduce((s, m) => s + m, 0) / midiValues.length
     const ratio = (avgMidi - 21) / (108 - 21)
     const totalWidth = stage.scrollWidth
@@ -332,7 +426,7 @@ export function PracticeView({
       totalWidth,
       visibleWidth,
     )
-  }, [song.id, song.notes])
+  }, [practiceNotes, song.id])
 
   const loadingSamples =
     loadState.status === 'loading' && loadState.total > 0
@@ -369,9 +463,12 @@ export function PracticeView({
           </h2>
         </div>
         <div className="text-muted-foreground/80 piano-mono hidden text-[11px] sm:block">
-          {song.notes.length} notes · {getTempoLabel(song)} ·{' '}
-          {getMeterLabel(song)}
+          {practicePart === 'all'
+            ? `${song.notes.length} notes`
+            : `${practiceNotes.length}/${song.notes.length} notes`}{' '}
+          · {getTempoLabel(song)} · {getMeterLabel(song)}
         </div>
+        <PartPicker value={practicePart} onChange={onPracticePartChange} />
         <SoundPicker
           packs={instrumentPacks}
           activePackId={activePackId}
@@ -442,7 +539,7 @@ export function PracticeView({
               <div className="flex-1" />
               {stageHeight !== null ? (
                 <FallingNotes
-                  notes={song.notes}
+                  notes={practiceNotes}
                   cursor={visualCursor}
                   height={stageHeight}
                 />
