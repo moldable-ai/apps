@@ -1,5 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, FolderPlus, Play, Search, Trash2, X } from 'lucide-react'
+import {
+  ArrowLeft,
+  Folder as FolderIcon,
+  FolderPlus,
+  GripVertical,
+  Play,
+  Search,
+  Trash2,
+  X,
+} from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -26,6 +35,28 @@ import { type Folder, useFolders } from '../use-folders'
 import { CatalogSearchDialog } from './catalog-search-dialog'
 import { MoveToMenu } from './move-to-menu'
 import { NewFolderDialog } from './new-folder-dialog'
+import {
+  DndContext,
+  type DragEndEvent,
+  type DragOverEvent,
+  DragOverlay,
+  type DragStartEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  rectSortingStrategy,
+  sortableKeyboardCoordinates,
+  useSortable,
+} from '@dnd-kit/sortable'
+import { CSS as DndCSS } from '@dnd-kit/utilities'
 
 interface LibraryViewProps {
   songs: SongSummary[]
@@ -52,6 +83,22 @@ function normalizeForSearch(value: string) {
 
 function songByline(song: SongSummary) {
   return song.composer?.trim() || song.artist?.trim() || null
+}
+
+function compareSongsByTitle(a: SongSummary, b: SongSummary) {
+  const titleCompare = a.title.localeCompare(b.title, undefined, {
+    sensitivity: 'base',
+    numeric: true,
+  })
+  if (titleCompare !== 0) return titleCompare
+  return a.id.localeCompare(b.id, undefined, {
+    sensitivity: 'base',
+    numeric: true,
+  })
+}
+
+function sortSongsByTitle(songs: SongSummary[]) {
+  return [...songs].sort(compareSongsByTitle)
 }
 
 function MiniRoll({ notes, tone }: { notes: PianoNote[]; tone: string }) {
@@ -205,11 +252,24 @@ function SongCard({
   )
 }
 
+type FolderSortControls = {
+  setNodeRef?: (element: HTMLElement | null) => void
+  setActivatorNodeRef?: (element: HTMLElement | null) => void
+  attributes?: DraggableAttributes
+  listeners?: DraggableSyntheticListeners
+  style?: CSSProperties
+  isDragging?: boolean
+  isDropTarget?: boolean
+  isSorting?: boolean
+}
+
 function FolderCard({
   folder,
   index,
   songs,
   notePreviewBySong,
+  sortable,
+  isDragOverlay = false,
   onOpen,
   onRequestDelete,
 }: {
@@ -217,6 +277,8 @@ function FolderCard({
   index: number
   songs: SongSummary[]
   notePreviewBySong: Map<string, PianoNote[]>
+  sortable?: FolderSortControls
+  isDragOverlay?: boolean
   onOpen: (folderId: string) => void
   onRequestDelete: (folder: Folder) => void
 }) {
@@ -230,52 +292,115 @@ function FolderCard({
   const previewSongs = songsInFolder.slice(0, 3)
   const remainder = Math.max(0, songsInFolder.length - previewSongs.length)
   const style = { ['--card-tone' as string]: folder.tone } as CSSProperties
+  const dragHandleProps = {
+    ...(sortable?.attributes ?? {}),
+    ...(sortable?.listeners ?? {}),
+  }
 
   return (
     <div
-      role="button"
-      tabIndex={0}
-      onClick={() => onOpen(folder.id)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault()
-          onOpen(folder.id)
-        }
+      ref={sortable?.setNodeRef}
+      role={isDragOverlay ? undefined : 'button'}
+      tabIndex={isDragOverlay ? undefined : 0}
+      aria-label={isDragOverlay ? `Dragging ${folder.name}` : undefined}
+      onClick={isDragOverlay ? undefined : () => onOpen(folder.id)}
+      onKeyDown={
+        isDragOverlay
+          ? undefined
+          : (event) => {
+              if (event.target !== event.currentTarget) return
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                onOpen(folder.id)
+              }
+            }
+      }
+      style={{
+        ...style,
+        ...sortable?.style,
+        animationDelay: `${index * 35}ms`,
       }}
-      style={{ ...style, animationDelay: `${index * 35}ms` }}
       className={cn(
         'piano-card-tone animate-piano-card-in group relative isolate flex h-56 flex-col overflow-hidden rounded-2xl text-left',
         'border-border/50 border shadow-sm',
-        'cursor-pointer transition-all duration-300 ease-out',
-        'focus-visible:ring-primary/40 hover:-translate-y-0.5 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2',
+        'transition-all duration-300 ease-out',
+        isDragOverlay
+          ? 'ring-primary/45 pointer-events-none cursor-grabbing shadow-2xl ring-2'
+          : 'focus-visible:ring-primary/40 cursor-pointer hover:-translate-y-0.5 hover:shadow-xl focus-visible:outline-none focus-visible:ring-2',
+        sortable?.isSorting && 'will-change-transform',
+        sortable?.isDragging &&
+          'ring-primary/30 scale-[0.98] opacity-30 shadow-none ring-2',
+        sortable?.isDropTarget &&
+          !sortable.isDragging &&
+          'ring-primary/65 ring-offset-background scale-[1.015] shadow-2xl ring-2 ring-offset-2',
       )}
     >
-      <div className="absolute right-3 top-3 z-20">
-        <button
-          type="button"
-          aria-label={`Delete folder ${folder.name}`}
-          onClick={(event) => {
-            event.stopPropagation()
-            onRequestDelete(folder)
-          }}
-          className={cn(
-            'inline-flex size-7 cursor-pointer items-center justify-center rounded-full transition-all',
-            'bg-background/70 text-foreground/80 hover:bg-background hover:text-destructive',
-            'border-border/50 border backdrop-blur',
-            'opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
-          )}
-        >
-          <Trash2 className="size-3.5" />
-        </button>
-      </div>
+      {sortable?.isDropTarget && !sortable.isDragging ? (
+        <div className="pointer-events-none absolute inset-x-4 top-3 z-30 flex justify-center">
+          <span className="bg-primary text-primary-foreground shadow-primary/20 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] shadow-lg">
+            Drop here
+          </span>
+        </div>
+      ) : null}
+
+      {sortable?.isDragging ? (
+        <div className="bg-background/35 pointer-events-none absolute inset-0 z-30 flex items-center justify-center backdrop-blur-[1px]">
+          <span className="bg-background/90 text-foreground border-border rounded-full border px-3 py-1 text-[11px] font-medium shadow-sm">
+            Dragging
+          </span>
+        </div>
+      ) : null}
+
+      {sortable && !isDragOverlay ? (
+        <div className="absolute left-3 top-3 z-20">
+          <button
+            ref={sortable.setActivatorNodeRef}
+            type="button"
+            aria-label={`Drag ${folder.name} to reorder`}
+            onClick={(event) => event.stopPropagation()}
+            className={cn(
+              'inline-flex size-7 cursor-grab items-center justify-center rounded-full transition-all active:cursor-grabbing',
+              'bg-background/70 text-foreground/70 hover:bg-background hover:text-foreground',
+              'border-border/50 border backdrop-blur',
+              sortable.isSorting
+                ? 'opacity-100 shadow-sm'
+                : 'opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
+            )}
+            {...dragHandleProps}
+          >
+            <GripVertical className="size-3.5" />
+          </button>
+        </div>
+      ) : null}
+
+      {!isDragOverlay ? (
+        <div className="absolute right-3 top-3 z-20">
+          <button
+            type="button"
+            aria-label={`Delete folder ${folder.name}`}
+            onClick={(event) => {
+              event.stopPropagation()
+              onRequestDelete(folder)
+            }}
+            className={cn(
+              'inline-flex size-7 cursor-pointer items-center justify-center rounded-full transition-all',
+              'bg-background/70 text-foreground/80 hover:bg-background hover:text-destructive',
+              'border-border/50 border backdrop-blur',
+              'opacity-0 focus-visible:opacity-100 group-hover:opacity-100',
+            )}
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        </div>
+      ) : null}
 
       <div className="relative z-10 flex flex-1 flex-col gap-1 p-5">
-        <p
-          className="text-[10px] font-medium uppercase tracking-[0.18em]"
-          style={{ color: folder.tone }}
-        >
-          Folder · {songsInFolder.length}{' '}
-          {songsInFolder.length === 1 ? 'song' : 'songs'}
+        <p className="text-muted-foreground/70 flex h-4 items-center gap-1.5 text-[10px] font-medium uppercase leading-none tracking-[0.16em]">
+          <FolderIcon className="size-3 shrink-0 opacity-70" aria-hidden />
+          <span className="leading-none">
+            {songsInFolder.length}{' '}
+            {songsInFolder.length === 1 ? 'song' : 'songs'}
+          </span>
         </p>
         <h3 className="piano-serif text-foreground line-clamp-2 pr-8 text-xl font-semibold leading-tight tracking-tight">
           {folder.name}
@@ -317,6 +442,60 @@ function FolderCard({
         ) : null}
       </div>
     </div>
+  )
+}
+
+function SortableFolderCard({
+  folder,
+  index,
+  songs,
+  notePreviewBySong,
+  isDropTarget,
+  isSorting,
+  onOpen,
+  onRequestDelete,
+}: {
+  folder: Folder
+  index: number
+  songs: SongSummary[]
+  notePreviewBySong: Map<string, PianoNote[]>
+  isDropTarget: boolean
+  isSorting: boolean
+  onOpen: (folderId: string) => void
+  onRequestDelete: (folder: Folder) => void
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: folder.id })
+
+  return (
+    <FolderCard
+      folder={folder}
+      index={index}
+      songs={songs}
+      notePreviewBySong={notePreviewBySong}
+      sortable={{
+        attributes,
+        listeners,
+        setNodeRef,
+        setActivatorNodeRef,
+        style: {
+          transform: DndCSS.Transform.toString(transform),
+          transition,
+        },
+        isDragging,
+        isDropTarget,
+        isSorting,
+      }}
+      onOpen={onOpen}
+      onRequestDelete={onRequestDelete}
+    />
   )
 }
 
@@ -423,8 +602,21 @@ export function LibraryView({
   onSelect,
 }: LibraryViewProps) {
   const hasSongs = songs.length > 0
-  const { folders, addFolder, deleteFolder, moveSong, renameFolder } =
-    useFolders()
+  const {
+    folders,
+    addFolder,
+    deleteFolder,
+    moveSong,
+    renameFolder,
+    reorderFolders,
+  } = useFolders()
+  const folderIds = useMemo(() => folders.map((folder) => folder.id), [folders])
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  )
 
   const [catalogOpen, setCatalogOpen] = useState(false)
   const [filter, setFilter] = useState('')
@@ -438,6 +630,8 @@ export function LibraryView({
   const [isDeletingFolder, setIsDeletingFolder] = useState(false)
   const [songPendingDelete, setSongPendingDelete] =
     useState<SongSummary | null>(null)
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
+  const [overFolderId, setOverFolderId] = useState<string | null>(null)
 
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
@@ -485,11 +679,15 @@ export function LibraryView({
       const folder = folders.find((f) => f.id === openFolderId)
       if (!folder) return []
       const byId = new Map(songs.map((song) => [song.id, song]))
-      return folder.songIds
-        .map((id) => byId.get(id))
-        .filter((song): song is SongSummary => Boolean(song))
+      return sortSongsByTitle(
+        folder.songIds
+          .map((id) => byId.get(id))
+          .filter((song): song is SongSummary => Boolean(song)),
+      )
     }
-    return songs.filter((song) => !songFolderById.has(song.id))
+    return sortSongsByTitle(
+      songs.filter((song) => !songFolderById.has(song.id)),
+    )
   }, [folders, openFolderId, songFolderById, songs])
 
   const filteredSongs = useMemo(() => {
@@ -505,6 +703,10 @@ export function LibraryView({
   const openFolder = openFolderId
     ? (folders.find((folder) => folder.id === openFolderId) ?? null)
     : null
+  const activeFolder = activeFolderId
+    ? (folders.find((folder) => folder.id === activeFolderId) ?? null)
+    : null
+  const isSortingFolders = activeFolderId !== null
 
   const showFilter = songsInActiveScope.length > 3
   const showFolders = !openFolderId && folders.length > 0
@@ -544,6 +746,38 @@ export function LibraryView({
     void moveSong(songId, folderId)
   }
 
+  const resetFolderDragState = () => {
+    setActiveFolderId(null)
+    setOverFolderId(null)
+  }
+
+  const handleFolderDragStart = (event: DragStartEvent) => {
+    const id = String(event.active.id)
+    setActiveFolderId(id)
+    setOverFolderId(id)
+  }
+
+  const handleFolderDragOver = (event: DragOverEvent) => {
+    setOverFolderId(event.over?.id ? String(event.over.id) : null)
+  }
+
+  const handleFolderDragEnd = (event: DragEndEvent) => {
+    const activeId = String(event.active.id)
+    const overId = event.over?.id ? String(event.over.id) : null
+    resetFolderDragState()
+
+    if (!overId || activeId === overId) return
+
+    const oldIndex = folderIds.indexOf(activeId)
+    const newIndex = folderIds.indexOf(overId)
+    if (oldIndex === -1 || newIndex === -1) return
+
+    const nextFolderIds = arrayMove(folderIds, oldIndex, newIndex)
+    void reorderFolders(nextFolderIds).catch(() => {
+      // The optimistic mutation rolls back and refetches if persistence fails.
+    })
+  }
+
   const confirmDeleteSong = async () => {
     if (!songPendingDelete) return
     try {
@@ -577,7 +811,6 @@ export function LibraryView({
                     className="mb-2 text-[10px] font-medium uppercase tracking-[0.18em]"
                     style={{ color: openFolder.tone }}
                   >
-                    Folder ·{' '}
                     {totalSongsInScope === 1
                       ? '1 song'
                       : `${totalSongsInScope} songs`}
@@ -748,49 +981,80 @@ export function LibraryView({
               </Button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {showFolders && !trimmedFilter
-                ? folders.map((folder, index) => (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleFolderDragStart}
+              onDragOver={handleFolderDragOver}
+              onDragCancel={resetFolderDragState}
+              onDragEnd={handleFolderDragEnd}
+            >
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {showFolders && !trimmedFilter ? (
+                  <SortableContext
+                    items={folderIds}
+                    strategy={rectSortingStrategy}
+                  >
+                    {folders.map((folder, index) => (
+                      <SortableFolderCard
+                        key={folder.id}
+                        folder={folder}
+                        index={index}
+                        songs={songs}
+                        notePreviewBySong={notePreviewBySong}
+                        isDropTarget={overFolderId === folder.id}
+                        isSorting={isSortingFolders}
+                        onOpen={(id) => {
+                          const folder = folders.find(
+                            (candidate) => candidate.id === id,
+                          )
+                          if (folder) onOpenFolder(folder)
+                          setFilter('')
+                        }}
+                        onRequestDelete={(folder) =>
+                          setFolderPendingDelete(folder)
+                        }
+                      />
+                    ))}
+                  </SortableContext>
+                ) : null}
+
+                {filteredSongs.map((song, songIndex) => {
+                  const preview = notePreviewBySong.get(song.id) ?? []
+                  const offset =
+                    showFolders && !trimmedFilter ? folders.length : 0
+                  return (
+                    <SongCard
+                      key={song.id}
+                      song={song}
+                      preview={preview}
+                      index={songIndex + offset}
+                      folders={folders}
+                      currentFolderId={songFolderById.get(song.id) ?? null}
+                      onSelect={onSelect}
+                      onMove={handleMoveSong}
+                      onRequestNewFolder={handleRequestNewFolderForSong}
+                      onRequestDelete={(target) => setSongPendingDelete(target)}
+                    />
+                  )
+                })}
+              </div>
+              <DragOverlay>
+                {activeFolder ? (
+                  <div className="w-[min(20rem,calc(100vw-3rem))] rotate-1">
                     <FolderCard
-                      key={folder.id}
-                      folder={folder}
-                      index={index}
+                      folder={activeFolder}
+                      index={0}
                       songs={songs}
                       notePreviewBySong={notePreviewBySong}
-                      onOpen={(id) => {
-                        const folder = folders.find(
-                          (candidate) => candidate.id === id,
-                        )
-                        if (folder) onOpenFolder(folder)
-                        setFilter('')
-                      }}
-                      onRequestDelete={(folder) =>
-                        setFolderPendingDelete(folder)
-                      }
+                      isDragOverlay
+                      onOpen={() => undefined}
+                      onRequestDelete={() => undefined}
                     />
-                  ))
-                : null}
-
-              {filteredSongs.map((song, songIndex) => {
-                const preview = notePreviewBySong.get(song.id) ?? []
-                const offset =
-                  showFolders && !trimmedFilter ? folders.length : 0
-                return (
-                  <SongCard
-                    key={song.id}
-                    song={song}
-                    preview={preview}
-                    index={songIndex + offset}
-                    folders={folders}
-                    currentFolderId={songFolderById.get(song.id) ?? null}
-                    onSelect={onSelect}
-                    onMove={handleMoveSong}
-                    onRequestNewFolder={handleRequestNewFolderForSong}
-                    onRequestDelete={(target) => setSongPendingDelete(target)}
-                  />
-                )
-              })}
-            </div>
+                  </div>
+                ) : null}
+              </DragOverlay>
+            </DndContext>
           )}
         </div>
       </div>

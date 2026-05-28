@@ -65,6 +65,48 @@ export function useFolders() {
     onSuccess: invalidate,
   })
 
+  const reorderFoldersMutation = useMutation({
+    mutationFn: async (folderIds: string[]) => {
+      const res = await fetchWithWorkspace('/api/folders/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderIds }),
+      })
+      if (!res.ok) throw new Error('Failed to reorder folders')
+      return (await res.json()) as FoldersResponse
+    },
+    onMutate: async (folderIds) => {
+      await queryClient.cancelQueries({ queryKey })
+      const previous = queryClient.getQueryData<FoldersResponse>(queryKey)
+      if (previous) {
+        const byId = new Map(
+          previous.folders.map((folder) => [folder.id, folder]),
+        )
+        const seen = new Set<string>()
+        const requested = folderIds
+          .map((id) => {
+            if (seen.has(id)) return null
+            seen.add(id)
+            return byId.get(id) ?? null
+          })
+          .filter((folder): folder is Folder => Boolean(folder))
+        const remaining = previous.folders.filter(
+          (folder) => !seen.has(folder.id),
+        )
+        queryClient.setQueryData<FoldersResponse>(queryKey, {
+          folders: [...requested, ...remaining],
+        })
+      }
+      return { previous }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKey, context.previous)
+      }
+    },
+    onSettled: invalidate,
+  })
+
   const moveSongMutation = useMutation({
     mutationFn: async ({
       songId,
@@ -120,6 +162,8 @@ export function useFolders() {
     renameFolder: (id: string, name: string) =>
       renameFolderMutation.mutateAsync({ id, name }),
     deleteFolder: (id: string) => deleteFolderMutation.mutateAsync(id),
+    reorderFolders: (folderIds: string[]) =>
+      reorderFoldersMutation.mutateAsync(folderIds),
     moveSong: (songId: string, folderId: string | null) =>
       moveSongMutation.mutateAsync({ songId, folderId }),
   }

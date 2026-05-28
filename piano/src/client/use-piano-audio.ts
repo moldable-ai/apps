@@ -23,6 +23,9 @@ type FetchWithWorkspace = (
 ) => Promise<Response>
 type PianoSampleLoader = Pick<SampleLoader, 'load'>
 
+const AUDIO_WAKE_RESET_THRESHOLD_MS = 30_000
+const AUDIO_HEARTBEAT_INTERVAL_MS = 5_000
+
 interface SfzPresetResponse {
   packId: string
   instrument: {
@@ -75,6 +78,8 @@ export function usePianoAudio(
     total: 0,
     error: null,
   })
+  const lastHeartbeatAtRef = useRef(Date.now())
+  const forceGraphResetOnNextPrepareRef = useRef(false)
 
   const disposeCachedInstruments = useCallback(() => {
     activeInstrumentRef.current?.stop()
@@ -114,8 +119,9 @@ export function usePianoAudio(
       void audioContext.close().catch(() => undefined)
     }
 
+    forceGraphResetOnNextPrepareRef.current = false
     setLoadState((current) =>
-      current.status === 'ready'
+      current.status === 'ready' || current.status === 'loading'
         ? { status: 'idle', loaded: 0, total: 0, error: null }
         : current,
     )
@@ -146,19 +152,22 @@ export function usePianoAudio(
     }
   }, [getAudioContext, resetAudioGraph])
 
-  const recoverAudio = useCallback(() => {
-    const audioContext = audioContextRef.current
-    if (!audioContext) return
-    if (isClosedAudioContext(audioContext)) {
-      resetAudioGraph()
-      return
-    }
-    if (!isPlayableAudioContext(audioContext)) {
-      void audioContext.resume().catch(() => {
+  const recoverAudio = useCallback(
+    (options: { forceReset?: boolean } = {}) => {
+      const audioContext = audioContextRef.current
+      if (!audioContext) return
+      if (options.forceReset || isClosedAudioContext(audioContext)) {
         resetAudioGraph()
-      })
-    }
-  }, [resetAudioGraph])
+        return
+      }
+      if (!isPlayableAudioContext(audioContext)) {
+        void audioContext.resume().catch(() => {
+          resetAudioGraph()
+        })
+      }
+    },
+    [resetAudioGraph],
+  )
 
   const loadPreset = useCallback(
     async (nextPresetId: PianoPresetId, pack: PianoInstrumentPack | null) => {
@@ -271,6 +280,9 @@ export function usePianoAudio(
   )
 
   const prepare = useCallback(async () => {
+    if (forceGraphResetOnNextPrepareRef.current) {
+      resetAudioGraph()
+    }
     setLoadState((current) =>
       current.status === 'ready'
         ? current
@@ -278,14 +290,18 @@ export function usePianoAudio(
     )
     await resume()
     await loadPreset(presetId, activePack)
-  }, [activePack, loadPreset, presetId, resume])
+  }, [activePack, loadPreset, presetId, resetAudioGraph, resume])
 
   const prewarm = useCallback(async () => {
+    if (forceGraphResetOnNextPrepareRef.current) {
+      resetAudioGraph()
+    }
     await loadPreset(presetId, activePack)
-  }, [activePack, loadPreset, presetId])
+  }, [activePack, loadPreset, presetId, resetAudioGraph])
 
   const playMidi = useCallback(
     (midi: number, duration: number, velocity = 0.72, delay = 0) => {
+      if (forceGraphResetOnNextPrepareRef.current) return
       const instrument = activeInstrumentRef.current
       const audioContext = audioContextRef.current
       if (!instrument || !audioContext) return
@@ -323,17 +339,51 @@ export function usePianoAudio(
   }, [activePack, activeInstrumentId, loadPreset, loadState.status, presetId])
 
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') recoverAudio()
+    const recoverAfterPossibleWake = () => {
+      const now = Date.now()
+      const elapsed = now - lastHeartbeatAtRef.current
+      lastHeartbeatAtRef.current = now
+
+      // macOS sleep / lock can leave Chromium's Web Audio context reporting
+      // "running" while the output graph is no longer audible. If JS was paused
+      // for a while, discard the old context and sampler so the next play click
+      // creates a fresh graph instead of requiring a full Moldable restart.
+      recoverAudio({ forceReset: elapsed > AUDIO_WAKE_RESET_THRESHOLD_MS })
     }
 
-    window.addEventListener('focus', recoverAudio)
-    window.addEventListener('pageshow', recoverAudio)
+    const handleHeartbeat = () => {
+      const now = Date.now()
+      const elapsed = now - lastHeartbeatAtRef.current
+      lastHeartbeatAtRef.current = now
+      if (elapsed > AUDIO_WAKE_RESET_THRESHOLD_MS) {
+        recoverAudio({ forceReset: true })
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') recoverAfterPossibleWake()
+    }
+
+    const handlePageHide = () => {
+      forceGraphResetOnNextPrepareRef.current = true
+      lastHeartbeatAtRef.current = Date.now()
+    }
+
+    const heartbeatId = window.setInterval(
+      handleHeartbeat,
+      AUDIO_HEARTBEAT_INTERVAL_MS,
+    )
+
+    window.addEventListener('focus', recoverAfterPossibleWake)
+    window.addEventListener('pageshow', recoverAfterPossibleWake)
+    window.addEventListener('pagehide', handlePageHide)
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
-      window.removeEventListener('focus', recoverAudio)
-      window.removeEventListener('pageshow', recoverAudio)
+      window.clearInterval(heartbeatId)
+      window.removeEventListener('focus', recoverAfterPossibleWake)
+      window.removeEventListener('pageshow', recoverAfterPossibleWake)
+      window.removeEventListener('pagehide', handlePageHide)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [recoverAudio])

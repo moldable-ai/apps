@@ -3,6 +3,7 @@ export interface Folder {
   name: string
   tone: string
   songIds: string[]
+  sortOrder?: number
   createdAt: string
   updatedAt: string
 }

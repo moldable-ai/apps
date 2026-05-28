@@ -88,10 +88,43 @@ function foldersPath(dataDir: string) {
   return safePath(dataDir, 'folders.json')
 }
 
+function compareByName(a: { name: string }, b: { name: string }) {
+  return a.name.localeCompare(b.name, undefined, {
+    sensitivity: 'base',
+    numeric: true,
+  })
+}
+
+function sortFolders(folders: Folder[]) {
+  const hasCustomOrder = folders.some(
+    (folder) => typeof folder.sortOrder === 'number',
+  )
+  return [...folders].sort((a, b) => {
+    if (!hasCustomOrder) return compareByName(a, b)
+    const aOrder =
+      typeof a.sortOrder === 'number' ? a.sortOrder : Number.POSITIVE_INFINITY
+    const bOrder =
+      typeof b.sortOrder === 'number' ? b.sortOrder : Number.POSITIVE_INFINITY
+    if (aOrder !== bOrder) return aOrder - bOrder
+    return compareByName(a, b)
+  })
+}
+
+function nextFolderSortOrder(folders: Folder[]) {
+  const orders = folders
+    .map((folder) => folder.sortOrder)
+    .filter(
+      (order): order is number =>
+        typeof order === 'number' && Number.isFinite(order),
+    )
+  if (orders.length === 0) return undefined
+  return Math.max(...orders) + 1
+}
+
 async function readFolders(dataDir: string): Promise<Folder[]> {
   const raw = await readJson<Folder[] | null>(foldersPath(dataDir), null)
   if (!Array.isArray(raw)) return []
-  return raw
+  const folders = raw
     .filter(
       (folder): folder is Folder =>
         !!folder &&
@@ -107,10 +140,16 @@ async function readFolders(dataDir: string): Promise<Folder[]> {
           ? folder.tone
           : toneFromSeed(folder.name),
       songIds: folder.songIds.filter((id) => typeof id === 'string'),
+      sortOrder:
+        typeof folder.sortOrder === 'number' &&
+        Number.isFinite(folder.sortOrder)
+          ? folder.sortOrder
+          : undefined,
       createdAt: folder.createdAt ?? new Date().toISOString(),
       updatedAt:
         folder.updatedAt ?? folder.createdAt ?? new Date().toISOString(),
     }))
+  return sortFolders(folders)
 }
 
 async function writeFolders(dataDir: string, folders: Folder[]) {
@@ -527,10 +566,11 @@ async function findTargetFolder(
     name: params.folderName.slice(0, 80),
     tone: toneFromSeed(params.folderName),
     songIds: [],
+    sortOrder: nextFolderSortOrder(folders),
     createdAt: now,
     updatedAt: now,
   }
-  return { folder, folders: [folder, ...folders] }
+  return { folder, folders: sortFolders([folder, ...folders]) }
 }
 
 async function importMidiFile(
@@ -1928,15 +1968,58 @@ app.post('/api/folders', async (c) => {
       name,
       tone,
       songIds: [],
+      sortOrder: nextFolderSortOrder(folders),
       createdAt: now,
       updatedAt: now,
     }
-    await writeFolders(dataDir, [folder, ...folders])
+    await writeFolders(dataDir, sortFolders([folder, ...folders]))
     return c.json(folder, 201)
   } catch (error) {
     return jsonError(
       c,
       error instanceof Error ? error.message : 'Failed to create folder',
+    )
+  }
+})
+
+app.post('/api/folders/reorder', async (c) => {
+  try {
+    const body = (await c.req.json().catch(() => null)) as {
+      folderIds?: unknown
+    } | null
+    if (!Array.isArray(body?.folderIds)) {
+      return jsonError(c, 'folderIds must be an array', 400)
+    }
+
+    const dataDir = getDataDir(c)
+    const folders = await readFolders(dataDir)
+    const byId = new Map(folders.map((folder) => [folder.id, folder]))
+    const seen = new Set<string>()
+    const requestedIds = body.folderIds.filter((id): id is string => {
+      if (typeof id !== 'string' || !byId.has(id) || seen.has(id)) return false
+      seen.add(id)
+      return true
+    })
+
+    if (folders.length > 0 && requestedIds.length === 0) {
+      return jsonError(c, 'At least one known folder id is required', 400)
+    }
+
+    const requested = requestedIds
+      .map((id) => byId.get(id))
+      .filter((folder): folder is Folder => Boolean(folder))
+    const remaining = folders.filter((folder) => !seen.has(folder.id))
+    const reordered = [...requested, ...remaining].map((folder, index) => ({
+      ...folder,
+      sortOrder: index,
+    }))
+
+    await writeFolders(dataDir, reordered)
+    return c.json({ folders: reordered })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to reorder folders',
     )
   }
 })
