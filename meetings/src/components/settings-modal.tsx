@@ -121,8 +121,8 @@ export function SettingsModal({
                       onClick={() => onAudioSourceChange('both')}
                       title={
                         !systemAudioAvailable
-                          ? 'Call audio requires native system capture in Moldable desktop'
-                          : 'Uses the system audio tap without opening a second microphone stream'
+                          ? 'Mixed audio requires native system capture in Moldable desktop'
+                          : undefined
                       }
                       className={cn(
                         'text-muted-foreground hover:bg-background/80 hover:text-foreground h-7 cursor-pointer rounded-full px-2.5 text-xs font-medium shadow-none disabled:cursor-not-allowed',
@@ -131,7 +131,7 @@ export function SettingsModal({
                       )}
                     >
                       <Waves className="mr-1.5 size-3.5" />
-                      Call
+                      Blend
                     </Button>
                     <Button
                       type="button"

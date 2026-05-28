@@ -699,28 +699,28 @@ export default function MeetingsPage() {
 
   const startPreferredCapture = useCallback(
     async (selectedSource: AudioSource, options: { resume?: boolean } = {}) => {
-      const useCallAudioCapture =
+      const useBlendedCapture =
         selectedSource === 'both' && systemAudio.isAvailable
       const useSystemOnlyNativeCapture =
         selectedSource === 'system' && systemAudio.isAvailable
 
-      if (useCallAudioCapture) {
+      if (useBlendedCapture) {
         console.log(
-          '[Meetings] Starting native call audio capture with system tap only',
+          '[Meetings] Starting native blended capture with system audio + microphone sidecar',
         )
         audioStreamingEnabledRef.current = true
         hasLoggedFirstNativeAudioChunkRef.current = false
         stopNativeDurationTimer()
-        activeCaptureSourceRef.current = 'system'
+        activeCaptureSourceRef.current = 'both'
         await deepgram.connect('linear16')
 
-        const started = await systemAudio.start('systemAudio')
+        const started = await systemAudio.start('both')
         if (started) {
-          return 'system'
+          return 'both'
         }
 
         console.warn(
-          '[Meetings] Native call audio capture failed, falling back to microphone-only capture',
+          '[Meetings] Native blended capture failed, falling back to microphone-only capture',
         )
         activeCaptureSourceRef.current = null
         deepgram.disconnect()
@@ -818,13 +818,13 @@ export default function MeetingsPage() {
     }
   }, [stopNativeDurationTimer])
 
-  // Prefer the native system tap when available. It avoids opening a second
-  // microphone stream while Zoom/Meet/Teams is already using the input device.
+  // Prefer the 2026-04-26 blended capture path: it was the last known-good
+  // default for capturing both local speech and meeting participant audio.
   useEffect(() => {
     if (systemAudio.isAvailable) {
-      setAudioSource('system')
+      setAudioSource('both')
       console.log(
-        '[Meetings] Native audio available in Moldable, using system tap capture by default',
+        '[Meetings] Native audio available in Moldable, using blended capture by default',
       )
     }
   }, [systemAudio.isAvailable])

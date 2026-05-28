@@ -1,6 +1,9 @@
 import type { PianoSong } from '../shared/song'
 import { defaultSongLibrary } from './default-song-library'
-import { defaultTutorialIds, defaultTutorialSongs } from './default-tutorials'
+import {
+  allTutorialIds as defaultTutorialIds,
+  allTutorialSongs as defaultTutorialSongs,
+} from './tutorials'
 
 export const retiredDefaultSongIds = [
   'the-entertainer',

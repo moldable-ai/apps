@@ -92,6 +92,13 @@ export interface PianoSong {
   midiInfo?: MidiSongInfo
   practiceSettings?: SongPracticeSettings
   tutorial?: SongTutorial
+  /**
+   * Sorted ascending times (seconds) where playback should auto-pause.
+   * Independent of `tutorial.sections` so any song can carry pause/checkpoint
+   * metadata without needing a full tutorial — e.g. for "wait for the user
+   * to read this" moments in any piece.
+   */
+  pausePoints?: number[]
   notes: PianoNote[]
   createdAt: string
   updatedAt: string

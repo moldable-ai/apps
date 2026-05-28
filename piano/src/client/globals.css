@@ -185,6 +185,62 @@
   animation: piano-view-forward 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@keyframes piano-tutorial-swap {
+  0% {
+    opacity: 0;
+    transform: translate3d(56px, 0, 0);
+    filter: blur(6px);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    filter: blur(0);
+  }
+}
+
+.animate-piano-tutorial-swap {
+  animation: piano-tutorial-swap 540ms cubic-bezier(0.2, 0.85, 0.2, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+@keyframes piano-notes-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(-48px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-piano-notes-reveal {
+  animation: piano-notes-reveal 720ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* CSS transforms apply to SVG <g> in modern browsers; this gives the
+     note bars a soft drop-in while the grid stays still. */
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+@keyframes piano-section-expand {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-piano-section-expand {
+  animation: piano-section-expand 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
 .animate-piano-view-back {
   animation: piano-view-back 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -206,7 +262,10 @@
   .animate-piano-view-back,
   .animate-piano-card-in,
   .animate-piano-chrome-in,
-  .animate-piano-mini-drift {
+  .animate-piano-mini-drift,
+  .animate-piano-tutorial-swap,
+  .animate-piano-notes-reveal,
+  .animate-piano-section-expand {
     animation: none;
   }
 }

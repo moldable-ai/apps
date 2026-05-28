@@ -1,0 +1,88 @@
+import type { RawTutorial } from '../../tutorial-builder'
+
+export const chromaticApproachTutorial: RawTutorial = {
+  id: 'tutorial-chromatic-approach',
+  title: 'Chromatic Approach Notes',
+  bpm: 60,
+  beatsPerBar: 4,
+  phrase: [
+    ['C4', 0.0, 0.45],
+    ['E4', 0.5, 0.45],
+    ['G4', 1.0, 0.45],
+    ['E4', 1.5, 0.45],
+    ['C4', 2.0, 1.5],
+    ['B3', 5.0, 0.3, 0.9],
+    ['C4', 5.3, 0.4],
+    ['D#4', 5.7, 0.3, 0.9],
+    ['E4', 6.0, 0.4],
+    ['F#4', 6.4, 0.3, 0.9],
+    ['G4', 6.7, 0.4],
+    ['F#4', 7.1, 0.3, 0.9],
+    ['E4', 7.4, 0.4],
+    ['D#4', 7.8, 0.3, 0.9],
+    ['C4', 8.1, 1.4],
+    ['C4', 11.0, 0.3],
+    ['B3', 11.3, 0.3],
+    ['C4', 11.6, 0.3],
+    ['D#4', 11.9, 0.3, 0.9],
+    ['E4', 12.2, 0.3],
+    ['F#4', 12.5, 0.3, 0.9],
+    ['G4', 12.8, 0.4],
+    ['F#4', 13.2, 0.3, 0.9],
+    ['E4', 13.5, 0.3],
+    ['D#4', 13.8, 0.3, 0.9],
+    ['D4', 14.1, 0.3],
+    ['C4', 14.4, 1.4],
+  ],
+  tutorial: {
+    title: 'Chromatic Approach Notes',
+    summary:
+      'A chromatic approach note is a half-step neighbor that "leans" into a chord tone. Jazz musicians use them to spice up plain triads — the target note still wins, but the approach makes the phrase smile.',
+    level: 'Advanced',
+    objectives: [
+      'Identify chord tones (C, E, G in a C major triad)',
+      'Add half-step approaches from below (B → C, D♯ → E, F♯ → G)',
+      'Use approaches from above too to land on the same chord tones',
+    ],
+    sections: [
+      {
+        id: 'plain',
+        title: 'Plain C major triad',
+        start: 0,
+        end: 5,
+        focus: 'C E G — the bare chord tones',
+        learn: ['These three notes are the "anchors" — the most stable points'],
+      },
+      {
+        id: 'below',
+        title: 'Approach from below',
+        start: 5,
+        end: 11,
+        focus: 'B → C, D♯ → E, F♯ → G — each target gets a chromatic lead-in',
+        learn: [
+          'Each approach is a leading tone, half a step below its target',
+          'The approach is intentionally outside the key — it resolves quickly',
+        ],
+        tryThis: [
+          'Slow this to 0.5× and feel each chromatic note pulling up to its chord tone',
+          'Then try approaching from above instead (D♭ → C, F → E, A♭ → G)',
+        ],
+      },
+      {
+        id: 'jazz-line',
+        title: 'Mix the approaches into a line',
+        start: 11,
+        end: 16,
+        focus: 'Stack approaches together to make a flowing jazz phrase',
+        learn: [
+          'Mixing chord tones with half-step approaches gives that smooth bop sound',
+          "Always land on a chord tone — that's what keeps the line 'inside'",
+        ],
+        reinforce: [
+          'Play C E G on the downbeats and walk into each one chromatically',
+          'This is the building block behind countless bebop lines',
+        ],
+      },
+    ],
+  },
+}

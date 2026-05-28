@@ -1,0 +1,110 @@
+import type { RawTutorial } from '../../tutorial-builder'
+
+export const voiceLeadingTutorial: RawTutorial = {
+  id: 'tutorial-voice-leading',
+  title: 'Voice Leading — Smooth Connections',
+  bpm: 60,
+  beatsPerBar: 4,
+  phrase: [
+    // 0–7s: Choppy version — C → F → G → C in root position (big jumps)
+    ['C4', 0.0, 1.4, 0.85],
+    ['E4', 0.0, 1.4, 0.85],
+    ['G4', 0.0, 1.4, 0.85],
+    ['F4', 1.6, 1.4, 0.85],
+    ['A4', 1.6, 1.4, 0.85],
+    ['C5', 1.6, 1.4, 0.85],
+    ['G3', 3.2, 1.4, 0.85],
+    ['B3', 3.2, 1.4, 0.85],
+    ['D4', 3.2, 1.4, 0.85],
+    ['C4', 4.8, 1.8, 0.95],
+    ['E4', 4.8, 1.8, 0.95],
+    ['G4', 4.8, 1.8, 0.95],
+    // 9–17s: Smooth version — same progression with inversions for closeness
+    ['C4', 9.0, 1.6, 0.9],
+    ['E4', 9.0, 1.6, 0.9],
+    ['G4', 9.0, 1.6, 0.9],
+    ['C4', 10.8, 1.6, 0.9],
+    ['F4', 10.8, 1.6, 0.9],
+    ['A4', 10.8, 1.6, 0.9],
+    ['B3', 12.6, 1.6, 0.9],
+    ['D4', 12.6, 1.6, 0.9],
+    ['G4', 12.6, 1.6, 0.9],
+    ['C4', 14.4, 2.0, 0.95],
+    ['E4', 14.4, 2.0, 0.95],
+    ['G4', 14.4, 2.0, 0.95],
+    // 18–25s: Hear the moving voices — top, middle, bottom each move minimally
+    ['C4', 18.0, 0.8],
+    ['E4', 18.0, 0.8],
+    ['G4', 18.0, 0.8],
+    ['C4', 19.0, 0.8],
+    ['F4', 19.0, 0.8],
+    ['A4', 19.0, 0.8],
+    ['B3', 20.0, 0.8],
+    ['D4', 20.0, 0.8],
+    ['G4', 20.0, 0.8],
+    ['C4', 21.0, 0.8],
+    ['E4', 21.0, 0.8],
+    ['G4', 21.0, 0.8],
+    ['C4', 22.0, 0.8],
+    ['F4', 22.0, 0.8],
+    ['A4', 22.0, 0.8],
+    ['C4', 23.0, 1.8, 0.95],
+    ['E4', 23.0, 1.8, 0.95],
+    ['G4', 23.0, 1.8, 0.95],
+  ],
+  tutorial: {
+    title: 'Voice Leading',
+    summary:
+      'When chords change, the smoothest sound comes from each voice (note) moving as little as possible. Using inversions, you can play C → F → G → C without big jumps — just neighbors. This is the secret behind chorale writing and good chord backing.',
+    level: 'Intermediate',
+    objectives: [
+      'Compare "blocky" chord motion vs smooth voice-led motion',
+      'Use inversions to keep common notes still',
+      'Identify each "voice" (top, middle, bottom) in a chord',
+    ],
+    sections: [
+      {
+        id: 'choppy',
+        title: 'Choppy — root position only',
+        start: 0,
+        end: 9,
+        focus: 'C → F → G → C, each in root position',
+        learn: [
+          'Each chord jumps to a new place on the keyboard',
+          'It works but sounds disconnected',
+        ],
+      },
+      {
+        id: 'smooth',
+        title: 'Smooth — use inversions',
+        start: 9,
+        end: 18,
+        focus: 'C (root) → F (root) → G (1st inversion) → C (root)',
+        learn: [
+          'By inverting G to start on B (just below C), we connect smoothly',
+          'Notes shared between chords stay in place',
+        ],
+        tryThis: [
+          'Play both versions back to back — the smooth one sounds more "intentional"',
+          'Try the same with C → Am → F → G',
+        ],
+      },
+      {
+        id: 'voices',
+        title: 'Each voice moves a little',
+        start: 18,
+        end: 25,
+        focus:
+          'Top voice: G → A → G → G. Middle: E → F → D → E. Bottom: C → C → B → C.',
+        learn: [
+          'Each voice moves by step (or stays still) — never big leaps',
+          'This is what "voice leading" means — every individual line moves smoothly',
+        ],
+        reinforce: [
+          'Try writing your own chord progression and minimize the movement in each voice',
+          "It's the difference between 'piano student' and 'pianist'",
+        ],
+      },
+    ],
+  },
+}

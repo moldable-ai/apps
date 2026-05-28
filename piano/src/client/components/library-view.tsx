@@ -4,7 +4,9 @@ import {
   BookOpen,
   Folder as FolderIcon,
   FolderPlus,
+  GraduationCap,
   GripVertical,
+  Library as LibraryIcon,
   Play,
   Search,
   Trash2,
@@ -32,6 +34,7 @@ import {
   cn,
   useWorkspace,
 } from '@moldable-ai/ui'
+import type { CourseSummary } from '../../shared/course'
 import {
   type PianoNote,
   type SongSummary,
@@ -41,6 +44,7 @@ import {
 import { formatDuration, midiToTone } from '../piano-utils'
 import { type Folder, useFolders } from '../use-folders'
 import { CatalogSearchDialog } from './catalog-search-dialog'
+import { CoursesRow } from './courses-row'
 import { MoveToMenu } from './move-to-menu'
 import { NewFolderDialog } from './new-folder-dialog'
 import {
@@ -75,6 +79,10 @@ interface LibraryViewProps {
   onOpenFolder: (folder: Folder) => void
   onCloseFolder: () => void
   onSelect: (song: SongSummary) => void
+  courseSummaries: CourseSummary[]
+  onOpenCourse: (courseId: string) => void
+  tab: 'library' | 'courses'
+  onTabChange: (tab: 'library' | 'courses') => void
 }
 
 function songTone(preview: PianoNote[] | undefined) {
@@ -586,6 +594,30 @@ function SortableFolderCard({
   )
 }
 
+function CoursesTabContent({
+  summaries,
+  onOpenCourse,
+}: {
+  summaries: CourseSummary[]
+  onOpenCourse: (courseId: string) => void
+}) {
+  return (
+    <section className="animate-piano-chrome-in">
+      <div className="mb-6">
+        <h2 className="piano-serif text-foreground text-3xl font-semibold tracking-tight">
+          Courses
+        </h2>
+        <p className="text-muted-foreground mt-2 max-w-xl text-sm leading-6">
+          Guided paths from absolute beginner to advanced expression. Each
+          lesson is a short exercise paired with what to listen for. You can
+          skip ahead any time.
+        </p>
+      </div>
+      <CoursesRow summaries={summaries} onOpenCourse={onOpenCourse} />
+    </section>
+  )
+}
+
 function EditableFolderTitle({
   folder,
   onRename,
@@ -687,6 +719,10 @@ export function LibraryView({
   onOpenFolder,
   onCloseFolder,
   onSelect,
+  courseSummaries,
+  onOpenCourse,
+  tab: view,
+  onTabChange: setView,
 }: LibraryViewProps) {
   const hasSongs = songs.length > 0
   const {
@@ -1092,7 +1128,55 @@ export function LibraryView({
     >
       <div className="piano-no-scrollbar min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-5xl px-6 pb-[calc(var(--chat-safe-padding,0px)+4rem)] pt-10">
-          {openFolder ? (
+          {!openFolder && courseSummaries.length > 0 ? (
+            <div className="animate-piano-chrome-in mb-8 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setView('library')}
+                className={cn(
+                  'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-medium transition-colors',
+                  view === 'library'
+                    ? 'bg-foreground text-background'
+                    : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+                )}
+              >
+                <LibraryIcon className="size-3.5" />
+                Library
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('courses')}
+                className={cn(
+                  'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3.5 text-[12.5px] font-medium transition-colors',
+                  view === 'courses'
+                    ? 'bg-foreground text-background'
+                    : 'text-muted-foreground hover:bg-muted/40 hover:text-foreground',
+                )}
+              >
+                <GraduationCap className="size-3.5" />
+                Courses
+                <span
+                  className={cn(
+                    'piano-mono ml-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] tabular-nums',
+                    view === 'courses'
+                      ? 'bg-background/15 text-background'
+                      : 'bg-muted/50 text-muted-foreground',
+                  )}
+                >
+                  {courseSummaries.length}
+                </span>
+              </button>
+            </div>
+          ) : null}
+
+          {!openFolder && view === 'courses' ? (
+            <CoursesTabContent
+              summaries={courseSummaries}
+              onOpenCourse={onOpenCourse}
+            />
+          ) : null}
+
+          {!openFolder && view === 'courses' ? null : openFolder ? (
             <section className="animate-piano-chrome-in mb-10">
               <button
                 type="button"
@@ -1182,179 +1266,188 @@ export function LibraryView({
             </section>
           )}
 
-          {showFilter ? (
-            <div className="animate-piano-chrome-in mb-5 flex items-center gap-3">
-              <div className="relative max-w-sm flex-1">
-                <Search className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2" />
-                <input
-                  type="search"
-                  value={filter}
-                  onChange={(event) => setFilter(event.target.value)}
-                  placeholder={
-                    openFolder
-                      ? `Filter ${openFolder.name}…`
-                      : 'Filter your library…'
-                  }
-                  className={cn(
-                    'border-border/70 bg-muted/30 focus:bg-background focus:border-foreground/30 h-8 w-full rounded-full border pl-9 pr-9 text-[12.5px] outline-none transition-colors',
-                    'placeholder:text-muted-foreground/80',
-                  )}
-                />
-                {filter ? (
-                  <button
-                    type="button"
-                    onClick={() => setFilter('')}
-                    className="text-muted-foreground hover:text-foreground absolute right-1.5 top-1/2 flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full"
-                    aria-label="Clear filter"
-                  >
-                    <X className="size-3" />
-                  </button>
-                ) : null}
-              </div>
-              <span className="text-muted-foreground piano-mono shrink-0 text-[11px]">
-                {trimmedFilter
-                  ? `${filteredSongs.length} of ${totalSongsInScope}`
-                  : `${totalSongsInScope} song${totalSongsInScope === 1 ? '' : 's'}`}
-              </span>
-            </div>
-          ) : null}
-
-          {isLoading ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="bg-muted/30 h-52 animate-pulse rounded-2xl"
-                />
-              ))}
-            </div>
-          ) : isError ? (
-            <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-xl border p-6 text-sm">
-              Could not load songs.
-            </div>
-          ) : !hasSongs ? (
-            <div className="border-border/60 rounded-2xl border border-dashed p-10 text-center">
-              <p className="piano-serif text-foreground text-lg">
-                No songs yet
-              </p>
-              <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
-                Browse public-domain pieces or drop a MIDI file here to convert
-                it automatically.
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-4 cursor-pointer gap-1.5 rounded-full"
-                onClick={() => setCatalogOpen(true)}
-              >
-                <Search className="size-3.5" />
-                Find sheet music
-              </Button>
-            </div>
-          ) : openFolder && totalSongsInScope === 0 ? (
-            <div className="border-border/60 rounded-2xl border border-dashed p-10 text-center">
-              <p className="piano-serif text-foreground text-lg">
-                This folder is empty
-              </p>
-              <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
-                Drop MIDI files here to convert them into{' '}
-                <span className="text-foreground/80">{openFolder.name}</span>.
-              </p>
-            </div>
-          ) : filteredSongs.length === 0 && trimmedFilter ? (
-            <div className="border-border/60 rounded-2xl border border-dashed p-10 text-center">
-              <p className="piano-serif text-foreground text-lg">
-                Nothing matches “{filter.trim()}”
-              </p>
-              <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
-                Try a different title, composer, or artist.
-              </p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="mt-4 cursor-pointer rounded-full"
-                onClick={() => setFilter('')}
-              >
-                Clear filter
-              </Button>
-            </div>
-          ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleFolderDragStart}
-              onDragOver={handleFolderDragOver}
-              onDragCancel={resetFolderDragState}
-              onDragEnd={handleFolderDragEnd}
-            >
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {showFolders && !trimmedFilter ? (
-                  <SortableContext
-                    items={folderIds}
-                    strategy={rectSortingStrategy}
-                  >
-                    {folders.map((folder, index) => (
-                      <SortableFolderCard
-                        key={folder.id}
-                        folder={folder}
-                        index={index}
-                        songs={songs}
-                        notePreviewBySong={notePreviewBySong}
-                        isDropTarget={overFolderId === folder.id}
-                        isSorting={isSortingFolders}
-                        onOpen={(id) => {
-                          const folder = folders.find(
-                            (candidate) => candidate.id === id,
-                          )
-                          if (folder) onOpenFolder(folder)
-                          setFilter('')
-                        }}
-                        onRequestDelete={(folder) =>
-                          setFolderPendingDelete(folder)
-                        }
-                      />
-                    ))}
-                  </SortableContext>
-                ) : null}
-
-                {filteredSongs.map((song, songIndex) => {
-                  const preview = notePreviewBySong.get(song.id) ?? []
-                  const offset =
-                    showFolders && !trimmedFilter ? folders.length : 0
-                  return (
-                    <SongCard
-                      key={song.id}
-                      song={song}
-                      preview={preview}
-                      index={songIndex + offset}
-                      folders={folders}
-                      currentFolderId={songFolderById.get(song.id) ?? null}
-                      onSelect={onSelect}
-                      onMove={handleMoveSong}
-                      onRequestNewFolder={handleRequestNewFolderForSong}
-                      onRequestDelete={(target) => setSongPendingDelete(target)}
+          {!openFolder && view === 'courses' ? null : (
+            <>
+              {showFilter ? (
+                <div className="animate-piano-chrome-in mb-5 flex items-center gap-3">
+                  <div className="relative max-w-sm flex-1">
+                    <Search className="text-muted-foreground pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2" />
+                    <input
+                      type="search"
+                      value={filter}
+                      onChange={(event) => setFilter(event.target.value)}
+                      placeholder={
+                        openFolder
+                          ? `Filter ${openFolder.name}…`
+                          : 'Filter your library…'
+                      }
+                      className={cn(
+                        'border-border/70 bg-muted/30 focus:bg-background focus:border-foreground/30 h-8 w-full rounded-full border pl-9 pr-9 text-[12.5px] outline-none transition-colors',
+                        'placeholder:text-muted-foreground/80',
+                      )}
                     />
-                  )
-                })}
-              </div>
-              <DragOverlay>
-                {activeFolder ? (
-                  <div className="w-[min(20rem,calc(100vw-3rem))] rotate-1">
-                    <FolderCard
-                      folder={activeFolder}
-                      index={0}
-                      songs={songs}
-                      notePreviewBySong={notePreviewBySong}
-                      isDragOverlay
-                      onOpen={() => undefined}
-                      onRequestDelete={() => undefined}
-                    />
+                    {filter ? (
+                      <button
+                        type="button"
+                        onClick={() => setFilter('')}
+                        className="text-muted-foreground hover:text-foreground absolute right-1.5 top-1/2 flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full"
+                        aria-label="Clear filter"
+                      >
+                        <X className="size-3" />
+                      </button>
+                    ) : null}
                   </div>
-                ) : null}
-              </DragOverlay>
-            </DndContext>
+                  <span className="text-muted-foreground piano-mono shrink-0 text-[11px]">
+                    {trimmedFilter
+                      ? `${filteredSongs.length} of ${totalSongsInScope}`
+                      : `${totalSongsInScope} song${totalSongsInScope === 1 ? '' : 's'}`}
+                  </span>
+                </div>
+              ) : null}
+
+              {isLoading ? (
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="bg-muted/30 h-52 animate-pulse rounded-2xl"
+                    />
+                  ))}
+                </div>
+              ) : isError ? (
+                <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-xl border p-6 text-sm">
+                  Could not load songs.
+                </div>
+              ) : !hasSongs ? (
+                <div className="border-border/60 rounded-2xl border border-dashed p-10 text-center">
+                  <p className="piano-serif text-foreground text-lg">
+                    No songs yet
+                  </p>
+                  <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
+                    Browse public-domain pieces or drop a MIDI file here to
+                    convert it automatically.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-4 cursor-pointer gap-1.5 rounded-full"
+                    onClick={() => setCatalogOpen(true)}
+                  >
+                    <Search className="size-3.5" />
+                    Find sheet music
+                  </Button>
+                </div>
+              ) : openFolder && totalSongsInScope === 0 ? (
+                <div className="border-border/60 rounded-2xl border border-dashed p-10 text-center">
+                  <p className="piano-serif text-foreground text-lg">
+                    This folder is empty
+                  </p>
+                  <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
+                    Drop MIDI files here to convert them into{' '}
+                    <span className="text-foreground/80">
+                      {openFolder.name}
+                    </span>
+                    .
+                  </p>
+                </div>
+              ) : filteredSongs.length === 0 && trimmedFilter ? (
+                <div className="border-border/60 rounded-2xl border border-dashed p-10 text-center">
+                  <p className="piano-serif text-foreground text-lg">
+                    Nothing matches “{filter.trim()}”
+                  </p>
+                  <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
+                    Try a different title, composer, or artist.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-4 cursor-pointer rounded-full"
+                    onClick={() => setFilter('')}
+                  >
+                    Clear filter
+                  </Button>
+                </div>
+              ) : (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleFolderDragStart}
+                  onDragOver={handleFolderDragOver}
+                  onDragCancel={resetFolderDragState}
+                  onDragEnd={handleFolderDragEnd}
+                >
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {showFolders && !trimmedFilter ? (
+                      <SortableContext
+                        items={folderIds}
+                        strategy={rectSortingStrategy}
+                      >
+                        {folders.map((folder, index) => (
+                          <SortableFolderCard
+                            key={folder.id}
+                            folder={folder}
+                            index={index}
+                            songs={songs}
+                            notePreviewBySong={notePreviewBySong}
+                            isDropTarget={overFolderId === folder.id}
+                            isSorting={isSortingFolders}
+                            onOpen={(id) => {
+                              const folder = folders.find(
+                                (candidate) => candidate.id === id,
+                              )
+                              if (folder) onOpenFolder(folder)
+                              setFilter('')
+                            }}
+                            onRequestDelete={(folder) =>
+                              setFolderPendingDelete(folder)
+                            }
+                          />
+                        ))}
+                      </SortableContext>
+                    ) : null}
+
+                    {filteredSongs.map((song, songIndex) => {
+                      const preview = notePreviewBySong.get(song.id) ?? []
+                      const offset =
+                        showFolders && !trimmedFilter ? folders.length : 0
+                      return (
+                        <SongCard
+                          key={song.id}
+                          song={song}
+                          preview={preview}
+                          index={songIndex + offset}
+                          folders={folders}
+                          currentFolderId={songFolderById.get(song.id) ?? null}
+                          onSelect={onSelect}
+                          onMove={handleMoveSong}
+                          onRequestNewFolder={handleRequestNewFolderForSong}
+                          onRequestDelete={(target) =>
+                            setSongPendingDelete(target)
+                          }
+                        />
+                      )
+                    })}
+                  </div>
+                  <DragOverlay>
+                    {activeFolder ? (
+                      <div className="w-[min(20rem,calc(100vw-3rem))] rotate-1">
+                        <FolderCard
+                          folder={activeFolder}
+                          index={0}
+                          songs={songs}
+                          notePreviewBySong={notePreviewBySong}
+                          isDragOverlay
+                          onOpen={() => undefined}
+                          onRequestDelete={() => undefined}
+                        />
+                      </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
+              )}
+            </>
           )}
         </div>
       </div>

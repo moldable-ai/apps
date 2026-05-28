@@ -1,0 +1,115 @@
+import type { RawTutorial } from '../../tutorial-builder'
+
+export const firstMelodiesTutorial: RawTutorial = {
+  id: 'tutorial-first-melodies',
+  title: 'First Melodies',
+  bpm: 96,
+  beatsPerBar: 4,
+  phrase: [
+    // ─── Hot Cross Buns (0–7s) ──────────────────────────────────
+    // "Hot cross buns, hot cross buns, one a penny two a penny hot cross buns"
+    ['E4', 0.0, 0.55],
+    ['D4', 0.625, 0.55],
+    ['C4', 1.25, 1.15],
+    ['E4', 2.5, 0.55],
+    ['D4', 3.125, 0.55],
+    ['C4', 3.75, 1.15],
+    ['C4', 5.0, 0.28],
+    ['C4', 5.28, 0.28],
+    ['C4', 5.56, 0.28],
+    ['C4', 5.84, 0.28],
+    ['D4', 6.12, 0.28],
+    ['D4', 6.4, 0.28],
+    ['D4', 6.68, 0.28],
+    ['D4', 6.96, 0.28],
+    ['E4', 7.24, 0.55],
+    ['D4', 7.86, 0.55],
+    ['C4', 8.5, 1.2],
+    // ─── Mary Had a Little Lamb (12–22s) ────────────────────────
+    ['E4', 12.0, 0.55],
+    ['D4', 12.625, 0.55],
+    ['C4', 13.25, 0.55],
+    ['D4', 13.875, 0.55],
+    ['E4', 14.5, 0.55],
+    ['E4', 15.125, 0.55],
+    ['E4', 15.75, 1.15],
+    ['D4', 17.0, 0.55],
+    ['D4', 17.625, 0.55],
+    ['D4', 18.25, 1.15],
+    ['E4', 19.5, 0.55],
+    ['G4', 20.125, 0.55],
+    ['G4', 20.75, 1.15],
+    // Bar B: little lamb whose fleece was white as snow
+    ['E4', 22.0, 0.55],
+    ['D4', 22.625, 0.55],
+    ['C4', 23.25, 0.55],
+    ['D4', 23.875, 0.55],
+    ['E4', 24.5, 0.55],
+    ['E4', 25.125, 0.55],
+    ['E4', 25.75, 0.55],
+    ['E4', 26.375, 0.55],
+    ['D4', 27.0, 0.55],
+    ['D4', 27.625, 0.55],
+    ['E4', 28.25, 0.55],
+    ['D4', 28.875, 0.55],
+    ['C4', 29.5, 1.5],
+  ],
+  tutorial: {
+    title: 'First Melodies',
+    summary:
+      "Your first two real songs, both playable entirely in the C position. Hot Cross Buns uses three fingers (3, 2, 1); Mary Had a Little Lamb uses four. Learn the shape of these melodies and you've started building muscle memory.",
+    level: 'Beginner',
+    objectives: [
+      'Play Hot Cross Buns from memory in C position',
+      'Play Mary Had a Little Lamb from memory in C position',
+      'Recognize how a 3-finger melody differs from a 5-finger one',
+    ],
+    sections: [
+      {
+        id: 'hot-cross',
+        title: 'Hot Cross Buns',
+        start: 0,
+        end: 11,
+        focus: 'Three notes (C, D, E) — fingers 1, 2, 3',
+        learn: [
+          'Only the first three fingers move; ring and pinky stay relaxed',
+          "The phrase repeats — that repetition is the song's shape",
+        ],
+        tryThis: [
+          'Play it at 0.5× first to lock the rhythm',
+          "Sing along — the melody contour matches what you're playing",
+        ],
+      },
+      {
+        id: 'mary',
+        title: 'Mary Had a Little Lamb',
+        start: 12,
+        end: 22,
+        focus: "Adds pinky on G — now you're using fingers 1, 2, 3, 5",
+        learn: [
+          'The melody hovers around E (your middle finger) and dips below',
+          'When G arrives, your pinky reaches out without moving the hand',
+        ],
+        tryThis: [
+          'Practice slowly until the finger pattern is automatic',
+          'Try to play without looking at the keys',
+        ],
+      },
+      {
+        id: 'mary-second',
+        title: 'Mary, second half',
+        start: 22,
+        end: 31,
+        focus: 'Same five fingers, different phrase',
+        learn: [
+          'Real songs almost always have an A and B section',
+          'The A part repeats; the B part is the variation',
+        ],
+        reinforce: [
+          'Try the whole song through twice without stopping',
+          "Notice how comfortable your hand feels — that's muscle memory forming",
+        ],
+      },
+    ],
+  },
+}

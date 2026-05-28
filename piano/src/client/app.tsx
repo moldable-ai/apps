@@ -1,4 +1,8 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   popMoldableNavigation,
@@ -7,8 +11,9 @@ import {
   useMoldableNavigationPop,
   useWorkspace,
 } from '@moldable-ai/ui'
+import { CourseView } from './components/course-view'
 import { LibraryView } from './components/library-view'
-import { PracticeView } from './components/practice-view'
+import { type CourseContext, PracticeView } from './components/practice-view'
 import {
   readActiveInstrumentId,
   readActivePackId,
@@ -38,6 +43,7 @@ import { getSongDuration } from '../shared/song'
 import { PIANO_PRESETS, type PianoPresetId } from './audio-presets'
 import { formatDuration } from './piano-utils'
 import { useAudioOptions } from './use-audio-options'
+import { useCourses } from './use-courses'
 import { useFolders } from './use-folders'
 import { usePianoAudio } from './use-piano-audio'
 
@@ -80,6 +86,11 @@ export function App() {
   const [presetId, setPresetId] = useState<PianoPresetId>('classic-grand')
   const [activeSongId, setActiveSongId] = useState<string | null>(null)
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
+  const [activeCourseId, setActiveCourseId] = useState<string | null>(null)
+  const [activeCourseLessonId, setActiveCourseLessonId] = useState<
+    string | null
+  >(null)
+  const [libraryTab, setLibraryTab] = useState<'library' | 'courses'>('library')
   const [cursor, setCursor] = useState(0)
   const [practicePart, setPracticePart] = useState<PracticePart>('all')
   const [splitMidi, setSplitMidi] = useState(DEFAULT_SPLIT_MIDI)
@@ -446,6 +457,9 @@ export function App() {
       if (!res.ok) throw new Error('Failed to load song')
       return (await res.json()) as PianoSong
     },
+    // Keep the previous song visible while the next one is fetching so the
+    // PracticeView doesn't unmount between lessons.
+    placeholderData: keepPreviousData,
   })
 
   const songSoundSettingsQuery = useQuery({
@@ -909,12 +923,25 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
       const previousCursor = lastCursorRef.current
       const audioLookahead = AUDIO_SCHEDULE_LOOKAHEAD_SECONDS * speed
 
+      // Pre-encoded pause points on the song (e.g. tutorial section
+      // audio-end times) — tutorials always carry these now, so we use them
+      // directly without any fallback.
+      const pausePoints = song.pausePoints ?? []
+      let scheduleCap = nextCursor + audioLookahead
+      let pauseAtBoundary: number | null = null
+      for (const boundary of pausePoints) {
+        if (boundary <= previousCursor) continue
+        if (boundary > nextCursor + audioLookahead) break
+        scheduleCap = Math.min(scheduleCap, boundary)
+        if (boundary <= nextCursor) pauseAtBoundary = boundary
+        break
+      }
+
       for (const note of practiceNotes) {
         if (playedNotesRef.current.has(note.id)) continue
-        if (
-          note.start >= previousCursor - 0.02 &&
-          note.start <= nextCursor + audioLookahead
-        ) {
+        // Note.start strictly less-than the cap: a note that starts exactly at
+        // a section boundary belongs to the next section and should wait.
+        if (note.start >= previousCursor - 0.02 && note.start < scheduleCap) {
           const musicDelay = Math.max(0, note.start - nextCursor)
           // Audio delay/duration are in wall-clock seconds, so divide by speed.
           playMidi(
@@ -925,6 +952,34 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
           )
           playedNotesRef.current.add(note.id)
         }
+      }
+
+      if (pauseAtBoundary !== null) {
+        // Rewind cursor to the start of the section that just played, so
+        // the user can read its content and hit Play again to re-listen
+        // (or click the next section to advance). Look up the section by
+        // RANGE (since the pause point is now an audio-end time, not the
+        // nominal section.end) so we still find the right section.
+        const justFinished = (song.tutorial?.sections ?? []).find(
+          (section) =>
+            pauseAtBoundary >= section.start &&
+            pauseAtBoundary <= section.end + 0.001,
+        )
+        const rewindTarget = justFinished?.start ?? pauseAtBoundary
+        setCursor(rewindTarget)
+        lastCursorRef.current = rewindTarget
+        if (justFinished) {
+          // Allow the section's notes to play again on the next Play.
+          for (const note of practiceNotes) {
+            if (note.start >= justFinished.start) {
+              playedNotesRef.current.delete(note.id)
+            }
+          }
+        }
+        setIsPlaying(false)
+        playStartPerformanceRef.current = 0
+        playStartAudioTimeRef.current = null
+        return
       }
 
       setCursor(nextCursor)
@@ -963,6 +1018,14 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
     [playMidi, prepare, resume],
   )
 
+  // Lesson breadcrumb: every Continue pushes the previous (lesson, song)
+  // pair so the Moldable back button unwinds through prior lessons before
+  // returning to the course outline. Declared before closeSong so the
+  // closure can safely reference it.
+  const lessonHistoryRef = useRef<Array<{ lessonId: string; songId: string }>>(
+    [],
+  )
+
   const closeSong = useCallback(
     (sync: 'pop' | 'none' = 'pop') => {
       if (sync === 'pop') popMoldableNavigation()
@@ -970,6 +1033,9 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
       stopAll()
       setCursor(0)
       setActiveSongId(null)
+      // Reaching here means we exited the lesson without going to the previous
+      // one — the breadcrumb is no longer relevant.
+      lessonHistoryRef.current = []
     },
     [stopAll],
   )
@@ -995,9 +1061,77 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
     setActiveSongId(nextSong.id)
   }, [])
 
+  const openCourse = useCallback((courseId: string) => {
+    pushMoldableNavigation({
+      id: `course:${courseId}`,
+      title: 'Course',
+    })
+    setActiveCourseId(courseId)
+    setLibraryTab('courses')
+  }, [])
+
+  const closeCourse = useCallback((sync: 'pop' | 'none' = 'pop') => {
+    if (sync === 'pop') popMoldableNavigation()
+    setActiveCourseId(null)
+    setActiveCourseLessonId(null)
+  }, [])
+
+  const openLessonFromCourse = useCallback(
+    (lessonId: string, songId: string, courseId: string) => {
+      const continuingWithinSameCourse =
+        activeSongId !== null &&
+        activeCourseId === courseId &&
+        activeCourseLessonId !== null &&
+        activeCourseLessonId !== lessonId
+      if (continuingWithinSameCourse && activeCourseLessonId && activeSongId) {
+        lessonHistoryRef.current.push({
+          lessonId: activeCourseLessonId,
+          songId: activeSongId,
+        })
+      }
+      pushMoldableNavigation({
+        id: `song:${songId}`,
+        title: 'Lesson',
+      })
+      setActiveCourseId(courseId)
+      setActiveCourseLessonId(lessonId)
+      setActiveSongId(songId)
+      setLibraryTab('courses')
+      void fetchWithWorkspace(`/api/courses/${courseId}/current`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lessonId }),
+      })
+    },
+    [activeCourseId, activeCourseLessonId, activeSongId, fetchWithWorkspace],
+  )
+
   useMoldableNavigationPop(() => {
     if (activeSongId) {
+      // If we're inside a course lesson with prior lessons in the breadcrumb,
+      // pop to the previous lesson instead of all the way back to the outline.
+      if (activeCourseId && lessonHistoryRef.current.length > 0) {
+        const previous = lessonHistoryRef.current.pop()
+        if (previous) {
+          setIsPlaying(false)
+          stopAll()
+          setCursor(0)
+          setActiveCourseLessonId(previous.lessonId)
+          setActiveSongId(previous.songId)
+          void fetchWithWorkspace(`/api/courses/${activeCourseId}/current`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lessonId: previous.lessonId }),
+          })
+          return
+        }
+      }
       closeSong('none')
+      return
+    }
+    if (activeCourseId) {
+      lessonHistoryRef.current = []
+      closeCourse('none')
       return
     }
     if (activeFolderId) {
@@ -1005,11 +1139,99 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
     }
   })
 
+  const coursesQuery = useCourses()
+  const courseSummaries = useMemo(
+    () => coursesQuery.data?.courses ?? [],
+    [coursesQuery.data?.courses],
+  )
+
+  const activeCourseSummary = useMemo(
+    () =>
+      activeCourseId
+        ? (courseSummaries.find((s) => s.course.id === activeCourseId) ?? null)
+        : null,
+    [activeCourseId, courseSummaries],
+  )
+
+  const courseContext = useMemo<CourseContext | null>(() => {
+    if (!activeCourseSummary || !activeCourseLessonId || !activeSongId)
+      return null
+    const { course, progress } = activeCourseSummary
+    const allLessons = course.modules.flatMap((module) => module.lessons)
+    const lessonIndex = allLessons.findIndex(
+      (lesson) => lesson.id === activeCourseLessonId,
+    )
+    if (lessonIndex === -1) return null
+    const isLessonComplete =
+      progress.completedLessonIds.includes(activeCourseLessonId)
+    const isLastLesson = lessonIndex >= allLessons.length - 1
+
+    const popBackToOutline = () => {
+      popMoldableNavigation()
+      setIsPlaying(false)
+      stopAll()
+      setCursor(0)
+      setActiveSongId(null)
+      setActiveCourseLessonId(null)
+      // Keep activeCourseId — CourseView renders
+    }
+
+    return {
+      courseId: course.id,
+      courseTitle: course.title,
+      courseTone: course.tone,
+      lessonId: activeCourseLessonId,
+      lessonIndex,
+      lessonCount: allLessons.length,
+      isLessonComplete,
+      isLastLesson,
+      onContinue: () => {
+        const advance = () => {
+          const next = allLessons[lessonIndex + 1]
+          if (next) {
+            openLessonFromCourse(next.id, next.songId, course.id)
+          } else {
+            popBackToOutline()
+          }
+        }
+        if (isLessonComplete) {
+          // Already done — just advance (or back to outline if last).
+          advance()
+          return
+        }
+        // Mark complete first, then advance.
+        void fetchWithWorkspace(`/api/courses/${course.id}/complete`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lessonId: activeCourseLessonId }),
+        }).then(() => {
+          void queryClient.invalidateQueries({
+            queryKey: ['courses', workspaceId],
+          })
+          advance()
+        })
+      },
+      // Part fields are placeholders here — TutorialPanel knows the song's
+      // tutorial sections and overrides these with real values.
+      partCount: 1,
+      currentPartIndex: 0,
+      onNextPart: () => {},
+    }
+  }, [
+    activeCourseSummary,
+    activeCourseLessonId,
+    activeSongId,
+    openLessonFromCourse,
+    fetchWithWorkspace,
+    queryClient,
+    stopAll,
+    workspaceId,
+  ])
+
   return (
     <main className="bg-background text-foreground flex h-full min-h-0 flex-col overflow-hidden">
       {activeSongId && song ? (
         <PracticeView
-          key={song.id}
           song={song}
           practiceNotes={practiceNotes}
           practicePart={practicePart}
@@ -1045,6 +1267,15 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
           onInstallPack={handleInstallPack}
           installingPackIds={installingPackIds}
           isAudioOptionsLoading={audioOptionsQuery.isLoading}
+          courseContext={courseContext}
+        />
+      ) : activeCourseId ? (
+        <CourseView
+          courseId={activeCourseId}
+          onBack={() => closeCourse('pop')}
+          onOpenLesson={(lesson, courseId) =>
+            openLessonFromCourse(lesson.id, lesson.songId, courseId)
+          }
         />
       ) : (
         <LibraryView
@@ -1056,6 +1287,10 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
           onOpenFolder={openFolder}
           onCloseFolder={closeFolder}
           onSelect={openSong}
+          courseSummaries={courseSummaries}
+          onOpenCourse={openCourse}
+          tab={libraryTab}
+          onTabChange={setLibraryTab}
         />
       )}
     </main>

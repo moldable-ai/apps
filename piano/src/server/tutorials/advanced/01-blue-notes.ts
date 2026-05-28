@@ -1,0 +1,92 @@
+import type { RawTutorial } from '../../tutorial-builder'
+
+export const blueNotesTutorial: RawTutorial = {
+  id: 'tutorial-blue-notes',
+  title: 'Blue Notes — Tension That Wants to Stay',
+  bpm: 60,
+  beatsPerBar: 4,
+  phrase: [
+    ['A4', 0.0, 0.4],
+    ['C5', 0.4, 0.4],
+    ['D5', 0.8, 0.4],
+    ['D#5', 1.2, 0.4],
+    ['E5', 1.6, 0.4],
+    ['G5', 2.0, 0.4],
+    ['A5', 2.4, 0.9],
+    ['A4', 5.0, 0.4],
+    ['D5', 5.4, 0.3],
+    ['D#5', 5.7, 0.3],
+    ['E5', 6.0, 0.4],
+    ['D5', 6.4, 0.3],
+    ['D#5', 6.7, 0.3],
+    ['E5', 7.0, 0.4],
+    ['G5', 7.4, 0.3],
+    ['A5', 7.7, 1.0],
+    ['A4', 10.0, 0.3],
+    ['D5', 10.3, 0.25],
+    ['D#5', 10.55, 0.25],
+    ['D5', 10.8, 0.25],
+    ['D#5', 11.05, 0.25],
+    ['E5', 11.3, 0.35],
+    ['G5', 11.65, 0.35],
+    ['E5', 12.0, 0.35],
+    ['D#5', 12.35, 0.35],
+    ['D5', 12.7, 0.35],
+    ['C5', 13.05, 0.35],
+    ['A4', 13.4, 1.2],
+  ],
+  tutorial: {
+    title: 'Blue Notes',
+    summary:
+      'In a blues scale, D♯ sits between D (the minor 3rd above A) and E. It\'s a "blue note" — tension that doesn\'t need to resolve. The clash is the point.',
+    level: 'Advanced',
+    objectives: [
+      'Hear what a blue note is and why it sounds smoky rather than wrong',
+      'Notice the difference between a "leading tone" (must resolve) and a "blue note" (can stay)',
+      'Use D and D♯ as neighbors to add expressive grit',
+    ],
+    sections: [
+      {
+        id: 'scale',
+        title: 'The A minor blues scale',
+        start: 0,
+        end: 5,
+        focus: 'A C D D♯ E G — six notes, one of them deliberately "wrong"',
+        learn: [
+          'The D♯ is between the minor 3rd (C above A) and the 5th (E)',
+          'In jazz/blues, this in-between tone is welcomed, not avoided',
+        ],
+      },
+      {
+        id: 'lick',
+        title: 'The bluesy lick',
+        start: 5,
+        end: 10,
+        focus: 'D → D♯ → E — the classic "bent" sound',
+        learn: [
+          'D♯ acts as a colored neighbor between D and E',
+          "It sounds intentional because it never sits still long enough to feel 'wrong'",
+        ],
+        tryThis: [
+          "Play D, then D♯, then E rapidly — that's the blue gesture",
+          'Slow it to 0.5× and listen to how the D♯ "leans" without resolving',
+        ],
+      },
+      {
+        id: 'slide',
+        title: 'Slide between',
+        start: 10,
+        end: 15,
+        focus: 'Going back and forth — D, D♯, D, D♯ — never settling',
+        learn: [
+          'Same D♯ that was tense in Für Elise is welcome here',
+          'Context — not the note itself — defines tension and release',
+        ],
+        reinforce: [
+          'In Für Elise, D♯ had to resolve to E. In a blues, D♯ can sit there',
+          'Same two notes, completely different musical job',
+        ],
+      },
+    ],
+  },
+}

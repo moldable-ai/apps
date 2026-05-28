@@ -1,7 +1,7 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-05-28T15:49:46.685Z",
+  "generatedAt": "2026-05-28T18:57:04.842Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
@@ -25,7 +25,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "code-editor",
@@ -43,7 +43,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "affirmations",
@@ -61,7 +61,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "db-browser",
@@ -79,7 +79,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "git-flow",
@@ -102,7 +102,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "hello-moldables",
@@ -123,7 +123,7 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "images",
@@ -146,7 +146,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "mail",
@@ -169,7 +169,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "meetings",
@@ -193,7 +193,7 @@
         "@moldable-ai/editor": "^0.1.11",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "microscope",
@@ -217,7 +217,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "notes",
@@ -241,7 +241,7 @@
         "@moldable-ai/editor": "^0.1.11",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "piano",
@@ -259,7 +259,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "remotion",
@@ -277,7 +277,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "scribo",
@@ -301,7 +301,7 @@
         "@moldable-ai/editor": "^0.1.11",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "tasks",
@@ -319,7 +319,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "time-tracker",
@@ -337,7 +337,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "todo",
@@ -360,7 +360,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     },
     {
       "id": "wiki",
@@ -384,7 +384,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "90456e1d2e4759501a664bb6bb6feee76c656243"
+      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
     }
   ],
   "categories": [

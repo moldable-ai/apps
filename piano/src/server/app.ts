@@ -13,6 +13,7 @@ import {
   defaultPianoAudioSettings,
   pianoPresetById,
 } from '../shared/audio'
+import type { CourseProgress, PianoCourse } from '../shared/course'
 import { type Folder, toneFromSeed } from '../shared/folder'
 import {
   type PianoSong,
@@ -20,6 +21,7 @@ import {
   type SongWorkspacePracticeSettings,
   getSongDuration,
 } from '../shared/song'
+import { defaultCourseIds, defaultCourses } from './courses'
 import {
   defaultClassicsIds,
   defaultSongs,
@@ -101,6 +103,18 @@ function foldersPath(dataDir: string) {
   return safePath(dataDir, 'folders.json')
 }
 
+function coursesDir(dataDir: string) {
+  return safePath(dataDir, 'courses')
+}
+
+function coursePath(dataDir: string, courseId: string) {
+  return safePath(coursesDir(dataDir), `${courseId}.json`)
+}
+
+function courseProgressPath(dataDir: string) {
+  return safePath(dataDir, 'course-progress.json')
+}
+
 function compareByName(a: { name: string }, b: { name: string }) {
   return a.name.localeCompare(b.name, undefined, {
     sensitivity: 'base',
@@ -168,6 +182,136 @@ async function readFolders(dataDir: string): Promise<Folder[]> {
 async function writeFolders(dataDir: string, folders: Folder[]) {
   await mkdir(dataDir, { recursive: true })
   await writeJson(foldersPath(dataDir), folders)
+}
+
+// ─── Courses ─────────────────────────────────────────────────────────
+
+function defaultCourseProgress(courseId: string): CourseProgress {
+  return {
+    courseId,
+    completedLessonIds: [],
+    currentLessonId: null,
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+function countCourseLessons(course: PianoCourse): number {
+  return course.modules.reduce(
+    (total, module) => total + module.lessons.length,
+    0,
+  )
+}
+
+function courseHasLesson(course: PianoCourse, lessonId: string): boolean {
+  return course.modules.some((module) =>
+    module.lessons.some((lesson) => lesson.id === lessonId),
+  )
+}
+
+function nextUncompleted(
+  course: PianoCourse,
+  completed: Set<string>,
+  afterLessonId: string,
+): string | null {
+  const allLessons = course.modules.flatMap((module) => module.lessons)
+  const startIndex = allLessons.findIndex(
+    (lesson) => lesson.id === afterLessonId,
+  )
+  if (startIndex === -1) return null
+  for (let i = startIndex + 1; i < allLessons.length; i += 1) {
+    if (!completed.has(allLessons[i].id)) return allLessons[i].id
+  }
+  // Wrap from the start
+  for (let i = 0; i < startIndex; i += 1) {
+    if (!completed.has(allLessons[i].id)) return allLessons[i].id
+  }
+  return null
+}
+
+async function ensureSeedCourses(dataDir: string) {
+  await mkdir(coursesDir(dataDir), { recursive: true })
+  for (const course of defaultCourses) {
+    const path = coursePath(dataDir, course.id)
+    const existing = await readJson<PianoCourse | null>(path, null)
+    if (!existing) {
+      await writeJson(path, course)
+    }
+  }
+}
+
+async function readCourses(dataDir: string): Promise<PianoCourse[]> {
+  const courses: PianoCourse[] = []
+  // Default-order — read the seeded ids first, then any user-added ones
+  const seen = new Set<string>()
+  for (const id of defaultCourseIds) {
+    const course = await readJson<PianoCourse | null>(
+      coursePath(dataDir, id),
+      null,
+    )
+    if (course) {
+      courses.push(course)
+      seen.add(course.id)
+    }
+  }
+  try {
+    const entries = await readdir(coursesDir(dataDir), { withFileTypes: true })
+    for (const entry of entries) {
+      if (!entry.isFile() || !entry.name.endsWith('.json')) continue
+      const id = entry.name.replace(/\.json$/, '')
+      if (seen.has(id)) continue
+      const course = await readJson<PianoCourse | null>(
+        coursePath(dataDir, id),
+        null,
+      )
+      if (course?.id) {
+        courses.push(course)
+        seen.add(course.id)
+      }
+    }
+  } catch {
+    // directory may not exist yet — fine
+  }
+  return courses
+}
+
+async function readCourse(
+  dataDir: string,
+  courseId: string,
+): Promise<PianoCourse | null> {
+  if (!/^[a-z0-9-]+$/.test(courseId)) return null
+  return readJson<PianoCourse | null>(coursePath(dataDir, courseId), null)
+}
+
+async function readAllCourseProgress(
+  dataDir: string,
+): Promise<Record<string, CourseProgress>> {
+  const raw = await readJson<Record<string, CourseProgress> | null>(
+    courseProgressPath(dataDir),
+    null,
+  )
+  if (!raw || typeof raw !== 'object') return {}
+  return raw
+}
+
+async function writeAllCourseProgress(
+  dataDir: string,
+  progress: Record<string, CourseProgress>,
+) {
+  await mkdir(dataDir, { recursive: true })
+  await writeJson(courseProgressPath(dataDir), progress)
+}
+
+async function updateCourseProgress(
+  dataDir: string,
+  courseId: string,
+  update: (current: CourseProgress) => CourseProgress,
+): Promise<CourseProgress> {
+  const all = await readAllCourseProgress(dataDir)
+  const current = all[courseId] ?? defaultCourseProgress(courseId)
+  const next = update(current)
+  all[courseId] = next
+  await writeAllCourseProgress(dataDir, all)
+  return next
 }
 
 function isValidSongId(songId: string) {
@@ -845,6 +989,10 @@ function sanitizeSongDocument(
       source.tutorial === undefined
         ? existing?.tutorial
         : sanitizeSongTutorial(source.tutorial),
+    pausePoints:
+      source.pausePoints === undefined
+        ? existing?.pausePoints
+        : sanitizePausePoints(source.pausePoints),
     notes: notes.map((note, index) => ({
       ...note,
       id: note.id || `note-${index + 1}`,
@@ -909,6 +1057,19 @@ function sanitizeSplitMidi(value: unknown): number | undefined {
 function sanitizePlaybackSpeed(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
   return Math.max(0.1, Math.min(2, value))
+}
+
+function sanitizePausePoints(value: unknown): number[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const cleaned = value
+    .filter(
+      (entry): entry is number =>
+        typeof entry === 'number' && Number.isFinite(entry) && entry >= 0,
+    )
+    .map((entry) => Number(entry.toFixed(3)))
+  if (cleaned.length === 0) return undefined
+  const unique = Array.from(new Set(cleaned)).sort((a, b) => a - b)
+  return unique
 }
 
 function sanitizeSongPracticeSettings(value: unknown) {
@@ -1422,6 +1583,7 @@ async function readLibraryRevision(dataDir: string) {
 
 async function ensureSeedSongs(dataDir: string) {
   await mkdir(songsDir(dataDir), { recursive: true })
+  await ensureSeedCourses(dataDir)
 
   for (const id of retiredDefaultSongIds) {
     const path = songPath(dataDir, id)
@@ -2297,6 +2459,183 @@ app.post('/api/folders/move', async (c) => {
     return jsonError(
       c,
       error instanceof Error ? error.message : 'Failed to move song',
+    )
+  }
+})
+
+// ─────────────────────────────────────────────────────────────────────
+// Courses
+// ─────────────────────────────────────────────────────────────────────
+
+app.get('/api/courses', async (c) => {
+  try {
+    const dataDir = getDataDir(c)
+    await ensureSeedCourses(dataDir)
+    const courses = await readCourses(dataDir)
+    const progressMap = await readAllCourseProgress(dataDir)
+    return c.json({
+      courses: courses.map((course) => ({
+        course,
+        progress: progressMap[course.id] ?? defaultCourseProgress(course.id),
+        totalLessons: countCourseLessons(course),
+        completedCount: (progressMap[course.id]?.completedLessonIds ?? [])
+          .length,
+      })),
+    })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to list courses',
+    )
+  }
+})
+
+app.get('/api/courses/:courseId', async (c) => {
+  try {
+    const dataDir = getDataDir(c)
+    await ensureSeedCourses(dataDir)
+    const course = await readCourse(dataDir, c.req.param('courseId'))
+    if (!course) return jsonError(c, 'Course not found', 404)
+    const progressMap = await readAllCourseProgress(dataDir)
+    return c.json({
+      course,
+      progress: progressMap[course.id] ?? defaultCourseProgress(course.id),
+    })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to read course',
+    )
+  }
+})
+
+app.post('/api/courses/:courseId/complete', async (c) => {
+  try {
+    const courseId = c.req.param('courseId')
+    const body = (await c.req.json().catch(() => null)) as {
+      lessonId?: unknown
+    } | null
+    if (!body || typeof body.lessonId !== 'string') {
+      return jsonError(c, 'lessonId is required', 400)
+    }
+    const dataDir = getDataDir(c)
+    const course = await readCourse(dataDir, courseId)
+    if (!course) return jsonError(c, 'Course not found', 404)
+    if (!courseHasLesson(course, body.lessonId)) {
+      return jsonError(c, 'Lesson not found in course', 404)
+    }
+    const progress = await updateCourseProgress(
+      dataDir,
+      courseId,
+      (current) => {
+        const next = new Set(current.completedLessonIds)
+        next.add(body.lessonId as string)
+        const nextLessonId = nextUncompleted(
+          course,
+          next,
+          body.lessonId as string,
+        )
+        return {
+          ...current,
+          completedLessonIds: [...next],
+          currentLessonId: nextLessonId,
+          updatedAt: new Date().toISOString(),
+        }
+      },
+    )
+    return c.json({ course, progress })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to mark lesson complete',
+    )
+  }
+})
+
+app.post('/api/courses/:courseId/uncomplete', async (c) => {
+  try {
+    const courseId = c.req.param('courseId')
+    const body = (await c.req.json().catch(() => null)) as {
+      lessonId?: unknown
+    } | null
+    if (!body || typeof body.lessonId !== 'string') {
+      return jsonError(c, 'lessonId is required', 400)
+    }
+    const dataDir = getDataDir(c)
+    const course = await readCourse(dataDir, courseId)
+    if (!course) return jsonError(c, 'Course not found', 404)
+    const progress = await updateCourseProgress(
+      dataDir,
+      courseId,
+      (current) => {
+        const next = current.completedLessonIds.filter(
+          (id) => id !== body.lessonId,
+        )
+        return {
+          ...current,
+          completedLessonIds: next,
+          updatedAt: new Date().toISOString(),
+        }
+      },
+    )
+    return c.json({ course, progress })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to undo completion',
+    )
+  }
+})
+
+app.post('/api/courses/:courseId/current', async (c) => {
+  try {
+    const courseId = c.req.param('courseId')
+    const body = (await c.req.json().catch(() => null)) as {
+      lessonId?: unknown
+    } | null
+    const dataDir = getDataDir(c)
+    const course = await readCourse(dataDir, courseId)
+    if (!course) return jsonError(c, 'Course not found', 404)
+    const lessonId =
+      typeof body?.lessonId === 'string' &&
+      courseHasLesson(course, body.lessonId)
+        ? body.lessonId
+        : null
+    const progress = await updateCourseProgress(
+      dataDir,
+      courseId,
+      (current) => ({
+        ...current,
+        currentLessonId: lessonId,
+        updatedAt: new Date().toISOString(),
+      }),
+    )
+    return c.json({ course, progress })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to set current lesson',
+    )
+  }
+})
+
+app.post('/api/courses/:courseId/reset', async (c) => {
+  try {
+    const courseId = c.req.param('courseId')
+    const dataDir = getDataDir(c)
+    const course = await readCourse(dataDir, courseId)
+    if (!course) return jsonError(c, 'Course not found', 404)
+    const progress = await updateCourseProgress(dataDir, courseId, () => ({
+      courseId,
+      completedLessonIds: [],
+      currentLessonId: null,
+      updatedAt: new Date().toISOString(),
+    }))
+    return c.json({ course, progress })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to reset course',
     )
   }
 })

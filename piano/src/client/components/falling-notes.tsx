@@ -13,6 +13,8 @@ interface FallingNotesProps {
   cursor: number
   lookAheadSeconds?: number
   height?: number
+  /** Bumps the reveal-animation key — set to song id to retrigger on lesson change. */
+  revealKey?: string
 }
 
 const KEY_BY_MIDI = new Map(PIANO_KEYS.map((key) => [key.midi, key]))
@@ -74,6 +76,7 @@ export function FallingNotes({
   cursor,
   lookAheadSeconds = 5.5,
   height = 380,
+  revealKey,
 }: FallingNotesProps) {
   const hitLine = height - 1
   const pixelsPerSecond = (hitLine - 8) / lookAheadSeconds
@@ -191,105 +194,110 @@ export function FallingNotes({
           ),
         )}
 
-        {/* glow underlay for each note */}
-        {visibleNotes.map((note) => {
-          const { x, width } = noteGeometry(note.midi)
-          const timeUntilStart = note.start - cursor
-          const noteHeight = Math.max(10, note.duration * pixelsPerSecond)
-          const topRaw =
-            hitLine - (timeUntilStart + note.duration) * pixelsPerSecond
-          const top = topRaw
-          const tone = note.color ?? midiToTone(note.midi)
-          const active =
-            cursor >= note.start && cursor < note.start + note.duration
-          const opacity = active ? 0.5 : 0.22
+        {/* The note bars + their glows are wrapped in a group keyed by
+            revealKey so they re-fire the reveal animation on lesson change.
+            The grid, hit-line, dividers, and lanes stay still. */}
+        <g key={revealKey} className="animate-piano-notes-reveal">
+          {/* glow underlay for each note */}
+          {visibleNotes.map((note) => {
+            const { x, width } = noteGeometry(note.midi)
+            const timeUntilStart = note.start - cursor
+            const noteHeight = Math.max(10, note.duration * pixelsPerSecond)
+            const topRaw =
+              hitLine - (timeUntilStart + note.duration) * pixelsPerSecond
+            const top = topRaw
+            const tone = note.color ?? midiToTone(note.midi)
+            const active =
+              cursor >= note.start && cursor < note.start + note.duration
+            const opacity = active ? 0.5 : 0.22
 
-          return (
-            <rect
-              key={`glow-${note.id}`}
-              x={x - 3}
-              y={top - 1}
-              width={width + 6}
-              height={noteHeight + 2}
-              rx="9"
-              fill={tone}
-              opacity={opacity}
-              filter="url(#note-glow)"
-            />
-          )
-        })}
-
-        {/* notes */}
-        {visibleNotes.map((note) => {
-          const { x, width } = noteGeometry(note.midi)
-          const timeUntilStart = note.start - cursor
-          const noteHeight = Math.max(10, note.duration * pixelsPerSecond)
-          const topRaw =
-            hitLine - (timeUntilStart + note.duration) * pixelsPerSecond
-          const top = topRaw
-          const tone = note.color ?? midiToTone(note.midi)
-          const active =
-            cursor >= note.start && cursor < note.start + note.duration
-
-          const gradientId = `note-grad-${note.id}`
-
-          return (
-            <g key={note.id}>
-              <defs>
-                <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor={tone} stopOpacity="0.98" />
-                  <stop offset="100%" stopColor={tone} stopOpacity="0.78" />
-                </linearGradient>
-              </defs>
+            return (
               <rect
-                x={x}
-                y={top}
-                width={width}
-                height={noteHeight}
-                rx="5"
-                fill={`url(#${gradientId})`}
-                stroke="rgba(255,255,255,0.35)"
-                strokeWidth="0.6"
+                key={`glow-${note.id}`}
+                x={x - 3}
+                y={top - 1}
+                width={width + 6}
+                height={noteHeight + 2}
+                rx="9"
+                fill={tone}
+                opacity={opacity}
+                filter="url(#note-glow)"
               />
-              {/* glossy highlight */}
-              <rect
-                x={x + 1}
-                y={top + 1}
-                width={width - 2}
-                height={Math.min(6, noteHeight - 2)}
-                rx="3"
-                fill="rgba(255,255,255,0.28)"
-              />
-              {active ? (
+            )
+          })}
+
+          {/* notes */}
+          {visibleNotes.map((note) => {
+            const { x, width } = noteGeometry(note.midi)
+            const timeUntilStart = note.start - cursor
+            const noteHeight = Math.max(10, note.duration * pixelsPerSecond)
+            const topRaw =
+              hitLine - (timeUntilStart + note.duration) * pixelsPerSecond
+            const top = topRaw
+            const tone = note.color ?? midiToTone(note.midi)
+            const active =
+              cursor >= note.start && cursor < note.start + note.duration
+
+            const gradientId = `note-grad-${note.id}`
+
+            return (
+              <g key={note.id}>
+                <defs>
+                  <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor={tone} stopOpacity="0.98" />
+                    <stop offset="100%" stopColor={tone} stopOpacity="0.78" />
+                  </linearGradient>
+                </defs>
                 <rect
-                  x={x - 2}
-                  y={top - 2}
-                  width={width + 4}
-                  height={noteHeight + 4}
-                  rx="6"
-                  fill="none"
-                  stroke="rgba(255,255,255,0.85)"
-                  strokeWidth="1.1"
+                  x={x}
+                  y={top}
+                  width={width}
+                  height={noteHeight}
+                  rx="5"
+                  fill={`url(#${gradientId})`}
+                  stroke="rgba(255,255,255,0.35)"
+                  strokeWidth="0.6"
                 />
-              ) : null}
-              {/* pitch label, only if tall enough */}
-              {noteHeight > 22 && width > 14 ? (
-                <text
-                  x={x + width / 2}
-                  y={top + noteHeight - 6}
-                  textAnchor="middle"
-                  fontSize="8.5"
-                  fontWeight="600"
-                  fill="white"
-                  opacity="0.78"
-                  style={{ letterSpacing: 0.2 }}
-                >
-                  {note.pitch.replace(/\d/, '')}
-                </text>
-              ) : null}
-            </g>
-          )
-        })}
+                {/* glossy highlight */}
+                <rect
+                  x={x + 1}
+                  y={top + 1}
+                  width={width - 2}
+                  height={Math.min(6, noteHeight - 2)}
+                  rx="3"
+                  fill="rgba(255,255,255,0.28)"
+                />
+                {active ? (
+                  <rect
+                    x={x - 2}
+                    y={top - 2}
+                    width={width + 4}
+                    height={noteHeight + 4}
+                    rx="6"
+                    fill="none"
+                    stroke="rgba(255,255,255,0.85)"
+                    strokeWidth="1.1"
+                  />
+                ) : null}
+                {/* pitch label, only if tall enough */}
+                {noteHeight > 22 && width > 14 ? (
+                  <text
+                    x={x + width / 2}
+                    y={top + noteHeight - 6}
+                    textAnchor="middle"
+                    fontSize="8.5"
+                    fontWeight="600"
+                    fill="white"
+                    opacity="0.78"
+                    style={{ letterSpacing: 0.2 }}
+                  >
+                    {note.pitch.replace(/\d/, '')}
+                  </text>
+                ) : null}
+              </g>
+            )
+          })}
+        </g>
 
         {/* hit line — luminous bar */}
         <rect

@@ -1,5 +1,4 @@
 import {
-  ArrowLeft,
   BookOpen,
   Check,
   ChevronDown,
@@ -97,6 +96,26 @@ interface PracticeViewProps {
   onInstallPack: (packId: string) => Promise<void>
   installingPackIds: Set<string>
   isAudioOptionsLoading: boolean
+  courseContext?: CourseContext | null
+}
+
+export interface CourseContext {
+  courseId: string
+  courseTitle: string
+  courseTone: string
+  lessonId: string
+  lessonIndex: number
+  lessonCount: number
+  isLessonComplete: boolean
+  isLastLesson: boolean
+  /** Mark current complete (if not yet) and advance — or finish on last lesson. */
+  onContinue: () => void
+  /** Total tutorial parts in this lesson. */
+  partCount: number
+  /** Index of the part the cursor is currently inside. */
+  currentPartIndex: number
+  /** Seek to the start of the next tutorial part. */
+  onNextPart: () => void
 }
 
 const SPEED_OPTIONS = [0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5]
@@ -137,18 +156,156 @@ function TutorialBullets({
   )
 }
 
+function CourseHeaderStrip({ context }: { context: CourseContext }) {
+  const {
+    isLessonComplete,
+    isLastLesson,
+    courseTone,
+    partCount,
+    currentPartIndex,
+    onNextPart,
+  } = context
+  const hasParts = partCount > 1
+  const onLastPart = !hasParts || currentPartIndex >= partCount - 1
+
+  // The primary button walks the user part-by-part through the lesson, then
+  // advances to the next lesson only once they've reached the last part.
+  let label: string
+  let onClick: () => void
+  if (!onLastPart) {
+    label = 'Next part →'
+    onClick = onNextPart
+  } else if (isLessonComplete && isLastLesson) {
+    label = 'Back to course'
+    onClick = context.onContinue
+  } else if (isLastLesson) {
+    label = 'Finish'
+    onClick = context.onContinue
+  } else {
+    label = 'Next lesson →'
+    onClick = context.onContinue
+  }
+
+  // On the final part the button advances the lesson, so render it as the
+  // accent-filled CTA. While walking parts it's a quieter outline so it reads
+  // as "keep going within this lesson".
+  const filled = onLastPart && !isLessonComplete
+
+  return (
+    <div
+      className="border-border/40 flex flex-col gap-2 border-b px-4 pb-3 pt-3"
+      style={{ borderTopColor: courseTone }}
+    >
+      <div className="flex items-baseline justify-between gap-2">
+        <p
+          className="piano-mono truncate text-[10px] font-medium uppercase tracking-[0.16em]"
+          style={{ color: courseTone }}
+        >
+          {context.courseTitle}
+        </p>
+        <span className="text-muted-foreground/80 piano-mono shrink-0 text-[10px] tabular-nums">
+          Lesson {context.lessonIndex + 1} of {context.lessonCount}
+        </span>
+      </div>
+
+      {hasParts ? (
+        <div className="flex items-center gap-2">
+          <div className="flex flex-1 items-center gap-1">
+            {Array.from({ length: partCount }).map((_, i) => (
+              <span
+                key={i}
+                className="h-1 flex-1 rounded-full transition-colors"
+                style={{
+                  background:
+                    i < currentPartIndex
+                      ? courseTone
+                      : i === currentPartIndex
+                        ? courseTone
+                        : 'color-mix(in oklch, var(--muted-foreground) 28%, transparent)',
+                  opacity:
+                    i === currentPartIndex
+                      ? 1
+                      : i < currentPartIndex
+                        ? 0.55
+                        : 1,
+                }}
+              />
+            ))}
+          </div>
+          <span className="text-muted-foreground/80 piano-mono shrink-0 text-[10px] tabular-nums">
+            Part {currentPartIndex + 1}/{partCount}
+          </span>
+        </div>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={onClick}
+        className="inline-flex h-9 w-full cursor-pointer items-center justify-center gap-1.5 rounded-full text-[12.5px] font-medium transition-opacity hover:opacity-90"
+        style={{
+          background: filled ? courseTone : 'transparent',
+          color: filled ? 'var(--background)' : courseTone,
+          border: filled ? 'none' : `1px solid ${courseTone}`,
+        }}
+      >
+        {label}
+      </button>
+    </div>
+  )
+}
+
 function TutorialPanel({
   song,
   activeSection,
+  cursor,
   onSeek,
+  courseContext,
 }: {
   song: PianoSong
   activeSection: SongTutorialSection | null
+  cursor: number
   onSeek: (cursor: number) => void
+  courseContext?: CourseContext | null
 }) {
   const tutorial = song.tutorial
+  const currentSection = activeSection ?? tutorial?.sections[0] ?? null
+  const courseTone = courseContext?.courseTone
+
+  // Scroll the active part into view within the panel when it changes (e.g.
+  // after "Next part" or when playback advances the cursor into a new part).
+  const sectionRefs = useRef<Map<string, HTMLDivElement | null>>(new Map())
+  const currentSectionId = currentSection?.id ?? null
+  useEffect(() => {
+    if (!currentSectionId) return
+    const el = sectionRefs.current.get(currentSectionId)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+  }, [currentSectionId])
+
   if (!tutorial) return null
-  const currentSection = activeSection ?? tutorial.sections[0] ?? null
+
+  // Part-aware course context: tell the header strip which part the cursor is
+  // inside and how to advance to the next part. The strip's primary button
+  // walks parts before advancing the whole lesson.
+  const sectionList = tutorial.sections
+  const currentPartIndex = currentSection
+    ? Math.max(
+        0,
+        sectionList.findIndex((section) => section.id === currentSection.id),
+      )
+    : 0
+  const partAwareContext: CourseContext | null = courseContext
+    ? {
+        ...courseContext,
+        partCount: sectionList.length,
+        currentPartIndex,
+        onNextPart: () => {
+          const next = sectionList[currentPartIndex + 1]
+          if (next) onSeek(next.start)
+        },
+      }
+    : null
 
   return (
     <aside
@@ -156,6 +313,9 @@ function TutorialPanel({
       style={{ width: TUTORIAL_PANEL_WIDTH }}
       aria-label="Tutorial notes"
     >
+      {partAwareContext ? (
+        <CourseHeaderStrip context={partAwareContext} />
+      ) : null}
       <div className="flex shrink-0 items-center justify-between px-4 pt-3">
         <div className="flex items-center gap-2">
           <BookOpen className="text-muted-foreground size-3.5" />
@@ -171,7 +331,7 @@ function TutorialPanel({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(var(--chat-safe-padding,0px)+1.5rem)] pt-4">
-        <div className="space-y-5">
+        <div key={song.id} className="animate-piano-tutorial-swap space-y-5">
           <section>
             <h3 className="piano-serif text-foreground text-base font-semibold leading-tight tracking-tight">
               {tutorial.title ?? song.title}
@@ -195,82 +355,96 @@ function TutorialPanel({
             <div className="-mx-1 space-y-1">
               {tutorial.sections.map((section, index) => {
                 const active = currentSection?.id === section.id
+                const done = !active && cursor >= section.end
+                const accent = courseTone ?? 'var(--foreground)'
                 return (
-                  <button
+                  <div
                     key={section.id}
-                    type="button"
-                    onClick={() => onSeek(section.start)}
+                    ref={(el) => {
+                      sectionRefs.current.set(section.id, el)
+                    }}
                     className={cn(
-                      'flex w-full cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors',
-                      active
-                        ? 'bg-muted/70 text-foreground'
-                        : 'text-muted-foreground hover:bg-muted/45 hover:text-foreground',
+                      'scroll-mt-2 rounded-md transition-colors',
+                      active ? 'bg-muted/70' : '',
                     )}
                   >
-                    <span className="piano-mono mt-0.5 shrink-0 text-[10px] tabular-nums opacity-70">
-                      {index + 1}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">
-                        {section.title}
+                    <button
+                      type="button"
+                      onClick={() => onSeek(section.start)}
+                      className={cn(
+                        'group/section flex w-full cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors',
+                        active
+                          ? 'text-foreground'
+                          : done
+                            ? 'text-muted-foreground/80 hover:bg-muted/45 hover:text-foreground'
+                            : 'text-muted-foreground hover:bg-muted/45 hover:text-foreground',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'flex size-4 shrink-0 items-center justify-center rounded-full text-[8px] tabular-nums transition-colors',
+                          active
+                            ? 'text-background'
+                            : done
+                              ? 'text-background'
+                              : 'text-muted-foreground/70 border-border/70 border',
+                        )}
+                        style={
+                          active || done ? { background: accent } : undefined
+                        }
+                        aria-label={
+                          active ? 'Current part' : done ? 'Played' : 'Upcoming'
+                        }
+                      >
+                        {done ? (
+                          <Check className="size-2.5" strokeWidth={3} />
+                        ) : (
+                          <span className="piano-mono">{index + 1}</span>
+                        )}
                       </span>
-                      {section.focus ? (
-                        <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 opacity-75">
-                          {section.focus}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">
+                          {section.title}
                         </span>
-                      ) : null}
-                    </span>
-                  </button>
+                        {section.focus ? (
+                          <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 opacity-75">
+                            {section.focus}
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                    {active ? (
+                      <div
+                        key={`expanded-${section.id}`}
+                        className="animate-piano-section-expand space-y-3 px-2.5 pb-3 pt-1"
+                      >
+                        <TutorialBullets
+                          title="Listen for"
+                          items={section.learn}
+                          icon={<BookOpen className="size-3" />}
+                        />
+                        <TutorialBullets
+                          title="Try this"
+                          items={section.tryThis}
+                          icon={<Sparkles className="size-3" />}
+                        />
+                        <TutorialBullets
+                          title="Break it on purpose"
+                          items={section.breakIt}
+                          icon={<RotateCcw className="size-3" />}
+                        />
+                        <TutorialBullets
+                          title="Reinforce"
+                          items={section.reinforce}
+                          icon={<Check className="size-3" />}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
                 )
               })}
             </div>
           </section>
-
-          {currentSection ? (
-            <section className="border-border/60 bg-card/55 rounded-xl border p-3 shadow-sm">
-              <div className="mb-3 flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-foreground text-sm font-semibold leading-5">
-                    {currentSection.title}
-                  </p>
-                  {currentSection.focus ? (
-                    <p className="text-muted-foreground mt-0.5 text-[11px] leading-4">
-                      {currentSection.focus}
-                    </p>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onSeek(currentSection.start)}
-                  className="text-muted-foreground hover:bg-muted/70 hover:text-foreground shrink-0 cursor-pointer rounded-full px-2 py-1 text-[10px] font-medium transition-colors"
-                >
-                  Jump
-                </button>
-              </div>
-              <div className="space-y-4">
-                <TutorialBullets
-                  title="Listen for"
-                  items={currentSection.learn}
-                  icon={<BookOpen className="size-3" />}
-                />
-                <TutorialBullets
-                  title="Try this"
-                  items={currentSection.tryThis}
-                  icon={<Sparkles className="size-3" />}
-                />
-                <TutorialBullets
-                  title="Break it on purpose"
-                  items={currentSection.breakIt}
-                  icon={<RotateCcw className="size-3" />}
-                />
-                <TutorialBullets
-                  title="Reinforce"
-                  items={currentSection.reinforce}
-                  icon={<Check className="size-3" />}
-                />
-              </div>
-            </section>
-          ) : null}
         </div>
       </div>
     </aside>
@@ -649,6 +823,7 @@ export function PracticeView({
   onInstallPack,
   installingPackIds,
   isAudioOptionsLoading,
+  courseContext,
 }: PracticeViewProps) {
   const stageRef = useRef<HTMLDivElement | null>(null)
   const wrapRef = useRef<HTMLDivElement | null>(null)
@@ -779,7 +954,10 @@ export function PracticeView({
     }
   }, [isPlaying])
 
-  // On mount, scroll to center the song's note range
+  // Scroll to center the song's note range — smoothly when the song id
+  // changes (lesson transition), instantly on first mount so there's no
+  // initial scroll animation from 0.
+  const previousSongIdRef = useRef<string | null>(null)
   useEffect(() => {
     if (!stageRef.current || practiceNotes.length === 0) return
     const stage = stageRef.current
@@ -789,11 +967,20 @@ export function PracticeView({
     const totalWidth = stage.scrollWidth
     const visibleWidth = stage.clientWidth
     if (totalWidth <= visibleWidth) return
-    stage.scrollLeft = clampScrollTarget(
+    const target = clampScrollTarget(
       ratio * totalWidth - visibleWidth / 2,
       totalWidth,
       visibleWidth,
     )
+    const isLessonTransition =
+      previousSongIdRef.current !== null &&
+      previousSongIdRef.current !== song.id
+    previousSongIdRef.current = song.id
+    if (isLessonTransition) {
+      stage.scrollTo({ left: target, behavior: 'smooth' })
+    } else {
+      stage.scrollLeft = target
+    }
   }, [practiceNotes, song.id])
 
   const loadingSamples =
@@ -827,17 +1014,6 @@ export function PracticeView({
     >
       {/* Top chrome */}
       <header className="animate-piano-chrome-in border-border/40 bg-background/85 z-20 flex h-12 shrink-0 items-center gap-3 border-b px-3 backdrop-blur-xl">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="text-muted-foreground hover:text-foreground -ml-1 h-7 cursor-pointer gap-1.5 rounded-full pl-1.5 pr-2.5 text-[12px]"
-          onClick={onBack}
-        >
-          <ArrowLeft className="size-3.5" />
-          Library
-        </Button>
-        <div className="bg-border/70 h-4 w-px" />
         <div className="min-w-0 flex-1">
           <h2 className="piano-serif truncate text-[15px] font-semibold leading-tight tracking-tight">
             {song.title}
@@ -933,6 +1109,7 @@ export function PracticeView({
                     notes={practiceNotes}
                     cursor={visualCursor}
                     height={stageHeight}
+                    revealKey={song.id}
                   />
                 ) : null}
                 <div className="relative pb-3">
@@ -951,7 +1128,9 @@ export function PracticeView({
           <TutorialPanel
             song={song}
             activeSection={activeTutorialSection}
+            cursor={cursor}
             onSeek={onSeek}
+            courseContext={courseContext ?? null}
           />
         ) : null}
       </div>

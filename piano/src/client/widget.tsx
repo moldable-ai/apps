@@ -1,229 +1,186 @@
 import { useQuery } from '@tanstack/react-query'
+import { Play } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { useWorkspace } from '@moldable-ai/ui'
-import type { PianoSong, SongSummary } from '../shared/song'
-import { formatDuration, midiToTone } from './piano-utils'
+import {
+  type CourseSummary,
+  type CoursesListResponse,
+  DIFFICULTY_LABELS,
+  findFirstIncompleteLessonId,
+  findLesson,
+  getAllLessons,
+} from '../shared/course'
 
-interface SongsResponse {
-  songs: SongSummary[]
+interface CoursesQueryResult {
+  data?: CoursesListResponse
+  isLoading: boolean
+  isError: boolean
 }
 
-const GHOST_EXAMPLES: Array<{
-  id: string
-  title: string
-  byline: string
-  tone: string
-}> = [
-  {
-    id: 'g-1',
-    title: 'Clair de Lune',
-    byline: 'C. Debussy',
-    tone: midiToTone(60),
-  },
-  {
-    id: 'g-2',
-    title: 'Fur Elise',
-    byline: 'L. V. Beethoven',
-    tone: midiToTone(64),
-  },
-  { id: 'g-3', title: 'Practice roll', byline: 'Ready', tone: midiToTone(67) },
-]
-
-function songByline(song: SongSummary) {
-  return song.composer?.trim() || song.artist?.trim() || null
+function useCourses(): CoursesQueryResult {
+  const { workspaceId, fetchWithWorkspace } = useWorkspace()
+  return useQuery({
+    queryKey: ['courses', workspaceId],
+    queryFn: async () => {
+      const res = await fetchWithWorkspace('/api/courses')
+      if (!res.ok) throw new Error('Failed to load courses')
+      return (await res.json()) as CoursesListResponse
+    },
+    staleTime: 30_000,
+  })
 }
 
-function MiniRoll({
-  notes,
-  tone,
-}: {
-  notes: PianoSong['notes']
-  tone: string
-}) {
-  if (notes.length === 0) {
-    return <div className="h-4" />
-  }
-  const head = notes.slice(0, 24)
-  const minMidi = Math.min(...head.map((n) => n.midi)) - 1
-  const maxMidi = Math.max(...head.map((n) => n.midi)) + 1
-  const span = Math.max(6, maxMidi - minMidi)
-  const totalBeats = head.reduce((sum, n) => sum + Math.max(0.2, n.duration), 0)
-  const width = 160
-  const height = 22
-  const widthPerBeat = width / Math.max(1, totalBeats)
-  const gradId = `widget-mini-${tone.replace(/[^a-z0-9]/gi, '')}`
-
-  let cursor = 0
-  return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      width="100%"
-      height={height}
-      preserveAspectRatio="none"
-      className="block"
-      aria-hidden
-    >
-      <defs>
-        <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor={tone} stopOpacity="0.95" />
-          <stop offset="100%" stopColor={tone} stopOpacity="0.7" />
-        </linearGradient>
-      </defs>
-      {head.map((note, index) => {
-        const x = cursor * widthPerBeat
-        const w = Math.max(1.5, Math.max(0.2, note.duration) * widthPerBeat - 1)
-        const y = height - 3 - ((note.midi - minMidi) / span) * (height - 6)
-        cursor += Math.max(0.2, note.duration)
-        return (
-          <rect
-            key={`${note.id}-${index}`}
-            x={x}
-            y={y}
-            width={w}
-            height={2.5}
-            rx="1.25"
-            fill={`url(#${gradId})`}
-          />
-        )
-      })}
-    </svg>
+function pickPrimary(summaries: CourseSummary[]): CourseSummary | null {
+  if (summaries.length === 0) return null
+  // Prefer in-progress (started but not finished)
+  const inProgress = summaries.find(
+    (s) => s.completedCount > 0 && s.completedCount < s.totalLessons,
   )
+  if (inProgress) return inProgress
+  // Otherwise the first not-yet-finished one (likely Beginnings)
+  const notFinished = summaries.find((s) => s.completedCount < s.totalLessons)
+  if (notFinished) return notFinished
+  // Everything done — show the first
+  return summaries[0]
 }
 
-function SongCard({
-  title,
-  byline,
-  noteCount,
-  duration,
-  tone,
-  notes,
-  ghost,
-}: {
+function nextLessonInfo(summary: CourseSummary): {
   title: string
-  byline?: string | null
-  noteCount?: number
-  duration?: number
-  tone: string
-  notes?: PianoSong['notes']
-  ghost?: boolean
-}) {
+  teaser: string
+} | null {
+  const target =
+    summary.progress.currentLessonId ??
+    findFirstIncompleteLessonId(summary.course, summary.progress)
+  if (!target) return null
+  const lesson = findLesson(summary.course, target)
+  if (!lesson) return null
+  return {
+    title: lesson.titleOverride ?? lesson.teaser,
+    teaser: lesson.teaser,
+  }
+}
+
+function PrimaryCourseBlock({ summary }: { summary: CourseSummary }) {
+  const { course, progress, totalLessons, completedCount } = summary
+  const tone = course.tone
   const style = { ['--card-tone' as string]: tone } as CSSProperties
+  const next = nextLessonInfo(summary)
+  const pct = totalLessons > 0 ? completedCount / totalLessons : 0
+  const started = completedCount > 0
+  const finished = completedCount >= totalLessons && totalLessons > 0
+  const ctaLabel = finished ? 'Review' : started ? 'Continue' : 'Start'
+
   return (
     <div
-      className={`piano-card-tone border-border/50 relative isolate flex flex-col overflow-hidden rounded-lg border ${
-        ghost ? 'opacity-45 grayscale' : ''
-      }`}
+      className="piano-card-tone border-border/50 relative isolate flex flex-col gap-2 overflow-hidden rounded-xl border p-3"
       style={style}
     >
-      <div className="flex items-baseline justify-between gap-2 px-2.5 pb-1 pt-2">
-        {byline ? (
-          <p
-            className="truncate text-[8.5px] font-medium tracking-[0.08em]"
-            style={{ color: tone }}
-            title={byline}
-          >
-            {byline}
-          </p>
-        ) : (
-          <span />
-        )}
-        {duration !== undefined ? (
-          <span className="piano-mono text-muted-foreground/85 text-[9px]">
-            {formatDuration(duration)}
-          </span>
-        ) : null}
+      <div className="flex items-baseline justify-between gap-2">
+        <p
+          className="piano-mono truncate text-[9px] font-medium uppercase tracking-[0.18em]"
+          style={{ color: tone }}
+        >
+          {DIFFICULTY_LABELS[course.difficulty]} · {completedCount}/
+          {totalLessons}
+        </p>
+        <span className="piano-mono text-muted-foreground/85 shrink-0 text-[9px]">
+          ~{course.estimatedMinutes}m
+        </span>
       </div>
-      <h3 className="piano-serif text-foreground line-clamp-1 px-2.5 text-[13px] font-semibold leading-tight tracking-tight">
-        {title}
+      <h3 className="piano-serif text-foreground line-clamp-1 text-[14px] font-semibold leading-tight tracking-tight">
+        {course.title}
       </h3>
-      <div className="bg-background/55 border-border/40 mt-1.5 border-t px-2 pb-1.5 pt-1.5 backdrop-blur-sm">
-        <MiniRoll notes={notes ?? []} tone={tone} />
-        {noteCount !== undefined ? (
-          <p className="text-muted-foreground/85 piano-mono mt-0.5 text-[9px]">
-            {noteCount} notes
+
+      <div className="bg-muted/45 relative h-1 w-full overflow-hidden rounded-full">
+        <div
+          className="absolute inset-y-0 left-0 rounded-full transition-[width] duration-500"
+          style={{ width: `${pct * 100}%`, background: tone }}
+        />
+      </div>
+
+      {next ? (
+        <div className="mt-1">
+          <p
+            className="piano-mono text-[8.5px] font-medium uppercase tracking-[0.16em]"
+            style={{ color: tone }}
+          >
+            {finished ? 'Last lesson' : started ? 'Next' : 'Start with'}
           </p>
-        ) : null}
+          <p className="piano-serif text-foreground line-clamp-2 text-[11.5px] font-semibold leading-4">
+            {next.title}
+          </p>
+        </div>
+      ) : null}
+
+      <div
+        className="mt-1 inline-flex items-center gap-1 self-start rounded-full px-2 py-0.5 text-[10px] font-medium"
+        style={{ background: tone, color: 'var(--background)' }}
+      >
+        <Play className="size-2.5" />
+        {ctaLabel}
       </div>
     </div>
   )
 }
 
+function MiniCourseRow({ summary }: { summary: CourseSummary }) {
+  const { course, totalLessons, completedCount } = summary
+  const tone = course.tone
+  const pct = totalLessons > 0 ? completedCount / totalLessons : 0
+  return (
+    <div className="flex min-w-0 items-center gap-2 px-2.5 py-1.5">
+      <span
+        className="size-1.5 shrink-0 rounded-full"
+        style={{ background: tone }}
+      />
+      <span className="piano-serif text-foreground/90 min-w-0 flex-1 truncate text-[11.5px] font-semibold leading-tight">
+        {course.title}
+      </span>
+      <div className="bg-muted/45 relative h-1 w-12 shrink-0 overflow-hidden rounded-full">
+        <div
+          className="absolute inset-y-0 left-0 rounded-full"
+          style={{ width: `${pct * 100}%`, background: tone }}
+        />
+      </div>
+      <span className="piano-mono text-muted-foreground/85 w-9 shrink-0 text-right text-[9.5px] tabular-nums">
+        {completedCount}/{totalLessons}
+      </span>
+    </div>
+  )
+}
+
 export function Widget() {
-  const { workspaceId, fetchWithWorkspace } = useWorkspace()
-
-  const songsQuery = useQuery({
-    queryKey: ['songs', workspaceId],
-    queryFn: async () => {
-      const res = await fetchWithWorkspace('/api/songs')
-      if (!res.ok) throw new Error('Failed to load songs')
-      return (await res.json()) as SongsResponse
-    },
-  })
-
-  const songs = (songsQuery.data?.songs ?? []).slice(0, 3)
-
-  const previewsQuery = useQuery({
-    queryKey: [
-      'widget-song-previews',
-      workspaceId,
-      songs.map((s) => s.id).join(','),
-    ],
-    enabled: songs.length > 0,
-    queryFn: async () => {
-      const previews = await Promise.all(
-        songs.map(async (s): Promise<[string, PianoSong['notes']]> => {
-          const res = await fetchWithWorkspace(`/api/songs/${s.id}`)
-          if (!res.ok) return [s.id, []]
-          const song = (await res.json()) as PianoSong
-          return [s.id, song.notes.slice(0, 24)]
-        }),
-      )
-      return new Map(previews)
-    },
-  })
+  const coursesQuery = useCourses()
+  const summaries = coursesQuery.data?.courses ?? []
+  const primary = pickPrimary(summaries)
+  const others = primary
+    ? summaries.filter((s) => s.course.id !== primary.course.id)
+    : summaries
 
   return (
     <div className="bg-background flex h-full flex-col overflow-hidden p-2">
-      <div className="min-h-0 flex-1 space-y-1.5 overflow-hidden">
-        {songsQuery.isError ? (
-          <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border px-2.5 py-2 text-[11px]">
-            Could not load songs
-          </div>
-        ) : songsQuery.isLoading ? (
-          [0, 1, 2].map((item) => (
-            <div
-              key={item}
-              className="bg-muted/40 h-[78px] animate-pulse rounded-lg"
-            />
-          ))
-        ) : songs.length === 0 ? (
-          GHOST_EXAMPLES.map((item) => (
-            <SongCard
-              key={item.id}
-              title={item.title}
-              byline={item.byline}
-              tone={item.tone}
-              ghost
-            />
-          ))
-        ) : (
-          songs.map((song) => {
-            const notes = previewsQuery.data?.get(song.id) ?? []
-            const tone = midiToTone(notes[0]?.midi ?? 60)
-            return (
-              <SongCard
-                key={song.id}
-                title={song.title}
-                byline={songByline(song)}
-                noteCount={song.noteCount}
-                duration={song.duration}
-                tone={tone}
-                notes={notes}
-              />
-            )
-          })
-        )}
-      </div>
+      {coursesQuery.isError ? (
+        <div className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border px-2.5 py-2 text-[11px]">
+          Could not load courses
+        </div>
+      ) : coursesQuery.isLoading ? (
+        <div className="bg-muted/40 h-[120px] animate-pulse rounded-xl" />
+      ) : primary ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+          <PrimaryCourseBlock summary={primary} />
+          {others.length > 0 ? (
+            <div className="border-border/40 flex flex-col overflow-hidden rounded-lg border">
+              {others.slice(0, 3).map((summary) => (
+                <MiniCourseRow key={summary.course.id} summary={summary} />
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="text-muted-foreground/85 piano-serif flex h-full items-center justify-center text-[12px] italic">
+          No courses yet
+        </div>
+      )}
     </div>
   )
 }
