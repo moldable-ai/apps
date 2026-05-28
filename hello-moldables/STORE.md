@@ -1,8 +1,12 @@
-New to Moldable? Start here. Hello Moldables is a friendly, hands-on tour that shows you how to install apps, use them, and shape them — or build entirely new ones — just by asking.
+A friendly first-run guide that shows you what it feels like to build and reshape your own apps in Moldable. Open it, click a starter prompt, and watch the AI assistant turn your words into a working change.
 
 **Highlights**
 
-- A guided welcome to how Moldable works
-- Learn to install and customize apps in minutes
-- See how to describe a change and watch Moldable make it
-- The fastest way to go from curious to capable
+- One-click starter prompts that drop straight into the AI chat, like personalizing the greeting or adding a countdown timer with confetti
+- Hands-on examples that teach the build-and-tweak loop instead of just describing it
+- Keyboard shortcut hints baked in: Cmd/Ctrl+M to summon the assistant, Cmd/Ctrl+K to navigate around
+- A live dashboard widget previewing next steps, from your first app to a fun game
+- Adapts automatically to Mac or Windows/Linux modifier keys
+- Runs fully local-first, with no external accounts or API keys required
+
+A two-minute, no-pressure intro that gets you comfortable molding apps with AI before you build something of your own.

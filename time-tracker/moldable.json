@@ -257,5 +257,6 @@
   },
   "env": [],
   "routeName": "time-tracker",
-  "screenshots": ["public/screenshots/1.png"]
+  "screenshots": ["public/screenshots/1.png"],
+  "tagline": "One-click time tracking with weekly views and export"
 }

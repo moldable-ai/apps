@@ -816,5 +816,6 @@
     ]
   },
   "env": [],
-  "iconPath": "public/icon.png"
+  "iconPath": "public/icon.png",
+  "tagline": "A Linear-style task manager that lives on your machine"
 }

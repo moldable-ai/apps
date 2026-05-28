@@ -107,11 +107,10 @@ function generateManifest() {
       name: app.name,
       version: app.version || '0.1.0',
       description: app.description || '',
+      tagline: app.tagline || app.description || '',
       author: app.author || 'Moldable Team',
       icon: app.icon || '📦',
-      iconUrl: app.iconPath
-        ? `${RAW_BASE}/${app.path}/${app.iconPath}`
-        : null,
+      iconUrl: app.iconPath ? `${RAW_BASE}/${app.path}/${app.iconPath}` : null,
       screenshots: (app.screenshots || []).map(
         (rel) => `${RAW_BASE}/${app.path}/${rel}`,
       ),

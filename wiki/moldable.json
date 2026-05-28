@@ -48,5 +48,6 @@
     ]
   },
   "env": [],
-  "iconPath": "public/icon.png"
+  "iconPath": "public/icon.png",
+  "tagline": "A linked, local-first Markdown knowledge base"
 }

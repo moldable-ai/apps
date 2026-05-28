@@ -166,5 +166,6 @@
     "installedAt": "2026-01-15T03:56:56Z"
   },
   "modified": false,
-  "screenshots": ["public/screenshots/1.png"]
+  "screenshots": ["public/screenshots/1.png"],
+  "tagline": "A clean Git client with AI commits and review, built in"
 }

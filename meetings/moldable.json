@@ -314,5 +314,6 @@
   },
   "modified": false,
   "routeName": "meetings",
-  "screenshots": ["public/screenshots/1.png"]
+  "screenshots": ["public/screenshots/1.png"],
+  "tagline": "Record, transcribe, and summarize every meeting locally"
 }

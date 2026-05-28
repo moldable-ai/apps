@@ -25,5 +25,6 @@
   "visibility": "public",
   "widgetSize": "medium",
   "widgetTint": "amber",
-  "routeName": "hello-moldables"
+  "routeName": "hello-moldables",
+  "tagline": "Your first step into building software with AI"
 }

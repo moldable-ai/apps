@@ -326,5 +326,6 @@
       "capabilities": ["remove-bg/background-removal"]
     }
   ],
-  "routeName": "images"
+  "routeName": "images",
+  "tagline": "Generate, edit, and branch images with GPT Image 2"
 }

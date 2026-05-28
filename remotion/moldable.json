@@ -164,5 +164,6 @@
   },
   "env": [],
   "routeName": "remotion",
-  "screenshots": ["public/screenshots/1.png"]
+  "screenshots": ["public/screenshots/1.png"],
+  "tagline": "Make videos by describing them, powered by code"
 }
