@@ -88,23 +88,49 @@ function generateManifest() {
   }
 
   // Transform apps for the manifest
-  const manifestApps = apps.map((app) => ({
-    id: app.id,
-    name: app.name,
-    version: app.version || '0.1.0',
-    description: app.description || '',
-    icon: app.icon || '📦',
-    iconUrl: app.iconPath
-      ? `https://raw.githubusercontent.com/moldable-ai/apps/main/${app.path}/${app.iconPath}`
-      : null,
-    widgetSize: app.widgetSize || 'medium',
-    category: app.category || 'productivity',
-    tags: app.tags || [],
-    path: app.path,
-    requiredEnv: (app.env || []).filter((e) => e.required).map((e) => e.key),
-    moldableDependencies: app.moldableDependencies || {},
-    commit: commit,
-  }))
+  const RAW_BASE = 'https://raw.githubusercontent.com/moldable-ai/apps/main'
+  const manifestApps = apps.map((app) => {
+    // Apps declare secrets via either `vault` or legacy `env`.
+    const secrets = app.vault || app.env || []
+    const required = secrets.filter((e) => e.required)
+
+    // Long-form, store-facing markdown lives in STORE.md at the app root.
+    let about = null
+    try {
+      about = readFileSync(join(ROOT, app.path, 'STORE.md'), 'utf-8').trim()
+    } catch {
+      // No STORE.md, leave null
+    }
+
+    return {
+      id: app.id,
+      name: app.name,
+      version: app.version || '0.1.0',
+      description: app.description || '',
+      author: app.author || 'Moldable Team',
+      icon: app.icon || '📦',
+      iconUrl: app.iconPath
+        ? `${RAW_BASE}/${app.path}/${app.iconPath}`
+        : null,
+      screenshots: (app.screenshots || []).map(
+        (rel) => `${RAW_BASE}/${app.path}/${rel}`,
+      ),
+      about,
+      widgetSize: app.widgetSize || 'medium',
+      category: app.category || 'productivity',
+      tags: app.tags || [],
+      path: app.path,
+      requiredEnv: required.map((e) => e.key),
+      credentials: required.map((e) => ({
+        key: e.key,
+        name: e.name || e.key,
+        description: e.description || '',
+        url: e.url || null,
+      })),
+      moldableDependencies: app.moldableDependencies || {},
+      commit: commit,
+    }
+  })
 
   // Sort by name
   manifestApps.sort((a, b) => a.name.localeCompare(b.name))

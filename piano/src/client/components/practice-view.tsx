@@ -116,6 +116,8 @@ export interface CourseContext {
   currentPartIndex: number
   /** Seek to the start of the next tutorial part. */
   onNextPart: () => void
+  /** Seek to the start of a specific tutorial part by index. */
+  onSeekPart: (partIndex: number) => void
 }
 
 const SPEED_OPTIONS = [0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5]
@@ -212,24 +214,30 @@ function CourseHeaderStrip({ context }: { context: CourseContext }) {
         <div className="flex items-center gap-2">
           <div className="flex flex-1 items-center gap-1">
             {Array.from({ length: partCount }).map((_, i) => (
-              <span
+              <button
                 key={i}
-                className="h-1 flex-1 rounded-full transition-colors"
-                style={{
-                  background:
-                    i < currentPartIndex
-                      ? courseTone
-                      : i === currentPartIndex
+                type="button"
+                onClick={() => context.onSeekPart(i)}
+                aria-label={`Go to part ${i + 1}`}
+                aria-current={i === currentPartIndex ? 'step' : undefined}
+                className="group/seg flex flex-1 cursor-pointer items-center py-1.5"
+              >
+                <span
+                  className="h-1 w-full rounded-full transition-[background,opacity,height] group-hover/seg:h-1.5"
+                  style={{
+                    background:
+                      i <= currentPartIndex
                         ? courseTone
                         : 'color-mix(in oklch, var(--muted-foreground) 28%, transparent)',
-                  opacity:
-                    i === currentPartIndex
-                      ? 1
-                      : i < currentPartIndex
-                        ? 0.55
-                        : 1,
-                }}
-              />
+                    opacity:
+                      i === currentPartIndex
+                        ? 1
+                        : i < currentPartIndex
+                          ? 0.55
+                          : 1,
+                  }}
+                />
+              </button>
             ))}
           </div>
           <span className="text-muted-foreground/80 piano-mono shrink-0 text-[10px] tabular-nums">
@@ -303,6 +311,10 @@ function TutorialPanel({
         onNextPart: () => {
           const next = sectionList[currentPartIndex + 1]
           if (next) onSeek(next.start)
+        },
+        onSeekPart: (partIndex: number) => {
+          const target = sectionList[partIndex]
+          if (target) onSeek(target.start)
         },
       }
     : null

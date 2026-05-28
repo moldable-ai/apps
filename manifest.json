@@ -1,7 +1,7 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-05-28T18:57:04.842Z",
+  "generatedAt": "2026-05-28T19:50:29.471Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
@@ -9,8 +9,13 @@
       "name": "Calendar",
       "version": "0.1.3",
       "description": "Integrated calendar with Google Calendar connection",
+      "author": "Moldable Team",
       "icon": "🗓️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/calendar/public/icon.png",
+      "screenshots": [
+        "https://raw.githubusercontent.com/moldable-ai/apps/main/calendar/public/screenshots/1.png"
+      ],
+      "about": "Your schedule, beautifully simple. Calendar connects to your Google Calendar and gives you a clean month view with a daily agenda alongside it — so you always know what's next.\n\n**Highlights**\n\n- Connects securely to Google Calendar via OAuth\n- Month grid with events on every day, plus a focused daily agenda\n- See times, locations, attendees, and meeting links at a glance\n- Jump between months effortlessly\n\n> Sign in with Google the first time you open it. Your tokens are stored locally and never leave your machine.",
       "widgetSize": "medium",
       "category": "productivity",
       "tags": [
@@ -21,73 +26,97 @@
       ],
       "path": "calendar",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "code-editor",
       "name": "Code",
       "version": "0.1.2",
       "description": "A lightweight, VS Code-like IDE for exploring and editing local codebases with integrated AI context and browser preview.",
+      "author": "Moldable Team",
       "icon": "💻",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/code-editor/public/icon.png",
+      "screenshots": [
+        "https://raw.githubusercontent.com/moldable-ai/apps/main/code-editor/public/screenshots/1.png"
+      ],
+      "about": "A real IDE, right inside Moldable. Code is a lightweight, VS Code–like editor for exploring and editing local codebases — with a file tree, multi-tab editing, an integrated terminal, and a live browser preview.\n\n**Highlights**\n\n- File tree navigation with create, rename, and delete\n- Multi-tab editor with Monaco syntax highlighting\n- Integrated terminal and live browser preview for web projects\n- Command palette for quick actions; remembers your open tabs\n- Gives the Moldable agent rich context about your project",
       "widgetSize": "medium",
       "category": "custom",
       "tags": [],
       "path": "code-editor",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "affirmations",
       "name": "Daily Affirmations",
       "version": "0.1.2",
       "description": "A soothing, daily affirmation app to improve mental health and positivity.",
+      "author": "Moldable Team",
       "icon": "✨",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/affirmations/public/icon.png",
+      "screenshots": [
+        "https://raw.githubusercontent.com/moldable-ai/apps/main/affirmations/public/screenshots/1.png"
+      ],
+      "about": "Start your day with a moment of calm. Daily Affirmations serves up soothing, positive statements across categories like Inner Peace, Self Love, Gratitude, and Courage — with gentle animations that make each one land.\n\n**Highlights**\n\n- Browse affirmations by mood and category\n- Smooth, calming animations and a quiet, focused design\n- Save the ones that resonate to your favorites\n- Fully local — your reflections stay on your machine",
       "widgetSize": "medium",
       "category": "custom",
       "tags": [],
       "path": "affirmations",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "db-browser",
       "name": "DB Browser",
       "version": "0.1.1",
       "description": "Connect to PostgreSQL databases and browse schemas, tables, and read-only query results",
+      "author": "Moldable Team",
       "icon": "🗄️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/db-browser/public/icon.png",
+      "screenshots": [
+        "https://raw.githubusercontent.com/moldable-ai/apps/main/db-browser/public/screenshots/1.png"
+      ],
+      "about": "Explore your database without leaving Moldable. DB Browser connects to PostgreSQL and lets you inspect schemas, tables, and views — and run bounded, read-only queries safely.\n\n**Highlights**\n\n- Connect to PostgreSQL with saved connections\n- Object browser for schemas, tables, views, and column details\n- Saved SQL editor tabs with formatting and query history\n- Read-only, bounded query results in a clean table\n- Exposes safe APIs so Moldable can help you read schema and edit SQL",
       "widgetSize": "large",
       "category": "custom",
       "tags": [],
       "path": "db-browser",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "git-flow",
       "name": "Git",
       "version": "0.1.3",
       "description": "Simple Git client for branch management, staging, and diffing",
+      "author": "Moldable Team",
       "icon": "🛠️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/git-flow/public/icon.png",
+      "screenshots": [
+        "https://raw.githubusercontent.com/moldable-ai/apps/main/git-flow/public/screenshots/1.png"
+      ],
+      "about": "Git, made visual. Stage, diff, commit, and push without memorizing commands. Git shows you exactly what changed and lets you ship it with confidence.\n\n**Highlights**\n\n- See changed files in your working directory\n- Stage and unstage with checkboxes; review syntax-highlighted diffs\n- Write commit messages and commit only what you select\n- Browse commit history, undo the last commit, and push to remote\n- Switch between repositories in a click",
       "widgetSize": "medium",
       "category": "developer",
       "tags": [
@@ -98,19 +127,23 @@
       ],
       "path": "git-flow",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "hello-moldables",
       "name": "Hello Moldables",
       "version": "0.1.2",
       "description": "Welcome to Moldable! Learn how to build and modify apps with AI.",
+      "author": "Moldable Team",
       "icon": "👋",
       "iconUrl": null,
+      "screenshots": [],
+      "about": "New to Moldable? Start here. Hello Moldables is a friendly, hands-on tour that shows you how to install apps, use them, and shape them — or build entirely new ones — just by asking.\n\n**Highlights**\n\n- A guided welcome to how Moldable works\n- Learn to install and customize apps in minutes\n- See how to describe a change and watch Moldable make it\n- The fastest way to go from curious to capable",
       "widgetSize": "medium",
       "category": "getting-started",
       "tags": [
@@ -120,18 +153,22 @@
       ],
       "path": "hello-moldables",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "images",
       "name": "Images",
       "version": "0.1.0",
       "description": "Generate and iterate images with GPT Image 2",
+      "author": "Moldable",
       "icon": "🖼️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/images/public/icon.png",
+      "screenshots": [],
+      "about": "Imagine it, then make it. Images generates and iterates on pictures with GPT Image 2 — describe what you want, refine it, and even knock out the background.\n\n**Highlights**\n\n- Generate images from a text prompt with GPT Image 2\n- Iterate on a result until it's right\n- Optional background removal\n- Keep a local gallery of everything you make",
       "widgetSize": "medium",
       "category": "creative",
       "tags": [
@@ -141,20 +178,35 @@
         "gpt-image-2"
       ],
       "path": "images",
-      "requiredEnv": [],
+      "requiredEnv": [
+        "OPENAI_API_KEY"
+      ],
+      "credentials": [
+        {
+          "key": "OPENAI_API_KEY",
+          "name": "OpenAI API Key",
+          "description": "Fallback for GPT Image 2 generation and image edits when Codex CLI auth is unavailable.",
+          "url": "https://platform.openai.com/api-keys"
+        }
+      ],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "mail",
       "name": "Mail",
       "version": "0.2.2",
       "description": "Fast Gmail client for triage, search, reading, and sending email",
+      "author": "Moldable Team",
       "icon": "✉️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/mail/public/icon.png",
+      "screenshots": [
+        "https://raw.githubusercontent.com/moldable-ai/apps/main/mail/public/screenshots/1.png"
+      ],
+      "about": "A fast inbox built for triage. Mail is a snappy Gmail client for reading, searching, and sending — with an AI briefing that surfaces what actually needs your attention.\n\n**Highlights**\n\n- Connects to Gmail via OAuth\n- Built for speed: triage, search, archive, snooze, and label\n- Read messages with attachments and one-click unsubscribe\n- Compose and reply inline\n- AI briefing summarizes your important unread mail\n\n> Sign in with Google the first time you open it. Credentials are stored locally and never exposed to generated code.",
       "widgetSize": "medium",
       "category": "productivity",
       "tags": [
@@ -165,19 +217,25 @@
       ],
       "path": "mail",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "meetings",
       "name": "Meetings",
       "version": "0.1.3",
       "description": "Record, transcribe, and summarize meetings with real-time transcription",
+      "author": "Moldable Team",
       "icon": "🎙️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/meetings/public/icon.png",
+      "screenshots": [
+        "https://raw.githubusercontent.com/moldable-ai/apps/main/meetings/public/screenshots/1.png"
+      ],
+      "about": "Never take meeting notes alone again. Meetings records your audio, transcribes it in real time, detects who's speaking, and gives you a rich notes pane to write alongside the transcript.\n\n**Highlights**\n\n- Real-time transcription powered by Deepgram\n- Automatic speaker detection\n- A rich-text notes editor that lives next to the transcript\n- Export everything to Markdown when you're done",
       "widgetSize": "medium",
       "category": "productivity",
       "tags": [
@@ -187,21 +245,34 @@
         "recording"
       ],
       "path": "meetings",
-      "requiredEnv": [],
+      "requiredEnv": [
+        "DEEPGRAM_API_KEY"
+      ],
+      "credentials": [
+        {
+          "key": "DEEPGRAM_API_KEY",
+          "name": "Deepgram API Key",
+          "description": "Powers real-time speech-to-text transcription",
+          "url": "https://console.deepgram.com/"
+        }
+      ],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/editor": "^0.1.11",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "microscope",
       "name": "Microscope",
       "version": "0.1.0",
       "description": "Explore the natural world through generated images, transparent 2D relief layers, procedural 3D models, and optional fal Hunyuan3D or Tripo renders.",
+      "author": "Moldable",
       "icon": "🔬",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/microscope/public/icon.png",
+      "screenshots": [],
+      "about": "Zoom in on the natural world. Microscope turns a curiosity into a vivid, layered exploration — generated imagery, transparent 2D relief layers, and procedural 3D models you can turn around.\n\n**Highlights**\n\n- Generate detailed nature imagery with GPT Image 2\n- Peel through transparent 2D relief layers\n- Build procedural 3D models, with optional fal Hunyuan3D or Tripo renders\n- A playful, hands-on way to learn",
       "widgetSize": "large",
       "category": "knowledge",
       "tags": [
@@ -213,19 +284,25 @@
       ],
       "path": "microscope",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "notes",
       "name": "Notes",
       "version": "0.1.3",
       "description": "A Google Keep-style note taking app with pinning and markdown support",
+      "author": "Moldable Team",
       "icon": "📝",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/notes/public/icon.png",
+      "screenshots": [
+        "https://raw.githubusercontent.com/moldable-ai/apps/main/notes/public/screenshots/1.png"
+      ],
+      "about": "Capture every thought. Notes is a Google Keep–style space for quick ideas and longer writing alike — pin what matters, label to organize, and search it all instantly.\n\n**Highlights**\n\n- Rich-text notes with markdown support\n- Pin important notes to the top\n- Labels, archive, and full-text search\n- Masonry grid layout that's easy to scan",
       "widgetSize": "medium",
       "category": "productivity",
       "tags": [
@@ -236,56 +313,72 @@
       ],
       "path": "notes",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/editor": "^0.1.11",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "piano",
       "name": "Piano",
       "version": "0.1.0",
       "description": "A local-first piano song library with 88-key playback and falling-note practice visualization.",
+      "author": "Moldable Team",
       "icon": "🎹",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/piano/public/icon.png",
+      "screenshots": [],
+      "about": "Play, practice, and keep your songs. Piano is a local-first library with full 88-key playback and a falling-note visualization that makes practicing feel like a game.\n\n**Highlights**\n\n- 88-key playback right in the app\n- Falling-note practice visualization\n- Organize your songs into folders\n- Local-first — your library is yours",
       "widgetSize": "medium",
       "category": "custom",
       "tags": [],
       "path": "piano",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "remotion",
       "name": "Remotion",
       "version": "0.1.2",
       "description": "Create programmatic videos with Remotion - manage projects, preview compositions, and render videos",
+      "author": "Moldable Team",
       "icon": "🎬",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/remotion/public/icon.png",
+      "screenshots": [
+        "https://raw.githubusercontent.com/moldable-ai/apps/main/remotion/public/screenshots/1.png"
+      ],
+      "about": "Make videos with code. Remotion lets you build programmatic videos with React — manage projects, preview compositions live, and render the final cut to MP4.\n\n**Highlights**\n\n- Create video projects from React components\n- Live preview player to see changes instantly\n- Add text overlays, images, and animations on a timeline\n- Render to MP4 with Remotion's renderer",
       "widgetSize": "large",
       "category": "custom",
       "tags": [],
       "path": "remotion",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "scribo",
       "name": "Scribo Languages",
       "version": "0.1.3",
       "description": "Language learning journal with AI-powered translations",
+      "author": "Moldable Team",
       "icon": "📓",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/scribo/public/icon.png",
+      "screenshots": [
+        "https://raw.githubusercontent.com/moldable-ai/apps/main/scribo/public/screenshots/1.png"
+      ],
+      "about": "Keep a journal in a new language. Scribo translates as you write — see real-time DeepL translations, hear them spoken aloud, and build a habit one entry at a time.\n\n**Highlights**\n\n- Write in your native language; see live translations via DeepL\n- Multiple language pairs (English → French, Spanish, and more)\n- Listen to translations with natural text-to-speech\n- A running history of every journal entry",
       "widgetSize": "medium",
       "category": "productivity",
       "tags": [
@@ -295,57 +388,82 @@
         "journal"
       ],
       "path": "scribo",
-      "requiredEnv": [],
+      "requiredEnv": [
+        "DEEPL_API_KEY"
+      ],
+      "credentials": [
+        {
+          "key": "DEEPL_API_KEY",
+          "name": "DeepL API Key",
+          "description": "Powers automatic translations between languages",
+          "url": "https://www.deepl.com/en/your-account/keys"
+        }
+      ],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/editor": "^0.1.11",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "tasks",
       "name": "Tasks",
       "version": "0.1.0",
       "description": "Linear-style local project and task management",
+      "author": "Moldable Team",
       "icon": "✅",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/tasks/public/icon.png",
+      "screenshots": [],
+      "about": "Plan work like a pro — locally. Tasks brings a Linear-style workflow to your machine: projects, issues, labels, comments, and attachments, all without a subscription or a server.\n\n**Highlights**\n\n- Linear-style projects and task management\n- Labels, comments, and attachments\n- Fast keyboard-driven workflow\n- Entirely local and private",
       "widgetSize": "large",
       "category": "productivity",
       "tags": [],
       "path": "tasks",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "time-tracker",
       "name": "Time Tracker",
       "version": "0.1.2",
       "description": "Track time for work projects with weekly views and export",
+      "author": "Moldable Team",
       "icon": "⏱️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/time-tracker/public/icon.png",
+      "screenshots": [
+        "https://raw.githubusercontent.com/moldable-ai/apps/main/time-tracker/public/screenshots/1.png"
+      ],
+      "about": "Know where your time goes. Time Tracker makes logging hours painless — start and stop timers, group by project, and export when it's time to invoice.\n\n**Highlights**\n\n- Start/stop timers for tasks\n- Organize entries by color-coded projects\n- List and weekly calendar views, with easy week navigation\n- Export your entries to CSV",
       "widgetSize": "medium",
       "category": "custom",
       "tags": [],
       "path": "time-tracker",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "todo",
       "name": "Todo",
       "version": "0.1.3",
       "description": "Simple task management with quick add and completion tracking",
+      "author": "Moldable Team",
       "icon": "✅",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/todo/public/icon.png",
+      "screenshots": [
+        "https://raw.githubusercontent.com/moldable-ai/apps/main/todo/public/screenshots/1.png"
+      ],
+      "about": "The simplest way to get things done. Todo is quick task management done right — add fast, prioritize, filter, and keep moving with full keyboard navigation.\n\n**Highlights**\n\n- Quick add and one-tap completion\n- High / medium / low priorities\n- Filter by all, active, or completed\n- Keyboard navigation throughout; stored locally",
       "widgetSize": "small",
       "category": "productivity",
       "tags": [
@@ -356,19 +474,23 @@
       ],
       "path": "todo",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     },
     {
       "id": "wiki",
       "name": "Wiki",
       "version": "0.1.0",
       "description": "Create, edit, and organize a Markdown knowledge base.",
+      "author": "Moldable Team",
       "icon": "📚",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/wiki/public/icon.png",
+      "screenshots": [],
+      "about": "Your personal knowledge base. Wiki is a clean, Markdown-first space to write, link, and organize everything you want to remember.\n\n**Highlights**\n\n- Create and edit pages in Markdown\n- Organize a growing knowledge base\n- Fast to write in, easy to navigate\n- Local-first and entirely yours",
       "widgetSize": "large",
       "category": "knowledge",
       "tags": [
@@ -379,12 +501,13 @@
       ],
       "path": "wiki",
       "requiredEnv": [],
+      "credentials": [],
       "moldableDependencies": {
         "@moldable-ai/editor": "^0.1.11",
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5745adc2032b274773fb32fb9300abcd792f81f"
+      "commit": "540b37fb7744acf1a879bbfb1ba795984f0c9d4e"
     }
   ],
   "categories": [

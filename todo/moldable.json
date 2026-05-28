@@ -195,5 +195,6 @@
     "installedAt": "2026-01-15T03:56:56Z"
   },
   "modified": false,
-  "routeName": "todo"
+  "routeName": "todo",
+  "screenshots": ["public/screenshots/1.png"]
 }

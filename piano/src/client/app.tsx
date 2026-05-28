@@ -1216,6 +1216,7 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
       partCount: 1,
       currentPartIndex: 0,
       onNextPart: () => {},
+      onSeekPart: () => {},
     }
   }, [
     activeCourseSummary,

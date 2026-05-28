@@ -4,7 +4,7 @@
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Linear-style local project and task management",
-  "author": "",
+  "author": "Moldable Team",
   "license": "MIT",
   "icon": "✅",
   "widgetSize": "large",

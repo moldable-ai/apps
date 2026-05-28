@@ -4,7 +4,7 @@
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "A local-first piano song library with 88-key playback and falling-note practice visualization.",
-  "author": "",
+  "author": "Moldable Team",
   "license": "MIT",
   "icon": "🎹",
   "iconPath": "public/icon.png",
@@ -77,17 +77,29 @@
                 "suggested": {
                   "type": ["object", "null"],
                   "properties": {
-                    "presetId": { "type": "string" },
-                    "instrumentPackId": { "type": "string" },
-                    "instrumentId": { "type": "string" }
+                    "presetId": {
+                      "type": "string"
+                    },
+                    "instrumentPackId": {
+                      "type": "string"
+                    },
+                    "instrumentId": {
+                      "type": "string"
+                    }
                   }
                 },
                 "override": {
                   "type": ["object", "null"],
                   "properties": {
-                    "presetId": { "type": "string" },
-                    "instrumentPackId": { "type": "string" },
-                    "instrumentId": { "type": "string" }
+                    "presetId": {
+                      "type": "string"
+                    },
+                    "instrumentPackId": {
+                      "type": "string"
+                    },
+                    "instrumentId": {
+                      "type": "string"
+                    }
                   }
                 }
               },

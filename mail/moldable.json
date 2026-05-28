@@ -342,5 +342,6 @@
   },
   "env": [],
   "routeName": "mail",
-  "iconPath": "public/icon.png"
+  "iconPath": "public/icon.png",
+  "screenshots": ["public/screenshots/1.png"]
 }

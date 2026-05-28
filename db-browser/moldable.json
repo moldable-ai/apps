@@ -5,7 +5,7 @@
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Connect to PostgreSQL databases and browse schemas, tables, and read-only query results",
-  "author": "",
+  "author": "Moldable Team",
   "license": "MIT",
   "icon": "🗄️",
   "iconPath": "public/icon.png",
@@ -656,5 +656,6 @@
       }
     ]
   },
-  "env": []
+  "env": [],
+  "screenshots": ["public/screenshots/1.png"]
 }

@@ -5,7 +5,7 @@
   "visibility": "public",
   "description": "A soothing, daily affirmation app to improve mental health and positivity.",
   "runtime": "vite_hono",
-  "author": "",
+  "author": "Moldable Team",
   "license": "FSL-1.1-ALv2",
   "icon": "✨",
   "iconPath": "public/icon.png",
@@ -115,5 +115,6 @@
     ]
   },
   "env": [],
-  "routeName": "affirmations"
+  "routeName": "affirmations",
+  "screenshots": ["public/screenshots/1.png"]
 }
