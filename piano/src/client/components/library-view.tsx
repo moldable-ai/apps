@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
+  BookOpen,
   Folder as FolderIcon,
   FolderPlus,
   GripVertical,
@@ -9,8 +10,15 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import type { CSSProperties } from 'react'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, DragEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -99,6 +107,74 @@ function compareSongsByTitle(a: SongSummary, b: SongSummary) {
 
 function sortSongsByTitle(songs: SongSummary[]) {
   return [...songs].sort(compareSongsByTitle)
+}
+
+type MoldableFileDropMessage =
+  | {
+      type: 'moldable:file-drag-over'
+      paths?: string[]
+    }
+  | {
+      type: 'moldable:file-drag-leave'
+    }
+  | {
+      type: 'moldable:file-drop'
+      paths?: string[]
+    }
+
+type MidiImportResult = {
+  song?: SongSummary
+}
+
+function midiFilesFromList(fileList: FileList): File[] {
+  return Array.from(fileList).filter((file) => /\.(mid|midi)$/i.test(file.name))
+}
+
+function midiPathsFromList(paths: string[]): string[] {
+  return paths.filter((path) => /\.(mid|midi)$/i.test(path))
+}
+
+function hasFileDrag(event: DragEvent): boolean {
+  return Array.from(event.dataTransfer.types).includes('Files')
+}
+
+function fileNameFromPath(path: string) {
+  return path.split(/[\\/]/).pop() || path
+}
+
+function titleFromMidiName(name: string) {
+  return name
+    .replace(/\.(mid|midi)$/i, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function slugifySongId(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
+}
+
+function uniqueSongId(sourceName: string, reserved: Set<string>) {
+  const base = slugifySongId(titleFromMidiName(sourceName)) || 'imported-midi'
+  let candidate = base
+  let suffix = 2
+  while (reserved.has(candidate)) {
+    candidate = `${base}-${suffix}`
+    suffix += 1
+  }
+  reserved.add(candidate)
+  return candidate
+}
+
+async function readImportError(res: Response) {
+  const body = (await res.json().catch(() => null)) as { error?: string } | null
+  return body?.error ?? 'Failed to import MIDI file'
 }
 
 function MiniRoll({ notes, tone }: { notes: PianoNote[]; tone: string }) {
@@ -215,6 +291,15 @@ function SongCard({
       </div>
 
       <div className="relative z-10 flex flex-1 flex-col gap-1 p-5">
+        {song.isTutorial ? (
+          <span
+            className="mb-1 inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+            style={{ background: `${tone}18`, color: tone }}
+          >
+            <BookOpen className="size-2.5" />
+            Tutorial
+          </span>
+        ) : null}
         {byline ? (
           <p
             className="truncate pr-8 text-[10px] font-medium tracking-[0.08em]"
@@ -284,9 +369,11 @@ function FolderCard({
 }) {
   const songsInFolder = useMemo(() => {
     const byId = new Map(songs.map((song) => [song.id, song]))
-    return folder.songIds
-      .map((id) => byId.get(id))
-      .filter((song): song is SongSummary => Boolean(song))
+    return sortSongsByTitle(
+      folder.songIds
+        .map((id) => byId.get(id))
+        .filter((song): song is SongSummary => Boolean(song)),
+    )
   }, [folder.songIds, songs])
 
   const previewSongs = songsInFolder.slice(0, 3)
@@ -632,6 +719,10 @@ export function LibraryView({
     useState<SongSummary | null>(null)
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
   const [overFolderId, setOverFolderId] = useState<string | null>(null)
+  const [isDraggingMidi, setIsDraggingMidi] = useState(false)
+  const [importMessage, setImportMessage] = useState<string | null>(null)
+  const [importError, setImportError] = useState<string | null>(null)
+  const fileDragDepthRef = useRef(0)
 
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
@@ -658,6 +749,116 @@ export function LibraryView({
       void queryClient.invalidateQueries({
         queryKey: ['folders', workspaceId],
       })
+    },
+  })
+
+  const invalidateLibrary = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: ['songs', workspaceId] })
+    void queryClient.invalidateQueries({
+      queryKey: ['song-previews', workspaceId],
+    })
+    void queryClient.invalidateQueries({ queryKey: ['folders', workspaceId] })
+    void queryClient.invalidateQueries({
+      queryKey: ['library-revision', workspaceId],
+    })
+  }, [queryClient, workspaceId])
+
+  const existingSongIds = useMemo(
+    () => new Set(songs.map((song) => song.id)),
+    [songs],
+  )
+
+  const importMidiPathsMutation = useMutation({
+    mutationFn: async ({
+      paths,
+      folderId,
+    }: {
+      paths: string[]
+      folderId: string | null
+    }) => {
+      const reserved = new Set(existingSongIds)
+      const imported: MidiImportResult[] = []
+      for (const path of paths) {
+        const fileName = fileNameFromPath(path)
+        const title = titleFromMidiName(fileName) || 'Imported MIDI'
+        const res = await fetchWithWorkspace('/api/song-import/midi-file', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filePath: path,
+            songId: uniqueSongId(fileName, reserved),
+            title,
+            folderId: folderId ?? undefined,
+            source: `Dropped MIDI: ${path}`,
+          }),
+        })
+        if (!res.ok) throw new Error(await readImportError(res))
+        imported.push((await res.json()) as MidiImportResult)
+      }
+      return imported
+    },
+    onMutate: () => {
+      setImportError(null)
+      setImportMessage('Importing MIDI…')
+    },
+    onSuccess: (imported) => {
+      invalidateLibrary()
+      const count = imported.length
+      setImportMessage(
+        count === 1 ? 'Imported 1 MIDI file.' : `Imported ${count} MIDI files.`,
+      )
+    },
+    onError: (error) => {
+      setImportMessage(null)
+      setImportError(
+        error instanceof Error ? error.message : 'Failed to import MIDI file',
+      )
+    },
+  })
+
+  const importMidiFilesMutation = useMutation({
+    mutationFn: async ({
+      files,
+      folderId,
+    }: {
+      files: File[]
+      folderId: string | null
+    }) => {
+      const reserved = new Set(existingSongIds)
+      const imported: MidiImportResult[] = []
+      for (const file of files) {
+        const title = titleFromMidiName(file.name) || 'Imported MIDI'
+        const form = new FormData()
+        form.set('file', file)
+        form.set('songId', uniqueSongId(file.name, reserved))
+        form.set('title', title)
+        form.set('source', `Dropped MIDI: ${file.name}`)
+        if (folderId) form.set('folderId', folderId)
+        const res = await fetchWithWorkspace('/api/song-import/midi-upload', {
+          method: 'POST',
+          body: form,
+        })
+        if (!res.ok) throw new Error(await readImportError(res))
+        imported.push((await res.json()) as MidiImportResult)
+      }
+      return imported
+    },
+    onMutate: () => {
+      setImportError(null)
+      setImportMessage('Importing MIDI…')
+    },
+    onSuccess: (imported) => {
+      invalidateLibrary()
+      const count = imported.length
+      setImportMessage(
+        count === 1 ? 'Imported 1 MIDI file.' : `Imported ${count} MIDI files.`,
+      )
+    },
+    onError: (error) => {
+      setImportMessage(null)
+      setImportError(
+        error instanceof Error ? error.message : 'Failed to import MIDI file',
+      )
     },
   })
 
@@ -711,6 +912,99 @@ export function LibraryView({
   const showFilter = songsInActiveScope.length > 3
   const showFolders = !openFolderId && folders.length > 0
   const totalSongsInScope = songsInActiveScope.length
+  const midiImportPending =
+    importMidiPathsMutation.isPending || importMidiFilesMutation.isPending
+
+  const importDroppedPaths = useCallback(
+    (paths: string[]) => {
+      const midiPaths = midiPathsFromList(paths)
+      if (midiPaths.length === 0) return
+      importMidiPathsMutation.mutate({
+        paths: midiPaths,
+        folderId: openFolderId,
+      })
+    },
+    [importMidiPathsMutation, openFolderId],
+  )
+
+  const importDroppedFiles = useCallback(
+    (files: File[]) => {
+      const midiFiles = files.filter((file) => /\.(mid|midi)$/i.test(file.name))
+      if (midiFiles.length === 0) return
+      importMidiFilesMutation.mutate({
+        files: midiFiles,
+        folderId: openFolderId,
+      })
+    },
+    [importMidiFilesMutation, openFolderId],
+  )
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent<MoldableFileDropMessage>) => {
+      const data = event.data
+      if (!data || typeof data !== 'object') return
+
+      if (data.type === 'moldable:file-drag-over') {
+        setIsDraggingMidi(true)
+        return
+      }
+
+      if (data.type === 'moldable:file-drag-leave') {
+        fileDragDepthRef.current = 0
+        setIsDraggingMidi(false)
+        return
+      }
+
+      if (data.type !== 'moldable:file-drop') return
+
+      fileDragDepthRef.current = 0
+      setIsDraggingMidi(false)
+      importDroppedPaths(data.paths ?? [])
+    }
+
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [importDroppedPaths])
+
+  useEffect(() => {
+    if (!importMessage || midiImportPending) return
+    const timer = window.setTimeout(() => setImportMessage(null), 3600)
+    return () => window.clearTimeout(timer)
+  }, [importMessage, midiImportPending])
+
+  const handleDragEnter = useCallback((event: DragEvent<HTMLElement>) => {
+    if (!hasFileDrag(event)) return
+    event.preventDefault()
+    fileDragDepthRef.current += 1
+    setIsDraggingMidi(true)
+  }, [])
+
+  const handleDragOver = useCallback((event: DragEvent<HTMLElement>) => {
+    if (!hasFileDrag(event)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+  }, [])
+
+  const handleDragLeave = useCallback((event: DragEvent<HTMLElement>) => {
+    if (!hasFileDrag(event)) return
+    event.preventDefault()
+    fileDragDepthRef.current = Math.max(0, fileDragDepthRef.current - 1)
+    if (fileDragDepthRef.current === 0) setIsDraggingMidi(false)
+  }, [])
+
+  const handleDrop = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      if (!hasFileDrag(event)) return
+      event.preventDefault()
+      fileDragDepthRef.current = 0
+      setIsDraggingMidi(false)
+
+      const files = midiFilesFromList(event.dataTransfer.files)
+      if (files.length === 0) return
+      importDroppedFiles(files)
+    },
+    [importDroppedFiles],
+  )
 
   const handleNewFolderClick = () => {
     setPendingMoveSongId(null)
@@ -789,7 +1083,13 @@ export function LibraryView({
   }
 
   return (
-    <div className="animate-piano-view-back relative flex h-full min-h-0 flex-col overflow-hidden">
+    <div
+      className="animate-piano-view-back relative flex h-full min-h-0 flex-col overflow-hidden"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <div className="piano-no-scrollbar min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-5xl px-6 pb-[calc(var(--chat-safe-padding,0px)+4rem)] pt-10">
           {openFolder ? (
@@ -853,8 +1153,8 @@ export function LibraryView({
                   Tap a song to play it.
                 </h2>
                 <p className="text-muted-foreground mt-2 max-w-xl text-sm leading-6">
-                  Search public-domain pieces from the Mutopia Project or ask
-                  Moldable chat to add one from a MIDI file.
+                  Search public-domain pieces from the Mutopia Project or drop
+                  MIDI files here to convert them automatically.
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -938,8 +1238,8 @@ export function LibraryView({
                 No songs yet
               </p>
               <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
-                Browse public-domain pieces or ask Moldable chat to add one from
-                a MIDI file.
+                Browse public-domain pieces or drop a MIDI file here to convert
+                it automatically.
               </p>
               <Button
                 type="button"
@@ -958,7 +1258,7 @@ export function LibraryView({
                 This folder is empty
               </p>
               <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
-                Open the “…” menu on any song card to move it into{' '}
+                Drop MIDI files here to convert them into{' '}
                 <span className="text-foreground/80">{openFolder.name}</span>.
               </p>
             </div>
@@ -1058,6 +1358,34 @@ export function LibraryView({
           )}
         </div>
       </div>
+
+      {isDraggingMidi ? (
+        <div className="bg-background/72 pointer-events-none absolute inset-0 z-30 flex items-center justify-center backdrop-blur-sm">
+          <div className="border-border/70 bg-background/95 text-foreground rounded-2xl border px-6 py-5 text-center shadow-xl">
+            <p className="piano-serif text-lg font-semibold">
+              {openFolder
+                ? `Drop MIDI into ${openFolder.name}`
+                : 'Drop MIDI files'}
+            </p>
+            <p className="text-muted-foreground mt-1 text-sm">
+              Piano will convert .mid and .midi files into playable songs.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {midiImportPending || importMessage || importError ? (
+        <div className="pointer-events-none absolute bottom-[calc(var(--chat-safe-padding,0px)+1rem)] left-1/2 z-40 -translate-x-1/2 px-4">
+          <div
+            className={cn(
+              'border-border/70 bg-background/95 text-foreground rounded-full border px-4 py-2 text-[12px] shadow-lg backdrop-blur',
+              importError && 'border-destructive/35 text-destructive',
+            )}
+          >
+            {importError ?? importMessage ?? 'Importing MIDI…'}
+          </div>
+        </div>
+      ) : null}
 
       <CatalogSearchDialog open={catalogOpen} onOpenChange={setCatalogOpen} />
       <NewFolderDialog

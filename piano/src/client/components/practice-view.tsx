@@ -1,14 +1,19 @@
 import {
   ArrowLeft,
+  BookOpen,
   Check,
   ChevronDown,
+  ListChecks,
   Loader2,
   Pause,
   Play,
   RotateCcw,
   SkipBack,
+  Sparkles,
+  Target,
 } from 'lucide-react'
 import {
+  type ReactNode,
   type WheelEvent,
   useEffect,
   useLayoutEffect,
@@ -36,6 +41,7 @@ import {
 import {
   type PianoNote,
   type PianoSong,
+  type SongTutorialSection,
   getMeterLabel,
   getTempoLabel,
 } from '../../shared/song'
@@ -94,10 +100,181 @@ interface PracticeViewProps {
 }
 
 const SPEED_OPTIONS = [0.1, 0.25, 0.5, 0.75, 1, 1.25, 1.5]
+const TUTORIAL_PANEL_WIDTH = 352
 
 function formatSpeed(speed: number) {
   if (Number.isInteger(speed)) return `${speed}x`
   return `${speed.toFixed(2).replace(/0$/, '').replace(/\.$/, '')}x`
+}
+
+function TutorialBullets({
+  title,
+  items,
+  icon,
+}: {
+  title: string
+  items: string[] | undefined
+  icon: ReactNode
+}) {
+  if (!items?.length) return null
+  return (
+    <section className="space-y-2">
+      <div className="text-muted-foreground flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider">
+        {icon}
+        <span>{title}</span>
+      </div>
+      <ul className="space-y-1.5">
+        {items.map((item) => (
+          <li
+            key={item}
+            className="text-foreground/90 relative pl-4 text-[12px] leading-5 before:absolute before:left-1 before:top-2 before:size-1 before:rounded-full before:bg-current before:opacity-35"
+          >
+            {item}
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function TutorialPanel({
+  song,
+  activeSection,
+  onSeek,
+}: {
+  song: PianoSong
+  activeSection: SongTutorialSection | null
+  onSeek: (cursor: number) => void
+}) {
+  const tutorial = song.tutorial
+  if (!tutorial) return null
+  const currentSection = activeSection ?? tutorial.sections[0] ?? null
+
+  return (
+    <aside
+      className="border-border/45 bg-background/58 shadow-foreground/10 z-20 hidden h-full shrink-0 flex-col border-l shadow-2xl backdrop-blur-2xl backdrop-saturate-150 lg:flex"
+      style={{ width: TUTORIAL_PANEL_WIDTH }}
+      aria-label="Tutorial notes"
+    >
+      <div className="flex shrink-0 items-center justify-between px-4 pt-3">
+        <div className="flex items-center gap-2">
+          <BookOpen className="text-muted-foreground size-3.5" />
+          <p className="text-muted-foreground text-[10px] font-medium uppercase tracking-wider">
+            Tutorial
+          </p>
+        </div>
+        {tutorial.level ? (
+          <span className="border-border/60 bg-muted/25 text-muted-foreground rounded-full border px-2 py-0.5 text-[10px] font-medium">
+            {tutorial.level}
+          </span>
+        ) : null}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(var(--chat-safe-padding,0px)+1.5rem)] pt-4">
+        <div className="space-y-5">
+          <section>
+            <h3 className="piano-serif text-foreground text-base font-semibold leading-tight tracking-tight">
+              {tutorial.title ?? song.title}
+            </h3>
+            <p className="text-foreground/85 mt-2 text-[12.5px] leading-5">
+              {tutorial.summary}
+            </p>
+          </section>
+
+          <TutorialBullets
+            title="What to learn"
+            items={tutorial.objectives}
+            icon={<Target className="size-3" />}
+          />
+
+          <section className="space-y-2">
+            <div className="text-muted-foreground flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider">
+              <ListChecks className="size-3" />
+              <span>Parts</span>
+            </div>
+            <div className="-mx-1 space-y-1">
+              {tutorial.sections.map((section, index) => {
+                const active = currentSection?.id === section.id
+                return (
+                  <button
+                    key={section.id}
+                    type="button"
+                    onClick={() => onSeek(section.start)}
+                    className={cn(
+                      'flex w-full cursor-pointer items-start gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors',
+                      active
+                        ? 'bg-muted/70 text-foreground'
+                        : 'text-muted-foreground hover:bg-muted/45 hover:text-foreground',
+                    )}
+                  >
+                    <span className="piano-mono mt-0.5 shrink-0 text-[10px] tabular-nums opacity-70">
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">
+                        {section.title}
+                      </span>
+                      {section.focus ? (
+                        <span className="mt-0.5 line-clamp-2 block text-[11px] leading-4 opacity-75">
+                          {section.focus}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+
+          {currentSection ? (
+            <section className="border-border/60 bg-card/55 rounded-xl border p-3 shadow-sm">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-foreground text-sm font-semibold leading-5">
+                    {currentSection.title}
+                  </p>
+                  {currentSection.focus ? (
+                    <p className="text-muted-foreground mt-0.5 text-[11px] leading-4">
+                      {currentSection.focus}
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onSeek(currentSection.start)}
+                  className="text-muted-foreground hover:bg-muted/70 hover:text-foreground shrink-0 cursor-pointer rounded-full px-2 py-1 text-[10px] font-medium transition-colors"
+                >
+                  Jump
+                </button>
+              </div>
+              <div className="space-y-4">
+                <TutorialBullets
+                  title="Listen for"
+                  items={currentSection.learn}
+                  icon={<BookOpen className="size-3" />}
+                />
+                <TutorialBullets
+                  title="Try this"
+                  items={currentSection.tryThis}
+                  icon={<Sparkles className="size-3" />}
+                />
+                <TutorialBullets
+                  title="Break it on purpose"
+                  items={currentSection.breakIt}
+                  icon={<RotateCcw className="size-3" />}
+                />
+                <TutorialBullets
+                  title="Reinforce"
+                  items={currentSection.reinforce}
+                  icon={<Check className="size-3" />}
+                />
+              </div>
+            </section>
+          ) : null}
+        </div>
+      </div>
+    </aside>
+  )
 }
 
 function SplitNoteDialog({
@@ -629,6 +806,19 @@ export function PracticeView({
       : `Loading piano samples · ${loadingSamples}%`
 
   const progress = duration > 0 ? Math.min(1, cursor / duration) : 0
+  const activeTutorialSection = useMemo(() => {
+    const sections = song.tutorial?.sections ?? []
+    if (sections.length === 0) return null
+    return (
+      sections.find(
+        (section) => cursor >= section.start && cursor < section.end,
+      ) ??
+      sections.find((section) => cursor < section.start) ??
+      sections[sections.length - 1] ??
+      null
+    )
+  }, [cursor, song.tutorial?.sections])
+  const hasTutorial = Boolean(song.tutorial)
 
   return (
     <div
@@ -714,55 +904,68 @@ export function PracticeView({
       ) : null}
 
       {/* Stage: falling notes + keyboard, horizontally scrollable together */}
-      <div ref={wrapRef} className="relative min-h-0 flex-1 overflow-hidden">
-        <div
-          ref={stageRef}
-          className="piano-no-scrollbar absolute inset-0 overflow-x-auto overflow-y-hidden"
-        >
-          {isSongLoading ? (
-            <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-              <Loader2 className="mr-2 size-4 animate-spin" />
-              Loading song…
-            </div>
-          ) : isSongError ? (
-            <div className="text-destructive flex h-full items-center justify-center text-sm">
-              Could not load this song.
-            </div>
-          ) : (
-            <div
-              className="relative mx-auto flex h-full flex-col pb-[calc(var(--chat-safe-padding,0px)+4.5rem)]"
-              style={{ width: KEYBOARD_WIDTH }}
-            >
-              <div className="flex-1" />
-              {stageHeight !== null ? (
-                <FallingNotes
-                  notes={practiceNotes}
-                  cursor={visualCursor}
-                  height={stageHeight}
-                />
-              ) : null}
-              <div className="relative pb-3">
-                <PianoKeyboard
-                  activeMidi={activeMidi}
-                  upcomingMidi={upcomingMidi}
-                  noteTones={noteTones}
-                  onKeyPress={onPreviewKey}
-                />
+      <div
+        ref={wrapRef}
+        className="relative flex min-h-0 flex-1 overflow-hidden"
+      >
+        <div className="relative min-w-0 flex-1 overflow-hidden">
+          <div
+            ref={stageRef}
+            className="piano-no-scrollbar absolute inset-0 overflow-x-auto overflow-y-hidden"
+          >
+            {isSongLoading ? (
+              <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Loading song…
               </div>
-            </div>
-          )}
+            ) : isSongError ? (
+              <div className="text-destructive flex h-full items-center justify-center text-sm">
+                Could not load this song.
+              </div>
+            ) : (
+              <div
+                className="relative mx-auto flex h-full flex-col pb-[calc(var(--chat-safe-padding,0px)+4.5rem)]"
+                style={{ width: KEYBOARD_WIDTH }}
+              >
+                <div className="flex-1" />
+                {stageHeight !== null ? (
+                  <FallingNotes
+                    notes={practiceNotes}
+                    cursor={visualCursor}
+                    height={stageHeight}
+                  />
+                ) : null}
+                <div className="relative pb-3">
+                  <PianoKeyboard
+                    activeMidi={activeMidi}
+                    upcomingMidi={upcomingMidi}
+                    noteTones={noteTones}
+                    onKeyPress={onPreviewKey}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+        {hasTutorial ? (
+          <TutorialPanel
+            song={song}
+            activeSection={activeTutorialSection}
+            onSeek={onSeek}
+          />
+        ) : null}
       </div>
 
       {/* Floating control dock — fixed, chat-aware, auto-hide while playing */}
       <div
         className={cn(
-          'pointer-events-none fixed inset-x-0 z-30 flex justify-center px-4 transition-all duration-300 ease-out',
+          'pointer-events-none fixed left-0 z-30 flex justify-center px-4 transition-all duration-300 ease-out',
           controlsVisible
             ? 'translate-y-0 opacity-100'
             : 'pointer-events-none translate-y-2 opacity-0',
         )}
         style={{
+          right: hasTutorial ? TUTORIAL_PANEL_WIDTH : 0,
           bottom:
             'calc(var(--piano-action-dock-safe-padding, var(--chat-safe-padding, 0px)) + 0.75rem)',
         }}

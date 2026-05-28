@@ -35,6 +35,26 @@ export interface MidiSongInfo {
   sourceFileName?: string
 }
 
+export interface SongTutorialSection {
+  id: string
+  title: string
+  start: number
+  end: number
+  focus?: string
+  learn: string[]
+  tryThis?: string[]
+  breakIt?: string[]
+  reinforce?: string[]
+}
+
+export interface SongTutorial {
+  title?: string
+  summary: string
+  level?: string
+  objectives: string[]
+  sections: SongTutorialSection[]
+}
+
 export interface SongPracticeSettings {
   splitMidi?: number
 }
@@ -71,6 +91,7 @@ export interface PianoSong {
   timeSignatureMap?: TimeSignatureChange[]
   midiInfo?: MidiSongInfo
   practiceSettings?: SongPracticeSettings
+  tutorial?: SongTutorial
   notes: PianoNote[]
   createdAt: string
   updatedAt: string
@@ -87,6 +108,8 @@ export interface SongSummary {
   beatUnit?: number
   tempoMap?: TempoChange[]
   timeSignatureMap?: TimeSignatureChange[]
+  isTutorial?: boolean
+  tutorialSummary?: string
   noteCount: number
   duration: number
   updatedAt: string

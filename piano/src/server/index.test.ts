@@ -204,6 +204,10 @@ describe('default songs', () => {
     )
     expect(songs.every((song) => Boolean(song.sourceInfo?.provider))).toBe(true)
     expect(songs.every((song) => Boolean(song.sourceInfo?.license))).toBe(true)
-    expect(songs.every((song) => song.notes.length > 100)).toBe(true)
+    expect(
+      songs
+        .filter((song) => !song.tutorial)
+        .every((song) => song.notes.length > 100),
+    ).toBe(true)
   })
 })

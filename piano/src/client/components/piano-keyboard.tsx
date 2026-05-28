@@ -10,6 +10,14 @@ import {
   midiToTone,
 } from '../piano-utils'
 
+const BLACK_KEY_FLAT_LABELS: Record<string, string> = {
+  'C#': 'Db',
+  'D#': 'Eb',
+  'F#': 'Gb',
+  'G#': 'Ab',
+  'A#': 'Bb',
+}
+
 interface PianoKeyboardProps {
   activeMidi: Set<number>
   upcomingMidi?: Set<number>
@@ -87,6 +95,17 @@ export function PianoKeyboard({
                   {key.pitch}
                 </span>
               ) : null}
+              {/* hover note label */}
+              {!isC ? (
+                <span
+                  className={cn(
+                    'piano-mono pointer-events-none absolute bottom-1.5 z-10 text-[8.5px] font-semibold tracking-wide opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-focus-visible:opacity-100',
+                    active ? 'text-neutral-900/85' : 'text-neutral-700',
+                  )}
+                >
+                  {key.pitch}
+                </span>
+              ) : null}
             </button>
           )
         })}
@@ -97,6 +116,10 @@ export function PianoKeyboard({
         const active = activeMidi.has(key.midi)
         const upcoming = upcomingMidi.has(key.midi)
         const tone = noteTones?.get(key.midi) ?? midiToTone(key.midi)
+        const flatLabel = BLACK_KEY_FLAT_LABELS[key.label]
+        const hoverLabel = flatLabel
+          ? `${key.pitch} / ${flatLabel}${key.octave}`
+          : key.pitch
 
         const baseStyle: CSSProperties = {
           left: key.left,
@@ -116,7 +139,7 @@ export function PianoKeyboard({
             key={key.midi}
             type="button"
             className={cn(
-              'absolute top-0 z-10 flex cursor-pointer items-end justify-center pb-1.5 transition-[transform,box-shadow] duration-100 ease-out focus-visible:outline-none',
+              'group absolute top-0 z-10 flex cursor-pointer items-end justify-center pb-1.5 transition-[transform,box-shadow] duration-100 ease-out hover:z-30 focus-visible:z-30 focus-visible:outline-none',
               'rounded-b-[3px]',
               active
                 ? 'translate-y-px'
@@ -133,6 +156,9 @@ export function PianoKeyboard({
                 style={{ background: tone, boxShadow: `0 0 6px ${tone}` }}
               />
             ) : null}
+            <span className="piano-mono bg-background/95 text-foreground pointer-events-none absolute bottom-1.5 left-1/2 z-20 -translate-x-1/2 whitespace-nowrap rounded-sm px-1.5 py-0.5 text-[8px] font-semibold leading-none opacity-0 shadow-sm transition-opacity duration-100 group-hover:opacity-100 group-focus-visible:opacity-100">
+              {hoverLabel}
+            </span>
           </button>
         )
       })}

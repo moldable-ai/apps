@@ -20,7 +20,12 @@ import {
   type SongWorkspacePracticeSettings,
   getSongDuration,
 } from '../shared/song'
-import { defaultSongs, retiredDefaultSongIds } from './default-songs'
+import {
+  defaultClassicsIds,
+  defaultSongs,
+  defaultTutorialIds,
+  retiredDefaultSongIds,
+} from './default-songs'
 import {
   installInstrumentPack,
   withInstrumentInstallState,
@@ -39,7 +44,15 @@ import { midiBytesToSong } from './song-importer'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { createHash } from 'node:crypto'
-import { copyFile, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises'
 import { basename, extname, parse } from 'node:path'
 
 export const app = new Hono()
@@ -413,6 +426,8 @@ function summarizeSong(song: PianoSong): SongSummary {
     beatUnit: song.beatUnit,
     tempoMap: song.tempoMap,
     timeSignatureMap: song.timeSignatureMap,
+    isTutorial: Boolean(song.tutorial),
+    tutorialSummary: song.tutorial?.summary,
     noteCount: song.notes.length,
     duration: getSongDuration(song),
     updatedAt: song.updatedAt,
@@ -573,23 +588,16 @@ async function findTargetFolder(
   return { folder, folders: sortFolders([folder, ...folders]) }
 }
 
-async function importMidiFile(
-  dataDir: string,
-  rawParams: ImportMidiFileParams,
-) {
-  const params = normalizeImportMidiParams(rawParams)
-  const fileStats = await stat(params.filePath).catch(() => null)
-  if (!fileStats?.isFile()) {
-    throw new ImportMidiError('MIDI file not found', 'file_not_found', 404)
-  }
-  if (fileStats.size > 50 * 1024 * 1024) {
-    throw new ImportMidiError(
-      'MIDI file is larger than 50 MB',
-      'file_too_large',
-      422,
-    )
-  }
+type NormalizedImportMidiParams = ReturnType<typeof normalizeImportMidiParams>
 
+async function persistImportedMidiSong(
+  dataDir: string,
+  params: NormalizedImportMidiParams,
+  bytes: Buffer,
+  sourceName: string,
+  sourceUrl: string,
+  copySourceFilePath?: string,
+) {
   const destinationSongPath = songPath(dataDir, params.songId)
   const existing = await readJson<PianoSong | null>(destinationSongPath, null)
   const replacingSameSong = params.replaceSongId === params.songId
@@ -601,17 +609,16 @@ async function importMidiFile(
     )
   }
 
-  const bytes = await readFile(params.filePath)
   const sourceHash = createHash('sha256').update(bytes).digest('hex')
-  const sourceMidiPath = copiedMidiPath(dataDir, params.songId, params.filePath)
+  const sourceMidiPath = copiedMidiPath(dataDir, params.songId, sourceName)
   const now = new Date().toISOString()
   const song = midiBytesToSong(bytes, {
     id: params.songId,
     title: params.title,
-    source: params.source || `Imported from MIDI: ${params.filePath}`,
+    source: params.source || `Imported from MIDI: ${sourceUrl}`,
     sourceInfo: {
       provider: 'User-provided MIDI',
-      sourceUrl: params.filePath,
+      sourceUrl,
       midiUrl: sourceMidiPath,
       license: params.license || 'User-provided for personal use',
       composer: params.composer || undefined,
@@ -620,13 +627,17 @@ async function importMidiFile(
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
     sourceHash,
-    sourceFileName: basename(params.filePath),
+    sourceFileName: basename(sourceName),
   })
 
   await mkdir(songsDir(dataDir), { recursive: true })
   await mkdir(songSourcesDir(dataDir), { recursive: true })
   await writeJson(destinationSongPath, song)
-  await copyFile(params.filePath, sourceMidiPath)
+  if (copySourceFilePath) {
+    await copyFile(copySourceFilePath, sourceMidiPath)
+  } else {
+    await writeFile(sourceMidiPath, bytes)
+  }
 
   let removedSongId: string | undefined
   if (params.replaceSongId && params.replaceSongId !== params.songId) {
@@ -665,6 +676,34 @@ async function importMidiFile(
     folder: folderResult?.folder,
     midiInfo: song.midiInfo,
   }
+}
+
+async function importMidiFile(
+  dataDir: string,
+  rawParams: ImportMidiFileParams,
+) {
+  const params = normalizeImportMidiParams(rawParams)
+  const fileStats = await stat(params.filePath).catch(() => null)
+  if (!fileStats?.isFile()) {
+    throw new ImportMidiError('MIDI file not found', 'file_not_found', 404)
+  }
+  if (fileStats.size > 50 * 1024 * 1024) {
+    throw new ImportMidiError(
+      'MIDI file is larger than 50 MB',
+      'file_too_large',
+      422,
+    )
+  }
+
+  const bytes = await readFile(params.filePath)
+  return persistImportedMidiSong(
+    dataDir,
+    params,
+    bytes,
+    params.filePath,
+    params.filePath,
+    params.filePath,
+  )
 }
 
 function normalizeSongFolderParams(params: SongFolderParams) {
@@ -802,6 +841,10 @@ function sanitizeSongDocument(
       source.practiceSettings === undefined
         ? existing?.practiceSettings
         : sanitizeSongPracticeSettings(source.practiceSettings),
+    tutorial:
+      source.tutorial === undefined
+        ? existing?.tutorial
+        : sanitizeSongTutorial(source.tutorial),
     notes: notes.map((note, index) => ({
       ...note,
       id: note.id || `note-${index + 1}`,
@@ -872,6 +915,67 @@ function sanitizeSongPracticeSettings(value: unknown) {
   const source = objectParam(value)
   const splitMidi = sanitizeSplitMidi(source.splitMidi)
   return splitMidi === undefined ? undefined : { splitMidi }
+}
+
+function sanitizeTextList(value: unknown, maxItems = 8, maxLength = 360) {
+  return Array.isArray(value)
+    ? value
+        .filter(
+          (item): item is string =>
+            typeof item === 'string' && item.trim().length > 0,
+        )
+        .slice(0, maxItems)
+        .map((item) => item.trim().slice(0, maxLength))
+    : []
+}
+
+function sanitizeSongTutorial(value: unknown): PianoSong['tutorial'] {
+  const source = objectParam(value)
+  const summary = stringParam(source.summary).slice(0, 700)
+  const objectives = sanitizeTextList(source.objectives, 8, 220)
+  const rawSections = Array.isArray(source.sections) ? source.sections : []
+  const sections = rawSections
+    .map((rawSection, index) => {
+      const section = objectParam(rawSection)
+      const title = stringParam(section.title).slice(0, 120)
+      const start = positiveNumber(section.start, Number.NaN, 0)
+      const end = positiveNumber(section.end, Number.NaN, 0)
+      const learn = sanitizeTextList(section.learn, 8, 360)
+      if (
+        !title ||
+        !Number.isFinite(start) ||
+        !Number.isFinite(end) ||
+        end <= start ||
+        learn.length === 0
+      ) {
+        return null
+      }
+      return {
+        id: stringParam(section.id) || `section-${index + 1}`,
+        title,
+        start,
+        end,
+        focus: stringParam(section.focus).slice(0, 160) || undefined,
+        learn,
+        tryThis: sanitizeTextList(section.tryThis, 8, 320),
+        breakIt: sanitizeTextList(section.breakIt, 8, 320),
+        reinforce: sanitizeTextList(section.reinforce, 8, 320),
+      }
+    })
+    .filter((section): section is NonNullable<typeof section> =>
+      Boolean(section),
+    )
+
+  if (!summary || objectives.length === 0 || sections.length === 0)
+    return undefined
+
+  return {
+    title: stringParam(source.title).slice(0, 120) || undefined,
+    summary,
+    level: stringParam(source.level).slice(0, 80) || undefined,
+    objectives,
+    sections,
+  }
 }
 
 function objectParam(value: unknown): Record<string, unknown> {
@@ -998,6 +1102,10 @@ function mergePatchedSongMetadata(
       metadata.practiceSettings === undefined
         ? existing.practiceSettings
         : sanitizeSongPracticeSettings(metadata.practiceSettings),
+    tutorial:
+      metadata.tutorial === undefined
+        ? existing.tutorial
+        : sanitizeSongTutorial(metadata.tutorial),
     notes,
     createdAt: existing.createdAt,
     updatedAt: now,
@@ -1323,13 +1431,78 @@ async function ensureSeedSongs(dataDir: string) {
     }
   }
 
+  const newlySeededIds: string[] = []
   for (const song of defaultSongs()) {
     const path = songPath(dataDir, song.id)
     const existing = await readJson<PianoSong | null>(path, null)
     if (!existing) {
       await writeJson(path, song)
+      newlySeededIds.push(song.id)
     }
   }
+
+  if (newlySeededIds.length > 0) {
+    const seededTutorialIds = newlySeededIds.filter((id) =>
+      defaultTutorialIds.includes(id),
+    )
+    const seededClassicsIds = newlySeededIds.filter((id) =>
+      defaultClassicsIds.includes(id),
+    )
+    if (seededTutorialIds.length > 0) {
+      await ensureDefaultFolderHas(dataDir, 'Tutorials', seededTutorialIds)
+    }
+    if (seededClassicsIds.length > 0) {
+      await ensureDefaultFolderHas(dataDir, 'Classics', seededClassicsIds)
+    }
+  }
+}
+
+/**
+ * Ensure a default-named folder exists containing the given song ids.
+ * Never modifies an existing folder's membership beyond appending songs
+ * that aren't already in *any* folder — so the user's custom
+ * organization is preserved.
+ */
+async function ensureDefaultFolderHas(
+  dataDir: string,
+  folderName: string,
+  songIds: string[],
+) {
+  const folders = await readFolders(dataDir)
+  const alreadyAssigned = new Set<string>()
+  for (const folder of folders) {
+    for (const id of folder.songIds) alreadyAssigned.add(id)
+  }
+  const idsToAssign = songIds.filter((id) => !alreadyAssigned.has(id))
+  if (idsToAssign.length === 0) return
+
+  const now = new Date().toISOString()
+  let target = folders.find(
+    (folder) => folder.name.toLowerCase() === folderName.toLowerCase(),
+  )
+
+  if (!target) {
+    target = {
+      id: generateId(),
+      name: folderName,
+      tone: toneFromSeed(folderName),
+      songIds: [],
+      createdAt: now,
+      updatedAt: now,
+    }
+    folders.unshift(target)
+  }
+
+  const existingInTarget = new Set(target.songIds)
+  for (const id of idsToAssign) {
+    if (!existingInTarget.has(id)) {
+      target.songIds.push(id)
+      existingInTarget.add(id)
+    }
+  }
+  target.updatedAt = now
+
+  await writeFolders(dataDir, folders)
 }
 
 async function readSongs(dataDir: string) {
@@ -2193,6 +2366,71 @@ app.post('/api/song-import/midi-file', async (c) => {
       .catch(() => null)) as ImportMidiFileParams | null
     if (!body) return jsonError(c, 'JSON body required', 400)
     return c.json(await importMidiFile(getDataDir(c), body), 201)
+  } catch (error) {
+    if (error instanceof ImportMidiError || error instanceof SongWriteError) {
+      return jsonError(c, error.message, error.status)
+    }
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to import MIDI file',
+    )
+  }
+})
+
+app.post('/api/song-import/midi-upload', async (c) => {
+  try {
+    const form = await c.req.formData()
+    const file = form.get('file')
+    if (!(file instanceof File)) {
+      return jsonError(c, 'A MIDI file upload is required', 400)
+    }
+
+    const fileName = file.name || 'uploaded.mid'
+    const extension = extname(fileName).toLowerCase()
+    if (extension !== '.mid' && extension !== '.midi') {
+      throw new ImportMidiError(
+        'Only .mid and .midi files can be imported',
+        'invalid_file_type',
+      )
+    }
+    if (file.size > 50 * 1024 * 1024) {
+      throw new ImportMidiError(
+        'MIDI file is larger than 50 MB',
+        'file_too_large',
+        422,
+      )
+    }
+
+    const field = (name: string) => {
+      const value = form.get(name)
+      return typeof value === 'string' ? value : undefined
+    }
+    const boolField = (name: string) => field(name) === 'true'
+    const params = normalizeImportMidiParams({
+      filePath: fileName,
+      songId: field('songId'),
+      title: field('title'),
+      replaceSongId: field('replaceSongId'),
+      overwrite: boolField('overwrite'),
+      source: field('source'),
+      composer: field('composer'),
+      artist: field('artist'),
+      license: field('license'),
+      folderId: field('folderId'),
+      folderName: field('folderName'),
+      createFolder: boolField('createFolder'),
+    })
+    const bytes = Buffer.from(await file.arrayBuffer())
+    return c.json(
+      await persistImportedMidiSong(
+        getDataDir(c),
+        params,
+        bytes,
+        fileName,
+        fileName,
+      ),
+      201,
+    )
   } catch (error) {
     if (error instanceof ImportMidiError || error instanceof SongWriteError) {
       return jsonError(c, error.message, error.status)
