@@ -12,7 +12,7 @@
   "iconPath": "public/icon.png",
   "widgetSize": "medium",
   "widgetTint": "rose",
-  "category": "productivity",
+  "category": "education",
   "tags": ["languages", "translation", "learning", "journal"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.12",

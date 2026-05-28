@@ -11,7 +11,7 @@
   "iconPath": "public/icon.png",
   "widgetSize": "medium",
   "widgetTint": "teal",
-  "category": "creative",
+  "category": "graphics-design",
   "tags": ["images", "generation", "openai", "gpt-image-2"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.12",

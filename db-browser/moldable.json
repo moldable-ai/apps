@@ -10,7 +10,7 @@
   "icon": "🗄️",
   "iconPath": "public/icon.png",
   "widgetSize": "large",
-  "category": "custom",
+  "category": "developer-tools",
   "tags": [],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.12",

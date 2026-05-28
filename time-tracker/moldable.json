@@ -11,7 +11,7 @@
   "iconPath": "public/icon.png",
   "widgetSize": "medium",
   "widgetTint": "graphite",
-  "category": "custom",
+  "category": "productivity",
   "tags": [],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.12",

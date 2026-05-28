@@ -11,7 +11,7 @@
   "iconPath": "public/icon.png",
   "widgetSize": "large",
   "widgetTint": "cyan",
-  "category": "custom",
+  "category": "photo-video",
   "skills": ["remotion-dev/skills/remotion"],
   "tags": [],
   "moldableDependencies": {

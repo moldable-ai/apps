@@ -10,7 +10,7 @@
   "iconPath": "public/icon.png",
   "widgetSize": "large",
   "widgetTint": "teal",
-  "category": "knowledge",
+  "category": "education",
   "tags": ["science", "learning", "images", "gpt-image-2", "3d"],
   "aliases": [
     "magic scope",

@@ -21,15 +21,35 @@ const IGNORE_DIRS = [
   '.turbo',
 ]
 
-// Categories with display info
+// Canonical app categories — modeled on the Apple App Store taxonomy so apps
+// map to a known, fixed set instead of inventing their own. Ordered so the
+// categories we actually use surface first; the store only renders non-empty
+// ones. Keep this list in sync with scripts/lint-moldable-app.js in the
+// moldable repo (the per-app validator that rejects unknown categories).
 const CATEGORIES = [
   { id: 'productivity', name: 'Productivity', icon: '⚡' },
+  { id: 'developer-tools', name: 'Developer Tools', icon: '🛠️' },
+  { id: 'education', name: 'Education', icon: '🎓' },
+  { id: 'graphics-design', name: 'Graphics & Design', icon: '🎨' },
+  { id: 'photo-video', name: 'Photo & Video', icon: '🎬' },
+  { id: 'music', name: 'Music', icon: '🎵' },
+  { id: 'health-fitness', name: 'Health & Fitness', icon: '❤️' },
+  { id: 'business', name: 'Business', icon: '💼' },
+  { id: 'reference', name: 'Reference', icon: '📚' },
+  { id: 'entertainment', name: 'Entertainment', icon: '🍿' },
   { id: 'finance', name: 'Finance', icon: '💰' },
-  { id: 'health', name: 'Health', icon: '❤️' },
-  { id: 'developer', name: 'Developer Tools', icon: '🛠️' },
-  { id: 'entertainment', name: 'Entertainment', icon: '🎮' },
-  { id: 'social', name: 'Social', icon: '👥' },
+  { id: 'games', name: 'Games', icon: '🎮' },
+  { id: 'lifestyle', name: 'Lifestyle', icon: '🌿' },
+  { id: 'medical', name: 'Medical', icon: '🩺' },
+  { id: 'news', name: 'News', icon: '📰' },
+  { id: 'social-networking', name: 'Social Networking', icon: '💬' },
+  { id: 'sports', name: 'Sports', icon: '⚽' },
+  { id: 'travel', name: 'Travel', icon: '✈️' },
+  { id: 'utilities', name: 'Utilities', icon: '🧰' },
+  { id: 'weather', name: 'Weather', icon: '🌤️' },
 ]
+
+const ALLOWED_CATEGORIES = new Set(CATEGORIES.map((c) => c.id))
 
 /**
  * Get the current git commit hash
@@ -76,6 +96,21 @@ function findApps(dir) {
   return apps
 }
 
+// Validate/normalize an app's category against the canonical list. Unknown
+// categories are coerced to 'productivity' with a loud warning so bogus values
+// never reach the published manifest.
+function normalizeCategory(app) {
+  const category = app.category || 'productivity'
+  if (!ALLOWED_CATEGORIES.has(category)) {
+    console.warn(
+      `⚠️  ${app.id}: unknown category "${category}" — coercing to "productivity". ` +
+        `Valid: ${[...ALLOWED_CATEGORIES].join(', ')}`,
+    )
+    return 'productivity'
+  }
+  return category
+}
+
 function generateManifest() {
   console.log('🔍 Scanning for apps...')
 
@@ -116,7 +151,7 @@ function generateManifest() {
       ),
       about,
       widgetSize: app.widgetSize || 'medium',
-      category: app.category || 'productivity',
+      category: normalizeCategory(app),
       tags: app.tags || [],
       path: app.path,
       requiredEnv: required.map((e) => e.key),

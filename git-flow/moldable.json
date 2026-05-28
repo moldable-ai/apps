@@ -13,7 +13,7 @@
   "widgetSize": "medium",
   "widgetTint": "amber",
   "routeName": "git-flow",
-  "category": "developer",
+  "category": "developer-tools",
   "tags": ["git", "version-control", "developer", "code"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.12",

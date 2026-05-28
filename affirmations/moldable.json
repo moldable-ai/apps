@@ -11,7 +11,7 @@
   "iconPath": "public/icon.png",
   "widgetSize": "medium",
   "widgetTint": "cyan",
-  "category": "custom",
+  "category": "health-fitness",
   "tags": [],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.12",
