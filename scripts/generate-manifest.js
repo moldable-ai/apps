@@ -51,6 +51,32 @@ const CATEGORIES = [
 
 const ALLOWED_CATEGORIES = new Set(CATEGORIES.map((c) => c.id))
 
+// Official, first-party apps. This is the ONLY place "official" is decided —
+// app authors cannot mark themselves official via their moldable.json. Add a
+// new first-party app's id here when it ships. Official apps are attributed to
+// "Moldable" and get the verified badge in the store.
+const OFFICIAL_APP_IDS = new Set([
+  'affirmations',
+  'calendar',
+  'code-editor',
+  'db-browser',
+  'git-flow',
+  'hello-moldables',
+  'images',
+  'mail',
+  'meetings',
+  'microscope',
+  'notes',
+  'piano',
+  'remotion',
+  'scribo',
+  'tasks',
+  'time-tracker',
+  'todo',
+  'wiki',
+])
+const OFFICIAL_AUTHOR = 'Moldable'
+
 /**
  * Get the current git commit hash
  */
@@ -137,13 +163,18 @@ function generateManifest() {
       // No STORE.md, leave null
     }
 
+    const official = OFFICIAL_APP_IDS.has(app.id)
+
     return {
       id: app.id,
       name: app.name,
       version: app.version || '0.1.0',
       description: app.description || '',
       tagline: app.tagline || app.description || '',
-      author: app.author || 'Moldable Team',
+      // Official apps are always attributed to "Moldable"; third-party authors
+      // keep their own name. "official" is set here, never from app manifests.
+      author: official ? OFFICIAL_AUTHOR : app.author || '',
+      official,
       icon: app.icon || '📦',
       iconUrl: app.iconPath ? `${RAW_BASE}/${app.path}/${app.iconPath}` : null,
       screenshots: (app.screenshots || []).map(

@@ -5,7 +5,7 @@
   "visibility": "public",
   "description": "Create programmatic videos with Remotion - manage projects, preview compositions, and render videos",
   "runtime": "vite_hono",
-  "author": "Moldable Team",
+  "author": "Moldable",
   "license": "FSL-1.1-ALv2",
   "icon": "🎬",
   "iconPath": "public/icon.png",

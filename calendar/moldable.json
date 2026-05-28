@@ -5,7 +5,7 @@
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Integrated calendar with Google Calendar connection",
-  "author": "Moldable Team",
+  "author": "Moldable",
   "license": "FSL-1.1-ALv2",
   "repository": "moldable-ai/apps",
   "icon": "🗓️",

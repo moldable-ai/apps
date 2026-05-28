@@ -5,7 +5,7 @@
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Fast Gmail client for triage, search, reading, and sending email",
-  "author": "Moldable Team",
+  "author": "Moldable",
   "license": "FSL-1.1-ALv2",
   "icon": "✉️",
   "widgetSize": "medium",
