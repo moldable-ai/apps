@@ -15,7 +15,6 @@ app-name/
 ├── moldable.json           # App manifest (required)
 ├── package.json            # Dependencies
 ├── index.html              # Full app HTML entry
-├── widget.html             # Widget HTML entry
 ├── vite.config.ts          # Vite config
 ├── eslint.config.js        # Shared Moldable app ESLint config
 ├── scripts/
@@ -24,7 +23,6 @@ app-name/
 │   ├── client/
 │   │   ├── main.tsx        # React entry with ThemeProvider + WorkspaceProvider
 │   │   ├── app.tsx         # Main app view
-│   │   ├── widget.tsx      # Glanceable widget content
 │   │   └── globals.css     # Styles
 │   ├── server/
 │   │   ├── index.ts        # Server entry
@@ -117,18 +115,30 @@ createRoot(document.getElementById('root')!).render(
 @import '@moldable-ai/ui/styles';
 ```
 
-### Widget View (Required)
+### Today contribution (recommended)
 
-Apps must expose a widget entry through `widget.html` and `src/client/widget.tsx`.
+There is no widget view anymore. The Moldable home is the **Today** view, and apps
+contribute to it through an HTTP route — `GET /api/moldable/today` — that returns
+zero or more "items" plus an optional "resume" point. The golden rule is **stay
+silent unless something genuinely needs the user right now**.
 
-```tsx
-// src/client/widget.tsx
-import { WidgetLayout } from '@moldable-ai/ui'
-
-export function Widget() {
-  return <WidgetLayout>...</WidgetLayout>
-}
+```ts
+// src/server/app.ts
+app.get('/api/moldable/today', async (c) => {
+  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const items: unknown[] = [] // push only when it truly earns attention
+  // resume = where the user left off (powers the "Pick up where you left off" rail)
+  const resume = /* ... */ null
+  return c.json({ items, resume, generatedAt: new Date().toISOString() })
+})
 ```
+
+Item kinds: `resume` | `active` (running now) | `blocked` (needs unblocking) |
+`timely` (imminent) | `threshold` (a limit crossed) | `milestone` | `agent-activity`.
+Each item: `{ id, kind, surface?, title, subtitle?, icon?, priority?, actions? }`,
+where an action is `open-app` | `rpc` (call your own /api/moldable/rpc) | `message`
+(prompt the chat) | `navigate`. See `prds/today-view.prd.md`. Do NOT mirror old
+widget behavior (no always-on lists, no bare counts, no empty-state nags).
 
 ### Color Usage
 
@@ -225,4 +235,4 @@ This is run automatically as part of `pnpm release`.
 - **NEVER start apps manually** - Moldable handles app lifecycle
 - **NEVER use browser tools to test** - Test in Moldable's webviews
 - **NEVER use raw Tailwind colors** - Use semantic tokens
-- **NEVER skip the widget view** - Every app needs one
+- **DON'T build widget views** - they're removed; contribute to the home via `GET /api/moldable/today` instead (see "Today contribution")

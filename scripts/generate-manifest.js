@@ -181,7 +181,6 @@ function generateManifest() {
         (rel) => `${RAW_BASE}/${app.path}/${rel}`,
       ),
       about,
-      widgetSize: app.widgetSize || 'medium',
       category: normalizeCategory(app),
       tags: app.tags || [],
       path: app.path,
