@@ -8,7 +8,6 @@
   "license": "MIT",
   "icon": "🎹",
   "iconPath": "public/icon.png",
-  "widgetSize": "medium",
   "category": "music",
   "tags": [],
   "moldableDependencies": {

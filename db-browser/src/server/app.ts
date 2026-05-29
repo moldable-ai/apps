@@ -234,6 +234,95 @@ app.get('/api/moldable/health', (c) => {
   })
 })
 
+app.get('/api/moldable/today', async (c) => {
+  const items: unknown[] = []
+  let resume: unknown = null
+  const generatedAt = new Date().toISOString()
+
+  try {
+    const workspaceId = requiredWorkspaceId(
+      c.req.header('x-moldable-workspace-id') ?? getWorkspaceId(c),
+    )
+    const dataDir = getDataDir(c)
+
+    const connections = await listConnections(workspaceId, dataDir)
+    if (connections.length === 0) {
+      return c.json({ items, resume, generatedAt })
+    }
+
+    const connectionId = await resolveConnectionId(workspaceId, dataDir)
+    const [workspace, dashboardWorkspace] = await Promise.all([
+      getSqlWorkspace(workspaceId, dataDir, connectionId),
+      getDashboardWorkspace(workspaceId, dataDir, connectionId),
+    ])
+    const activeTab =
+      workspace.tabs.find((tab) => tab.id === workspace.activeTabId) ?? null
+    const activeDashboard =
+      dashboardWorkspace.dashboards.find(
+        (d) => d.id === dashboardWorkspace.activeDashboardId,
+      ) ?? null
+
+    // Resume whichever the user touched most recently: the dashboard they were
+    // viewing (e.g. "Daily Analytics") or an in-progress SQL query tab.
+    const candidates: { resume: Record<string, unknown>; ts: number }[] = []
+
+    if (activeDashboard) {
+      const n = activeDashboard.charts.length
+      candidates.push({
+        resume: {
+          title: activeDashboard.title.trim() || 'Untitled dashboard',
+          subtitle: n > 0 ? `${n} chart${n === 1 ? '' : 's'}` : 'Dashboard',
+          icon: '📊',
+          lastTouchedAt: activeDashboard.updatedAt,
+        },
+        ts: Date.parse(activeDashboard.updatedAt) || 0,
+      })
+    }
+
+    if (activeTab && activeTab.sql.trim()) {
+      const tabTitle = activeTab.title.trim() || 'Untitled query'
+      const connection =
+        connections.find((item) => item.id === connectionId) ?? null
+      const connectionLabel = connection
+        ? connection.environment
+          ? `${connection.name} · ${connection.environment}`
+          : connection.name
+        : null
+
+      const history = await listQueryHistory(workspaceId, dataDir, connectionId)
+      const lastRun = history.find(
+        (entry) =>
+          entry.rowCount != null && titleMatches(entry.title, tabTitle),
+      )
+      const rowCount = lastRun?.rowCount ?? null
+      const rowLabel =
+        rowCount != null
+          ? `${rowCount.toLocaleString()} ${rowCount === 1 ? 'row' : 'rows'}`
+          : null
+
+      const subtitle =
+        [rowLabel, connectionLabel].filter(Boolean).join(' · ') || undefined
+
+      candidates.push({
+        resume: {
+          title: tabTitle,
+          ...(subtitle ? { subtitle } : {}),
+          icon: '🗂️',
+          lastTouchedAt: activeTab.updatedAt,
+        },
+        ts: Date.parse(activeTab.updatedAt) || 0,
+      })
+    }
+
+    candidates.sort((a, b) => b.ts - a.ts)
+    resume = candidates[0]?.resume ?? null
+
+    return c.json({ items, resume, generatedAt })
+  } catch {
+    return c.json({ items: [], resume: null, generatedAt })
+  }
+})
+
 app.post('/api/moldable/rpc', async (c) => {
   const workspaceId = requiredWorkspaceId(
     c.req.header('x-moldable-workspace-id') ?? getWorkspaceId(c),

@@ -29,7 +29,7 @@ import {
   undoUnpushedCommit,
 } from '../lib/git/server'
 import { generateAppJson } from '../lib/llm/generate-json.server'
-import { readFile } from 'fs/promises'
+import { readFile, stat } from 'fs/promises'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import path from 'path'
@@ -603,6 +603,116 @@ app.get('/api/moldable/health', (c) => {
       'Cache-Control': 'no-store',
     },
   )
+})
+
+// Most-recent edit time across a repo's changed files. Lets the resume rail
+// sort by genuine recency. Bounded to one repo and best-effort.
+async function getLastTouchedAt(
+  repoPath: string,
+  workspaceId?: string,
+): Promise<string | undefined> {
+  try {
+    const status = await getStatus(repoPath, workspaceId)
+    const mtimes = await Promise.all(
+      status.files.slice(0, 50).map(async (file) => {
+        try {
+          const abs = path.join(repoPath, file.path)
+          return (await stat(abs)).mtimeMs
+        } catch {
+          return 0
+        }
+      }),
+    )
+    const latest = Math.max(0, ...mtimes)
+    return latest > 0 ? new Date(latest).toISOString() : undefined
+  } catch {
+    return undefined
+  }
+}
+
+app.get('/api/moldable/today', async (c) => {
+  const items: unknown[] = []
+  let resume: unknown = null
+
+  try {
+    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const repos = await getRecentRepos(workspaceId)
+
+    const label = (name: string, branch: string) =>
+      branch ? `${name} · ${branch}` : name
+    const changes = (n: number) =>
+      `${n} uncommitted change${n === 1 ? '' : 's'}`
+
+    // Repos with uncommitted work — the real "pick up where you left off",
+    // not whichever repo happens to be selected. Most-recent first.
+    const dirty = repos.filter((r) => r.isDirty && r.changedCount > 0)
+
+    if (dirty.length > 0) {
+      const [top, ...rest] = dirty
+      resume = {
+        title: label(top.name, top.branch),
+        subtitle: changes(top.changedCount),
+        icon: '🌳',
+        deepLink: top.path,
+        lastTouchedAt: await getLastTouchedAt(top.path, workspaceId),
+      }
+
+      // Collapse any other dirty repos into ONE summary nudge that just opens
+      // Git — one card, not a list of recent-item dumps.
+      if (rest.length > 0) {
+        const totalChanges = rest.reduce((sum, r) => sum + r.changedCount, 0)
+        items.push({
+          id: 'git:dirty:others',
+          kind: 'resume',
+          surface: 'nudge',
+          title:
+            rest.length === 1
+              ? label(rest[0].name, rest[0].branch)
+              : `${rest.length} more repos with uncommitted work`,
+          subtitle:
+            rest.length === 1
+              ? changes(rest[0].changedCount)
+              : `${totalChanges} uncommitted change${totalChanges === 1 ? '' : 's'} across them`,
+          icon: '🌳',
+          priority: 60,
+          actions: [
+            {
+              type: 'open-app',
+              label: 'Open Git',
+              ...(rest.length === 1 ? { deepLink: rest[0].path } : {}),
+            },
+          ],
+        })
+      }
+    }
+
+    // THRESHOLD: a repo with commits not yet pushed.
+    const unpushed = repos.find((r) => r.ahead >= 1)
+    if (unpushed) {
+      items.push({
+        id: 'git:unpushed',
+        kind: 'threshold',
+        surface: 'nudge',
+        title:
+          unpushed.ahead === 1
+            ? `1 unpushed commit on ${unpushed.branch}`
+            : `${unpushed.ahead} unpushed commits on ${unpushed.branch}`,
+        subtitle: `${unpushed.name} · not yet pushed to remote`,
+        icon: '⬆️',
+        priority: 75,
+        actions: [{ type: 'open-app', label: 'Push', deepLink: unpushed.path }],
+      })
+    }
+  } catch (error) {
+    console.error('Git today endpoint failed:', error)
+    return c.json({
+      items: [],
+      resume: null,
+      generatedAt: new Date().toISOString(),
+    })
+  }
+
+  return c.json({ items, resume, generatedAt: new Date().toISOString() })
 })
 
 app.get('/api/git', async (c) => {

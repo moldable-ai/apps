@@ -1,7 +1,7 @@
 import { getAppDataDir, readJson, writeJson } from '@moldable-ai/storage'
 import { execFile, spawn } from 'child_process'
 import { createHash } from 'crypto'
-import { accessSync, constants, existsSync, readdirSync } from 'fs'
+import { existsSync, readdirSync } from 'fs'
 import {
   appendFile,
   copyFile,
@@ -909,11 +909,17 @@ export async function getRecentRepos(workspaceId?: string) {
         return {
           ...repo,
           isDirty: !status.isClean(),
+          changedCount: status.files.length,
+          branch: status.current ?? '',
+          ahead: status.ahead ?? 0,
         }
       } catch {
         return {
           ...repo,
           isDirty: false,
+          changedCount: 0,
+          branch: '',
+          ahead: 0,
         }
       }
     }),
@@ -979,6 +985,8 @@ export async function getStatus(repoPath?: string, workspaceId?: string) {
       branches: branchView.all,
       files: status.files,
       isClean: status.isClean(),
+      ahead: status.ahead,
+      tracking: status.tracking,
       repoName: path.basename(pathToUse),
       repoPath: pathToUse,
       pullRequest,
@@ -1636,15 +1644,6 @@ export async function addFileToGitignore(
   await appendFile(gitignorePath, `${prefix}${pattern}\n`, 'utf8')
 
   return { ok: true, path: normalizedPath, alreadyIgnored: false }
-}
-
-function isExecutableFile(filePath: string) {
-  try {
-    accessSync(filePath, constants.X_OK)
-    return true
-  } catch {
-    return false
-  }
 }
 
 function slugifyAppName(appName: string) {

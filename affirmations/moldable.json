@@ -9,8 +9,6 @@
   "license": "FSL-1.1-ALv2",
   "icon": "✨",
   "iconPath": "public/icon.png",
-  "widgetSize": "medium",
-  "widgetTint": "cyan",
   "category": "health-fitness",
   "tags": [],
   "moldableDependencies": {

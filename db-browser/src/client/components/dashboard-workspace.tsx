@@ -3454,7 +3454,7 @@ function seriesLegendItems(series: DashboardChartSeries[]): ChartLegendItem[] {
   }))
 }
 
-function blankSeries(index: number): DashboardChartSeries {
+function blankSeries(_index: number): DashboardChartSeries {
   return {
     id: newSeriesId(),
     name: '',

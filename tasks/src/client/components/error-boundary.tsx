@@ -7,7 +7,6 @@ type ErrorSource = 'react' | 'window' | 'promise'
 interface ErrorBoundaryProps {
   appName: string
   children: ReactNode
-  surface?: 'app' | 'widget'
 }
 
 interface ErrorBoundaryState {
@@ -100,11 +99,9 @@ export class ErrorBoundary extends Component<
     const { error, source, componentStack } = this.state
     if (!error) return
 
-    const surfaceLabel =
-      this.props.surface === 'widget' ? ' widget' : ' full app'
     const errorReport = formatError(error, source, componentStack)
     const text = [
-      `${this.props.appName}${surfaceLabel} hit an uncaught frontend error.`,
+      `${this.props.appName} hit an uncaught frontend error.`,
       'Please inspect and fix the client crash.',
       errorReport,
     ].join('\n\n')

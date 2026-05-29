@@ -342,12 +342,6 @@ function GenerationLoadingPreview({
   )
 }
 
-function pendingAspectRatio(thread: ImageThread | null): AspectRatioId | null {
-  return thread?.status === 'generating' && thread.pendingIteration
-    ? thread.pendingIteration.aspectRatio
-    : null
-}
-
 function pendingIterationsForThread(
   thread: ImageThread | null,
 ): PendingIteration[] {
@@ -679,7 +673,6 @@ export function App() {
     null,
   )
   const [isThumbnailFlyoutOpen, setIsThumbnailFlyoutOpen] = useState(false)
-  const [hoveredFanItemId, setHoveredFanItemId] = useState<string | null>(null)
   const hoveredThumbnailIdRef = useRef<string | null>(null)
   const thumbnailFlyoutCloseTimeoutRef = useRef<number | null>(null)
   const thumbnailFlyoutOpenFrameRef = useRef<number | null>(null)
@@ -754,7 +747,6 @@ export function App() {
       return
     }
 
-    setHoveredFanItemId(null)
     hoveredThumbnailIdRef.current = thumbnailId
     setHoveredThumbnailId(thumbnailId)
     setIsThumbnailFlyoutOpen(false)

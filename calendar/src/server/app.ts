@@ -558,6 +558,114 @@ app.get('/api/events', async (c) => {
   }
 })
 
+// Today contribution: surface ONLY an imminent meeting (starting within the next
+// ~20 min, or in progress) — the one calendar moment that earns attention. Lead
+// with Join (conference URL) when there's a video call, offer in-place RSVP when
+// you haven't responded yet, and stay silent for far-off events, finished
+// meetings, all-day items, and when Calendar isn't connected.
+app.get('/api/moldable/today', async (c) => {
+  const workspaceId =
+    c.req.header('x-moldable-workspace-id') ??
+    getWorkspaceFromRequest(c.req.raw) ??
+    'personal'
+
+  try {
+    const { timeMin, timeMax } = todayRange(false)
+    const events = await fetchCalendarEvents(workspaceId, {
+      timeMin,
+      timeMax,
+      maxResults: 20,
+    })
+
+    const now = Date.now()
+    // The meeting happening right now or starting soonest, excluding ones the
+    // user has already declined and all-day blocks (not "imminent" in any sense).
+    const next = events
+      .filter(
+        (e) =>
+          !e.isAllDay &&
+          e.start &&
+          e.end &&
+          e.selfResponseStatus !== 'declined' &&
+          Date.parse(e.end) > now,
+      )
+      .sort((a, b) => Date.parse(a.start!) - Date.parse(b.start!))[0]
+
+    if (!next || !next.start || !next.end) {
+      return c.json({ items: [], generatedAt: new Date().toISOString() })
+    }
+
+    const startMs = Date.parse(next.start)
+    const minsUntil = Math.round((startMs - now) / 60000)
+    const inProgress = startMs <= now && Date.parse(next.end) > now
+
+    // Quiet unless the meeting is imminent (≤20 min out) or already running.
+    if (!inProgress && minsUntil > 20) {
+      return c.json({ items: [], generatedAt: new Date().toISOString() })
+    }
+
+    const timeLabel = new Date(startMs).toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+    const title = next.title ?? 'Untitled event'
+
+    const when = inProgress
+      ? 'now'
+      : minsUntil <= 0
+        ? 'now'
+        : `in ${minsUntil} min`
+
+    const actions: unknown[] = []
+
+    // Richest action first: jump straight into the video call.
+    if (next.conferenceUrl) {
+      actions.push({
+        type: 'open-app',
+        label: 'Join',
+        deepLink: next.conferenceUrl,
+      })
+    }
+
+    // If you haven't responded, let you accept in place via the app's own RPC.
+    if (next.id && next.selfResponseStatus === 'needsAction') {
+      actions.push({
+        type: 'rpc',
+        label: 'Accept',
+        method: 'events.rsvp',
+        params: { eventId: next.id, responseStatus: 'accepted' },
+      })
+    }
+
+    // Fallback to opening the event in Google Calendar.
+    actions.push({
+      type: 'open-app',
+      label: actions.length ? 'View' : 'View event',
+      ...(next.link ? { deepLink: next.link } : {}),
+    })
+
+    const subtitle =
+      next.location ??
+      (next.conferenceUrl ? `Video call · ${timeLabel}` : timeLabel)
+
+    const item = {
+      id: `event:${next.id}`,
+      kind: 'timely',
+      surface: 'nudge',
+      title: `${title} ${when}`,
+      subtitle,
+      icon: '📅',
+      priority: inProgress ? 96 : 92,
+      actions,
+    }
+
+    return c.json({ items: [item], generatedAt: new Date().toISOString() })
+  } catch {
+    // Not connected / transient error → stay quiet.
+    return c.json({ items: [], generatedAt: new Date().toISOString() })
+  }
+})
+
 app.post('/api/moldable/rpc', async (c) => {
   const workspaceId =
     c.req.header('x-moldable-workspace-id') ??

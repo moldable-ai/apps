@@ -260,6 +260,83 @@ app.get('/api/moldable/health', (c) => {
   )
 })
 
+app.get('/api/moldable/today', async (c) => {
+  const generatedAt = new Date().toISOString()
+  const items: unknown[] = []
+  let resume: unknown = null
+
+  try {
+    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const entries = await loadEntries(workspaceId)
+
+    const now = Date.now()
+    const twoWeeksMs = 14 * 24 * 60 * 60 * 1000
+
+    const touchedAt = (entry: JournalEntry): number =>
+      new Date(entry.updatedAt).getTime()
+
+    const recent = entries
+      .filter((entry) => {
+        const touched = touchedAt(entry)
+        return Number.isFinite(touched) && now - touched <= twoWeeksMs
+      })
+      .sort((a, b) => touchedAt(b) - touchedAt(a))
+
+    // Highest-signal item: a draft with real content the user wrote but never
+    // translated. That is genuine unfinished work with a concrete next step, and
+    // translating it well needs language-pair reasoning + persisting the result,
+    // so we hand off to chat rather than fire-and-forget an rpc.
+    const untranslated = recent.find((entry) => {
+      const content = (entry.content ?? '').trim()
+      const translation = (entry.translation ?? '').trim()
+      return content.length >= 40 && translation.length === 0
+    })
+
+    if (untranslated) {
+      const title = (untranslated.title ?? '').trim() || 'Untitled entry'
+      const sourceLanguage = untranslated.sourceLanguage
+      const targetLanguage = untranslated.targetLanguage
+      items.push({
+        id: `scribo-untranslated-${untranslated.id}`,
+        kind: 'blocked',
+        title,
+        subtitle: `Drafted in ${sourceLanguage} · no ${targetLanguage} translation yet`,
+        icon: '📓',
+        priority: 45,
+        dismissible: true,
+        actions: [{ type: 'open-app', label: 'Open in Scribo' }],
+      })
+    }
+
+    // Resume: where the user was actually writing — the most recently-touched
+    // entry from the last 2 weeks that still has content (skip empty/blank
+    // entries; those aren't in-progress work). Don't repeat the entry we already
+    // surfaced as an actionable item above.
+    const resumeEntry = recent.find(
+      (entry) =>
+        entry.id !== untranslated?.id &&
+        (entry.content ?? '').trim().length > 0,
+    )
+
+    if (resumeEntry) {
+      const title = (resumeEntry.title ?? '').trim() || 'Untitled entry'
+      const needsTranslation =
+        (resumeEntry.translation ?? '').trim().length === 0
+      resume = {
+        title: `${title} · ${resumeEntry.sourceLanguage}→${resumeEntry.targetLanguage}`,
+        subtitle: needsTranslation ? 'Draft not yet translated' : undefined,
+        icon: '✍️',
+        lastTouchedAt: new Date(resumeEntry.updatedAt).toISOString(),
+      }
+    }
+  } catch (error) {
+    console.error('Scribo today endpoint failed:', error)
+    return c.json({ items: [], resume: null, generatedAt })
+  }
+
+  return c.json({ items, resume, generatedAt })
+})
+
 app.get('/api/entries', async (c) => {
   try {
     const workspaceId = getWorkspaceFromRequest(c.req.raw)

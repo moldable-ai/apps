@@ -650,10 +650,6 @@ function remapMovedEntry(
   }
 }
 
-function displayPath(path: string) {
-  return path || 'Wiki'
-}
-
 function titleFromPath(path: string) {
   return path.split('/').pop()?.replace(/\.md$/, '') ?? path
 }

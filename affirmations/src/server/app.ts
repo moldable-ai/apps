@@ -102,6 +102,24 @@ app.get('/api/moldable/health', (c) => {
   )
 })
 
+// Today contribution.
+//
+// Affirmations is a calm, manual app: the only thing it persists is a list of
+// favorited affirmation texts (favorites.json, with no timestamps, no streaks,
+// no "last viewed", no deadlines, agents, or in-progress work). A stable count
+// of saved favorites is NOT an event that earns attention — surfacing it would
+// be exactly the always-on empty-state nag the Today view forbids.
+//
+// There is no honest signal here and no genuine in-progress state to resume,
+// so this app stays silent by default. (Per prds/today-view.prd.md: "Quiet by
+// default. Most of the time most apps should emit nothing.")
+app.get('/api/moldable/today', (c) => {
+  const items: unknown[] = []
+  const resume: unknown = null
+
+  return c.json({ items, resume, generatedAt: new Date().toISOString() })
+})
+
 app.get('/api/favorites', async (c) => {
   try {
     const workspaceId = getWorkspaceFromRequest(c.req.raw)

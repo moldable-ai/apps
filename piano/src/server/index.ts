@@ -161,10 +161,6 @@ async function handleClientRequest(
     return
   }
 
-  if (url.pathname === '/widget') {
-    req.url = `/widget.html${url.search}`
-  }
-
   vite.middlewares(req, res, () => {
     req.url = originalUrl
     res.statusCode = 404

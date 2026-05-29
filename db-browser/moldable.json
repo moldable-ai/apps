@@ -9,7 +9,6 @@
   "license": "MIT",
   "icon": "🗄️",
   "iconPath": "public/icon.png",
-  "widgetSize": "large",
   "category": "developer-tools",
   "tags": [],
   "moldableDependencies": {

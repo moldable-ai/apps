@@ -5,7 +5,6 @@ A friendly first-run guide that shows you what it feels like to build and reshap
 - One-click starter prompts that drop straight into the AI chat, like personalizing the greeting or adding a countdown timer with confetti
 - Hands-on examples that teach the build-and-tweak loop instead of just describing it
 - Keyboard shortcut hints baked in: Cmd/Ctrl+M to summon the assistant, Cmd/Ctrl+K to navigate around
-- A live dashboard widget previewing next steps, from your first app to a fun game
 - Adapts automatically to Mac or Windows/Linux modifier keys
 - Runs fully local-first, with no external accounts or API keys required
 

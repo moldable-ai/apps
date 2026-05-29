@@ -8,8 +8,6 @@
   "license": "MIT",
   "icon": "🔬",
   "iconPath": "public/icon.png",
-  "widgetSize": "large",
-  "widgetTint": "teal",
   "category": "education",
   "tags": ["science", "learning", "images", "gpt-image-2", "3d"],
   "aliases": [

@@ -134,10 +134,6 @@ async function handleClientRequest(
   }
 
   const originalUrl = req.url
-  const url = requestUrl(req)
-  if (url.pathname === '/widget') {
-    req.url = `/widget.html${url.search}`
-  }
 
   vite.middlewares(req, res, () => {
     req.url = originalUrl

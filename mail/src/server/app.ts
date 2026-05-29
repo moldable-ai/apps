@@ -182,6 +182,15 @@ async function resolveTriageAccount(
   return (await getProfile(workspaceId).catch(() => null))?.emailAddress ?? null
 }
 
+function senderName(raw: string) {
+  if (!raw) return 'Unknown sender'
+  const match = raw.match(/^\s*"?([^"<]+?)"?\s*<[^>]+>\s*$/)
+  if (match && match[1]) return match[1].trim()
+  const emailMatch = raw.match(/<([^>]+)>/) ?? raw.match(/([\w.+-]+@[\w.-]+)/)
+  if (emailMatch && emailMatch[1]) return emailMatch[1].trim()
+  return raw.trim()
+}
+
 function numberQuery(value: string | undefined, fallback: number) {
   const parsed = Number(value ?? fallback)
   return Number.isFinite(parsed) ? parsed : fallback
@@ -361,6 +370,94 @@ app.get('/api/moldable/health', (c) => {
     200,
     { 'Cache-Control': 'no-store' },
   )
+})
+
+app.get('/api/moldable/today', async (c) => {
+  const workspaceId = getWorkspaceId(c.req.raw)
+  const generatedAt = new Date().toISOString()
+  const items: unknown[] = []
+  let resume: unknown = null
+
+  try {
+    if (!(await isAuthenticated(workspaceId))) {
+      return c.json({ items, resume, generatedAt })
+    }
+
+    // TIMELY: surface only the messages Gmail itself flagged as important AND
+    // still unread — the genuinely actionable subset, not the raw unread pile.
+    // Silent when there's nothing important waiting.
+    const important = await listMessages(workspaceId, {
+      labelId: 'INBOX',
+      query: 'is:important is:unread',
+      maxResults: 5,
+    }).catch(() => null)
+
+    if (important && important.messages.length > 0) {
+      const messages = important.messages
+      const count =
+        important.resultSizeEstimate && important.resultSizeEstimate > 0
+          ? important.resultSizeEstimate
+          : messages.length
+      const top = messages[0]
+      const sender = senderName(top.from)
+      const subject = top.subject.trim() || '(no subject)'
+
+      // A concrete handoff: hand the chat the actual senders/subjects so it can
+      // triage, summarize, and draft replies — multistep work no single rpc does.
+      const list = messages
+        .slice(0, 5)
+        .map(
+          (m) =>
+            `- ${senderName(m.from)}: ${m.subject.trim() || '(no subject)'}`,
+        )
+        .join('\n')
+      const triagePrompt =
+        `Help me clear my important unread email. There ${count === 1 ? 'is' : 'are'} ${count} ` +
+        `important unread message${count === 1 ? '' : 's'} in my inbox:\n${list}\n\n` +
+        `For each, give me a one-line summary of what they want and whether it needs a reply. ` +
+        `Draft replies for the ones that do. ` +
+        `When you're done, refresh the home view by calling the Moldable app API with targetAppId "today" and method "today.refresh".`
+
+      items.push({
+        id: 'mail:important-unread',
+        kind: 'timely',
+        title:
+          count === 1
+            ? `${sender}: ${subject}`
+            : `${count} important emails unread`,
+        subtitle:
+          count === 1 ? undefined : `Latest from ${sender} · ${subject}`,
+        icon: '📨',
+        priority: 75,
+        actions: [
+          { type: 'open-app', label: 'Open inbox' },
+          { type: 'message', label: 'Triage with chat', prompt: triagePrompt },
+        ],
+      })
+    }
+
+    // RESUME: an unfinished draft left untouched for over an hour. Lead with the
+    // thing being written, not a "Finish your draft" prefix.
+    const drafts = await listDrafts(workspaceId).catch(() => [])
+    const staleDraft = drafts.find(
+      (draft) => Date.now() - draft.updatedAt > 60 * 60 * 1000,
+    )
+    if (staleDraft) {
+      const subject = staleDraft.composer.subject.trim()
+      const recipient = staleDraft.composer.to.trim()
+      resume = {
+        title: subject || (recipient ? `To ${recipient}` : 'Unsent draft'),
+        subtitle: subject && recipient ? `To ${recipient}` : undefined,
+        icon: '✍️',
+        lastTouchedAt: new Date(staleDraft.updatedAt).toISOString(),
+      }
+    }
+  } catch {
+    // Gmail not connected or transient failure: stay quiet.
+    return c.json({ items: [], resume: null, generatedAt })
+  }
+
+  return c.json({ items, resume, generatedAt })
 })
 
 app.get('/api/moldable/commands', async (c) => {

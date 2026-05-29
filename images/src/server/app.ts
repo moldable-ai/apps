@@ -2399,6 +2399,65 @@ app.get('/api/moldable/health', (c) => {
   )
 })
 
+app.get('/api/moldable/today', async (c) => {
+  const generatedAt = new Date().toISOString()
+  const items: unknown[] = []
+  const resume: unknown = null
+
+  try {
+    const workspaceId = getWorkspaceId(c.req.raw)
+    const threads = await loadThreads(workspaceId)
+
+    // Quiet by default. Only a failed generation (needs unblocking) or an
+    // actively-rendering generation earns a card. A finished/ready image is a
+    // done state, not unfinished work, so it never becomes a resume.
+    const failed = threads.find((thread) => threadStatus(thread) === 'failed')
+    const generating = threads.find(
+      (thread) => threadStatus(thread) === 'generating',
+    )
+
+    if (failed) {
+      const label = failed.title || titleFromPrompt(failed.prompt)
+      items.push({
+        id: 'render:blocked',
+        kind: 'blocked',
+        surface: 'nudge',
+        title: label || 'Image generation',
+        subtitle:
+          failed.errorMessage ?? 'Generation failed — retry to run it again',
+        icon: '⚠️',
+        priority: 95,
+        actions: [
+          {
+            type: 'rpc',
+            label: 'Retry',
+            method: 'images.retry',
+            params: { id: failed.id },
+          },
+          { type: 'open-app', label: 'Open Images' },
+        ],
+      })
+    } else if (generating) {
+      const label = generating.title || titleFromPrompt(generating.prompt)
+      items.push({
+        id: 'render:active',
+        kind: 'active',
+        surface: 'nudge',
+        title: label || 'Untitled image',
+        subtitle: 'Rendering now',
+        icon: '🎨',
+        priority: 90,
+        dismissible: false,
+        actions: [{ type: 'open-app', label: 'View' }],
+      })
+    }
+  } catch {
+    return c.json({ items: [], resume: null, generatedAt })
+  }
+
+  return c.json({ items, resume, generatedAt })
+})
+
 app.get('/api/images/aspect-ratios', (c) => {
   return c.json(Object.values(ASPECT_RATIOS))
 })

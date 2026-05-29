@@ -8,7 +8,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         app: 'index.html',
-        widget: 'widget.html',
       },
     },
   },

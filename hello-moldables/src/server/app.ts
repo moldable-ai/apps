@@ -12,6 +12,16 @@ app.get('/api/moldable/health', (c) => {
   })
 })
 
+// Today contribution — apps surface to the Today home view via this route.
+// Stay silent unless something needs the user. See prds/today-view.prd.md.
+app.get('/api/moldable/today', (c) => {
+  return c.json({
+    items: [],
+    resume: null,
+    generatedAt: new Date().toISOString(),
+  })
+})
+
 app.get('/api/example/stream', () => {
   const encoder = new TextEncoder()
   let count = 0

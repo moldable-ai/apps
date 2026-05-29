@@ -2116,6 +2116,70 @@ app.get('/api/moldable/health', (c) => {
   })
 })
 
+app.get('/api/moldable/today', async (c) => {
+  const items: unknown[] = []
+  let resume: unknown = null
+  const generatedAt = new Date().toISOString()
+
+  try {
+    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const vaultId = await getActiveVaultId(workspaceId)
+
+    // RESUME: the note the user last had open.
+    const tabs = await readTabsState(workspaceId, vaultId)
+    if (tabs.activePath) {
+      const activeTab = tabs.tabs.find((tab) => tab.path === tabs.activePath)
+      const title = activeTab?.title ?? titleFromNotePath(tabs.activePath)
+      const folder = folderNameFromPath(tabs.activePath)
+      resume = {
+        title,
+        subtitle: folder || undefined,
+        icon: '📝',
+        deepLink: tabs.activePath,
+        lastTouchedAt: tabs.updatedAt ?? generatedAt,
+      }
+    }
+
+    // THRESHOLD: surface only broken-link warnings (skip info-severity health items).
+    const health = await getHealth(workspaceId, vaultId)
+    const brokenLinks = health.issues.filter(
+      (issue) =>
+        issue.severity === 'warning' && issue.id.startsWith('broken-link:'),
+    )
+    if (brokenLinks.length > 0) {
+      const linkList = brokenLinks
+        .slice(0, 12)
+        .map(
+          (issue) => `- ${(issue as { detail?: string }).detail ?? issue.id}`,
+        )
+        .join('\n')
+      const prompt = `My Wiki vault has ${brokenLinks.length} broken link${
+        brokenLinks.length === 1 ? '' : 's'
+      } — links that point to notes which no longer exist:\n${linkList}\n\nFor each one, either repoint it to the correct existing note or remove the link, then tell me what you changed. When you're done, refresh the home view by calling the Moldable app API with targetAppId "today" and method "today.refresh".`
+      items.push({
+        id: 'wiki:broken-links',
+        kind: 'threshold',
+        surface: 'nudge',
+        title:
+          brokenLinks.length === 1
+            ? '1 broken link in your vault'
+            : `${brokenLinks.length} broken links in your vault`,
+        subtitle: 'Links point to notes that no longer exist',
+        icon: '🔗',
+        priority: 70,
+        actions: [
+          { type: 'message', label: 'Fix links', prompt },
+          { type: 'open-app', label: 'Open Wiki' },
+        ],
+      })
+    }
+  } catch {
+    return c.json({ items: [], resume: null, generatedAt })
+  }
+
+  return c.json({ items, resume, generatedAt })
+})
+
 app.get('/api/moldable/commands', async (c) => {
   const workspaceId = getWorkspaceFromRequest(c.req.raw)
   let vaultCommands: Array<{

@@ -7,7 +7,6 @@ Calendar connects securely to your Google Calendar and pairs a full month grid w
 - Click any event for a popover with full time range, location, and a direct "View in Google Calendar" link
 - Navigate months by buttons, mouse wheel, or touch swipe, with a one-tap Today jump
 - Past events automatically dim and strike through so the day's remaining schedule stands out
-- A medium widget surfaces today's events at a glance without opening the full app
 
 **Connects to:** Google Calendar via OAuth. Your tokens and calendar data are stored locally on your device and never leave your machine.
 

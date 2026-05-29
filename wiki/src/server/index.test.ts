@@ -68,12 +68,6 @@ describe('resolveStaticFilePath', () => {
       'assets/index-abc123.js',
     )
   })
-
-  it('resolves widget routes to the built widget html entry', () => {
-    expect(resolveStaticFilePath('/widget')).toBe(
-      path.join(process.cwd(), 'dist', 'widget.html'),
-    )
-  })
 })
 
 describe('rewriteInternalLinksInMarkdown', () => {

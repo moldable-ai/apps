@@ -36,7 +36,6 @@ A simple meeting recorder with real-time transcription powered by Deepgram.
 src/
 ├── client/
 │   ├── app.tsx              # Main app
-│   ├── widget.tsx           # Dashboard widget
 │   └── query-provider.tsx   # React Query provider
 ├── components/
 │   ├── recording-controls   # Record/pause/stop UI

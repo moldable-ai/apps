@@ -13,7 +13,6 @@ import {
   ChevronDown,
   Code2,
   Copy,
-  FileDiff,
   FileMinus,
   FilePenLine,
   FilePlus,
@@ -1538,6 +1537,21 @@ export default function GitFlowPage() {
       }
     },
   })
+
+  // Today deep-link: opening a repo card from the Today view sends
+  // { type: 'moldable:navigate', path } — switch straight to that repo.
+  const handleRepoChangeRef = useRef(handleRepoChange)
+  handleRepoChangeRef.current = handleRepoChange
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      const data = event.data as { type?: string; path?: unknown } | null
+      if (data?.type === 'moldable:navigate' && typeof data.path === 'string') {
+        handleRepoChangeRef.current(data.path)
+      }
+    }
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
+  }, [])
 
   const handleReviewCode = () => {
     if (selectedFiles.size === 0) {

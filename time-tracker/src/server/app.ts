@@ -225,6 +225,81 @@ app.options('/api/moldable/health', (c) =>
   }),
 )
 
+// Today contribution: surface a running timer (so it's never forgotten) or a
+// one-tap resume of the last project. Silent when nothing is tracking.
+app.get('/api/moldable/today', async (c) => {
+  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const [timer, projects, entries] = await Promise.all([
+    readTimer(workspaceId),
+    readJson<Project[]>(getProjectsPath(workspaceId), []),
+    readJson<TimeEntry[]>(getEntriesPath(workspaceId), []),
+  ])
+  const projectName = (id: string | null) =>
+    projects.find((p) => p.id === id)?.name ?? 'Untracked'
+
+  const items: unknown[] = []
+  let resume: unknown = null
+
+  if (timer.isRunning && timer.projectId && timer.startTime) {
+    const mins = Math.max(
+      0,
+      Math.floor((Date.now() - new Date(timer.startTime).getTime()) / 60000),
+    )
+    const elapsed =
+      mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`
+    // A timer running 8h+ is almost always a forget-to-stop, not real work.
+    // Flag it as a blocked-style nudge so it stands out and gets stopped.
+    const forgotten = mins >= 8 * 60
+
+    items.push({
+      id: 'timer:active',
+      kind: forgotten ? 'blocked' : 'active',
+      surface: 'text',
+      title: forgotten
+        ? `Timer running ${elapsed} on ${projectName(timer.projectId)}`
+        : `Tracking ${projectName(timer.projectId)}`,
+      subtitle: forgotten
+        ? 'Still running — stop it if you forgot'
+        : timer.description
+          ? `${elapsed} · ${timer.description}`
+          : `${elapsed} elapsed`,
+      icon: forgotten ? '⚠️' : '⏱️',
+      priority: forgotten ? 92 : 95,
+      dismissible: false,
+      actions: [
+        { type: 'rpc', label: 'Stop', method: 'time.timer.stop' },
+        { type: 'open-app', label: 'Open' },
+      ],
+    })
+  } else if (timer.lastProjectId) {
+    // Only resume if there's a real prior session to pick back up — not a
+    // bare project that was never tracked.
+    const lastEntry = entries
+      .filter((e) => e.projectId === timer.lastProjectId && e.endTime)
+      .sort(
+        (a, b) => Date.parse(b.endTime ?? '') - Date.parse(a.endTime ?? ''),
+      )[0]
+
+    if (lastEntry) {
+      const lastSeconds = lastEntry.duration ?? 0
+      const lastSpan =
+        lastSeconds >= 3600
+          ? `${Math.floor(lastSeconds / 3600)}h ${Math.floor((lastSeconds % 3600) / 60)}m`
+          : `${Math.floor(lastSeconds / 60)}m`
+      resume = {
+        title: projectName(timer.lastProjectId),
+        subtitle: lastEntry.description
+          ? `Last: ${lastSpan} · ${lastEntry.description}`
+          : `Last session ${lastSpan}`,
+        icon: '⏱️',
+        lastTouchedAt: lastEntry.endTime,
+      }
+    }
+  }
+
+  return c.json({ items, resume, generatedAt: new Date().toISOString() })
+})
+
 app.get('/api/projects', async (c) => {
   const workspaceId = getWorkspaceFromRequest(c.req.raw)
   const projects = await readJson<Project[]>(getProjectsPath(workspaceId), [])

@@ -1695,6 +1695,86 @@ app.get('/api/moldable/health', (c) => {
   })
 })
 
+// Today contribution: nudge the user back into their in-progress lesson — the
+// canonical "resume where you left off" case. Silent when no course is started.
+app.get('/api/moldable/today', async (c) => {
+  const dataDir = getDataDir(c)
+  const [courses, progressMap] = await Promise.all([
+    readCourses(dataDir),
+    readAllCourseProgress(dataDir),
+  ])
+
+  type Candidate = {
+    course: PianoCourse
+    lessonId: string
+    completedCount: number
+    total: number
+    hasCurrent: boolean
+    updatedAt: string
+  }
+  let best: Candidate | null = null
+
+  for (const course of courses) {
+    const progress = progressMap[course.id]
+    if (!progress) continue
+    const total = countCourseLessons(course)
+    const completed = new Set(progress.completedLessonIds)
+    const completedCount = completed.size
+    if (completedCount === 0 && !progress.currentLessonId) continue
+    if (completedCount >= total) continue // finished — nothing to resume
+
+    const allLessons = course.modules.flatMap((m) => m.lessons)
+    const lessonId =
+      progress.currentLessonId &&
+      !completed.has(progress.currentLessonId) &&
+      courseHasLesson(course, progress.currentLessonId)
+        ? progress.currentLessonId
+        : (allLessons.find((l) => !completed.has(l.id))?.id ?? null)
+    if (!lessonId) continue
+
+    const candidate: Candidate = {
+      course,
+      lessonId,
+      completedCount,
+      total,
+      hasCurrent: Boolean(progress.currentLessonId),
+      updatedAt: progress.updatedAt || new Date(0).toISOString(),
+    }
+    // Prefer the course the user was most recently working in (that's the real
+    // "where I left off"); fall back to an active course, then most progress.
+    const moreRecent = candidate.updatedAt > (best?.updatedAt ?? '')
+    if (
+      !best ||
+      (candidate.hasCurrent && !best.hasCurrent) ||
+      (candidate.hasCurrent === best.hasCurrent && moreRecent)
+    ) {
+      best = candidate
+    }
+  }
+
+  let resume: unknown = null
+  if (best) {
+    const allLessons = best.course.modules.flatMap((m) => m.lessons)
+    const index = allLessons.findIndex((l) => l.id === best!.lessonId)
+    const lesson = allLessons[index]
+    const lessonLabel =
+      lesson?.titleOverride ??
+      best.course.modules.find((m) =>
+        m.lessons.some((l) => l.id === best!.lessonId),
+      )?.title ??
+      `Lesson ${index + 1}`
+    resume = {
+      title: best.course.title,
+      subtitle: `Lesson ${index + 1} of ${best.total}: ${lessonLabel}`,
+      icon: '🎹',
+      deepLink: `course/${best.course.id}/lesson/${best.lessonId}`,
+      lastTouchedAt: best.updatedAt,
+    }
+  }
+
+  return c.json({ items: [], resume, generatedAt: new Date().toISOString() })
+})
+
 app.post('/api/moldable/rpc', async (c) => {
   const body = (await c.req.json().catch(() => null)) as {
     method?: unknown

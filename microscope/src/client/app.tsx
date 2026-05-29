@@ -935,7 +935,6 @@ function SpecimenView({
   const nonBlockingIssue =
     generated && !failed && !generating && failedMessage ? failedMessage : null
   const canToggleLayer = isGenerated(exploration) && !!exploration.imageUrl
-  const working = generated ? isExplorationWorking(generated) : false
   const canShow3d =
     !generated ||
     (generated.modelStatus === 'ready' && !!generated.modelUrl) ||

@@ -23,7 +23,7 @@ type SceneViewerProps = {
   cameraFov?: number
   cameraPosition?: [number, number, number]
   enableControls?: boolean
-  rotationMode?: 'standard' | 'widget'
+  rotationMode?: 'standard' | 'preview'
   sceneScale?: number
   showGround?: boolean
   lighting?: SceneLighting
@@ -137,13 +137,13 @@ function RotatingGroup({
 }: {
   autoRotate: boolean
   children: React.ReactNode
-  rotationMode?: 'standard' | 'widget'
+  rotationMode?: 'standard' | 'preview'
   sceneScale?: number
 }) {
   const ref = useRef<THREE.Group>(null)
   useFrame((_, delta) => {
     if (autoRotate && ref.current) {
-      if (rotationMode === 'widget') {
+      if (rotationMode === 'preview') {
         ref.current.rotation.y += delta * 0.28
         ref.current.rotation.z += delta * 0.18
       } else {
@@ -155,7 +155,7 @@ function RotatingGroup({
     <group
       ref={ref}
       scale={sceneScale}
-      rotation={rotationMode === 'widget' ? [0.1, -0.1, -0.18] : undefined}
+      rotation={rotationMode === 'preview' ? [0.1, -0.1, -0.18] : undefined}
     >
       {children}
     </group>
@@ -787,6 +787,7 @@ function SceneContents({
             }
           />
         ) : null}
+        {!hasRealModel ? <ProceduralModel recipe={exploration.model} /> : null}
       </RotatingGroup>
       {showGround ? (
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -1.95, 0]}>

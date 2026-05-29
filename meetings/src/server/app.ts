@@ -416,6 +416,116 @@ app.get('/api/moldable/health', (c) => {
   )
 })
 
+app.get('/api/moldable/today', async (c) => {
+  const items: unknown[] = []
+  let resume: unknown = null
+
+  try {
+    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const meetings = await loadMeetings(workspaceId)
+
+    const now = Date.now()
+    const DAY_MS = 24 * 60 * 60 * 1000
+    const TWO_WEEKS_MS = 14 * DAY_MS
+
+    // A meeting that has not ended and has an open recording session is a
+    // paused/unfinished recording the user can resume right now.
+    const unfinished = meetings.find((meeting) => {
+      if (meeting.endedAt) return false
+      return (meeting.recordingSessions ?? []).some(
+        (session) => !session.endedAt,
+      )
+    })
+
+    if (unfinished) {
+      items.push({
+        id: 'recording:active',
+        kind: 'active',
+        surface: 'nudge',
+        title: `Recording: ${unfinished.title || 'Untitled meeting'}`,
+        subtitle: 'A recording is still open',
+        icon: '🔴',
+        priority: 90,
+        dismissible: false,
+        actions: [{ type: 'open-app', label: 'Resume recording' }],
+      })
+    }
+
+    // A recently finished meeting (<24h) that has a transcript but no enhanced
+    // notes yet is the highest-signal moment: structured notes are one tap away
+    // and most useful while the meeting is still fresh.
+    let recentNeedsNotesId: string | undefined
+    if (items.length === 0) {
+      const recentNeedsNotes = meetings.find((meeting) => {
+        if (!meeting.endedAt) return false
+        const endedMs = new Date(meeting.endedAt).getTime()
+        if (!Number.isFinite(endedMs)) return false
+        if (now - endedMs > DAY_MS) return false
+        if (meeting.enhancedNotes?.trim()) return false
+        return meeting.segments.length > 0
+      })
+
+      if (recentNeedsNotes) {
+        recentNeedsNotesId = recentNeedsNotes.id
+        items.push({
+          id: 'meeting:needs-notes',
+          kind: 'timely',
+          surface: 'nudge',
+          title: `Enhance notes for ${recentNeedsNotes.title || 'Untitled meeting'}`,
+          subtitle:
+            'Just wrapped, transcript ready — generate structured notes',
+          icon: '📝',
+          priority: 60,
+          actions: [
+            {
+              type: 'rpc',
+              label: 'Enhance notes',
+              method: 'meetings.enhanceNotes',
+              params: { id: recentNeedsNotes.id, save: true },
+            },
+            { type: 'open-app', label: 'Open meeting' },
+          ],
+        })
+      }
+    }
+
+    // Resume: where the user was genuinely mid-work. Prefer the most recently
+    // edited meeting that still lacks enhanced notes (unfinished), since a
+    // meeting with notes already generated is a done/clean state, not WIP.
+    const byRecentEdit = [...meetings].sort((a, b) => {
+      const aMs = new Date(a.updatedAt).getTime()
+      const bMs = new Date(b.updatedAt).getTime()
+      return (Number.isFinite(bMs) ? bMs : 0) - (Number.isFinite(aMs) ? aMs : 0)
+    })
+
+    const resumeTarget = byRecentEdit.find((meeting) => {
+      const touchedMs = new Date(meeting.updatedAt).getTime()
+      if (!Number.isFinite(touchedMs)) return false
+      if (now - touchedMs > TWO_WEEKS_MS) return false
+      // Genuine WIP: has a transcript to work with but no enhanced notes yet.
+      return meeting.segments.length > 0 && !meeting.enhancedNotes?.trim()
+    })
+
+    // Avoid duplicating a meeting already surfaced as the needs-notes item.
+    if (resumeTarget && resumeTarget.id !== recentNeedsNotesId) {
+      resume = {
+        title: resumeTarget.title || 'Untitled meeting',
+        subtitle: 'Transcript captured, notes not yet enhanced',
+        icon: '🎙️',
+        lastTouchedAt: new Date(resumeTarget.updatedAt).toISOString(),
+      }
+    }
+  } catch {
+    return c.json({
+      items: [],
+      resume: null,
+      generatedAt: new Date().toISOString(),
+    })
+  }
+
+  return c.json({ items, resume, generatedAt: new Date().toISOString() })
+})
+
 app.post('/api/moldable/rpc', async (c) => {
   const workspaceId = getRpcWorkspaceId(c.req.raw)
 

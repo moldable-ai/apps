@@ -17,9 +17,9 @@ describe('resolveStaticFilePath', () => {
     )
   })
 
-  it('resolves widget routes to the built widget html entry', () => {
-    expect(resolveStaticFilePath('/widget')).toBe(
-      path.join(process.cwd(), 'dist', 'widget.html'),
+  it('resolves unknown client routes to the SPA index entry', () => {
+    expect(resolveStaticFilePath('/settings')).toBe(
+      path.join(process.cwd(), 'dist', 'index.html'),
     )
   })
 })

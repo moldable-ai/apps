@@ -96,10 +96,7 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse) {
     requestedPath === '/favicon.ico' ||
     requestedPath === '/icon.png'
       ? path.join(distDir, requestedPath)
-      : path.join(
-          distDir,
-          url.pathname === '/widget' ? 'widget.html' : 'index.html',
-        )
+      : path.join(distDir, 'index.html')
 
   try {
     const content = await fs.readFile(filePath)
@@ -145,10 +142,6 @@ async function handleClientRequest(
   }
 
   const originalUrl = req.url
-  const url = requestUrl(req)
-  if (url.pathname === '/widget') {
-    req.url = `/widget.html${url.search}`
-  }
 
   vite.middlewares(req, res, () => {
     req.url = originalUrl

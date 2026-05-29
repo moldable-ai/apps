@@ -23,8 +23,6 @@
   "version": "0.1.2",
   "aliases": ["welcome", "tutorial"],
   "visibility": "public",
-  "widgetSize": "medium",
-  "widgetTint": "amber",
   "routeName": "hello-moldables",
   "tagline": "Your first step into building software with AI"
 }

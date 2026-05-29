@@ -818,7 +818,6 @@ export function PracticeView({
   soundLoadingLabel,
   isSongLoading,
   isSongError,
-  onBack,
   onTogglePlay,
   onRestart,
   onSeek,

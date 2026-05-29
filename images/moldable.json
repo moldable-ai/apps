@@ -9,8 +9,6 @@
   "license": "MIT",
   "icon": "🖼️",
   "iconPath": "public/icon.png",
-  "widgetSize": "medium",
-  "widgetTint": "teal",
   "category": "graphics-design",
   "tags": ["images", "generation", "openai", "gpt-image-2"],
   "moldableDependencies": {

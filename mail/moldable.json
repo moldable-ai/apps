@@ -8,8 +8,6 @@
   "author": "Moldable",
   "license": "FSL-1.1-ALv2",
   "icon": "✉️",
-  "widgetSize": "medium",
-  "widgetTint": "blue",
   "category": "productivity",
   "tags": ["email", "gmail", "inbox", "productivity"],
   "moldableDependencies": {

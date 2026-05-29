@@ -123,6 +123,92 @@ app.get('/api/moldable/health', (c) => {
   )
 })
 
+app.get('/api/moldable/today', async (c) => {
+  try {
+    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const projectIds = await readProjectIndex(workspaceId)
+
+    const projects: ProjectMetadata[] = []
+    for (const id of projectIds) {
+      const metadata = await readProjectMetadata(workspaceId, id)
+      if (metadata) {
+        projects.push(metadata)
+      }
+    }
+
+    projects.sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    )
+
+    const items: unknown[] = []
+    let resume: unknown = null
+
+    const now = Date.now()
+    const RECENT_MS = 24 * 60 * 60 * 1000
+
+    // BLOCKED: a project that can't render because its composition is empty.
+    // New projects ship with DEFAULT_COMPOSITION_CODE, so an empty composition
+    // means the user cleared it and the project is stuck. Only flag a recently
+    // touched one (otherwise it's an abandoned draft, not actionable), and hand
+    // off to chat, which can write the composition via remotion.projects.update.
+    let blockedProject: ProjectMetadata | null = null
+    for (const metadata of projects) {
+      if (now - new Date(metadata.updatedAt).getTime() > RECENT_MS) {
+        break // projects are sorted newest-first; nothing recent past here
+      }
+      const compositionPath = getCompositionPath(workspaceId, metadata.id)
+      const code = await readFile(compositionPath, 'utf-8').catch(() => '')
+      if (code.trim().length === 0) {
+        blockedProject = metadata
+        break
+      }
+    }
+
+    if (blockedProject) {
+      items.push({
+        id: `remotion:blocked:${blockedProject.id}`,
+        kind: 'blocked',
+        surface: 'nudge',
+        title: `${blockedProject.name} has no composition`,
+        subtitle: "Empty composition — can't render",
+        icon: '🎬',
+        priority: 90,
+        actions: [
+          {
+            type: 'message',
+            label: 'Build composition',
+            prompt: `The Remotion project "${blockedProject.name}" (id ${blockedProject.id}, ${blockedProject.width}x${blockedProject.height} @ ${blockedProject.fps}fps, ${blockedProject.durationInFrames} frames) has an empty composition and can't render. Write a Remotion composition for it, then save it by calling the Moldable app API with targetAppId "remotion" and method "remotion.projects.update" passing { id: "${blockedProject.id}", compositionCode: "<the code>" }. When you're done, refresh the home view by calling the Moldable app API with targetAppId "today" and method "today.refresh".`,
+          },
+          { type: 'open-app', label: 'Open in editor' },
+        ],
+      })
+    }
+
+    // RESUME: the project the user was actually working in — most-recently
+    // edited, but only if it was touched recently. A project untouched for days
+    // isn't "where you left off"; surfacing it would be stale noise.
+    const mostRecent = projects[0]
+    if (
+      mostRecent &&
+      (!blockedProject || blockedProject.id !== mostRecent.id) &&
+      now - new Date(mostRecent.updatedAt).getTime() <= RECENT_MS
+    ) {
+      resume = {
+        title: mostRecent.name,
+        subtitle: `${mostRecent.width}×${mostRecent.height} · ${mostRecent.fps}fps`,
+        icon: '🎞️',
+        lastTouchedAt: mostRecent.updatedAt,
+      }
+    }
+
+    return c.json({ items, resume, generatedAt: new Date().toISOString() })
+  } catch (error) {
+    console.error('Failed to build Today items:', error)
+    return c.json({ items: [], generatedAt: new Date().toISOString() })
+  }
+})
+
 app.get('/api/projects', async (c) => {
   try {
     const workspaceId = getWorkspaceFromRequest(c.req.raw)

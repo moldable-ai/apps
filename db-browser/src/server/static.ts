@@ -12,8 +12,5 @@ export function resolveStaticFilePath(pathname: string) {
     return path.join(distDir, requestedPath.replace(/^\//, ''))
   }
 
-  return path.join(
-    distDir,
-    requestedPath === '/widget' ? 'widget.html' : 'index.html',
-  )
+  return path.join(distDir, 'index.html')
 }

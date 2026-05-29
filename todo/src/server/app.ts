@@ -137,6 +137,125 @@ app.get('/api/moldable/health', (c) => {
   )
 })
 
+// Today contribution: only dated work that has slipped past or is due today
+// earns a card. A to-do list has no "in-progress editing" state, so there is
+// no resume. Silent when nothing is overdue or due today.
+app.get('/api/moldable/today', async (c) => {
+  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const todos = await loadTodos(workspaceId)
+  const active = todos.filter((t) => !t.completed)
+
+  const now = new Date()
+  const endOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    23,
+    59,
+    59,
+    999,
+  ).getTime()
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime()
+
+  const dueTs = (t: Todo) => (t.dueDate ? Date.parse(t.dueDate) : NaN)
+  const overdue = active
+    .filter((t) => {
+      const d = dueTs(t)
+      return Number.isFinite(d) && d < startOfToday
+    })
+    .sort((a, b) => dueTs(a) - dueTs(b))
+  const dueTodayHigh = active.filter((t) => {
+    const d = dueTs(t)
+    return (
+      Number.isFinite(d) &&
+      d >= startOfToday &&
+      d <= endOfToday &&
+      t.priority === 'high'
+    )
+  })
+
+  const items: unknown[] = []
+
+  if (overdue.length === 1) {
+    const top = overdue[0]
+    items.push({
+      id: 'todo:overdue',
+      kind: 'blocked',
+      surface: 'nudge',
+      title: top.title,
+      subtitle: 'Overdue',
+      icon: '⚠️',
+      priority: 82,
+      dismissible: true,
+      actions: [
+        {
+          type: 'rpc',
+          label: 'Mark done',
+          method: 'todos.complete',
+          params: { id: top.id, completed: true },
+        },
+        { type: 'open-app', label: 'Open' },
+      ],
+    })
+  } else if (overdue.length > 1) {
+    items.push({
+      id: 'todo:overdue',
+      kind: 'blocked',
+      surface: 'nudge',
+      title: `${overdue.length} overdue to-dos`,
+      subtitle: `Oldest: ${overdue[0].title}`,
+      icon: '⚠️',
+      priority: 82,
+      dismissible: true,
+      actions: [{ type: 'open-app', label: 'Open' }],
+    })
+  }
+
+  if (dueTodayHigh.length === 1) {
+    const top = dueTodayHigh[0]
+    items.push({
+      id: 'todo:due-today',
+      kind: 'timely',
+      surface: 'text',
+      title: top.title,
+      subtitle: 'High priority · due today',
+      icon: '🔴',
+      priority: 70,
+      dismissible: true,
+      actions: [
+        {
+          type: 'rpc',
+          label: 'Mark done',
+          method: 'todos.complete',
+          params: { id: top.id, completed: true },
+        },
+        { type: 'open-app', label: 'Open' },
+      ],
+    })
+  } else if (dueTodayHigh.length > 1) {
+    items.push({
+      id: 'todo:due-today',
+      kind: 'timely',
+      surface: 'text',
+      title: `${dueTodayHigh.length} high-priority to-dos due today`,
+      icon: '🔴',
+      priority: 70,
+      dismissible: true,
+      actions: [{ type: 'open-app', label: 'Open' }],
+    })
+  }
+
+  return c.json({
+    items,
+    resume: null,
+    generatedAt: new Date().toISOString(),
+  })
+})
+
 app.get('/api/moldable/commands', (c) => {
   const commands: AppCommand[] = [
     {

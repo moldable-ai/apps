@@ -254,7 +254,7 @@ function ObjectBrowserContent({
 
   return (
     <div className="border-border/70 bg-muted/25 dark:bg-muted/15 overflow-hidden rounded-2xl border">
-      {visibleTables.map((table, index) => {
+      {visibleTables.map((table) => {
         const isSelected =
           selectedTable?.schema === currentSchema.name &&
           selectedTable.table === table.name

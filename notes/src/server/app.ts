@@ -172,6 +172,16 @@ app.get('/api/moldable/health', (c) => {
   )
 })
 
+// Notes intentionally does not contribute to the Today view — quick capture
+// has no deadline / blocked / in-progress state worth nudging about. Silent.
+app.get('/api/moldable/today', (c) => {
+  return c.json({
+    items: [],
+    resume: null,
+    generatedAt: new Date().toISOString(),
+  })
+})
+
 app.get('/api/notes', async (c) => {
   try {
     const workspaceId = getWorkspaceFromRequest(c.req.raw)

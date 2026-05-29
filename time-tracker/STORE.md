@@ -7,7 +7,6 @@ Start a timer in one click, see where your week went, and export clean timesheet
 - Full manual control: create, edit, and delete time entries by project, with start/end times and durations
 - Project management: add color-coded projects and archive the ones you're no longer tracking
 - Export timesheets as CSV or JSON, with date presets (this/last week, this/last month, or a custom range) and per-project filtering
-- A home-screen widget that shows today's total, your recent entries, and quick start/stop without opening the app
 - Agent-ready: exposes a full time-tracking API (projects, entries, timer, and summaries) so assistants can log and report on your time
 
 Everything runs locally with no external accounts or services to connect. Install it for a fast, private way to track work and hand off accurate timesheets.

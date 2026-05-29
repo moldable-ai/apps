@@ -7,7 +7,6 @@
   "author": "Moldable",
   "license": "MIT",
   "icon": "📚",
-  "widgetSize": "large",
   "category": "reference",
   "tags": ["markdown", "notes", "wiki", "knowledge-base"],
   "moldableDependencies": {

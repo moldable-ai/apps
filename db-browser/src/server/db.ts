@@ -816,10 +816,6 @@ function connectionCredentialId(connectionId: string) {
   return `db-browser-${connectionId}`
 }
 
-function legacyPasswordSecretName(connectionId: string) {
-  return `DB_BROWSER_CONNECTION_${connectionId}_PASSWORD`
-}
-
 export function parseConnectionInput(value: unknown): ConnectionInput {
   if (!value || typeof value !== 'object') {
     throw new Error('Connection details are required')
@@ -2211,7 +2207,7 @@ export async function getExplorer(
   connectionId: string,
   timeoutMs?: number,
 ): Promise<ExplorerSchema[]> {
-  const { connection, credentialId } = await getConnectionCredential(
+  const { credentialId } = await getConnectionCredential(
     workspaceId,
     dataDir,
     connectionId,
@@ -2262,7 +2258,7 @@ export async function describeTable(
   table: string
   columns: Array<{ name: string; dataType: string; nullable: boolean }>
 }> {
-  const { connection, credentialId } = await getConnectionCredential(
+  const { credentialId } = await getConnectionCredential(
     workspaceId,
     dataDir,
     connectionId,
@@ -2359,7 +2355,7 @@ export async function previewTable(
     throw new Error('Table not found')
   }
 
-  const { connection, credentialId } = await getConnectionCredential(
+  const { credentialId } = await getConnectionCredential(
     workspaceId,
     dataDir,
     connectionId,
@@ -2399,7 +2395,7 @@ export async function runReadOnlyQuery(
   rawSql: string,
   timeoutMs?: number,
 ): Promise<QueryResultResponse> {
-  const { connection, credentialId } = await getConnectionCredential(
+  const { credentialId } = await getConnectionCredential(
     workspaceId,
     dataDir,
     connectionId,

@@ -8,7 +8,6 @@ A clean, keyboard-driven todo list that opens fast, saves locally, and stays out
 - Due dates render as human-friendly labels like Today, Tomorrow, Overdue, or "3 days"
 - Filter by All, Active, or Completed, with incomplete and higher-priority tasks automatically sorted to the top
 - Drive everything from the Moldable command palette (Cmd+K): add a todo, switch filters, or clear completed
-- A compact widget view gives you an at-a-glance count of active and completed tasks
 - Exposes a task API so Moldable agents can list, search, create, update, complete, and delete your todos
 
 Everything is stored as local JSON on your own machine with no external accounts or services to connect. Install it for a fast, private task list that your agents can read and act on too.

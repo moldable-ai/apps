@@ -9,8 +9,6 @@
   "license": "FSL-1.1-ALv2",
   "icon": "🎬",
   "iconPath": "public/icon.png",
-  "widgetSize": "large",
-  "widgetTint": "cyan",
   "category": "photo-video",
   "skills": ["remotion-dev/skills/remotion"],
   "tags": [],

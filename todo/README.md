@@ -9,7 +9,6 @@ A simple, elegant todo app built with Vite, Hono, and React 19.
 - 🔍 Filter by status (all, active, completed)
 - 💾 Persistent storage (JSON file)
 - 🎨 Light/dark theme support
-- 📱 Widget view for quick glance
 
 ## Getting Started
 
@@ -22,8 +21,6 @@ pnpm dev
 ```
 
 Open the local URL printed by `pnpm dev` to see the full app.
-
-Open `/widget` on that local URL for the widget view.
 
 ## Tech Stack
 
@@ -39,7 +36,6 @@ Open `/widget` on that local URL for the widget view.
 src/
 ├── client/
 │   ├── app.tsx          # Main app view
-│   ├── widget.tsx       # Widget view
 │   └── globals.css      # Global styles
 ├── server/
 │   ├── app.ts           # Hono API routes

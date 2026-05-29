@@ -21,12 +21,6 @@ describe('resolveStaticFilePath', () => {
     )
   })
 
-  it('resolves widget routes to the built widget html entry', () => {
-    expect(resolveStaticFilePath('/widget')).toBe(
-      path.join(process.cwd(), 'dist', 'widget.html'),
-    )
-  })
-
   it('resolves bundled instrument assets from public', () => {
     expect(resolveStaticFilePath('/instruments/vcsl-keys/piano.sfz')).toBe(
       path.join(

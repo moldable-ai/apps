@@ -179,6 +179,60 @@ app.get('/api/moldable/health', (c) => {
   )
 })
 
+app.get('/api/moldable/today', async (c) => {
+  const items: unknown[] = []
+  let resume: unknown = null
+
+  try {
+    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const config = await readJson<ProjectConfig>(
+      getConfigPath(workspaceId),
+      DEFAULT_CONFIG,
+    )
+
+    const currentPath = config.rootPath
+    const recent = Array.isArray(config.recentProjects)
+      ? config.recentProjects
+      : []
+
+    // RESUME only: the project you were actually editing. Code-editor has no
+    // failures/builds/imminent events to surface, and a list of recent projects
+    // would just be a recent-item dump — so we stay silent unless there is a
+    // real in-progress project to return to.
+    if (currentPath) {
+      const current = recent.find((p) => p.path === currentPath)
+      const name = current?.name ?? path.basename(currentPath)
+      const tabs = config.projectTabs?.[currentPath]
+      const openCount = Array.isArray(tabs?.openFiles)
+        ? tabs.openFiles.length
+        : 0
+
+      resume = {
+        title: name,
+        // Open files are the genuine WIP signal. With nothing open, skip the
+        // subtitle rather than echo the action.
+        ...(openCount > 0
+          ? {
+              subtitle: `${openCount} file${openCount === 1 ? '' : 's'} open`,
+            }
+          : {}),
+        icon: '📝',
+        deepLink: currentPath,
+        lastTouchedAt: current?.lastOpened,
+      }
+    }
+  } catch {
+    // No project state / unreadable config: stay quiet.
+    return c.json({
+      items: [],
+      resume: null,
+      generatedAt: new Date().toISOString(),
+    })
+  }
+
+  return c.json({ items, resume, generatedAt: new Date().toISOString() })
+})
+
 app.get('/api/config', async (c) => {
   const workspaceId = getWorkspaceFromRequest(c.req.raw)
   const config = await readJson<ProjectConfig>(

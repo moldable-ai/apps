@@ -583,6 +583,64 @@ app.get('/api/moldable/health', (c) => {
   })
 })
 
+app.get('/api/moldable/today', async (c) => {
+  const items: unknown[] = []
+  let resume: unknown = null
+
+  try {
+    const data = await readData(c)
+    const inProgress = data.tasks.filter(
+      (task) => task.status === 'in_progress',
+    )
+
+    // THRESHOLD: too much in flight at once is a WIP bottleneck — open the board
+    // to pick what to finish first.
+    if (inProgress.length > 5) {
+      items.push({
+        id: 'tasks:wip',
+        kind: 'threshold',
+        surface: 'nudge',
+        title: `${inProgress.length} tasks in progress`,
+        subtitle: 'Too much in flight — pick what to finish first',
+        icon: '🌊',
+        priority: 70,
+        actions: [{ type: 'open-app', label: 'Open Tasks' }],
+      })
+    }
+
+    // RESUME: a task left in_progress since before today is where to pick back up.
+    const startOfToday = new Date()
+    startOfToday.setHours(0, 0, 0, 0)
+    const stale = inProgress
+      .filter(
+        (task) => new Date(task.updatedAt).getTime() < startOfToday.getTime(),
+      )
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+
+    const top = stale[0]
+    if (top) {
+      const project = data.projects.find((item) => item.id === top.projectId)
+      resume = {
+        title: top.title,
+        subtitle: project
+          ? `${taskKey(project, top)} · in progress`
+          : 'In progress',
+        icon: '⏳',
+        deepLink: `#view=task&project=${encodeURIComponent(top.projectId)}&task=${encodeURIComponent(top.id)}`,
+        lastTouchedAt: top.updatedAt,
+      }
+    }
+  } catch {
+    return c.json({
+      items: [],
+      resume: null,
+      generatedAt: new Date().toISOString(),
+    })
+  }
+
+  return c.json({ items, resume, generatedAt: new Date().toISOString() })
+})
+
 app.get('/api/moldable/commands', async (c) => {
   try {
     const data = await readData(c)

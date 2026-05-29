@@ -474,13 +474,6 @@ function hashSeed(value: string): number {
   return Math.abs(hash)
 }
 
-function categoryScale(categoryId?: string) {
-  return (
-    CATEGORIES.find((category) => category.id === categoryId)?.scale ??
-    'microscopic'
-  )
-}
-
 function categoryIds() {
   return CATEGORIES.map((category) => category.id)
 }
@@ -1962,6 +1955,114 @@ app.get('/api/moldable/health', (c) => {
     appId: process.env.MOLDABLE_APP_ID ?? 'microscope',
     status: 'ok',
   })
+})
+
+app.get('/api/moldable/today', async (c) => {
+  const generatedAt = new Date().toISOString()
+  const items: unknown[] = []
+  let resume: unknown = null
+
+  try {
+    const workspaceId = getWorkspaceId(c.req.raw)
+    const explorations = await loadGenerated(workspaceId)
+
+    // Something running NOW: an image still generating, or a 3D model rendering.
+    const inProgress = explorations.filter(
+      (item) =>
+        item.status === 'generating' || item.modelStatus === 'rendering',
+    )
+    // A generation that failed recently and is worth retrying.
+    const dayAgo = Date.now() - 24 * 60 * 60 * 1000
+    const recentlyFailed = explorations.filter(
+      (item) =>
+        item.status === 'failed' &&
+        new Date(item.updatedAt).getTime() >= dayAgo,
+    )
+
+    if (recentlyFailed.length > 0) {
+      // Blocked beats active — surface the failure first.
+      const failed = recentlyFailed[0]
+      items.push({
+        id: 'render:failed',
+        kind: 'blocked',
+        surface: 'nudge',
+        title:
+          recentlyFailed.length === 1
+            ? `${failed.title} failed to render`
+            : `${recentlyFailed.length} explorations failed to render`,
+        subtitle: failed.errorMessage ?? 'The render did not finish.',
+        icon: '⚠️',
+        priority: 95,
+        actions: [
+          {
+            type: 'rpc',
+            label: 'Retry',
+            method: 'microscope.regenerate',
+            params: { id: failed.id },
+          },
+          { type: 'open-app', label: 'Open Microscope' },
+        ],
+      })
+    } else if (inProgress.length > 0) {
+      const active = inProgress[0]
+      const rendering = active.modelStatus === 'rendering'
+      items.push({
+        id: 'render:active',
+        kind: 'active',
+        surface: 'nudge',
+        title: rendering
+          ? `Rendering 3D model of ${active.title}`
+          : `Generating ${active.title}`,
+        subtitle:
+          inProgress.length > 1
+            ? `${inProgress.length} explorations in progress`
+            : undefined,
+        icon: '🔬',
+        priority: 90,
+        dismissible: false,
+        actions: [
+          { type: 'open-app', label: 'Check progress' },
+          {
+            type: 'rpc',
+            label: 'Cancel',
+            method: 'microscope.cancel',
+            params: { id: active.id },
+            confirm: 'Cancel this generation?',
+          },
+        ],
+      })
+    }
+
+    // Resume: genuine unfinished work — an exploration whose 2D image is ready
+    // but whose 3D model never finished (failed, skipped, or never started) and
+    // is not currently rendering. That is the "you started this, the 3D didn't
+    // complete, pick it back up" state. Stay silent for fully-finished or
+    // empty/failed-from-the-start explorations: a completed render is not
+    // "picking up where you left off".
+    const unfinished = explorations.find(
+      (item) =>
+        item.status === 'ready' &&
+        Boolean(item.imageFileName) &&
+        item.modelStatus !== 'ready' &&
+        item.modelStatus !== 'rendering' &&
+        item.modelStatus !== 'pending',
+    )
+    if (unfinished) {
+      const backgroundFailed = unfinished.backgroundStatus === 'failed'
+      resume = {
+        title: unfinished.title,
+        subtitle: backgroundFailed
+          ? 'Background removal failed — 3D not built'
+          : '2D image ready — 3D model not built yet',
+        icon: '🔬',
+        lastTouchedAt: unfinished.updatedAt,
+      }
+    }
+  } catch {
+    return c.json({ items: [], resume: null, generatedAt })
+  }
+
+  return c.json({ items, resume, generatedAt })
 })
 
 app.get('/api/library', async (c) => {
