@@ -1,7 +1,7 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-05-28T21:05:06.897Z",
+  "generatedAt": "2026-05-28T21:13:26.566Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
@@ -33,7 +33,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "code-editor",
@@ -59,7 +59,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "affirmations",
@@ -85,7 +85,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "db-browser",
@@ -111,7 +111,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "git-flow",
@@ -142,7 +142,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "hello-moldables",
@@ -169,7 +169,7 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.12"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "images",
@@ -207,7 +207,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "mail",
@@ -238,7 +238,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "meetings",
@@ -255,7 +255,7 @@
       ],
       "about": "Meetings records your calls, transcribes them live with speaker labels, and turns the raw transcript into structured notes you can actually use. It runs on your own machine, stores everything in your workspace, and starts recording the moment it detects a live call.\n\n**Highlights**\n\n- Live transcription as you speak, with automatic speaker diarization to tell participants apart\n- Auto-detects live calls (Zoom, Google Meet, Teams, Webex) and starts recording on its own, then stops when the call ends\n- Captures microphone, system audio, or both at once, so you get your voice and everyone else's\n- AI-enhanced notes built from ready-made templates: general meeting, 1:1, sales call, interview, project sync, and user research, plus your own custom templates\n- Pulls in your calendar to title meetings and attach attendees, organizer, and conference details automatically\n- Optional audio saving with in-app playback, full-text search across titles, notes, and transcripts, and Markdown export\n\n**Connects to:** Deepgram for real-time speech-to-text (you bring your own API key, stored securely in Moldable's Vault).\n\nEverything stays local to your workspace and saves incrementally as the meeting runs, so nothing is lost even on long calls. Install it and stop taking notes by hand.",
       "widgetSize": "medium",
-      "category": "business",
+      "category": "productivity",
       "tags": [
         "meetings",
         "transcription",
@@ -279,7 +279,7 @@
         "@moldable-ai/editor": "^0.1.11",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "microscope",
@@ -309,7 +309,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "notes",
@@ -341,7 +341,7 @@
         "@moldable-ai/editor": "^0.1.11",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "piano",
@@ -365,7 +365,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "remotion",
@@ -391,7 +391,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "scribo",
@@ -432,7 +432,7 @@
         "@moldable-ai/editor": "^0.1.11",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "tasks",
@@ -456,7 +456,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "time-tracker",
@@ -482,7 +482,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "todo",
@@ -513,7 +513,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     },
     {
       "id": "wiki",
@@ -543,7 +543,7 @@
         "@moldable-ai/ui": "^0.2.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "5ed02c5373c8fc1ec9462ea113fbfd16be9c6360"
+      "commit": "2b48e5311cec75ea9d0b3b453aa6e56b649460cf"
     }
   ],
   "categories": [

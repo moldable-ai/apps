@@ -23,7 +23,7 @@
   "iconPath": "public/icon.png",
   "widgetSize": "medium",
   "widgetTint": "violet",
-  "category": "business",
+  "category": "productivity",
   "tags": ["meetings", "transcription", "audio", "recording"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.12",
