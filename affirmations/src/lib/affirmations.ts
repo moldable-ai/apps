@@ -2,6 +2,7 @@ import {
   HandHeart,
   Heart,
   Leaf,
+  type LucideIcon,
   Mountain,
   ShieldCheck,
   Sun,
@@ -11,71 +12,91 @@ import {
   Zap,
 } from 'lucide-react'
 
-export const categories = [
+export interface Category {
+  id: string
+  name: string
+  /** One-line invitation shown beneath the category name. */
+  blurb: string
+  icon: LucideIcon
+  /**
+   * The single source of truth for a category's color. Surfaces are derived
+   * from this accent at low alpha via color-mix so they adapt to light and
+   * dark themes — never paint a solid pale background.
+   */
+  accent: string
+}
+
+export const categories: Category[] = [
   {
     id: 'inner-peace',
     name: 'Inner Peace',
+    blurb: 'Settle the mind, soften the body',
     icon: Wind,
-    color: '#f0f9ff',
     accent: '#0ea5e9',
   },
   {
     id: 'self-love',
     name: 'Self Love',
+    blurb: 'Be your own kindest voice',
     icon: Heart,
-    color: '#fff1f2',
     accent: '#f43f5e',
   },
   {
     id: 'abundance',
     name: 'Abundance',
+    blurb: 'Open up to what flows toward you',
     icon: Leaf,
-    color: '#ecfdf5',
     accent: '#10b981',
   },
   {
     id: 'courage',
     name: 'Courage',
+    blurb: 'Move forward, fear and all',
     icon: Zap,
-    color: '#fff7ed',
     accent: '#f59e0b',
   },
   {
     id: 'gratitude',
     name: 'Gratitude',
+    blurb: 'Notice the good already here',
     icon: HandHeart,
-    color: '#fffbeb',
     accent: '#fbbf24',
   },
   {
     id: 'healing',
     name: 'Healing',
+    blurb: 'Give yourself room to mend',
     icon: ShieldCheck,
-    color: '#f5f3ff',
     accent: '#8b5cf6',
   },
   {
     id: 'focus',
     name: 'Focus',
+    blurb: 'Return to what matters now',
     icon: Target,
-    color: '#f0fdfa',
     accent: '#14b8a6',
   },
   {
     id: 'social',
     name: 'Connection',
+    blurb: 'Draw closer to your people',
     icon: Users,
-    color: '#fdf2f8',
     accent: '#ec4899',
   },
   {
     id: 'strength',
     name: 'Strength',
+    blurb: 'Stand steady through anything',
     icon: Mountain,
-    color: '#f8fafc',
     accent: '#64748b',
   },
-  { id: 'joy', name: 'Joy', icon: Sun, color: '#fefce8', accent: '#eab308' },
+  {
+    id: 'joy',
+    name: 'Joy',
+    blurb: 'Let the light back in',
+    icon: Sun,
+    accent: '#eab308',
+  },
 ]
 
 const affirmationTemplates: Record<string, string[]> = {
@@ -1114,13 +1135,46 @@ const affirmationTemplates: Record<string, string[]> = {
   ],
 }
 
+const fallbackAffirmations = [
+  'I am growing every day.',
+  'I choose positivity.',
+  'I am capable.',
+  'My life is filled with light.',
+]
+
 export function getAffirmations(categoryId: string): string[] {
-  return (
-    affirmationTemplates[categoryId] || [
-      'I am growing every day.',
-      'I choose positivity.',
-      'I am capable.',
-      'My life is filled with light.',
-    ]
-  )
+  return affirmationTemplates[categoryId] || fallbackAffirmations
+}
+
+/** Every affirmation across all categories, deduped, in a stable order. */
+export const allAffirmations: string[] = Array.from(
+  new Set(Object.values(affirmationTemplates).flat()),
+)
+
+/** A small deterministic hash for a string — used to seed daily selection. */
+function hashString(value: string): number {
+  let hash = 0
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash << 5) - hash + value.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+/** A YYYY-MM-DD key for a date in the user's local timezone. */
+export function getDayKey(date: Date = new Date()): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+/**
+ * The affirmation of the day. Deterministic for the whole calendar day, so it
+ * never changes on refresh and is the same every time you open the app today.
+ */
+export function getDailyAffirmation(date: Date = new Date()): string {
+  if (allAffirmations.length === 0) return fallbackAffirmations[0]
+  const index = hashString(getDayKey(date)) % allAffirmations.length
+  return allAffirmations[index]
 }

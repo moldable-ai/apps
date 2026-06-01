@@ -15,6 +15,7 @@ import { execSync } from 'child_process'
 import {
   cpSync,
   existsSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -22,6 +23,7 @@ import {
   writeFileSync,
 } from 'fs'
 import { homedir } from 'os'
+import { tmpdir } from 'os'
 import { basename, join, relative } from 'path'
 
 const SOURCE_DIR =
@@ -129,6 +131,26 @@ function rewriteReleaseDependencies(appPath) {
   }
 }
 
+function shellQuote(value) {
+  return `'${value.replaceAll("'", "'\\''")}'`
+}
+
+function formatCopiedApp(appPath) {
+  if (process.env.MOLDABLE_APPS_SKIP_FORMAT === '1') return
+
+  try {
+    execSync(
+      `pnpm prettier --write ${shellQuote(appPath)} --ignore-path .prettierignore --cache --cache-location .prettiercache`,
+      {
+        cwd: TARGET_DIR,
+        stdio: 'inherit',
+      },
+    )
+  } catch {
+    console.error('   ⚠️  Format failed (non-fatal)')
+  }
+}
+
 function preserveTargetManifestVersion(targetApp) {
   const targetManifest = readAppManifest(targetApp)
   return targetManifest?.version
@@ -201,12 +223,76 @@ function restoreTargetPackageVersion(targetApp, version) {
   writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`)
 }
 
-function resolveTargetManifestVersion(targetApp, previousVersion, versionBump) {
-  if (!versionBump) return previousVersion
-
+function resolveBumpedManifestVersion(targetApp, previousVersion, versionBump) {
   const copiedVersion = readAppManifest(targetApp)?.version || '0.1.0'
   const baseVersion = previousVersion || copiedVersion
   return bumpSemver(baseVersion, versionBump)
+}
+
+function listComparableFiles(root, patterns = []) {
+  if (!existsSync(root)) return []
+
+  const files = []
+  const visit = (dir) => {
+    for (const entry of readdirSync(dir)) {
+      const fullPath = join(dir, entry)
+      const relativePath = relative(root, fullPath)
+      if (shouldExclude(fullPath, root, patterns)) continue
+
+      const stat = statSync(fullPath)
+      if (stat.isDirectory()) {
+        visit(fullPath)
+      } else if (stat.isFile()) {
+        files.push(relativePath)
+      }
+    }
+  }
+
+  visit(root)
+  return files.sort()
+}
+
+function readComparableFile(root, relativePath) {
+  const fullPath = join(root, relativePath)
+  if (relativePath === 'moldable.json') {
+    const manifest = JSON.parse(readFileSync(fullPath, 'utf-8'))
+    delete manifest.version
+    return `${JSON.stringify(manifest, null, 2)}\n`
+  }
+
+  return readFileSync(fullPath)
+}
+
+function comparableContentEquals(leftRoot, rightRoot, relativePath) {
+  const left = readComparableFile(leftRoot, relativePath)
+  const right = readComparableFile(rightRoot, relativePath)
+  if (Buffer.isBuffer(left) && Buffer.isBuffer(right)) {
+    return left.equals(right)
+  }
+  return left === right
+}
+
+function hasMeaningfulChanges(previousTargetApp, targetApp, patterns = []) {
+  if (!previousTargetApp) return true
+
+  const previousFiles = listComparableFiles(previousTargetApp, patterns)
+  const currentFiles = listComparableFiles(targetApp, patterns)
+  if (previousFiles.length !== currentFiles.length) return true
+
+  for (let index = 0; index < previousFiles.length; index += 1) {
+    if (previousFiles[index] !== currentFiles[index]) return true
+    if (
+      !comparableContentEquals(
+        previousTargetApp,
+        targetApp,
+        previousFiles[index],
+      )
+    ) {
+      return true
+    }
+  }
+
+  return false
 }
 
 function copyApp(appId, { versionBump } = {}) {
@@ -231,37 +317,67 @@ function copyApp(appId, { versionBump } = {}) {
     )
   }
 
+  const hadPreviousTarget = existsSync(targetApp)
   const previousTargetVersion = preserveTargetManifestVersion(targetApp)
   const targetPackageVersion = preserveTargetPackageVersion(targetApp)
+  const snapshotRoot = mkdtempSync(join(tmpdir(), 'moldable-app-copy-'))
+  const previousTargetSnapshot = hadPreviousTarget
+    ? join(snapshotRoot, appId)
+    : null
+
+  if (previousTargetSnapshot) {
+    cpSync(targetApp, previousTargetSnapshot, { recursive: true })
+  }
 
   // Remove existing target if it exists
-  if (existsSync(targetApp)) {
+  if (hadPreviousTarget) {
     console.log(`   Removing existing ${appId}...`)
     rmSync(targetApp, { recursive: true, force: true })
   }
 
-  // Copy with filter based on .gitignore patterns
-  cpSync(sourceApp, targetApp, {
-    recursive: true,
-    filter: (src) => {
-      return !shouldExclude(src, sourceApp, excludePatterns)
-    },
-  })
+  try {
+    // Copy with filter based on .gitignore patterns
+    cpSync(sourceApp, targetApp, {
+      recursive: true,
+      filter: (src) => {
+        return !shouldExclude(src, sourceApp, excludePatterns)
+      },
+    })
 
-  rewriteReleaseDependencies(targetApp)
-  const targetVersion = resolveTargetManifestVersion(
-    targetApp,
-    previousTargetVersion,
-    versionBump,
-  )
-  restoreTargetManifestVersion(targetApp, targetVersion)
-  restoreTargetPackageVersion(targetApp, targetPackageVersion)
+    rewriteReleaseDependencies(targetApp)
+    restoreTargetManifestVersion(targetApp, previousTargetVersion)
+    restoreTargetPackageVersion(targetApp, targetPackageVersion)
+    formatCopiedApp(targetApp)
 
-  if (versionBump && targetVersion) {
-    console.log(
-      `   Version: ${previousTargetVersion || readAppManifest(sourceApp)?.version || '0.1.0'} -> ${targetVersion}`,
+    const hasChanges = hasMeaningfulChanges(
+      previousTargetSnapshot,
+      targetApp,
+      excludePatterns,
     )
+    const targetVersion =
+      versionBump && hasChanges
+        ? resolveBumpedManifestVersion(
+            targetApp,
+            previousTargetVersion,
+            versionBump,
+          )
+        : previousTargetVersion
+
+    restoreTargetManifestVersion(targetApp, targetVersion)
+
+    if (versionBump && targetVersion) {
+      if (hasChanges) {
+        console.log(
+          `   Version: ${previousTargetVersion || readAppManifest(sourceApp)?.version || '0.1.0'} -> ${targetVersion}`,
+        )
+      } else {
+        console.log(`   Version: unchanged (${targetVersion}; no app changes)`)
+      }
+    }
+  } finally {
+    rmSync(snapshotRoot, { recursive: true, force: true })
   }
+
   console.log(`   ✅ Done`)
   return true
 }
@@ -361,23 +477,9 @@ function main() {
     `✨ Copied ${success} app(s)${failed > 0 ? `, ${failed} failed` : ''}`,
   )
 
-  // Format copied apps
   if (copiedApps.length > 0 && process.env.MOLDABLE_APPS_SKIP_FORMAT !== '1') {
     console.log('')
-    console.log('✨ Formatting copied apps...')
-    const appPaths = copiedApps.map((id) => join(TARGET_DIR, id)).join(' ')
-    try {
-      execSync(
-        `pnpm prettier --write ${appPaths} --ignore-path .prettierignore --cache --cache-location .prettiercache`,
-        {
-          cwd: TARGET_DIR,
-          stdio: 'inherit',
-        },
-      )
-      console.log('   ✅ Formatted')
-    } catch {
-      console.error('   ⚠️  Format failed (non-fatal)')
-    }
+    console.log('✨ Formatted copied apps before version checks')
   }
 }
 

@@ -158,11 +158,14 @@ app.post('/api/moldable/rpc', async (c) => {
     if (body.method === 'affirmations.categories') {
       return c.json({
         ok: true,
-        result: categories.map(({ id, name, color, accent }) => ({
+        result: categories.map(({ id, name, blurb, accent }) => ({
           id,
           name,
-          color,
+          blurb,
           accent,
+          // Kept for backward compatibility: an accent-derived tint that adapts
+          // to either theme instead of a hardcoded pale hex.
+          color: `color-mix(in srgb, ${accent} 14%, transparent)`,
         })),
       })
     }

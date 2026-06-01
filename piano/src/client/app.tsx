@@ -982,15 +982,35 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
         return
       }
 
-      setCursor(nextCursor)
-      lastCursorRef.current = nextCursor
-
       if (nextCursor >= duration) {
+        const tutorialSections = song.tutorial?.sections ?? []
+        const finalSection = tutorialSections[tutorialSections.length - 1]
+        if (finalSection && previousCursor >= finalSection.start - 0.02) {
+          setCursor(finalSection.start)
+          lastCursorRef.current = finalSection.start
+          // Let the last section replay immediately, matching earlier
+          // tutorial section pauses.
+          for (const note of practiceNotes) {
+            if (note.start >= finalSection.start) {
+              playedNotesRef.current.delete(note.id)
+            }
+          }
+          setIsPlaying(false)
+          playStartPerformanceRef.current = 0
+          playStartAudioTimeRef.current = null
+          return
+        }
+
+        setCursor(nextCursor)
+        lastCursorRef.current = nextCursor
         setIsPlaying(false)
         playStartPerformanceRef.current = 0
         playStartAudioTimeRef.current = null
         return
       }
+
+      setCursor(nextCursor)
+      lastCursorRef.current = nextCursor
 
       rafRef.current = requestAnimationFrame(tick)
     }

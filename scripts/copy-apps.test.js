@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -68,7 +69,7 @@ function writeApp(root, appId, manifest = {}, packageJson = {}) {
   return appDir
 }
 
-function runCopy({ source, target }, args) {
+function runCopy({ source, target }, args, env = {}) {
   execFileSync('node', [scriptPath, ...args], {
     cwd: target,
     env: {
@@ -76,6 +77,7 @@ function runCopy({ source, target }, args) {
       MOLDABLE_APPS_SOURCE_DIR: source,
       MOLDABLE_APPS_TARGET_DIR: target,
       MOLDABLE_APPS_SKIP_FORMAT: '1',
+      ...env,
     },
     encoding: 'utf-8',
   })
@@ -113,6 +115,118 @@ test('--patch bumps new apps from their copied source manifest version', () => {
   assert.equal(
     readJson(join(fixture.target, 'calculator', 'moldable.json')).version,
     '0.1.1',
+  )
+})
+
+test('--patch preserves the target version when only versions changed', () => {
+  const fixture = makeFixture()
+  writeApp(fixture.source, 'notes', { version: '0.4.0' }, { version: '7.7.7' })
+  writeApp(fixture.target, 'notes', { version: '1.2.3' }, { version: '9.9.9' })
+
+  runCopy(fixture, ['--all', '--patch'])
+
+  assert.equal(
+    readJson(join(fixture.target, 'notes', 'moldable.json')).version,
+    '1.2.3',
+  )
+  assert.equal(
+    readJson(join(fixture.target, 'notes', 'package.json')).version,
+    '9.9.9',
+  )
+})
+
+test('--patch ignores app-specific ignored files when detecting changes', () => {
+  const fixture = makeFixture()
+  writeApp(fixture.source, 'notes', { version: '0.4.0' })
+  writeFileSync(join(fixture.source, 'notes', '.gitignore'), 'local-cache\n')
+  writeApp(fixture.target, 'notes', { version: '1.2.3' })
+  writeFileSync(join(fixture.target, 'notes', '.gitignore'), 'local-cache\n')
+  writeFileSync(join(fixture.target, 'notes', 'local-cache'), 'generated\n')
+
+  runCopy(fixture, ['--all', '--patch'])
+
+  assert.equal(
+    readJson(join(fixture.target, 'notes', 'moldable.json')).version,
+    '1.2.3',
+  )
+})
+
+test('--patch checks for changes after formatting copied app files', () => {
+  const fixture = makeFixture()
+  writeApp(fixture.source, 'notes', { version: '0.4.0' })
+  writeFileSync(join(fixture.source, 'notes', 'src.txt'), 'same app code   \n')
+  writeApp(fixture.target, 'notes', { version: '1.2.3' })
+  writeFileSync(join(fixture.target, 'notes', 'src.txt'), 'same app code\n')
+
+  const binDir = join(fixture.root, 'bin')
+  mkdirSync(binDir)
+  const fakePnpm = join(binDir, 'pnpm')
+  writeFileSync(
+    fakePnpm,
+    `#!/usr/bin/env node
+import { readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+const appPath = process.argv[4]
+const file = join(appPath, 'src.txt')
+writeFileSync(file, readFileSync(file, 'utf-8').trimEnd() + '\\n')
+`,
+  )
+  chmodSync(fakePnpm, 0o755)
+
+  runCopy(fixture, ['--all', '--patch'], {
+    MOLDABLE_APPS_SKIP_FORMAT: '',
+    PATH: `${binDir}:${process.env.PATH}`,
+  })
+
+  assert.equal(
+    readJson(join(fixture.target, 'notes', 'moldable.json')).version,
+    '1.2.3',
+  )
+})
+
+test('--patch bumps the target version when app files changed', () => {
+  const fixture = makeFixture()
+  writeApp(fixture.source, 'notes', { version: '0.4.0' })
+  writeFileSync(join(fixture.source, 'notes', 'src.txt'), 'changed app code\n')
+  writeApp(fixture.target, 'notes', { version: '1.2.3' })
+
+  runCopy(fixture, ['--all', '--patch'])
+
+  assert.equal(
+    readJson(join(fixture.target, 'notes', 'moldable.json')).version,
+    '1.2.4',
+  )
+  assert.equal(
+    readFileSync(join(fixture.target, 'notes', 'src.txt'), 'utf-8'),
+    'changed app code\n',
+  )
+})
+
+test('minor and major bumps are also conditional on app file changes', () => {
+  const minorFixture = makeFixture()
+  writeApp(minorFixture.source, 'notes', { version: '0.4.0' })
+  writeFileSync(
+    join(minorFixture.source, 'notes', 'src.txt'),
+    'changed app code\n',
+  )
+  writeApp(minorFixture.target, 'notes', { version: '1.2.3' })
+
+  runCopy(minorFixture, ['--all', '--minor'])
+
+  assert.equal(
+    readJson(join(minorFixture.target, 'notes', 'moldable.json')).version,
+    '1.3.0',
+  )
+
+  const majorFixture = makeFixture()
+  writeApp(majorFixture.source, 'tasks', { version: '0.4.0' })
+  writeApp(majorFixture.target, 'tasks', { version: '1.2.3' })
+
+  runCopy(majorFixture, ['--all', '--major'])
+
+  assert.equal(
+    readJson(join(majorFixture.target, 'tasks', 'moldable.json')).version,
+    '1.2.3',
   )
 })
 
