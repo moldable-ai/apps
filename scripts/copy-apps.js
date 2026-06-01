@@ -6,6 +6,7 @@
  *   pnpm app:copy scribo          # Copy single app
  *   pnpm app:copy scribo notes    # Copy multiple apps
  *   pnpm app:copy --all           # Copy all public apps
+ *   pnpm app:copy --all --patch   # Copy all public apps and bump app versions
  *
  * Only apps with "visibility": "public" in their moldable.json will be copied
  * when using --all. Individual app names bypass the visibility check.
@@ -23,9 +24,17 @@ import {
 import { homedir } from 'os'
 import { basename, join, relative } from 'path'
 
-const SOURCE_DIR = join(homedir(), '.moldable', 'shared', 'apps')
-const TARGET_DIR = join(homedir(), 'moldable-apps')
+const SOURCE_DIR =
+  process.env.MOLDABLE_APPS_SOURCE_DIR ||
+  join(homedir(), '.moldable', 'shared', 'apps')
+const TARGET_DIR =
+  process.env.MOLDABLE_APPS_TARGET_DIR || join(homedir(), 'moldable-apps')
 const RELEASE_ESLINT_CONFIG_VERSION = '0.1.3'
+const VERSION_BUMP_FLAGS = new Map([
+  ['--patch', 'patch'],
+  ['--minor', 'minor'],
+  ['--major', 'major'],
+])
 
 // Local dependency, build, and Moldable runtime files to always exclude.
 const ALWAYS_EXCLUDE = [
@@ -137,15 +146,46 @@ function preserveTargetPackageVersion(targetApp) {
   }
 }
 
-function restoreTargetManifestVersion(targetApp, version) {
-  if (!version) return
+function bumpSemver(current, kind) {
+  const match = current.match(/^(\d+)\.(\d+)\.(\d+)(.*)?$/)
+  if (!match) {
+    throw new Error(`Unsupported version format: ${current}`)
+  }
 
+  let major = Number(match[1])
+  let minor = Number(match[2])
+  let patch = Number(match[3])
+  const suffix = match[4] || ''
+
+  if (kind === 'major') {
+    major += 1
+    minor = 0
+    patch = 0
+  } else if (kind === 'minor') {
+    minor += 1
+    patch = 0
+  } else if (kind === 'patch') {
+    patch += 1
+  } else {
+    throw new Error(`Unsupported version bump: ${kind}`)
+  }
+
+  return `${major}.${minor}.${patch}${suffix}`
+}
+
+function setTargetManifestVersion(targetApp, version) {
   const manifestPath = join(targetApp, 'moldable.json')
   const manifest = readAppManifest(targetApp)
   if (!manifest || manifest.version === version) return
 
   manifest.version = version
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+}
+
+function restoreTargetManifestVersion(targetApp, version) {
+  if (!version) return
+
+  setTargetManifestVersion(targetApp, version)
 }
 
 function restoreTargetPackageVersion(targetApp, version) {
@@ -161,7 +201,15 @@ function restoreTargetPackageVersion(targetApp, version) {
   writeFileSync(packageJsonPath, `${JSON.stringify(pkg, null, 2)}\n`)
 }
 
-function copyApp(appId) {
+function resolveTargetManifestVersion(targetApp, previousVersion, versionBump) {
+  if (!versionBump) return previousVersion
+
+  const copiedVersion = readAppManifest(targetApp)?.version || '0.1.0'
+  const baseVersion = previousVersion || copiedVersion
+  return bumpSemver(baseVersion, versionBump)
+}
+
+function copyApp(appId, { versionBump } = {}) {
   const sourceApp = join(SOURCE_DIR, appId)
   const targetApp = join(TARGET_DIR, appId)
 
@@ -183,7 +231,7 @@ function copyApp(appId) {
     )
   }
 
-  const targetVersion = preserveTargetManifestVersion(targetApp)
+  const previousTargetVersion = preserveTargetManifestVersion(targetApp)
   const targetPackageVersion = preserveTargetPackageVersion(targetApp)
 
   // Remove existing target if it exists
@@ -201,9 +249,19 @@ function copyApp(appId) {
   })
 
   rewriteReleaseDependencies(targetApp)
+  const targetVersion = resolveTargetManifestVersion(
+    targetApp,
+    previousTargetVersion,
+    versionBump,
+  )
   restoreTargetManifestVersion(targetApp, targetVersion)
   restoreTargetPackageVersion(targetApp, targetPackageVersion)
 
+  if (versionBump && targetVersion) {
+    console.log(
+      `   Version: ${previousTargetVersion || readAppManifest(sourceApp)?.version || '0.1.0'} -> ${targetVersion}`,
+    )
+  }
   console.log(`   ✅ Done`)
   return true
 }
@@ -229,11 +287,24 @@ function listPublicApps() {
 
 function main() {
   const args = process.argv.slice(2)
+  const versionBumps = args
+    .map((arg) => VERSION_BUMP_FLAGS.get(arg))
+    .filter(Boolean)
+
+  if (versionBumps.length > 1) {
+    console.error(
+      '❌ Choose only one version bump: --patch, --minor, or --major',
+    )
+    process.exit(1)
+  }
+  const versionBump = versionBumps[0]
 
   if (args.length === 0) {
     const apps = listAvailableApps()
     const publicApps = listPublicApps()
-    console.log('Usage: pnpm app:copy <app-id> [app-id...] | --all')
+    console.log(
+      'Usage: pnpm app:copy <app-id> [app-id...] | --all [--patch|--minor|--major]',
+    )
     console.log('')
     console.log('Available apps:')
     if (apps.length === 0) {
@@ -277,7 +348,7 @@ function main() {
   const copiedApps = []
 
   for (const appId of appsToCopy) {
-    if (copyApp(appId)) {
+    if (copyApp(appId, { versionBump })) {
       success++
       copiedApps.push(appId)
     } else {
@@ -291,7 +362,7 @@ function main() {
   )
 
   // Format copied apps
-  if (copiedApps.length > 0) {
+  if (copiedApps.length > 0 && process.env.MOLDABLE_APPS_SKIP_FORMAT !== '1') {
     console.log('')
     console.log('✨ Formatting copied apps...')
     const appPaths = copiedApps.map((id) => join(TARGET_DIR, id)).join(' ')

@@ -9,7 +9,7 @@ import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const ROOT = join(__dirname, '..')
+const ROOT = process.env.MOLDABLE_APPS_MANIFEST_ROOT || join(__dirname, '..')
 
 // Directories to ignore
 const IGNORE_DIRS = [
@@ -92,7 +92,7 @@ function getGitCommitHash() {
   }
 }
 
-function findApps(dir) {
+function findPublicApps(dir) {
   const apps = []
   const entries = readdirSync(dir)
 
@@ -107,6 +107,7 @@ function findApps(dir) {
       try {
         const manifestContent = readFileSync(manifestPath, 'utf-8')
         const manifest = JSON.parse(manifestContent)
+        if (manifest.visibility !== 'public') continue
 
         apps.push({
           id: entry,
@@ -140,10 +141,10 @@ function normalizeCategory(app) {
 function generateManifest() {
   console.log('🔍 Scanning for apps...')
 
-  const apps = findApps(ROOT)
+  const apps = findPublicApps(ROOT)
   const commit = getGitCommitHash()
 
-  console.log(`📦 Found ${apps.length} apps`)
+  console.log(`📦 Found ${apps.length} public apps`)
   if (commit) {
     console.log(`📌 Commit: ${commit.substring(0, 7)}`)
   }
