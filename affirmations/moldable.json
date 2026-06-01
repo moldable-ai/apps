@@ -1,7 +1,10 @@
 {
   "name": "Daily Affirmations",
-  "version": "0.1.5",
-  "aliases": ["mindfulness", "wellness"],
+  "version": "0.1.6",
+  "aliases": [
+    "mindfulness",
+    "wellness"
+  ],
   "visibility": "public",
   "description": "A soothing, daily affirmation app to improve mental health and positivity.",
   "runtime": "vite_hono",
@@ -105,7 +108,9 @@
                   }
                 }
               },
-              "required": ["favorites"]
+              "required": [
+                "favorites"
+              ]
             }
           }
         ]
@@ -114,6 +119,42 @@
   },
   "env": [],
   "routeName": "affirmations",
-  "screenshots": ["public/screenshots/1.png"],
-  "tagline": "Daily affirmations across ten themes, saved to your favorites"
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
+  "tagline": "Daily affirmations across ten themes, saved to your favorites",
+  "upstream": {
+    "repo": "moldable-ai/apps",
+    "path": "affirmations",
+    "installedVersion": "0.1.5",
+    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
+    "installedAt": "2026-06-01T14:46:15.621Z",
+    "fileHashes": {
+      ".gitignore": "a552cd01b17606c22d31ff4fd57f127a8e6e0f9e16e77ac3b689d2e964acadc9",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "9a080cf3be5b7350d5e6ab9771fc05a329e8a218d572ec71e01d37cb44a0b0ee",
+      "package.json": "b981bde0bde1aa3b683b6d3e18b92113e0af9e4060aaaab41a51d49a27b2555a",
+      "pnpm-lock.yaml": "2fbdbe33b2c25a391833f0f819acd92ebb284286f7ac1f3db402cf5b87e8a9a7",
+      "public/icon.png": "5b19f258b8f6ceab2079977d7373a03afe85f53a834f02ad3c9136b37b3e7e30",
+      "public/screenshots/1.png": "dc9242483fb561ad31f488061ee9699d5a150a909532b7be22914e94b1261bc2",
+      "scripts/moldable-dev.mjs": "a4f9a674f8a4149428b6cc9ea815f22cb7a239095c96188c7e4b1c5c2fa1e2a9",
+      "src/client/app.tsx": "529c66b014c6885ef81498b288eada29467fcac04646c8c10a8dc77441e4516f",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/globals.css": "e9c6bcce39ad6715485c87137f83e7831a5a11cb158ae7aa816ec4aae09a2b02",
+      "src/client/main.tsx": "6d39cbe8da9d519bb14effb4fe15493f3d843de222af6a54982e8df89eb70c85",
+      "src/components/empty-state.tsx": "c76b28042f7985b5fb99d63bd3b69a13878537a08e112cca383bbc321dc6aaeb",
+      "src/components/toast.tsx": "e9b43bcbe414f399bf475e31c2f1f20c50969717b9c40595231e5209545ad252",
+      "src/hooks/use-favorites.ts": "aa162381b90872bbf8341db4dae2e1ed77e46e00400f1810842af160e1783460",
+      "src/hooks/use-streak.ts": "3537ab0617957fe5e52a6424b2bc18a1c2fbc8ac620d5cedd6d2e779116f0ab7",
+      "src/lib/affirmations.ts": "02c539ce33ff1b4a0552fb4cc4899f68324ed1fe2ae575bd9e21b92fd4e814e2",
+      "src/lib/query-provider.tsx": "a509db46203df4fbf2e5435f43d49881a330f1cdb95851170362c19e461aece6",
+      "src/server/app.ts": "17aac5e908df2608aade5eb74820b972143870ff26397cabd795e7a6ba70415c",
+      "src/server/index.ts": "75011cfbcc3a8638ec2eccfb8fd1185bbb96e333d9b2e018a9516a027910c114",
+      "STORE.md": "eaf5b5839c4a2eb44ba7228012b19e72f4c5036f35cd4c705674eaeaa2b72690",
+      "tsconfig.json": "0050c7b298fc77a002b2f8dfc129417629fd61f47152e1737dbd7a6a094a96d6",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6",
+      "vitest.config.ts": "d8d421ffb3297c7a7c2285047c508bf427610e6145803c7a547a2a5512a427c7"
+    }
+  },
+  "modified": false
 }

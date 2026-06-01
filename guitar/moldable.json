@@ -1,0 +1,399 @@
+{
+  "name": "Guitar",
+  "version": "0.1.1",
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "A local-first guitar song library with 88-key playback and falling-note practice visualization.",
+  "author": "Moldable",
+  "license": "MIT",
+  "icon": "🎸",
+  "iconPath": "public/icon.png",
+  "category": "music",
+  "tags": [],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.13",
+    "@moldable-ai/storage": "^0.1.5"
+  },
+  "env": [],
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "guitar.songs",
+        "name": "Guitar songs",
+        "description": "Read and import Guitar song data in the active workspace.",
+        "scopes": [
+          {
+            "id": "songs.list",
+            "name": "List songs",
+            "description": "List installed Guitar songs with summary metadata.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          {
+            "id": "songs.get",
+            "name": "Get song",
+            "description": "Read one complete Guitar song JSON document, including notes and tempo/meter maps.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "songId": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$"
+                }
+              },
+              "required": [
+                "songId"
+              ]
+            }
+          },
+          {
+            "id": "songs.getSoundSettings",
+            "name": "Get song sound settings",
+            "description": "Get a song's suggested/default sound, user override, and effective sound choice.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "songId": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$"
+                }
+              },
+              "required": [
+                "songId"
+              ]
+            }
+          },
+          {
+            "id": "songs.setSoundSettings",
+            "name": "Set song sound settings",
+            "description": "Set or clear a song's suggested/default sound and user override sound choice.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "songId": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$"
+                },
+                "suggested": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "presetId": {
+                      "type": "string"
+                    },
+                    "instrumentPackId": {
+                      "type": "string"
+                    },
+                    "instrumentId": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "override": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "presetId": {
+                      "type": "string"
+                    },
+                    "instrumentPackId": {
+                      "type": "string"
+                    },
+                    "instrumentId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "required": [
+                "songId"
+              ]
+            }
+          },
+          {
+            "id": "songs.importMidiFile",
+            "name": "Import MIDI file",
+            "description": "Import an existing local .mid or .midi file as a deterministic Guitar song JSON document.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "filePath": {
+                  "type": "string",
+                  "description": "Absolute local path to an existing .mid or .midi file."
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Alias for filePath."
+                },
+                "songId": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$",
+                  "description": "Optional deterministic song id. Defaults to a slug of the MIDI filename."
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Optional display title. Defaults to the MIDI filename."
+                },
+                "folderId": {
+                  "type": "string",
+                  "description": "Optional folder id to assign the imported song to."
+                },
+                "folderName": {
+                  "type": "string",
+                  "description": "Optional existing folder name to assign the imported song to."
+                },
+                "createFolder": {
+                  "type": "boolean",
+                  "description": "Create folderName if it does not already exist. Defaults to false."
+                },
+                "replaceSongId": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$",
+                  "description": "Optional previous song id to remove after importing."
+                },
+                "overwrite": {
+                  "type": "boolean",
+                  "description": "Allow replacing an existing song with the same songId."
+                },
+                "composer": {
+                  "type": "string"
+                },
+                "artist": {
+                  "type": "string"
+                },
+                "license": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "filePath"
+              ]
+            }
+          },
+          {
+            "id": "songs.upsert",
+            "name": "Create or replace song",
+            "description": "Create or replace a complete Guitar song JSON document and optionally place it in a folder. Use this for chat-created lessons and manual song/note edits instead of writing files directly.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "song": {
+                  "type": "object",
+                  "description": "Complete GuitarSong object with id, title, tempo/meter fields, and notes."
+                },
+                "folderId": {
+                  "type": "string",
+                  "description": "Optional existing folder id to assign the song to."
+                },
+                "folderName": {
+                  "type": "string",
+                  "description": "Optional existing folder name to assign the song to."
+                },
+                "createFolder": {
+                  "type": "boolean",
+                  "description": "Create folderName if it does not already exist. Defaults to false."
+                },
+                "overwrite": {
+                  "type": "boolean",
+                  "description": "Allow replacing an existing song with the same id."
+                },
+                "allowEmpty": {
+                  "type": "boolean",
+                  "description": "Allow creating a temporary song shell with zero notes. Useful before songs.patch appends notes in chunks."
+                },
+                "soundSettings": {
+                  "type": "object",
+                  "description": "Optional suggested/override sound settings for the song."
+                }
+              },
+              "required": [
+                "song"
+              ]
+            }
+          },
+          {
+            "id": "songs.upsertFromFile",
+            "name": "Create or replace song from JSON file",
+            "description": "Read a local JSON file containing either a complete GuitarSong object or a { song, ...options } envelope, validate it, persist it as a Guitar song, and optionally place it in a folder. Use this for large chat-generated songs to avoid sending thousands of notes through RPC payloads.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "filePath": {
+                  "type": "string",
+                  "description": "Absolute local path to a .json file containing a GuitarSong or { song, ...options } envelope."
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Alias for filePath."
+                },
+                "folderId": {
+                  "type": "string",
+                  "description": "Optional existing folder id to assign the song to. Overrides the file envelope."
+                },
+                "folderName": {
+                  "type": "string",
+                  "description": "Optional existing folder name to assign the song to. Overrides the file envelope."
+                },
+                "createFolder": {
+                  "type": "boolean",
+                  "description": "Create folderName if it does not already exist. Overrides the file envelope."
+                },
+                "overwrite": {
+                  "type": "boolean",
+                  "description": "Allow replacing an existing song with the same id. Overrides the file envelope."
+                },
+                "allowEmpty": {
+                  "type": "boolean",
+                  "description": "Allow creating a song shell with zero notes. Overrides the file envelope."
+                },
+                "soundSettings": {
+                  "type": "object",
+                  "description": "Optional suggested/override sound settings. Overrides the file envelope."
+                }
+              },
+              "required": [
+                "filePath"
+              ]
+            }
+          },
+          {
+            "id": "songs.patch",
+            "name": "Patch song notes",
+            "description": "Apply surgical note operations to an existing song: append notes, replace all notes, upsert notes by id, delete notes by id/time range, or replace a time range. Use this for piece-by-piece manual song creation/editing without resending the full song.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "songId": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$"
+                },
+                "metadata": {
+                  "type": "object",
+                  "description": "Optional partial song metadata to merge before saving."
+                },
+                "noteOperations": {
+                  "type": "array",
+                  "description": "Operations such as { type: 'append', notes }, { type: 'replaceAll', notes }, { type: 'upsert', notes }, { type: 'delete', ids/start/end }, or { type: 'replaceRange', start, end, notes }."
+                },
+                "sortNotes": {
+                  "type": "boolean",
+                  "description": "Sort notes by start/midi/id after applying operations. Defaults to true."
+                },
+                "allowEmpty": {
+                  "type": "boolean",
+                  "description": "Allow the patched song to temporarily have zero notes."
+                },
+                "folderId": {
+                  "type": "string",
+                  "description": "Optional existing folder id to assign the song to."
+                },
+                "folderName": {
+                  "type": "string",
+                  "description": "Optional existing folder name to assign the song to."
+                },
+                "createFolder": {
+                  "type": "boolean",
+                  "description": "Create folderName if it does not already exist. Defaults to false."
+                },
+                "soundSettings": {
+                  "type": "object",
+                  "description": "Optional suggested/override sound settings for the song."
+                }
+              },
+              "required": [
+                "songId",
+                "noteOperations"
+              ]
+            }
+          },
+          {
+            "id": "songs.patchFromFile",
+            "name": "Patch song from JSON file",
+            "description": "Read a local JSON file containing a songs.patch request or an array of note operations, apply it, and persist once. Use this for large surgical edits so chat can write/pipeline a patch file instead of embedding huge note arrays in the RPC call.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "filePath": {
+                  "type": "string",
+                  "description": "Absolute local path to a .json file containing { songId, metadata, noteOperations, ...options } or an array of note operations."
+                },
+                "path": {
+                  "type": "string",
+                  "description": "Alias for filePath."
+                },
+                "songId": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9-]+$",
+                  "description": "Target song id. Required when the file contains only an operations array. Overrides songId in the file envelope."
+                },
+                "sortNotes": {
+                  "type": "boolean",
+                  "description": "Sort notes by start/midi/id after applying operations. Overrides the file envelope."
+                },
+                "allowEmpty": {
+                  "type": "boolean",
+                  "description": "Allow the patched song to temporarily have zero notes. Overrides the file envelope."
+                },
+                "folderId": {
+                  "type": "string",
+                  "description": "Optional existing folder id to assign the song to. Overrides the file envelope."
+                },
+                "folderName": {
+                  "type": "string",
+                  "description": "Optional existing folder name to assign the song to. Overrides the file envelope."
+                },
+                "createFolder": {
+                  "type": "boolean",
+                  "description": "Create folderName if it does not already exist. Overrides the file envelope."
+                },
+                "soundSettings": {
+                  "type": "object",
+                  "description": "Optional suggested/override sound settings. Overrides the file envelope."
+                }
+              },
+              "required": [
+                "filePath"
+              ]
+            }
+          },
+          {
+            "id": "library.revision",
+            "name": "Read library revision",
+            "description": "Read a lightweight revision token for song, folder, and song sound data so clients can refresh after external changes.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          }
+        ]
+      },
+      {
+        "id": "guitar.folders",
+        "name": "Guitar folders",
+        "description": "Read Guitar library folders in the active workspace.",
+        "scopes": [
+          {
+            "id": "folders.list",
+            "name": "List folders",
+            "description": "List Guitar song folders and their song IDs.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "tagline": "Practice guitar with falling notes and a full 88-key library"
+}

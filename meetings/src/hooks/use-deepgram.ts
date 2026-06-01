@@ -1,6 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  BoundedDeepgramAudioSpool,
+  type DeepgramAudioSpoolStats,
+} from '@/lib/deepgram-audio-spool'
 import type { MeetingSettings, TranscriptSegment } from '@/types'
 import {
   type DeepgramClientOptions,
@@ -17,6 +21,9 @@ type DeepgramState =
   | 'connected'
   | 'reconnecting'
   | 'error'
+
+const FINALIZE_DRAIN_MS = 1200
+const MAX_QUEUED_AUDIO_CHUNKS = 120
 
 export type DeepgramIssue = {
   code:
@@ -87,12 +94,30 @@ class DeepgramClientError extends Error {
 
 export type AudioFormat = 'webm' | 'linear16'
 
+export type DeepgramProviderDiagnostics = {
+  provider: 'deepgram'
+  connectionId: string | null
+  connectionGeneration: number
+  reconnectAttempts: number
+  maxReconnectAttempts: number
+  sentChunks: number
+  spool: DeepgramAudioSpoolStats
+}
+
 interface UseDeepgramOptions {
   onSegment?: (segment: TranscriptSegment) => void
   onInterim?: (text: string | null) => void
   onError?: (error: Error) => void
   settings: MeetingSettings
   maxReconnectAttempts?: number
+}
+
+type DeepgramDisconnectOptions = {
+  drainFinal?: boolean
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
 export function useDeepgram(options: UseDeepgramOptions) {
@@ -108,16 +133,49 @@ export function useDeepgram(options: UseDeepgramOptions) {
   const [issue, setIssue] = useState<DeepgramIssue | null>(null)
   const connectionRef = useRef<ListenLiveClient | null>(null)
   const isSocketOpenRef = useRef(false)
-  const queuedAudioRef = useRef<ArrayBuffer[]>([])
+  const audioSpoolRef = useRef(
+    new BoundedDeepgramAudioSpool(MAX_QUEUED_AUDIO_CHUNKS),
+  )
   const keepAliveRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectAttemptsRef = useRef(0)
   const activeFormatRef = useRef<AudioFormat>('webm')
   const intentionalCloseRef = useRef(false)
   const audioChunkCountRef = useRef(0)
+  const finalTranscriptCountRef = useRef(0)
+  const connectionGenerationRef = useRef(0)
+  const providerConnectionIdRef = useRef<string | null>(null)
+  const [diagnostics, setDiagnostics] = useState<DeepgramProviderDiagnostics>(
+    () => ({
+      provider: 'deepgram',
+      connectionId: null,
+      connectionGeneration: 0,
+      reconnectAttempts: 0,
+      maxReconnectAttempts,
+      sentChunks: 0,
+      spool: audioSpoolRef.current.snapshot(),
+    }),
+  )
   const connectRef = useRef<
-    ((format: AudioFormat, reconnecting?: boolean) => Promise<void>) | null
+    | ((
+        format: AudioFormat,
+        reconnecting?: boolean,
+        generation?: number,
+      ) => Promise<void>)
+    | null
   >(null)
+
+  const updateDiagnostics = useCallback(() => {
+    setDiagnostics({
+      provider: 'deepgram',
+      connectionId: providerConnectionIdRef.current,
+      connectionGeneration: connectionGenerationRef.current,
+      reconnectAttempts: reconnectAttemptsRef.current,
+      maxReconnectAttempts,
+      sentChunks: audioChunkCountRef.current,
+      spool: audioSpoolRef.current.snapshot(),
+    })
+  }, [maxReconnectAttempts])
 
   const clearKeepAlive = useCallback(() => {
     if (!keepAliveRef.current) return
@@ -154,59 +212,87 @@ export function useDeepgram(options: UseDeepgramOptions) {
     isSocketOpenRef.current = false
   }, [clearKeepAlive])
 
-  const scheduleReconnect = useCallback(() => {
-    if (intentionalCloseRef.current || reconnectTimerRef.current) return
-
-    if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
-      const exhaustedIssue: DeepgramIssue = {
-        code: 'deepgram_reconnect_exhausted',
-        message:
-          'Live transcription could not reconnect. Your meeting can continue, but the transcript may be incomplete.',
-        retryable: false,
+  const scheduleReconnect = useCallback(
+    (generation = connectionGenerationRef.current) => {
+      if (
+        generation !== connectionGenerationRef.current ||
+        intentionalCloseRef.current ||
+        reconnectTimerRef.current
+      ) {
+        return
       }
-      setState('error')
-      emitError(exhaustedIssue)
-      return
-    }
 
-    const attempt = reconnectAttemptsRef.current + 1
-    const delayMs = Math.min(
-      1000 * 2 ** reconnectAttemptsRef.current + Math.random() * 750,
-      10000,
-    )
+      if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+        if (generation !== connectionGenerationRef.current) return
+        const exhaustedIssue: DeepgramIssue = {
+          code: 'deepgram_reconnect_exhausted',
+          message:
+            'Live transcription could not reconnect. Your meeting can continue, but the transcript may be incomplete.',
+          retryable: false,
+        }
+        setState('error')
+        emitError(exhaustedIssue)
+        return
+      }
 
-    reconnectAttemptsRef.current = attempt
-    setState('reconnecting')
-    setIssue({
-      code: 'deepgram_connection_lost',
-      message: `Live transcription paused. Reconnecting (${attempt}/${maxReconnectAttempts})...`,
-      retryable: true,
-    })
+      const attempt = reconnectAttemptsRef.current + 1
+      const delayMs = Math.min(
+        1000 * 2 ** reconnectAttemptsRef.current + Math.random() * 750,
+        10000,
+      )
 
-    reconnectTimerRef.current = setTimeout(() => {
-      reconnectTimerRef.current = null
-      void connectRef.current?.(activeFormatRef.current, true)
-    }, delayMs)
-  }, [emitError, maxReconnectAttempts])
+      reconnectAttemptsRef.current = attempt
+      setState('reconnecting')
+      setIssue({
+        code: 'deepgram_connection_lost',
+        message: `Live transcription paused. Reconnecting (${attempt}/${maxReconnectAttempts})...`,
+        retryable: true,
+      })
+      updateDiagnostics()
+
+      reconnectTimerRef.current = setTimeout(() => {
+        if (generation !== connectionGenerationRef.current) {
+          reconnectTimerRef.current = null
+          return
+        }
+
+        reconnectTimerRef.current = null
+        void connectRef.current?.(activeFormatRef.current, true, generation)
+      }, delayMs)
+    },
+    [emitError, maxReconnectAttempts, updateDiagnostics],
+  )
 
   /**
    * Connect to Deepgram.
    * @param format - 'webm' for browser MediaRecorder, 'linear16' for raw PCM from system audio.
    */
   const connect = useCallback(
-    async (format: AudioFormat = 'webm', reconnecting = false) => {
+    async (
+      format: AudioFormat = 'webm',
+      reconnecting = false,
+      reconnectGeneration?: number,
+    ) => {
       if (connectionRef.current) {
         console.log('[Deepgram] Already connected, skipping')
         return
       }
 
+      const generation =
+        reconnecting && reconnectGeneration
+          ? reconnectGeneration
+          : connectionGenerationRef.current + 1
+      connectionGenerationRef.current = generation
+      providerConnectionIdRef.current = `deepgram-${generation}`
       intentionalCloseRef.current = false
       activeFormatRef.current = format
       setState(reconnecting ? 'reconnecting' : 'connecting')
       if (!reconnecting) {
         reconnectAttemptsRef.current = 0
         audioChunkCountRef.current = 0
+        audioSpoolRef.current.clear({ resetCounters: true })
       }
+      updateDiagnostics()
 
       console.log('[Deepgram] Starting connection with format:', format)
 
@@ -217,6 +303,13 @@ export function useDeepgram(options: UseDeepgramOptions) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ttl_seconds: 600 }),
         })
+
+        if (
+          generation !== connectionGenerationRef.current ||
+          intentionalCloseRef.current
+        ) {
+          return
+        }
 
         if (!tokenRes.ok) {
           const data = (await tokenRes
@@ -236,6 +329,13 @@ export function useDeepgram(options: UseDeepgramOptions) {
 
         const { access_token, source } =
           (await tokenRes.json()) as DeepgramTokenResponse
+        if (
+          generation !== connectionGenerationRef.current ||
+          intentionalCloseRef.current
+        ) {
+          return
+        }
+
         if (!access_token) {
           throw new DeepgramClientError({
             code: 'deepgram_token_unavailable',
@@ -278,9 +378,23 @@ export function useDeepgram(options: UseDeepgramOptions) {
         console.log('[Deepgram] Listen options:', listenOptions)
 
         const connection = client.listen.live(listenOptions)
+        if (
+          generation !== connectionGenerationRef.current ||
+          intentionalCloseRef.current
+        ) {
+          try {
+            connection.requestClose()
+          } catch {
+            // ignore close errors
+          }
+          return
+        }
+
         connectionRef.current = connection
 
         connection.on(LiveTranscriptionEvents.Open, () => {
+          if (generation !== connectionGenerationRef.current) return
+
           console.log(
             '[Deepgram] ✅ Connected via SDK - ready to receive audio',
           )
@@ -290,16 +404,17 @@ export function useDeepgram(options: UseDeepgramOptions) {
           setIssue(null)
           setState('connected')
 
-          if (queuedAudioRef.current.length > 0) {
+          const queuedStats = audioSpoolRef.current.snapshot()
+          if (queuedStats.queuedChunks > 0) {
             console.log(
               '[Deepgram] Flushing queued audio chunks:',
-              queuedAudioRef.current.length,
+              queuedStats.queuedChunks,
             )
-            for (const chunk of queuedAudioRef.current) {
+            for (const chunk of audioSpoolRef.current.drain()) {
               connection.send(chunk)
             }
-            queuedAudioRef.current = []
           }
+          updateDiagnostics()
 
           clearKeepAlive()
           keepAliveRef.current = setInterval(() => {
@@ -312,6 +427,8 @@ export function useDeepgram(options: UseDeepgramOptions) {
         })
 
         connection.on(LiveTranscriptionEvents.Transcript, (data) => {
+          if (generation !== connectionGenerationRef.current) return
+
           try {
             const alt = data.channel?.alternatives?.[0]
             const transcript = alt?.transcript || ''
@@ -336,6 +453,7 @@ export function useDeepgram(options: UseDeepgramOptions) {
               return
             }
 
+            finalTranscriptCountRef.current += 1
             const speakerId =
               alt?.words?.[0]?.speaker !== undefined
                 ? alt.words[0].speaker
@@ -365,10 +483,13 @@ export function useDeepgram(options: UseDeepgramOptions) {
         })
 
         connection.on(LiveTranscriptionEvents.Metadata, (data) => {
+          if (generation !== connectionGenerationRef.current) return
           console.log('[Deepgram] 📊 Metadata:', data)
         })
 
         connection.on(LiveTranscriptionEvents.Error, (error) => {
+          if (generation !== connectionGenerationRef.current) return
+
           const detail =
             typeof error?.message === 'string'
               ? error.message
@@ -383,22 +504,36 @@ export function useDeepgram(options: UseDeepgramOptions) {
               typeof error?.readyState === 'number' ? error.readyState : null,
           })
           isSocketOpenRef.current = false
-          connectionRef.current = null
+          if (connectionRef.current === connection) {
+            connectionRef.current = null
+          }
           clearKeepAlive()
+          updateDiagnostics()
+
+          if (intentionalCloseRef.current) {
+            setState('disconnected')
+            return
+          }
+
           emitError({
             code: 'deepgram_connection_lost',
             message: `Live transcription connection was interrupted. ${detail}`,
             retryable: true,
           })
-          scheduleReconnect()
+          scheduleReconnect(generation)
         })
 
         connection.on(LiveTranscriptionEvents.Close, (event?: unknown) => {
+          if (generation !== connectionGenerationRef.current) return
+
           const closeDiagnostics = getCloseDiagnostics(event)
           console.log('[Deepgram] 🔌 Disconnected', closeDiagnostics)
           isSocketOpenRef.current = false
-          connectionRef.current = null
+          if (connectionRef.current === connection) {
+            connectionRef.current = null
+          }
           clearKeepAlive()
+          updateDiagnostics()
 
           if (intentionalCloseRef.current) {
             setState('disconnected')
@@ -412,10 +547,11 @@ export function useDeepgram(options: UseDeepgramOptions) {
               : 'Live transcription connection was interrupted. Reconnecting...',
             retryable: true,
           })
-          scheduleReconnect()
+          scheduleReconnect(generation)
         })
 
         connection.on(LiveTranscriptionEvents.Unhandled, (data) => {
+          if (generation !== connectionGenerationRef.current) return
           console.log('[Deepgram] ⚠️ Unhandled event:', data)
         })
 
@@ -423,6 +559,8 @@ export function useDeepgram(options: UseDeepgramOptions) {
           '[Deepgram] Connection setup complete, waiting for Open event...',
         )
       } catch (error) {
+        if (generation !== connectionGenerationRef.current) return
+
         console.error('[Deepgram] ❌ Connection failed:', error)
         closeCurrentConnection()
 
@@ -443,7 +581,7 @@ export function useDeepgram(options: UseDeepgramOptions) {
         emitError(nextIssue)
 
         if (nextIssue.retryable) {
-          scheduleReconnect()
+          scheduleReconnect(generation)
         } else {
           setState('error')
         }
@@ -458,6 +596,7 @@ export function useDeepgram(options: UseDeepgramOptions) {
       onSegment,
       scheduleReconnect,
       settings,
+      updateDiagnostics,
     ],
   )
 
@@ -487,13 +626,8 @@ export function useDeepgram(options: UseDeepgramOptions) {
 
       try {
         if (!connectionRef.current || !isSocketOpenRef.current) {
-          if (data instanceof ArrayBuffer) {
-            queuedAudioRef.current.push(data)
-          }
-
-          if (queuedAudioRef.current.length > 120) {
-            queuedAudioRef.current = queuedAudioRef.current.slice(-120)
-          }
+          audioSpoolRef.current.enqueue(data)
+          updateDiagnostics()
           return
         }
 
@@ -507,38 +641,96 @@ export function useDeepgram(options: UseDeepgramOptions) {
           })
           connectionRef.current = null
           isSocketOpenRef.current = false
+          audioSpoolRef.current.enqueue(data)
+          updateDiagnostics()
           scheduleReconnect()
           return
         }
 
         connectionRef.current.send(data)
+        updateDiagnostics()
       } catch (error) {
         console.warn('[Deepgram] Failed to send audio:', error)
+        audioSpoolRef.current.enqueue(data)
+        updateDiagnostics()
         scheduleReconnect()
       }
     },
-    [scheduleReconnect],
+    [scheduleReconnect, updateDiagnostics],
   )
 
-  const disconnect = useCallback(() => {
-    console.log('[Deepgram] Disconnecting...')
-    intentionalCloseRef.current = true
-    clearReconnectTimer()
-    clearKeepAlive()
-    closeCurrentConnection()
+  const finalizeCurrentUtterance = useCallback(async () => {
+    const connection = connectionRef.current
+    if (!connection || !isSocketOpenRef.current) {
+      return false
+    }
 
-    isSocketOpenRef.current = false
-    queuedAudioRef.current = []
-    reconnectAttemptsRef.current = 0
-    setIssue(null)
-    onInterim?.(null)
-    setState('disconnected')
-    console.log(
-      '[Deepgram] Disconnected, sent',
-      audioChunkCountRef.current,
-      'audio chunks total',
-    )
-  }, [clearKeepAlive, clearReconnectTimer, closeCurrentConnection, onInterim])
+    const generation = connectionGenerationRef.current
+    const previousFinalCount = finalTranscriptCountRef.current
+
+    try {
+      console.log('[Deepgram] Requesting final transcript flush...')
+      connection.finalize()
+    } catch (error) {
+      console.warn(
+        '[Deepgram] Failed to request final transcript flush:',
+        error,
+      )
+      return false
+    }
+
+    const startedAt = Date.now()
+    while (
+      generation === connectionGenerationRef.current &&
+      Date.now() - startedAt < FINALIZE_DRAIN_MS
+    ) {
+      if (finalTranscriptCountRef.current > previousFinalCount) {
+        return true
+      }
+      await sleep(50)
+    }
+
+    return generation === connectionGenerationRef.current
+  }, [])
+
+  const disconnect = useCallback(
+    async (options: DeepgramDisconnectOptions = {}) => {
+      console.log('[Deepgram] Disconnecting...')
+      const shouldDrainFinal = options.drainFinal !== false
+      intentionalCloseRef.current = true
+      clearReconnectTimer()
+
+      if (shouldDrainFinal) {
+        await finalizeCurrentUtterance()
+      }
+
+      connectionGenerationRef.current += 1
+      providerConnectionIdRef.current = null
+      clearKeepAlive()
+      closeCurrentConnection()
+
+      isSocketOpenRef.current = false
+      audioSpoolRef.current.clear()
+      reconnectAttemptsRef.current = 0
+      setIssue(null)
+      onInterim?.(null)
+      setState('disconnected')
+      updateDiagnostics()
+      console.log(
+        '[Deepgram] Disconnected, sent',
+        audioChunkCountRef.current,
+        'audio chunks total',
+      )
+    },
+    [
+      clearKeepAlive,
+      clearReconnectTimer,
+      closeCurrentConnection,
+      finalizeCurrentUtterance,
+      onInterim,
+      updateDiagnostics,
+    ],
+  )
 
   return {
     state,
@@ -546,6 +738,7 @@ export function useDeepgram(options: UseDeepgramOptions) {
     connect,
     sendAudio,
     disconnect,
+    diagnostics,
     isConnected: state === 'connected',
     isReconnecting: state === 'reconnecting',
   }

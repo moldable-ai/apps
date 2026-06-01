@@ -58,9 +58,12 @@ const ALLOWED_CATEGORIES = new Set(CATEGORIES.map((c) => c.id))
 const OFFICIAL_APP_IDS = new Set([
   'affirmations',
   'calendar',
+  'calculator',
+  'clock',
   'code-editor',
   'db-browser',
   'git-flow',
+  'guitar',
   'hello-moldables',
   'images',
   'mail',
@@ -68,11 +71,15 @@ const OFFICIAL_APP_IDS = new Set([
   'microscope',
   'notes',
   'piano',
+  'reader',
+  'recipes-app',
   'remotion',
   'scribo',
   'tasks',
   'time-tracker',
   'todo',
+  'translate',
+  'weather',
   'wiki',
 ])
 const OFFICIAL_AUTHOR = 'Moldable'

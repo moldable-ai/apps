@@ -1,0 +1,107 @@
+{
+  "name": "Weather",
+  "version": "0.1.1",
+  "aliases": [
+    "forecast",
+    "conditions"
+  ],
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "Local forecast and current conditions, at a glance. Keyless and local-first.",
+  "author": "",
+  "license": "FSL-1.1-ALv2",
+  "icon": "⛅",
+  "iconPath": "public/icon.png",
+  "category": "weather",
+  "tags": [
+    "weather",
+    "forecast",
+    "essentials"
+  ],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.13",
+    "@moldable-ai/storage": "^0.1.5"
+  },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "weather.weather",
+        "name": "Weather",
+        "description": "Read current conditions and the forecast for the user's location (IP-resolved, or explicit coordinates).",
+        "scopes": [
+          {
+            "id": "weather.conditions",
+            "name": "Current conditions",
+            "description": "Get current temperature, feels-like, humidity, wind, and a condition label for the user's location.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "lat": {
+                  "type": "number"
+                },
+                "lon": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "fahrenheit",
+                    "celsius"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "weather.forecast",
+            "name": "Forecast",
+            "description": "Get the next 12 hours and 7-day daily forecast (highs, lows, precipitation probability, condition).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "lat": {
+                  "type": "number"
+                },
+                "lon": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "fahrenheit",
+                    "celsius"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "weather.get",
+            "name": "Full weather",
+            "description": "Get the full payload: location, current conditions, hourly, and daily forecast in one call.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "lat": {
+                  "type": "number"
+                },
+                "lon": {
+                  "type": "number"
+                },
+                "unit": {
+                  "type": "string",
+                  "enum": [
+                    "fahrenheit",
+                    "celsius"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "env": []
+}

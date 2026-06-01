@@ -1,0 +1,533 @@
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { GuitarInstrumentPack } from '../shared/audio'
+import { type GuitarPresetId, guitarPresetById } from './audio-presets'
+import {
+  type LoadProgress,
+  type SampleLoader,
+  Sampler,
+  type Smplr,
+  type SmplrPreset,
+  Soundfont,
+  Versilian,
+} from 'smplr'
+
+type GuitarInstrument = Smplr
+type FetchWithWorkspace = (
+  input: string,
+  init?: RequestInit,
+) => Promise<Response>
+type GuitarSampleLoader = Pick<SampleLoader, 'load'>
+
+const AUDIO_WAKE_RESET_THRESHOLD_MS = 30_000
+const AUDIO_HEARTBEAT_INTERVAL_MS = 5_000
+
+interface SfzPresetResponse {
+  packId: string
+  instrument: {
+    id: string
+    name: string
+  }
+  preset: SmplrPreset
+}
+
+export interface AudioLoadState {
+  status: 'idle' | 'loading' | 'ready' | 'error'
+  loaded: number
+  total: number
+  error: string | null
+}
+
+function createAudioContext() {
+  return new AudioContext()
+}
+
+function isClosedAudioContext(audioContext: AudioContext) {
+  return audioContext.state === 'closed'
+}
+
+function isPlayableAudioContext(audioContext: AudioContext) {
+  return audioContext.state === 'running'
+}
+
+function velocityToMidi(velocity: number | undefined, scale: number) {
+  const normalized = velocity ?? 0.72
+  return Math.min(127, Math.max(1, Math.round(normalized * 127 * scale)))
+}
+
+export function useGuitarAudio(
+  presetId: GuitarPresetId,
+  activePack: GuitarInstrumentPack | null,
+  activeInstrumentId: string | null,
+  fetchWithWorkspace: FetchWithWorkspace,
+) {
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const sfzLoaderRef = useRef<GuitarSampleLoader | null>(null)
+  const activeInstrumentRef = useRef<GuitarInstrument | null>(null)
+  const instrumentPromisesRef = useRef<Map<string, Promise<GuitarInstrument>>>(
+    new Map(),
+  )
+  const [loadState, setLoadState] = useState<AudioLoadState>({
+    status: 'idle',
+    loaded: 0,
+    total: 0,
+    error: null,
+  })
+  const lastHeartbeatAtRef = useRef(Date.now())
+  const forceGraphResetOnNextPrepareRef = useRef(false)
+
+  const disposeCachedInstruments = useCallback(() => {
+    activeInstrumentRef.current?.stop()
+    activeInstrumentRef.current?.scheduler.stop()
+    activeInstrumentRef.current = null
+
+    const instrumentPromises = instrumentPromisesRef.current
+    for (const promise of instrumentPromises.values()) {
+      void promise
+        .then((instrument) => instrument.dispose())
+        .catch(() => undefined)
+    }
+    instrumentPromises.clear()
+  }, [])
+
+  const createAudioGraph = useCallback(() => {
+    const audioContext = createAudioContext()
+    audioContextRef.current = audioContext
+    sfzLoaderRef.current = createSfzSampleLoader(
+      audioContext,
+      fetchWithWorkspace,
+    )
+    return audioContext
+  }, [fetchWithWorkspace])
+
+  const resetAudioGraph = useCallback(() => {
+    const audioContext = audioContextRef.current
+    disposeCachedInstruments()
+    sfzLoaderRef.current = null
+    audioContextRef.current = null
+
+    if (audioContext && !isClosedAudioContext(audioContext)) {
+      void audioContext.close().catch(() => undefined)
+    }
+
+    forceGraphResetOnNextPrepareRef.current = false
+    setLoadState((current) =>
+      current.status === 'ready' || current.status === 'loading'
+        ? { status: 'idle', loaded: 0, total: 0, error: null }
+        : current,
+    )
+  }, [disposeCachedInstruments])
+
+  const getAudioContext = useCallback(() => {
+    const audioContext = audioContextRef.current
+    if (!audioContext) return createAudioGraph()
+    if (isClosedAudioContext(audioContext)) {
+      resetAudioGraph()
+      return createAudioGraph()
+    }
+    return audioContext
+  }, [createAudioGraph, resetAudioGraph])
+
+  const resume = useCallback(async () => {
+    let audioContext = getAudioContext()
+    if (isPlayableAudioContext(audioContext)) return
+
+    try {
+      await audioContext.resume()
+    } catch {
+      resetAudioGraph()
+      audioContext = getAudioContext()
+      if (!isPlayableAudioContext(audioContext)) {
+        await audioContext.resume().catch(() => undefined)
+      }
+    }
+  }, [getAudioContext, resetAudioGraph])
+
+  const recoverAudio = useCallback(
+    (options: { forceReset?: boolean } = {}) => {
+      const audioContext = audioContextRef.current
+      if (!audioContext) return
+      if (options.forceReset || isClosedAudioContext(audioContext)) {
+        resetAudioGraph()
+        return
+      }
+      if (!isPlayableAudioContext(audioContext)) {
+        void audioContext.resume().catch(() => {
+          resetAudioGraph()
+        })
+      }
+    },
+    [resetAudioGraph],
+  )
+
+  const loadPreset = useCallback(
+    async (nextPresetId: GuitarPresetId, pack: GuitarInstrumentPack | null) => {
+      const selectedPack = pack?.status === 'installed' ? pack : null
+      const playableInstrument =
+        selectedPack?.instruments.find(
+          (instrument) =>
+            instrument.id === activeInstrumentId && instrument.playable,
+        ) ??
+        selectedPack?.instruments.find((instrument) => instrument.playable) ??
+        null
+
+      if (!selectedPack || !playableInstrument) {
+        throw new Error('No installed guitar instrument selected')
+      }
+
+      const instrumentKey = `${nextPresetId}:${selectedPack.id}:${playableInstrument.id}`
+
+      const existing = instrumentPromisesRef.current.get(instrumentKey)
+      if (existing) {
+        const instrument = await existing
+        activeInstrumentRef.current = instrument
+        setLoadState((current) => ({
+          ...current,
+          status: 'ready',
+          error: null,
+        }))
+        return instrument
+      }
+
+      const audioContext = getAudioContext()
+      const preset = guitarPresetById(nextPresetId)
+      const parameters = preset.parameters
+      setLoadState({ status: 'loading', loaded: 0, total: 0, error: null })
+
+      const promise = Promise.resolve()
+        .then(async () => {
+          const onLoadProgress = (progress: LoadProgress) => {
+            setLoadState({
+              status: 'loading',
+              loaded: progress.loaded,
+              total: progress.total,
+              error: null,
+            })
+          }
+
+          const instrument =
+            selectedPack.playbackEngine === 'smplr-soundfont'
+              ? loadSoundfontInstrument(audioContext, playableInstrument, {
+                  onLoadProgress,
+                  volume: parameters.volume,
+                })
+              : selectedPack.playbackEngine === 'smplr-versilian'
+                ? loadVersilianInstrument(audioContext, playableInstrument, {
+                    onLoadProgress,
+                    volume: parameters.volume,
+                  })
+                : await loadSfzInstrument(
+                    audioContext,
+                    fetchWithWorkspace,
+                    selectedPack.id,
+                    playableInstrument.id,
+                    {
+                      decayTime: parameters.decayTime,
+                      detune: parameters.detune,
+                      loader: sfzLoaderRef.current,
+                      onLoadProgress,
+                      volume: parameters.volume,
+                    },
+                  )
+
+          await instrument.ready
+          setLoadState((current) => ({
+            ...current,
+            status: 'ready',
+            error: null,
+          }))
+          return instrument
+        })
+        .catch((error: unknown) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : 'Could not load guitar samples'
+          instrumentPromisesRef.current.delete(instrumentKey)
+          setLoadState({
+            status: 'error',
+            loaded: 0,
+            total: 0,
+            error: message,
+          })
+          throw error
+        })
+
+      instrumentPromisesRef.current.set(instrumentKey, promise)
+      const instrument = await promise
+      activeInstrumentRef.current = instrument
+      return instrument
+    },
+    [activeInstrumentId, fetchWithWorkspace, getAudioContext],
+  )
+
+  const prepare = useCallback(async () => {
+    if (forceGraphResetOnNextPrepareRef.current) {
+      resetAudioGraph()
+    }
+    setLoadState((current) =>
+      current.status === 'ready'
+        ? current
+        : { status: 'loading', loaded: 0, total: 0, error: null },
+    )
+    await resume()
+    await loadPreset(presetId, activePack)
+  }, [activePack, loadPreset, presetId, resetAudioGraph, resume])
+
+  const prewarm = useCallback(async () => {
+    if (forceGraphResetOnNextPrepareRef.current) {
+      resetAudioGraph()
+    }
+    await loadPreset(presetId, activePack)
+  }, [activePack, loadPreset, presetId, resetAudioGraph])
+
+  const playMidi = useCallback(
+    (midi: number, duration: number, velocity = 0.72, delay = 0) => {
+      if (forceGraphResetOnNextPrepareRef.current) return
+      const instrument = activeInstrumentRef.current
+      const audioContext = audioContextRef.current
+      if (!instrument || !audioContext) return
+      if (!isPlayableAudioContext(audioContext)) {
+        void resume()
+        return
+      }
+
+      const preset = guitarPresetById(presetId)
+      instrument.start({
+        note: midi,
+        time: audioContext.currentTime + Math.max(0, delay),
+        duration: Math.max(0.08, duration),
+        velocity: velocityToMidi(velocity, preset.parameters.velocityScale),
+      })
+    },
+    [presetId, resume],
+  )
+
+  const stopAll = useCallback(() => {
+    activeInstrumentRef.current?.stop()
+    activeInstrumentRef.current?.scheduler.stop()
+  }, [])
+
+  const getCurrentTime = useCallback(() => {
+    const audioContext = audioContextRef.current
+    if (!audioContext || !isPlayableAudioContext(audioContext)) return null
+    return audioContext.currentTime
+  }, [])
+
+  useEffect(() => {
+    if (loadState.status === 'ready') {
+      void loadPreset(presetId, activePack).catch(() => undefined)
+    }
+  }, [activePack, activeInstrumentId, loadPreset, loadState.status, presetId])
+
+  useEffect(() => {
+    const recoverAfterPossibleWake = () => {
+      const now = Date.now()
+      const elapsed = now - lastHeartbeatAtRef.current
+      lastHeartbeatAtRef.current = now
+
+      // macOS sleep / lock can leave Chromium's Web Audio context reporting
+      // "running" while the output graph is no longer audible. If JS was paused
+      // for a while, discard the old context and sampler so the next play click
+      // creates a fresh graph instead of requiring a full Moldable restart.
+      recoverAudio({ forceReset: elapsed > AUDIO_WAKE_RESET_THRESHOLD_MS })
+    }
+
+    const handleHeartbeat = () => {
+      const now = Date.now()
+      const elapsed = now - lastHeartbeatAtRef.current
+      lastHeartbeatAtRef.current = now
+      if (elapsed > AUDIO_WAKE_RESET_THRESHOLD_MS) {
+        recoverAudio({ forceReset: true })
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') recoverAfterPossibleWake()
+    }
+
+    const handlePageHide = () => {
+      forceGraphResetOnNextPrepareRef.current = true
+      lastHeartbeatAtRef.current = Date.now()
+    }
+
+    const heartbeatId = window.setInterval(
+      handleHeartbeat,
+      AUDIO_HEARTBEAT_INTERVAL_MS,
+    )
+
+    window.addEventListener('focus', recoverAfterPossibleWake)
+    window.addEventListener('pageshow', recoverAfterPossibleWake)
+    window.addEventListener('pagehide', handlePageHide)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.clearInterval(heartbeatId)
+      window.removeEventListener('focus', recoverAfterPossibleWake)
+      window.removeEventListener('pageshow', recoverAfterPossibleWake)
+      window.removeEventListener('pagehide', handlePageHide)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [recoverAudio])
+
+  useEffect(() => {
+    const instrumentPromises = instrumentPromisesRef.current
+    return () => {
+      activeInstrumentRef.current?.stop()
+      activeInstrumentRef.current?.scheduler.stop()
+      for (const promise of instrumentPromises.values()) {
+        void promise
+          .then((instrument) => instrument.dispose())
+          .catch(() => undefined)
+      }
+      if (
+        audioContextRef.current &&
+        !isClosedAudioContext(audioContextRef.current)
+      ) {
+        void audioContextRef.current.close().catch(() => undefined)
+      }
+    }
+  }, [])
+
+  return {
+    loadState,
+    playMidi,
+    prepare,
+    prewarm,
+    resume,
+    stopAll,
+    getCurrentTime,
+  }
+}
+
+async function loadSfzInstrument(
+  audioContext: AudioContext,
+  fetchWithWorkspace: FetchWithWorkspace,
+  packId: string,
+  instrumentId: string,
+  options: {
+    decayTime: number
+    detune: number
+    loader: GuitarSampleLoader | null
+    onLoadProgress: (progress: LoadProgress) => void
+    volume: number
+  },
+) {
+  const response = await fetchWithWorkspace(
+    `/api/audio/instrument-packs/${packId}/instruments/${instrumentId}/preset`,
+  )
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      error?: string
+    } | null
+    throw new Error(body?.error ?? 'Failed to load SFZ instrument preset')
+  }
+
+  const body = (await response.json()) as SfzPresetResponse
+  return Sampler(audioContext, {
+    preset: body.preset,
+    decayTime: options.decayTime,
+    detune: options.detune,
+    loader: options.loader ?? undefined,
+    onLoadProgress: options.onLoadProgress,
+    volume: options.volume,
+  })
+}
+
+function loadSoundfontInstrument(
+  audioContext: AudioContext,
+  instrument: GuitarInstrumentPack['instruments'][number],
+  options: {
+    onLoadProgress: (progress: LoadProgress) => void
+    volume: number
+  },
+) {
+  if (!instrument.soundfontInstrument) {
+    throw new Error(
+      `${instrument.name} is missing its Soundfont instrument name`,
+    )
+  }
+
+  return Soundfont(audioContext, {
+    instrument: instrument.soundfontInstrument,
+    kit: instrument.soundfontKit ?? 'FluidR3_GM',
+    onLoadProgress: options.onLoadProgress,
+    volume: options.volume,
+  })
+}
+
+function loadVersilianInstrument(
+  audioContext: AudioContext,
+  instrument: GuitarInstrumentPack['instruments'][number],
+  options: {
+    onLoadProgress: (progress: LoadProgress) => void
+    volume: number
+  },
+) {
+  if (!instrument.versilianInstrument) {
+    throw new Error(`${instrument.name} is missing its VCSL instrument name`)
+  }
+
+  return Versilian(audioContext, {
+    instrument: instrument.versilianInstrument,
+    onLoadProgress: options.onLoadProgress,
+    volume: options.volume,
+  })
+}
+
+function createSfzSampleLoader(
+  audioContext: AudioContext,
+  fetchWithWorkspace: FetchWithWorkspace,
+): GuitarSampleLoader {
+  const cache = new Map<string, Promise<AudioBuffer>>()
+
+  const loadBuffer = (url: string) => {
+    let promise = cache.get(url)
+    if (promise) return promise
+
+    promise = fetchWithWorkspace(url)
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`Failed to load sample ${url}: ${response.status}`)
+        }
+        return response.arrayBuffer()
+      })
+      .then(async (arrayBuffer) => audioContext.decodeAudioData(arrayBuffer))
+
+    cache.set(url, promise)
+    return promise
+  }
+
+  return {
+    async load(preset, options) {
+      const format = preset.samples.formats[0] ?? 'wav'
+      const baseUrl = preset.samples.baseUrl.replace(/\/$/, '')
+      const sampleNames = new Set<string>()
+
+      for (const group of preset.groups) {
+        for (const region of group.regions) {
+          sampleNames.add(region.sample)
+        }
+      }
+
+      const total = sampleNames.size
+      let loaded = 0
+      const buffers = new Map<string, AudioBuffer>()
+
+      await Promise.all(
+        [...sampleNames].map(async (sample) => {
+          const mappedPath = preset.samples.map?.[sample] ?? sample
+          const buffer = await loadBuffer(`${baseUrl}/${mappedPath}.${format}`)
+          buffers.set(sample, buffer)
+          loaded += 1
+          if (typeof options === 'function') {
+            options(loaded, total)
+          } else {
+            options?.onProgress?.(loaded, total)
+          }
+        }),
+      )
+
+      return buffers
+    },
+  }
+}

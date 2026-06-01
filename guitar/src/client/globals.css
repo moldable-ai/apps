@@ -1,0 +1,271 @@
+@import 'tailwindcss';
+@import '@moldable-ai/ui/styles';
+@source './**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif:
+    'New York', 'Cambria', 'Palatino', Georgia, 'Times New Roman', serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    overflow: hidden;
+  }
+}
+
+@layer components {
+  .guitar-serif {
+    font-family: var(--font-serif);
+    letter-spacing: -0.01em;
+  }
+
+  .guitar-mono {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  .guitar-card-tone {
+    background:
+      radial-gradient(
+        120% 90% at 0% 0%,
+        color-mix(in oklch, var(--card-tone, var(--primary)) 38%, transparent)
+          0%,
+        transparent 55%
+      ),
+      radial-gradient(
+        120% 90% at 100% 100%,
+        color-mix(in oklch, var(--card-tone, var(--primary)) 22%, transparent)
+          0%,
+        transparent 55%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(
+          in oklch,
+          var(--card) 92%,
+          var(--card-tone, var(--primary)) 8%
+        ),
+        var(--card)
+      );
+  }
+
+  .guitar-scrollbar::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+  .guitar-scrollbar::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklch, var(--foreground) 14%, transparent);
+    border-radius: 999px;
+  }
+  .guitar-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklch, var(--foreground) 24%, transparent);
+  }
+  .guitar-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .guitar-no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .guitar-no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes guitar-view-forward {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes guitar-view-back {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0) scale(1.015);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes guitar-card-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes guitar-chrome-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes guitar-key-glow {
+  0% {
+    box-shadow:
+      0 0 0 0
+        color-mix(in oklch, var(--key-tone, var(--primary)) 65%, transparent),
+      0 4px 14px
+        color-mix(in oklch, var(--key-tone, var(--primary)) 45%, transparent);
+  }
+  60% {
+    box-shadow:
+      0 0 0 4px
+        color-mix(in oklch, var(--key-tone, var(--primary)) 0%, transparent),
+      0 6px 18px
+        color-mix(in oklch, var(--key-tone, var(--primary)) 30%, transparent);
+  }
+  100% {
+    box-shadow:
+      0 0 0 0
+        color-mix(in oklch, var(--key-tone, var(--primary)) 0%, transparent),
+      0 4px 14px
+        color-mix(in oklch, var(--key-tone, var(--primary)) 35%, transparent);
+  }
+}
+
+@keyframes guitar-hit-pulse {
+  0% {
+    opacity: 0.55;
+    transform: scaleX(1);
+  }
+  60% {
+    opacity: 0.15;
+    transform: scaleX(1.04);
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes guitar-mini-drift {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+.animate-guitar-view-forward {
+  animation: guitar-view-forward 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes guitar-tutorial-swap {
+  0% {
+    opacity: 0;
+    transform: translate3d(56px, 0, 0);
+    filter: blur(6px);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+    filter: blur(0);
+  }
+}
+
+.animate-guitar-tutorial-swap {
+  animation: guitar-tutorial-swap 540ms cubic-bezier(0.2, 0.85, 0.2, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+@keyframes guitar-notes-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(-48px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-guitar-notes-reveal {
+  animation: guitar-notes-reveal 720ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* CSS transforms apply to SVG <g> in modern browsers; this gives the
+     note bars a soft drop-in while the grid stays still. */
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+@keyframes guitar-section-expand {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-guitar-section-expand {
+  animation: guitar-section-expand 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-guitar-view-back {
+  animation: guitar-view-back 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-guitar-card-in {
+  animation: guitar-card-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-guitar-chrome-in {
+  animation: guitar-chrome-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-guitar-mini-drift {
+  animation: guitar-mini-drift 4.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-guitar-view-forward,
+  .animate-guitar-view-back,
+  .animate-guitar-card-in,
+  .animate-guitar-chrome-in,
+  .animate-guitar-mini-drift,
+  .animate-guitar-tutorial-swap,
+  .animate-guitar-notes-reveal,
+  .animate-guitar-section-expand {
+    animation: none;
+  }
+}

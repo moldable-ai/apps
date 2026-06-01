@@ -90,10 +90,17 @@ export function TranscriptView({
     )
 
     if (sortedSessions.length === 0) {
-      if (segments.length === 0 && !currentInterim) return []
+      if (
+        segments.length === 0 &&
+        !currentInterim &&
+        !currentRecordingSessionId
+      ) {
+        return []
+      }
+
       return [
         {
-          id: 'legacy-session',
+          id: currentRecordingSessionId ?? 'legacy-session',
           sessionNumber: 1,
           startedAt,
           segments,
@@ -124,7 +131,13 @@ export function TranscriptView({
         (a, b) => a.startTime - b.startTime,
       ),
     }))
-  }, [currentInterim, recordingSessions, segments, startedAt])
+  }, [
+    currentInterim,
+    currentRecordingSessionId,
+    recordingSessions,
+    segments,
+    startedAt,
+  ])
 
   useEffect(() => {
     if (isLive) {

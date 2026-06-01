@@ -12,16 +12,40 @@
     "@moldable-ai/ui": "^0.2.13"
   },
   "name": "Hello Moldables",
-  "tags": ["tutorial", "welcome", "getting-started"],
+  "tags": [
+    "tutorial",
+    "welcome",
+    "getting-started"
+  ],
   "upstream": {
-    "installedAt": "2026-01-21T18:07:52.994137+00:00",
-    "installedCommit": "942609ddc1dd6cd28c04908e05b12290b8b46325",
-    "installedVersion": "0.1.0",
+    "repo": "moldable-ai/apps",
     "path": "hello-moldables",
-    "repo": "moldable-ai/apps"
+    "installedVersion": "0.1.4",
+    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
+    "installedAt": "2026-06-01T14:46:32.795Z",
+    "fileHashes": {
+      ".gitignore": "a552cd01b17606c22d31ff4fd57f127a8e6e0f9e16e77ac3b689d2e964acadc9",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "118fe496f814a46ecfe759b869874a835669d068b974389e8054d77dc51d4fe2",
+      "package.json": "a93cce0c5878ab4f3f4ca7c038fe9db03c1a2f36419f31c6b73e8f60aeee638a",
+      "pnpm-lock.yaml": "56f36090043c127a45f2131fcddb90caf647235d05f83a0a358735629f76f320",
+      "scripts/moldable-dev.mjs": "67b4b14990e007f55cbd602aa0038af872b3772979eb8ad71f355f29274bd5bd",
+      "src/client/app.tsx": "0e076a2b5afdd1efd8c32164a66f261b6afa31f7a8bc88f0f4e32baf6a34171d",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/globals.css": "064569bfcc669e3bacc0d748d4797e0ee06c27a4570641b0b8a3fb708f4caf8e",
+      "src/client/main.tsx": "5d09a1526eae57e600da90854a29a11c4942d9cf6cda846d7357cd500b6aff63",
+      "src/server/app.ts": "1fffeca0f545166be1d2e06f5c4abc12226c753a8c538ad5b9f15fa3d8cbc470",
+      "src/server/index.ts": "4864c7d25c4b0a733842c6c4afb2db2f1ab9d48e1403e5f342988dfb1aaf64a4",
+      "STORE.md": "488631a039150bba4019e24a6bdf26aac07bf65329d7131967107cd106a7c91d",
+      "tsconfig.json": "2c2086735a1494ec9219070ed35e32706ca3c9b88c25d484f4fd37f5600a4b7a",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
+    }
   },
-  "version": "0.1.4",
-  "aliases": ["welcome", "tutorial"],
+  "version": "0.1.5",
+  "aliases": [
+    "welcome",
+    "tutorial"
+  ],
   "visibility": "public",
   "routeName": "hello-moldables",
   "tagline": "Your first step into building software with AI"

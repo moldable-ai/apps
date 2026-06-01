@@ -6,6 +6,7 @@ import {
 } from '../lib/enhancement.server'
 import {
   appendMeetingAudioChunk,
+  appendMeetingAudioSourceChunk,
   deleteCustomTemplate,
   deleteMeeting,
   finalizeMeetingAudio,
@@ -14,8 +15,8 @@ import {
   loadCustomTemplates,
   loadMeetings,
   loadSettings,
+  mergeAndSaveMeeting,
   saveCustomTemplate,
-  saveMeeting,
   saveMeetingAudio,
   saveSettings,
 } from '../lib/storage.server'
@@ -31,6 +32,12 @@ import { cors } from 'hono/cors'
 import { createReadStream } from 'node:fs'
 import { Readable } from 'node:stream'
 import { z } from 'zod'
+
+type PersistedAudioSource = 'microphone' | 'system'
+
+function isPersistedAudioSource(value: unknown): value is PersistedAudioSource {
+  return value === 'microphone' || value === 'system'
+}
 
 type DeepgramGrantResponse = {
   access_token?: string
@@ -629,10 +636,10 @@ app.post('/api/moldable/rpc', async (c) => {
         updatedAt: new Date(),
       }
 
-      await saveMeeting(updated, workspaceId)
+      const saved = await mergeAndSaveMeeting(updated, workspaceId)
       return c.json({
         ok: true,
-        result: toMeetingApiRecord(updated, { includeTranscript: true }),
+        result: toMeetingApiRecord(saved, { includeTranscript: true }),
       })
     }
 
@@ -726,7 +733,7 @@ app.post('/api/moldable/rpc', async (c) => {
       })
 
       if (params.save) {
-        await saveMeeting(
+        await mergeAndSaveMeeting(
           {
             ...meeting,
             enhancedNotes: markdown,
@@ -801,8 +808,8 @@ app.post('/api/meetings', async (c) => {
   try {
     const workspaceId = getWorkspaceFromRequest(c.req.raw)
     const meeting = await c.req.json<Meeting>()
-    await saveMeeting(meeting, workspaceId)
-    return c.json({ ok: true })
+    const saved = await mergeAndSaveMeeting(meeting, workspaceId)
+    return c.json({ ok: true, meeting: saved })
   } catch (error) {
     console.error('Failed to save meeting:', error)
     return c.json({ error: 'Failed to save meeting' }, 500)
@@ -863,17 +870,59 @@ app.post('/api/meetings/:id/audio/:sessionId/chunk', async (c) => {
   }
 })
 
+app.post(
+  '/api/meetings/:id/audio/:sessionId/source/:source/chunk',
+  async (c) => {
+    try {
+      const workspaceId = getWorkspaceFromRequest(c.req.raw)
+      const source = c.req.param('source')
+      if (!isPersistedAudioSource(source)) {
+        return c.json({ error: 'Unsupported audio source' }, 400)
+      }
+
+      const arrayBuffer = await c.req.arrayBuffer()
+      if (arrayBuffer.byteLength === 0) {
+        return c.json({ error: 'Missing audio data' }, 400)
+      }
+
+      const saved = await appendMeetingAudioSourceChunk({
+        meetingId: c.req.param('id'),
+        sessionId: c.req.param('sessionId'),
+        source,
+        contentType: c.req.header('content-type') ?? 'audio/webm',
+        data: Buffer.from(arrayBuffer),
+        workspaceId,
+      })
+
+      return c.json(saved)
+    } catch (error) {
+      console.error('Failed to append meeting source audio chunk:', error)
+      return c.json({ error: 'Failed to save meeting source audio chunk' }, 500)
+    }
+  },
+)
+
 app.post('/api/meetings/:id/audio/:sessionId/finalize', async (c) => {
   try {
     const workspaceId = getWorkspaceFromRequest(c.req.raw)
     const body = (await c.req
-      .json<{ contentType?: string }>()
-      .catch(() => ({}))) as { contentType?: string }
+      .json<{
+        contentType?: string
+        sourceManifest?: unknown
+        sourceContentTypes?: Partial<Record<PersistedAudioSource, string>>
+      }>()
+      .catch(() => ({}))) as {
+      contentType?: string
+      sourceManifest?: unknown
+      sourceContentTypes?: Partial<Record<PersistedAudioSource, string>>
+    }
 
     const saved = await finalizeMeetingAudio({
       meetingId: c.req.param('id'),
       sessionId: c.req.param('sessionId'),
       contentType: body.contentType ?? 'audio/webm',
+      sourceManifest: body.sourceManifest,
+      sourceContentTypes: body.sourceContentTypes,
       workspaceId,
     })
 

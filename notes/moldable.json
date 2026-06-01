@@ -1,7 +1,10 @@
 {
   "name": "Notes",
-  "version": "0.1.5",
-  "aliases": ["notepad", "writing"],
+  "version": "0.1.6",
+  "aliases": [
+    "notepad",
+    "writing"
+  ],
   "visibility": "public",
   "description": "A Google Keep-style note taking app with pinning and markdown support",
   "runtime": "vite_hono",
@@ -11,7 +14,12 @@
   "icon": "📝",
   "iconPath": "public/icon.png",
   "category": "productivity",
-  "tags": ["notes", "markdown", "writing", "keep"],
+  "tags": [
+    "notes",
+    "markdown",
+    "writing",
+    "keep"
+  ],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.13",
     "@moldable-ai/editor": "^0.1.12",
@@ -93,7 +101,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -162,7 +172,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -176,7 +188,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           }
         ]
@@ -187,12 +201,36 @@
   "upstream": {
     "repo": "moldable-ai/apps",
     "path": "notes",
-    "installedVersion": "0.1.0",
-    "installedCommit": "79c470e37f19631020babbc35646d6ef4eb515fa",
-    "installedAt": "2026-01-15T03:56:56Z"
+    "installedVersion": "0.1.5",
+    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
+    "installedAt": "2026-06-01T14:46:50.555Z",
+    "fileHashes": {
+      ".gitignore": "6bd7e28a654edbd2925c23d370886a3a4c55867eb8378c4a9a241346fdf4f5c0",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "1b0645910aac78f495cc314a5d4f7de62e45fdc2b845840fae612f057d11a7ed",
+      "package.json": "1606a2662fc13ad42e5eb421950801d2155dbaa5aab1965ec24b55f3d6154412",
+      "pnpm-lock.yaml": "035c9a6d7f06027aa6d6abe90aed1647e2690987b00ae6de9a7be467906e27a3",
+      "public/icon.png": "88f7e55c3d10f926afb314c186ee10199d3b8f8cd8db4992ecf2cdf70e3f1661",
+      "public/screenshots/1.png": "7fbcf5447f7b2f1bdb5477f7a0875cfb2f6c52b1a8d852e7dd9fdebf181c8f30",
+      "scripts/moldable-dev.mjs": "5ff705a61c031cdf1d29eaf8bdcf9556669a991dccbccab9f9a85c8b01f8caaf",
+      "src/client/app.tsx": "d3225d0b3e7026f84eface4f76309c3480b2f68fd9b5317e3e735daac195a006",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/globals.css": "13e68af26b1b6a3ee6206a97097939c7b758c281ace0f671b386c80a79e8f140",
+      "src/client/main.tsx": "3c8f47d79fdb94756af5f9af39905b1c4eda4810103092d59f8dcd743170cacd",
+      "src/client/query-provider.tsx": "a7db658e196e93a94544fc5de1799ba1b9f04c7c6f34997fec2908207d7cb79f",
+      "src/components/empty-state.tsx": "d5f9e65192087779bc8f0f1647c1f4904f2524bcc4160a823256e8481a933599",
+      "src/lib/types.ts": "ae00b5f8b29c3410db8193dcef41ac88ee4baaf1e3d140b30dd593b2593643c7",
+      "src/server/app.ts": "6fbb903799824e406c70473d88070c0fab8bb6d343669a31632978a33923ef97",
+      "src/server/index.ts": "c6b3931835b8322706ba6e0992d2e9bd644efc6d448117cd11d47503e202432b",
+      "STORE.md": "6ff59a83d23fdf3ad05c4bd3d4a9022a2ef9a212218fba9e66580f0e6cd43dac",
+      "tsconfig.json": "bf42036d631d553634cf1435e214edb5e9f1fe74336529ede77b7359abdf49b0",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
+    }
   },
   "modified": false,
   "routeName": "notes",
-  "screenshots": ["public/screenshots/1.png"],
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
   "tagline": "A Google Keep-style notebook with markdown and pinning"
 }

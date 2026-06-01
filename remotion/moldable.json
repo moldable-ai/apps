@@ -1,7 +1,10 @@
 {
   "name": "Remotion",
-  "version": "0.1.4",
-  "aliases": ["video", "render"],
+  "version": "0.1.5",
+  "aliases": [
+    "video",
+    "render"
+  ],
   "visibility": "public",
   "description": "Create programmatic videos with Remotion - manage projects, preview compositions, and render videos",
   "runtime": "vite_hono",
@@ -10,7 +13,9 @@
   "icon": "🎬",
   "iconPath": "public/icon.png",
   "category": "photo-video",
-  "skills": ["remotion-dev/skills/remotion"],
+  "skills": [
+    "remotion-dev/skills/remotion"
+  ],
   "tags": [],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.13",
@@ -53,7 +58,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -125,7 +132,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -139,7 +148,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -153,7 +164,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           }
         ]
@@ -162,6 +175,46 @@
   },
   "env": [],
   "routeName": "remotion",
-  "screenshots": ["public/screenshots/1.png"],
-  "tagline": "Make videos by describing them, powered by code"
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
+  "tagline": "Make videos by describing them, powered by code",
+  "upstream": {
+    "repo": "moldable-ai/apps",
+    "path": "remotion",
+    "installedVersion": "0.1.4",
+    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
+    "installedAt": "2026-06-01T14:47:00.705Z",
+    "fileHashes": {
+      ".gitignore": "a552cd01b17606c22d31ff4fd57f127a8e6e0f9e16e77ac3b689d2e964acadc9",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "3f6908026f4eacf8bfa10ebf55d035a1e7e07b59921e06b77d3c6396f995a520",
+      "package.json": "29953740dbe51866a3892ad20056d55cde0380c25fbd5e5fb90512e29dedc09e",
+      "pnpm-lock.yaml": "bc1b8034277844456dcaa2f39f352803ca110396cc60cb5dfc51194a0cc3b881",
+      "public/icon.png": "c3323085d9c85f82a61ecff4beb5ed716c92069f6bd6c20f7cee37a3855f9ccd",
+      "public/screenshots/1.png": "31ac114dae4609cd171a1ce2580c1458e88cdbb5d9c27bdd3b67c450482ead6e",
+      "scripts/moldable-dev.mjs": "ad146c36dae2fb55df49e56904bddf5c3a440e3aad879d4b0344a67862bd04b0",
+      "scripts/render.mjs": "26cfeee2851e3ac66ee3da0323f50b372fd401c9ffbcd5478d829b3e57642080",
+      "src/client/app.tsx": "7d3e79180dc58506f2473eec32880d04beb94fbac10f925363b9d77afef2f3fe",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/globals.css": "d1d80dd184f7afb66778f1ab5c5ccc0a75693e231b753abd6357cbb048ed3980",
+      "src/client/main.tsx": "6c70fc0ff16b983bed9dff09f65bdaf765566f99e0805eff5cdd8dae69f730b7",
+      "src/components/empty-state.tsx": "c76b28042f7985b5fb99d63bd3b69a13878537a08e112cca383bbc321dc6aaeb",
+      "src/components/project-editor.tsx": "06aca600994900a9c2a6a808ca3333b536579fdced69e152718200f43a22b1bc",
+      "src/components/project-list.tsx": "10aee0ce32a289c8a05800787382046c16b1bd00bc7d432d38ad7d2c268829fe",
+      "src/components/project-settings-fields.tsx": "c691fec06d64386471f3df7cbfc428cb59cb0ead59143e21298e014cbcf469f9",
+      "src/components/remotion-player.tsx": "7ee1f60cb7df1733918e08e30da0a2bbea07d762d00c32ccdf2a089ef59c2cd3",
+      "src/lib/hooks.ts": "5714192bc973f5614318657f7ccd4b0c086f263cea3e6285de3256b94b65f267",
+      "src/lib/query-provider.tsx": "a509db46203df4fbf2e5435f43d49881a330f1cdb95851170362c19e461aece6",
+      "src/lib/storage.ts": "c79b407afb2c4a22baa96bf5ec6ac2c9784fdc7ab9a55cd267f85a1ffda57e06",
+      "src/lib/types.ts": "3459f45d64d7b166455d36f91dc18b8f537e97487cf1a124fc3d287274191e9d",
+      "src/lib/utils.ts": "746e4d9beb1a5b6f0e047ec19d5f1c542c9f8117f4ea7c80d7b9bd0fe2128e91",
+      "src/server/app.ts": "3396a2846e0845100cd80c2a0d6bdc0c9935a3e7d2aebb8c2567ddec0bd6f297",
+      "src/server/index.ts": "44ca134560894688e6ef38108c259369383c3dbd7ddc88dee4024c65a9cc87b4",
+      "STORE.md": "d28db3ec01d1a852e0c69383944a295e8a1f0aca4b18ff1e8553d8bed3a14b72",
+      "tsconfig.json": "95669ad4db517996250982b516e5b72eceae1770f1ae1a7f3454f0564e05d5f6",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
+    }
+  },
+  "modified": false
 }

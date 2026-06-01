@@ -1,0 +1,43 @@
+@import 'tailwindcss';
+@import '@moldable-ai/ui/styles';
+@source './**/*.{js,jsx,ts,tsx}';
+@source '../components/**/*.{js,jsx,ts,tsx}';
+@source '../lib/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';
+
+@theme {
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
+  --font-mono:
+    'SF Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+@layer components {
+  /* Press feedback for the keypad — a quick, restrained scale so taps feel
+     physical without the bounce reading as a toy. */
+  .calc-key {
+    transition:
+      transform 0.06s ease,
+      background-color 0.12s ease,
+      color 0.12s ease;
+  }
+
+  .calc-key:active {
+    transform: scale(0.96);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .calc-key:active {
+      transform: none;
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}

@@ -275,11 +275,13 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
     ],
   )
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (): Promise<boolean> => {
     try {
       await startRecorder(true)
+      return true
     } catch (error) {
       onError?.(error as Error)
+      return false
     }
   }, [onError, startRecorder])
 
@@ -310,14 +312,17 @@ export function useAudioRecorder(options: UseAudioRecorderOptions = {}) {
   ])
 
   const resume = useCallback(
-    async (resetSession = false) => {
+    async (resetSession = false): Promise<boolean> => {
       if (state.isPaused) {
         try {
           await startRecorder(resetSession)
+          return true
         } catch (error) {
           onError?.(error as Error)
+          return false
         }
       }
+      return false
     },
     [onError, startRecorder, state.isPaused],
   )

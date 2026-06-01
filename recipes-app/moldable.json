@@ -1,0 +1,271 @@
+{
+  "name": "Recipes",
+  "version": "0.1.1",
+  "aliases": [
+    "cooking",
+    "meals"
+  ],
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "A photo-centric recipes app with beautiful cards, folders, rich Markdown steps, and a hands-free cook mode.",
+  "author": "",
+  "license": "FSL-1.1-ALv2",
+  "icon": "🍳",
+  "iconPath": "public/icon.png",
+  "category": "lifestyle",
+  "tags": [],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.13"
+  },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "recipes.recipes",
+        "name": "Recipes",
+        "description": "Read and manage saved recipes in this workspace.",
+        "scopes": [
+          {
+            "id": "recipes.list",
+            "name": "List recipes",
+            "description": "List recipes with optional filters for text, category, difficulty, favorites, and deleted state.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "difficulty": {
+                  "type": "string",
+                  "enum": [
+                    "Easy",
+                    "Medium",
+                    "Hard"
+                  ]
+                },
+                "favoriteOnly": {
+                  "type": "boolean"
+                },
+                "includeDeleted": {
+                  "type": "boolean"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200
+                }
+              }
+            }
+          },
+          {
+            "id": "recipes.search",
+            "name": "Search recipes",
+            "description": "Search recipe titles, descriptions, categories, ingredients, and instructions.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200
+                }
+              }
+            }
+          },
+          {
+            "id": "recipes.get",
+            "name": "Get recipe",
+            "description": "Get one recipe by ID.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          },
+          {
+            "id": "recipes.create",
+            "name": "Create recipe",
+            "description": "Create a new recipe. `instructions` accepts Markdown (use a numbered list for steps — each item becomes a Cook Mode step); `ingredients` is one item per array entry; `servings`, `prepTime`, `cookingTime`, `sourceUrl`, and `tags` are optional.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "imageUrl": {
+                  "type": "string"
+                },
+                "ingredients": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "instructions": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "cookingTime": {
+                  "type": "string"
+                },
+                "prepTime": {
+                  "type": "string"
+                },
+                "servings": {
+                  "type": "string"
+                },
+                "sourceUrl": {
+                  "type": "string"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "difficulty": {
+                  "type": "string",
+                  "enum": [
+                    "Easy",
+                    "Medium",
+                    "Hard"
+                  ]
+                },
+                "isFavorite": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "title"
+              ]
+            }
+          },
+          {
+            "id": "recipes.update",
+            "name": "Update recipe",
+            "description": "Update recipe fields.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "imageUrl": {
+                  "type": "string"
+                },
+                "ingredients": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "instructions": {
+                  "type": "string"
+                },
+                "category": {
+                  "type": "string"
+                },
+                "cookingTime": {
+                  "type": "string"
+                },
+                "prepTime": {
+                  "type": "string"
+                },
+                "servings": {
+                  "type": "string"
+                },
+                "sourceUrl": {
+                  "type": "string"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "difficulty": {
+                  "type": "string",
+                  "enum": [
+                    "Easy",
+                    "Medium",
+                    "Hard"
+                  ]
+                },
+                "isFavorite": {
+                  "type": "boolean"
+                },
+                "isDeleted": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          },
+          {
+            "id": "recipes.favorite",
+            "name": "Favorite recipe",
+            "description": "Set a recipe favorite state.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "isFavorite": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "isFavorite"
+              ]
+            }
+          },
+          {
+            "id": "recipes.delete",
+            "name": "Delete recipe",
+            "description": "Move one recipe to deleted state.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "env": [],
+  "routeName": "recipes-app"
+}

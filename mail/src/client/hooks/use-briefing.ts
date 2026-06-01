@@ -163,6 +163,51 @@ export function useInboxBriefing({
     return computeBriefingFingerprint(messages, account ?? null)
   }, [messages, account])
 
+  useEffect(() => {
+    if (!enabled || !clientFingerprint) return
+
+    let cancelled = false
+    const controller = new AbortController()
+
+    const loadCachedBriefing = async () => {
+      const cached = await fetchWithWorkspace(
+        `/api/briefing?fingerprint=${encodeURIComponent(clientFingerprint)}`,
+        { signal: controller.signal },
+      )
+        .then((res) => {
+          if (!res.ok) return null
+          return res.json() as Promise<BriefingCacheResponse>
+        })
+        .catch(() => null)
+
+      const cachedEntry = cached?.cached ?? null
+      const markdown = cachedEntry?.markdown.trim()
+      if (cancelled || !cachedEntry || !markdown) return
+
+      const linkedMessageIds = extractLinkedMessageIds(markdown)
+      linkedMessageIdsRef.current = linkedMessageIds
+      setState((prev) => {
+        if (prev.markdown) return prev
+        return {
+          fingerprint: cachedEntry.fingerprint,
+          markdown,
+          generatedAt: cachedEntry.generatedAt,
+          linkedMessageIds,
+          source: 'cache',
+          status: 'ready',
+          error: null,
+        }
+      })
+    }
+
+    void loadCachedBriefing()
+
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
+  }, [clientFingerprint, enabled, fetchWithWorkspace])
+
   const run = useCallback(
     async (force: boolean) => {
       if (!enabled || messages.length === 0 || !clientFingerprint) return

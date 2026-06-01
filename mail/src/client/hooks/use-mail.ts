@@ -17,6 +17,7 @@ import type {
   MailMessageDetail,
   MailMessageSummary,
   MailStatus,
+  MailThreadDetail,
   MailTriageSignalInput,
   MessageAction,
   MessagesResponse,
@@ -53,7 +54,7 @@ export function useMailStatus() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const statusCacheKey = cacheKey(['status', workspaceId])
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['mail-status', workspaceId],
     initialData: () => {
       const cached = readCachedValue<MailStatus>(statusCacheKey)
@@ -67,9 +68,15 @@ export function useMailStatus() {
       return status
     },
     refetchInterval: (query) =>
-      query.state.data?.authenticated ? false : 2000,
+      query.state.data?.syncing
+        ? 2_000
+        : query.state.data?.authenticated
+          ? false
+          : 2_000,
     refetchIntervalInBackground: true,
   })
+
+  return query
 }
 
 type MailMessagesPageParam = string | undefined
@@ -105,11 +112,21 @@ function flattenMessagePages(
   const resultSizeEstimate =
     data.pages.find((page) => page.resultSizeEstimate > 0)
       ?.resultSizeEstimate ?? messages.length
+  const source = data.pages.some((page) => page.source === 'cache')
+    ? 'cache'
+    : data.pages.find((page) => page.source)?.source
+  const syncing = data.pages.some((page) => page.syncing)
+  const syncedAt = [...data.pages]
+    .reverse()
+    .find((page) => page.syncedAt)?.syncedAt
 
   return {
     messages,
     nextPageToken: lastPage?.nextPageToken,
     resultSizeEstimate,
+    source,
+    syncing,
+    syncedAt,
   }
 }
 
@@ -176,7 +193,9 @@ export function useMailMessages({
       if (!res.ok) throw new Error('Failed to load messages')
 
       const data = (await res.json()) as MessagesResponse
-      if (!isSearch && !pageParam) writeCachedValue(messagesCacheKey, data)
+      if (!isSearch && !pageParam) {
+        writeCachedValue(messagesCacheKey, { ...data, syncing: false })
+      }
 
       for (const message of data.messages) {
         void queryClient.prefetchQuery({
@@ -194,6 +213,18 @@ export function useMailMessages({
     () => flattenMessagePages(messagesQuery.data),
     [messagesQuery.data],
   )
+
+  const refetchMessages = messagesQuery.refetch
+
+  useEffect(() => {
+    if (!data?.syncing) return
+
+    const timeout = window.setTimeout(() => {
+      void refetchMessages()
+    }, 1_800)
+
+    return () => window.clearTimeout(timeout)
+  }, [data?.syncing, refetchMessages, folderId, query, workspaceId])
 
   return {
     ...messagesQuery,
@@ -261,11 +292,14 @@ export function useActionSuggestions({
 }) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const key = actionSuggestionsKey({ messages, labels, account })
+  const suggestionsCacheKey = cacheKey(['action-suggestions', workspaceId, key])
 
-  return useQuery({
+  const query = useQuery({
     queryKey: ['mail-action-suggestions', workspaceId, key],
     enabled: enabled && messages.length > 0,
     staleTime: 60_000,
+    initialData: () =>
+      readCachedValue<ActionSuggestionsResponse>(suggestionsCacheKey),
     placeholderData: (previousData) => previousData,
     queryFn: async () => {
       const res = await fetchWithWorkspace('/api/action-suggestions', {
@@ -277,9 +311,25 @@ export function useActionSuggestions({
         const data = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(data.error ?? 'Failed to suggest actions')
       }
-      return (await res.json()) as ActionSuggestionsResponse
+      const data = (await res.json()) as ActionSuggestionsResponse
+      writeCachedValue(suggestionsCacheKey, { ...data, syncing: false })
+      return data
     },
   })
+
+  const refetchSuggestions = query.refetch
+
+  useEffect(() => {
+    if (!query.data?.syncing) return
+
+    const timeout = window.setTimeout(() => {
+      void refetchSuggestions()
+    }, 2_500)
+
+    return () => window.clearTimeout(timeout)
+  }, [query.data?.syncing, refetchSuggestions])
+
+  return query
 }
 
 export function useRetriageActionSuggestions() {
@@ -382,7 +432,7 @@ export function useWarmMailFolders({ enabled }: { enabled: boolean }) {
           })
           writeCachedValue(
             cacheKey(['messages', workspaceId, folderId, query]),
-            data,
+            { ...data, syncing: false },
           )
 
           for (const message of data.messages) {
@@ -451,6 +501,50 @@ export function useMailMessage({
         )
       }
       return data.message
+    },
+  })
+}
+
+export function useMailThread({
+  threadId,
+  enabled,
+}: {
+  threadId: string | null
+  enabled: boolean
+}) {
+  const { workspaceId, fetchWithWorkspace } = useWorkspace()
+  const threadCacheKey = threadId
+    ? cacheKey(['thread', workspaceId, threadId])
+    : null
+
+  return useQuery({
+    queryKey: ['mail-thread', workspaceId, threadId],
+    enabled: !!threadId && enabled,
+    initialData: () =>
+      threadCacheKey
+        ? readCachedValue<MailThreadDetail>(threadCacheKey)
+        : undefined,
+    refetchOnMount: 'always',
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const res = await fetchWithWorkspace(
+        `/api/threads/${encodeURIComponent(threadId ?? '')}`,
+      )
+      if (!res.ok) throw new Error('Failed to load thread')
+      const data = (await res.json()) as { thread: MailThreadDetail }
+      if (threadId) {
+        writeCachedValue(
+          cacheKey(['thread', workspaceId, threadId]),
+          data.thread,
+        )
+        for (const message of data.thread.messages) {
+          writeCachedValue(
+            cacheKey(['message', workspaceId, message.id]),
+            message,
+          )
+        }
+      }
+      return data.thread
     },
   })
 }
@@ -1119,6 +1213,9 @@ export function useUpdateMessageLabels() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['mail-messages'] }),
         queryClient.invalidateQueries({
+          queryKey: ['mail-action-suggestions', workspaceId],
+        }),
+        queryClient.invalidateQueries({
           queryKey: ['mail-message', workspaceId, variables.id],
         }),
       ])
@@ -1187,6 +1284,17 @@ export function useMessageAction({
         )
       }
     },
+    onSettled: async (_data, _error, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['mail-messages'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['mail-action-suggestions', workspaceId],
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ['mail-message', workspaceId, variables.id],
+        }),
+      ])
+    },
   })
 }
 
@@ -1246,6 +1354,9 @@ export function useUnsubscribeAndArchive({
     onSettled: async (_data, _error, id) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['mail-messages'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['mail-action-suggestions', workspaceId],
+        }),
         queryClient.invalidateQueries({
           queryKey: ['mail-message', workspaceId, id],
         }),

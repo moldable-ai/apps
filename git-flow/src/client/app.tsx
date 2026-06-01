@@ -9,8 +9,11 @@ import {
 import {
   AppWindow,
   ArrowUp,
+  ArrowUpFromLine,
   Ban,
+  CheckCircle2,
   ChevronDown,
+  ChevronRight,
   Code2,
   Copy,
   FileMinus,
@@ -121,6 +124,10 @@ interface RecentRepo {
   name: string
   path: string
   isDirty?: boolean
+  changedCount?: number
+  branch?: string
+  ahead?: number
+  preferredCommitAction?: PreferredCommitAction
 }
 
 interface ExistingPullRequest {
@@ -370,12 +377,31 @@ function CommitAvatar({
   )
 }
 
+const COMMIT_ACTIONS: {
+  value: PreferredCommitAction
+  label: string
+  Icon: LucideIcon
+}[] = [
+  { value: 'commit', label: 'Commit', Icon: GitCommit },
+  { value: 'commit-and-push', label: 'Commit & push', Icon: ArrowUp },
+  {
+    value: 'commit-and-open-pr',
+    label: 'Commit & open PR',
+    Icon: GitPullRequest,
+  },
+]
+
 export default function GitFlowPage() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
+  const [screen, setScreen] = useState<'home' | 'detail'>('home')
+  const [showAllRepos, setShowAllRepos] = useState(false)
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [selectedCommit, setSelectedCommit] = useState<string | null>(null)
   const [view, setView] = useState<'changes' | 'history'>('changes')
+  const [shippingPaths, setShippingPaths] = useState<Set<string>>(new Set())
+  const [isShippingAll, setIsShippingAll] = useState(false)
+  const [shipFeedback, setShipFeedback] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [selectedFiles, setSelectedFiles] = useState<Set<string>>(new Set())
   const [selectedActionFiles, setSelectedActionFiles] = useState<Set<string>>(
@@ -1178,11 +1204,22 @@ export default function GitFlowPage() {
     }
   }, [editorData?.preferredEditorId, editors, preferredEditorId])
 
+  // The composer's default action follows the currently open repo's own
+  // preference (which already resolves to the global fallback server-side).
+  const currentRepoPreferredAction = useMemo(
+    () =>
+      data?.recentRepos?.find((repo) => repo.path === data?.repoPath)
+        ?.preferredCommitAction,
+    [data?.recentRepos, data?.repoPath],
+  )
+
   useEffect(() => {
-    if (editorData?.preferredCommitAction) {
+    if (currentRepoPreferredAction) {
+      setPreferredCommitAction(currentRepoPreferredAction)
+    } else if (editorData?.preferredCommitAction) {
       setPreferredCommitAction(editorData.preferredCommitAction)
     }
-  }, [editorData?.preferredCommitAction])
+  }, [currentRepoPreferredAction, editorData?.preferredCommitAction])
 
   useEffect(() => {
     if (!isFilterOpen) return
@@ -1350,7 +1387,18 @@ export default function GitFlowPage() {
   }
 
   useMoldableNavigationPop((message) => {
-    if (message.entry?.id === 'history' || view === 'history') {
+    const entryId = message.entry?.id
+
+    if (entryId === 'repo') {
+      setScreen('home')
+      setView('changes')
+      setSelectedFile(null)
+      setSelectedCommit(null)
+      setSelectedCommitFile(null)
+      return
+    }
+
+    if (entryId === 'history' || view === 'history') {
       handleChangesTabSelect('none')
     }
   })
@@ -1596,13 +1644,124 @@ export default function GitFlowPage() {
 
     setError(null)
     setCodeReview(null)
+    if (screen === 'home') {
+      pushMoldableNavigation({
+        id: 'repo',
+        title: repoPath.split('/').filter(Boolean).pop() ?? 'Repository',
+      })
+    }
+    setScreen('detail')
+    setView('changes')
     repoMutation.mutate(repoPath)
+  }
+
+  const shipRepo = useCallback(
+    async (repoPath: string) => {
+      setShippingPaths((previous) => new Set(previous).add(repoPath))
+      setError(null)
+      try {
+        const res = await fetchWithWorkspace('/api/git', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'quickShip', repoPath }),
+        })
+        const json = await res.json()
+        if (!res.ok) throw new Error(json.error || 'Quick action failed')
+
+        const result = json as {
+          repoName: string
+          action: PreferredCommitAction
+          pullRequestUrl?: string
+          pushed?: boolean
+        }
+
+        if (result.pullRequestUrl) {
+          sendToMoldable({
+            type: 'moldable:open-url',
+            url: result.pullRequestUrl,
+          })
+        }
+
+        return result
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Quick action failed')
+        throw err
+      } finally {
+        setShippingPaths((previous) => {
+          const next = new Set(previous)
+          next.delete(repoPath)
+          return next
+        })
+        queryClient.invalidateQueries({ queryKey: ['git-status', workspaceId] })
+        queryClient.invalidateQueries({
+          queryKey: ['git-history', workspaceId],
+        })
+      }
+    },
+    [fetchWithWorkspace, queryClient, workspaceId],
+  )
+
+  const dirtyRepos = useMemo(
+    () =>
+      (data?.recentRepos ?? []).filter(
+        (repo) => repo.isDirty && (repo.changedCount ?? 0) > 0,
+      ),
+    [data?.recentRepos],
+  )
+
+  // Every known repo, dirty ones first, so the "View all" list lets you reach a
+  // clean repo's detail view (history, past diffs) — not just the dirty ones.
+  const allRepos = useMemo(() => {
+    const repos = [...(data?.recentRepos ?? [])]
+    return repos.sort((a, b) => {
+      const aDirty = a.isDirty && (a.changedCount ?? 0) > 0 ? 1 : 0
+      const bDirty = b.isDirty && (b.changedCount ?? 0) > 0 ? 1 : 0
+      if (aDirty !== bDirty) return bDirty - aDirty
+      return a.name.localeCompare(b.name)
+    })
+  }, [data?.recentRepos])
+
+  const handleShipAll = async () => {
+    if (isShippingAll || dirtyRepos.length === 0) return
+
+    setIsShippingAll(true)
+    setShipFeedback(null)
+    let shipped = 0
+    let failed = 0
+
+    // Sequential so each repo gets its own commit/push and one failure does not
+    // abort the rest — the goal is to clear the whole list.
+    for (const repo of dirtyRepos) {
+      try {
+        await shipRepo(repo.path)
+        shipped += 1
+      } catch {
+        failed += 1
+      }
+    }
+
+    setIsShippingAll(false)
+    setShipFeedback(
+      failed === 0
+        ? `Shipped ${shipped} ${shipped === 1 ? 'repo' : 'repos'}. Inbox zero.`
+        : `Shipped ${shipped}, ${failed} need attention.`,
+    )
+    window.setTimeout(() => setShipFeedback(null), 5000)
+  }
+
+  const getCommitActionPresentation = (action?: PreferredCommitAction) => {
+    if (action === 'commit-and-open-pr') {
+      return { Icon: GitPullRequest, label: 'Commit & open PR' }
+    }
+    if (action === 'commit') {
+      return { Icon: GitCommit, label: 'Commit' }
+    }
+    return { Icon: ArrowUp, label: 'Commit & push' }
   }
 
   useMoldableCommands({
     'switch-repository': (payload) => {
       const repoPath = (payload as { repoPath?: unknown } | null)?.repoPath
-
       if (typeof repoPath === 'string') {
         handleRepoChange(repoPath)
       }
@@ -1666,8 +1825,14 @@ export default function GitFlowPage() {
 
   const handlePreferredCommitActionChange = async (
     action: PreferredCommitAction,
+    repoPath?: string,
   ) => {
-    setPreferredCommitAction(action)
+    // Only update the detail composer's own state when editing the repo it is
+    // currently showing (or the global fallback). Row menus on the home screen
+    // pass another repo's path and should not move the composer.
+    if (!repoPath || repoPath === data?.repoPath) {
+      setPreferredCommitAction(action)
+    }
 
     try {
       const res = await fetchWithWorkspace('/api/git', {
@@ -1676,6 +1841,7 @@ export default function GitFlowPage() {
         body: JSON.stringify({
           action: 'setPreferredCommitAction',
           preferredCommitAction: action,
+          repoPath,
         }),
       })
 
@@ -1685,6 +1851,7 @@ export default function GitFlowPage() {
       }
 
       queryClient.invalidateQueries({ queryKey: ['git-editors', workspaceId] })
+      queryClient.invalidateQueries({ queryKey: ['git-status', workspaceId] })
     } catch (err) {
       setError(
         err instanceof Error
@@ -1880,6 +2047,48 @@ export default function GitFlowPage() {
     }
   }
 
+  const renderErrorOverlay = () =>
+    error ? (
+      <>
+        <div
+          className="bg-background/20 animate-in fade-in pointer-events-auto absolute inset-0 z-40 cursor-pointer backdrop-blur-[2px] duration-300"
+          onClick={() => setError(null)}
+        />
+        <div className="pointer-events-none absolute inset-x-0 top-[15%] z-50 flex justify-center px-4">
+          <div className="border-destructive/30 bg-background/95 animate-in fade-in slide-in-from-top-4 pointer-events-auto flex w-full max-w-2xl flex-col overflow-hidden rounded-lg border shadow-2xl duration-300">
+            <div className="border-destructive/20 bg-destructive/10 text-destructive flex items-center justify-between border-b px-3 py-2">
+              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider">
+                <Terminal className="size-3.5" />
+                {errorTitle}
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={copyError}
+                  className="bg-destructive/10 hover:bg-destructive/20 border-destructive/20 flex cursor-pointer items-center gap-1.5 rounded border px-2 py-0.5 text-[10px] font-bold transition-colors active:scale-95"
+                >
+                  <Copy className="size-3" />
+                  Copy Error
+                </button>
+                <button
+                  onClick={() => setError(null)}
+                  className="hover:bg-destructive/10 cursor-pointer rounded p-1 transition-colors active:scale-95"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            </div>
+            <div className="custom-scrollbar max-h-[300px] overflow-auto bg-zinc-950 p-4 font-mono text-[11px] leading-relaxed text-red-400">
+              <pre className="whitespace-pre-wrap">{error}</pre>
+            </div>
+            <div className="bg-muted/30 text-muted-foreground flex items-center gap-1.5 px-3 py-2 text-[10px] italic">
+              <ShieldAlert className="size-3" />
+              Fix the issues and try again.
+            </div>
+          </div>
+        </div>
+      </>
+    ) : null
+
   const renderDiffContent = () => (
     <div className="custom-scrollbar bg-muted/30 min-h-0 flex-1 overflow-auto pb-[var(--chat-safe-padding)] dark:bg-zinc-950/20">
       {selectedDiffIsImage ? (
@@ -2010,6 +2219,281 @@ export default function GitFlowPage() {
           <p className="text-muted-foreground animate-pulse text-sm font-medium tracking-tight">
             Accessing Git Repository...
           </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (screen === 'home') {
+    const allClean = dirtyRepos.length === 0
+    const hasRepos = (data?.recentRepos?.length ?? 0) > 0
+
+    const homeActions = (
+      <div className="flex items-center justify-end gap-0.5">
+        {!allClean && (
+          <button
+            onClick={handleShipAll}
+            disabled={isShippingAll}
+            title="Commit & ship all dirty repos"
+            aria-label="Commit & ship all dirty repos"
+            className="text-primary hover:bg-accent flex size-8 cursor-pointer items-center justify-center rounded-md transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isShippingAll ? (
+              <RefreshCw className="size-4 animate-spin" />
+            ) : (
+              <ArrowUpFromLine className="size-4" />
+            )}
+          </button>
+        )}
+        <button
+          onClick={handlePickFolder}
+          disabled={repositoryControlsDisabled}
+          title="Open a local repository"
+          aria-label="Open a local repository"
+          className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 cursor-pointer items-center justify-center rounded-md transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <FolderOpen className="size-4" />
+        </button>
+        <button
+          onClick={() => fetchData()}
+          disabled={loading}
+          title="Refresh"
+          aria-label="Refresh"
+          className="text-muted-foreground hover:bg-accent hover:text-foreground flex size-8 cursor-pointer items-center justify-center rounded-md transition-all active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <RefreshCw className={cn('size-4', loading && 'animate-spin')} />
+        </button>
+      </div>
+    )
+
+    return (
+      <div className="bg-background text-foreground flex h-screen flex-col overflow-hidden">
+        <div className="relative min-h-0 flex-1 overflow-y-auto">
+          {renderErrorOverlay()}
+
+          {!hasRepos ? (
+            <div className="relative flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
+              <div className="absolute right-2 top-2">{homeActions}</div>
+              <div className="flex size-16 items-center justify-center rounded-full bg-green-500/10 text-green-600 dark:text-green-400">
+                <CheckCircle2 className="size-9" />
+              </div>
+              <div className="space-y-1.5">
+                <h2 className="text-xl font-bold tracking-tight">All clean</h2>
+                <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
+                  Add a repository to start tracking your changes.
+                </p>
+              </div>
+              <button
+                onClick={handlePickFolder}
+                disabled={repositoryControlsDisabled}
+                className="border-border bg-background hover:bg-accent mt-1 flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-xs font-bold shadow-sm transition-all active:scale-95 disabled:opacity-50"
+              >
+                <FolderOpen className="size-3.5" />
+                Open a repository
+              </button>
+            </div>
+          ) : (
+            <div className="mx-auto w-full max-w-2xl space-y-3 p-3 sm:p-4">
+              {homeActions}
+
+              {shipFeedback && (
+                <div className="bg-primary/10 text-primary border-primary/20 animate-in fade-in slide-in-from-top-1 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold">
+                  <CheckCircle2 className="size-3.5" />
+                  {shipFeedback}
+                </div>
+              )}
+
+              {allClean ? (
+                <div className="border-border/60 bg-card flex flex-col items-center gap-3 rounded-xl border px-6 py-10 text-center shadow-sm">
+                  <div className="flex size-14 items-center justify-center rounded-full bg-green-500/10 text-green-600 dark:text-green-400">
+                    <CheckCircle2 className="size-8" />
+                  </div>
+                  <div className="space-y-1">
+                    <h2 className="text-lg font-bold tracking-tight">
+                      All clean
+                    </h2>
+                    <p className="text-muted-foreground max-w-sm text-sm leading-relaxed">
+                      No repositories have uncommitted changes. You&apos;re at
+                      inbox zero.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {dirtyRepos.map((repo) => {
+                    const isShipping = shippingPaths.has(repo.path)
+                    const actionPresentation = getCommitActionPresentation(
+                      repo.preferredCommitAction,
+                    )
+                    const ActionIcon = actionPresentation.Icon
+                    const aheadCount = repo.ahead ?? 0
+
+                    return (
+                      <div
+                        key={repo.path}
+                        className="border-border/60 bg-card hover:bg-accent/30 group flex items-center gap-3 rounded-xl border p-3 shadow-sm transition-colors"
+                      >
+                        <button
+                          onClick={() => handleRepoChange(repo.path)}
+                          disabled={isShippingAll || isShipping}
+                          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left disabled:cursor-not-allowed"
+                        >
+                          <span className="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-lg">
+                            <FolderGit className="size-[18px]" />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="truncate text-sm font-semibold tracking-tight">
+                                {repo.name}
+                              </span>
+                              {repo.branch && (
+                                <span className="text-muted-foreground bg-muted inline-flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+                                  <GitBranch className="size-2.5" />
+                                  {repo.branch}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-muted-foreground mt-0.5 truncate text-[11px]">
+                              {repo.changedCount} uncommitted{' '}
+                              {repo.changedCount === 1 ? 'change' : 'changes'}
+                              {aheadCount > 0
+                                ? ` · ${aheadCount} unpushed`
+                                : ''}
+                            </p>
+                          </div>
+                        </button>
+
+                        <div className="bg-primary text-primary-foreground flex shrink-0 overflow-hidden rounded-lg shadow-sm">
+                          <button
+                            onClick={() => void shipRepo(repo.path)}
+                            disabled={isShipping || isShippingAll}
+                            title={actionPresentation.label}
+                            className="flex cursor-pointer items-center gap-1.5 px-3 py-2 text-[11px] font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {isShipping ? (
+                              <RefreshCw className="size-3.5 animate-spin" />
+                            ) : (
+                              <ActionIcon className="size-3.5" />
+                            )}
+                            <span className="hidden sm:inline">
+                              {actionPresentation.label}
+                            </span>
+                          </button>
+                          <div className="bg-primary-foreground/20 my-1.5 w-px shrink-0" />
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Change default action"
+                                disabled={isShipping || isShippingAll}
+                                className="hover:bg-primary-foreground/10 inline-flex w-8 shrink-0 cursor-pointer items-center justify-center transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <ChevronDown className="size-3.5" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-60">
+                              <div className="text-muted-foreground truncate px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider">
+                                Default action · {repo.name}
+                              </div>
+                              {COMMIT_ACTIONS.map((option) => {
+                                const OptionIcon = option.Icon
+                                return (
+                                  <DropdownMenuItem
+                                    key={option.value}
+                                    onClick={() =>
+                                      void handlePreferredCommitActionChange(
+                                        option.value,
+                                        repo.path,
+                                      )
+                                    }
+                                  >
+                                    <OptionIcon className="size-3.5" />
+                                    {option.label}
+                                    {repo.preferredCommitAction ===
+                                    option.value ? (
+                                      <span className="text-muted-foreground ml-auto text-[11px]">
+                                        Default
+                                      </span>
+                                    ) : null}
+                                  </DropdownMenuItem>
+                                )
+                              })}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {allRepos.length > 0 && (
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setShowAllRepos((value) => !value)}
+                    className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 text-xs font-bold transition-colors"
+                  >
+                    <ChevronRight
+                      className={cn(
+                        'size-3.5 transition-transform',
+                        showAllRepos && 'rotate-90',
+                      )}
+                    />
+                    {showAllRepos ? 'Hide repositories' : 'View all'} (
+                    {allRepos.length})
+                  </button>
+                  {showAllRepos && (
+                    <div className="divide-border/60 divide-y overflow-hidden rounded-xl border">
+                      {allRepos.map((repo) => {
+                        const repoDirty =
+                          repo.isDirty && (repo.changedCount ?? 0) > 0
+                        const aheadCount = repo.ahead ?? 0
+                        return (
+                          <button
+                            key={repo.path}
+                            onClick={() => handleRepoChange(repo.path)}
+                            disabled={isShippingAll}
+                            className="hover:bg-accent/40 flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+                              <FolderGit className="size-4" />
+                            </span>
+                            <span className="truncate text-[13px] font-medium">
+                              {repo.name}
+                            </span>
+                            {repo.branch && (
+                              <span className="text-muted-foreground hidden shrink-0 items-center gap-1 text-[11px] sm:inline-flex">
+                                <GitBranch className="size-2.5" />
+                                {repo.branch}
+                              </span>
+                            )}
+                            <span className="ml-auto shrink-0 text-[11px] font-medium">
+                              {repoDirty ? (
+                                <span className="text-primary">
+                                  {repo.changedCount}{' '}
+                                  {repo.changedCount === 1
+                                    ? 'change'
+                                    : 'changes'}
+                                </span>
+                              ) : aheadCount > 0 ? (
+                                <span className="text-primary">
+                                  {aheadCount} unpushed
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/50">
+                                  clean
+                                </span>
+                              )}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     )
@@ -2283,46 +2767,7 @@ export default function GitFlowPage() {
 
       <div className="relative flex flex-1 overflow-hidden">
         {/* Commit Hook Error HUD */}
-        {error && (
-          <>
-            <div
-              className="bg-background/20 animate-in fade-in pointer-events-auto absolute inset-0 z-40 cursor-pointer backdrop-blur-[2px] duration-300"
-              onClick={() => setError(null)}
-            />
-            <div className="pointer-events-none absolute inset-x-0 top-[15%] z-50 flex justify-center px-4">
-              <div className="border-destructive/30 bg-background/95 animate-in fade-in slide-in-from-top-4 pointer-events-auto flex w-full max-w-2xl flex-col overflow-hidden rounded-lg border shadow-2xl duration-300">
-                <div className="border-destructive/20 bg-destructive/10 text-destructive flex items-center justify-between border-b px-3 py-2">
-                  <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider">
-                    <Terminal className="size-3.5" />
-                    {errorTitle}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={copyError}
-                      className="bg-destructive/10 hover:bg-destructive/20 border-destructive/20 flex cursor-pointer items-center gap-1.5 rounded border px-2 py-0.5 text-[10px] font-bold transition-colors active:scale-95"
-                    >
-                      <Copy className="size-3" />
-                      Copy Error
-                    </button>
-                    <button
-                      onClick={() => setError(null)}
-                      className="hover:bg-destructive/10 cursor-pointer rounded p-1 transition-colors active:scale-95"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </div>
-                </div>
-                <div className="custom-scrollbar max-h-[300px] overflow-auto bg-zinc-950 p-4 font-mono text-[11px] leading-relaxed text-red-400">
-                  <pre className="whitespace-pre-wrap">{error}</pre>
-                </div>
-                <div className="bg-muted/30 text-muted-foreground flex items-center gap-1.5 px-3 py-2 text-[10px] italic">
-                  <ShieldAlert className="size-3" />
-                  Fix the issues and try again.
-                </div>
-              </div>
-            </div>
-          </>
-        )}
+        {renderErrorOverlay()}
 
         {/* Code Review Modal */}
         {isReviewModalOpen && codeReview && (
@@ -2929,6 +3374,7 @@ export default function GitFlowPage() {
                                 onClick={() =>
                                   void handlePreferredCommitActionChange(
                                     'commit',
+                                    data?.repoPath,
                                   )
                                 }
                               >
@@ -2944,6 +3390,7 @@ export default function GitFlowPage() {
                                 onClick={() =>
                                   void handlePreferredCommitActionChange(
                                     'commit-and-push',
+                                    data?.repoPath,
                                   )
                                 }
                               >
@@ -2959,6 +3406,7 @@ export default function GitFlowPage() {
                                 onClick={() =>
                                   void handlePreferredCommitActionChange(
                                     'commit-and-open-pr',
+                                    data?.repoPath,
                                   )
                                 }
                               >

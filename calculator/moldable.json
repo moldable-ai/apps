@@ -1,0 +1,171 @@
+{
+  "name": "Calculator",
+  "version": "0.1.1",
+  "aliases": [
+    "calc",
+    "convert",
+    "converter"
+  ],
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "Everyday, scientific, and unit/currency calculator with history",
+  "author": "Moldable",
+  "license": "FSL-1.1-ALv2",
+  "repository": "moldable-ai/apps",
+  "icon": "🧮",
+  "iconPath": "public/icon.png",
+  "category": "utilities",
+  "tags": [
+    "calculator",
+    "math",
+    "scientific",
+    "convert",
+    "currency",
+    "units"
+  ],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.13",
+    "@moldable-ai/storage": "^0.1.5"
+  },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "calculator.compute",
+        "name": "Calculator compute",
+        "description": "Allow approved apps to evaluate math expressions and convert units or currency using Calculator.",
+        "scopes": [
+          {
+            "id": "compute.evaluate",
+            "name": "Evaluate an expression",
+            "description": "Evaluate an arithmetic or scientific math expression and return the numeric result. Records the calculation to history.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "expression": {
+                  "type": "string",
+                  "description": "Math expression, e.g. \"2 * (3 + 4)\" or \"sin(45) + sqrt(2)\"."
+                },
+                "angleMode": {
+                  "type": "string",
+                  "enum": [
+                    "deg",
+                    "rad"
+                  ],
+                  "description": "Angle unit for trigonometric functions. Defaults to deg."
+                },
+                "record": {
+                  "type": "boolean",
+                  "description": "Whether to save this calculation to history. Defaults to true."
+                }
+              },
+              "required": [
+                "expression"
+              ]
+            }
+          },
+          {
+            "id": "convert.units",
+            "name": "Convert units or currency",
+            "description": "Convert a value between units in a category (length, mass, temperature, volume, area, speed, data, time) or between currencies.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "type": "number"
+                },
+                "from": {
+                  "type": "string",
+                  "description": "Source unit/currency code, e.g. \"km\" or \"USD\"."
+                },
+                "to": {
+                  "type": "string",
+                  "description": "Target unit/currency code, e.g. \"mi\" or \"EUR\"."
+                },
+                "category": {
+                  "type": "string",
+                  "description": "Optional conversion category. Inferred from the units when omitted.",
+                  "enum": [
+                    "length",
+                    "mass",
+                    "temperature",
+                    "volume",
+                    "area",
+                    "speed",
+                    "data",
+                    "time",
+                    "currency"
+                  ]
+                },
+                "record": {
+                  "type": "boolean",
+                  "description": "Whether to save this conversion to history. Defaults to true."
+                }
+              },
+              "required": [
+                "value",
+                "from",
+                "to"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "calculator.history",
+        "name": "Calculator history",
+        "description": "Allow approved apps to read and search past calculations in this workspace.",
+        "scopes": [
+          {
+            "id": "history.recent",
+            "name": "Recent calculations",
+            "description": "Read the most recent calculations and conversions for this workspace.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500
+                }
+              }
+            }
+          },
+          {
+            "id": "history.search",
+            "name": "Search calculations",
+            "description": "Search past calculations and conversions by expression or result.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500
+                }
+              },
+              "required": [
+                "query"
+              ]
+            }
+          },
+          {
+            "id": "history.clear",
+            "name": "Clear calculation history",
+            "description": "Delete all saved calculations and conversions for this workspace.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "env": [],
+  "routeName": "calculator",
+  "tagline": "Everyday, scientific, and unit/currency math — with history"
+}

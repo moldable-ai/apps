@@ -1,0 +1,111 @@
+import type { RawTutorial } from '../../tutorial-builder'
+
+export const polychordsTutorial: RawTutorial = {
+  id: 'tutorial-polychords',
+  title: 'Polychords',
+  bpm: 72,
+  beatsPerBar: 4,
+  phrase: [
+    // Section 1: the two triads alone — C major (C E G) then D major (D F# A)
+    ['C3', 0.0, 1.0],
+    ['E3', 0.0, 1.0],
+    ['G3', 0.0, 1.0],
+    ['D3', 1.4, 1.0],
+    ['F#3', 1.4, 1.0],
+    ['A3', 1.4, 1.0],
+    ['C3', 2.8, 1.2],
+    ['E3', 2.8, 1.2],
+    ['G3', 2.8, 1.2],
+    // Section 2: a true polychord — D major triad over a complete C major triad.
+    ['C3', 4.5, 1.6],
+    ['E3', 4.5, 1.6],
+    ['G3', 4.5, 1.6],
+    ['D4', 4.5, 1.6],
+    ['F#4', 4.5, 1.6],
+    ['A4', 4.5, 1.6],
+    ['C3', 6.3, 0.45],
+    ['E3', 6.75, 0.45],
+    ['G3', 7.2, 0.45],
+    ['D4', 7.65, 0.45],
+    ['F#4', 8.1, 0.45],
+    ['A4', 8.55, 0.45],
+    ['C3', 9.1, 1.4],
+    ['E3', 9.1, 1.4],
+    ['G3', 9.1, 1.4],
+    ['D4', 9.1, 1.4],
+    ['F#4', 9.1, 1.4],
+    ['A4', 9.1, 1.4],
+    // Section 3: a second polychord — E major triad over C major, then resolve.
+    ['C3', 10.5, 1.6],
+    ['E3', 10.5, 1.6],
+    ['G3', 10.5, 1.6],
+    ['E4', 10.5, 1.6],
+    ['G#4', 10.5, 1.6],
+    ['B4', 10.5, 1.6],
+    ['C3', 12.4, 0.45],
+    ['E3', 12.85, 0.45],
+    ['G3', 13.3, 0.45],
+    ['E4', 13.75, 0.45],
+    ['G#4', 14.2, 0.45],
+    ['B4', 14.65, 0.45],
+    ['C3', 15.3, 1.8], // resolve to a warm C major
+    ['E3', 15.3, 1.8],
+    ['G3', 15.3, 1.8],
+    ['C4', 15.3, 1.8],
+  ],
+  tutorial: {
+    title: 'Polychords',
+    summary:
+      'A slash chord puts a triad over a foreign bass note; a polychord stacks two whole triads for a richer, more ambiguous sound. Here C major (C E G) sits underneath D major (D F# A), then underneath E major (E G# B). The complete lower triad matters: you are hearing one chord color pressed against another before the stack settles back into plain C major.',
+    level: 'Advanced',
+    objectives: [
+      'Hear two complete triads as one rich chord',
+      'Distinguish a slash chord from a true polychord',
+      'Stack D major over C major',
+      'Contrast two polychords, then resolve the stack',
+    ],
+    sections: [
+      {
+        id: 'triads',
+        title: 'Two triads alone',
+        start: 0,
+        end: 4.5,
+        focus: 'C major and D major, heard separately',
+        learn: [
+          'Each triad is simple and stable on its own',
+          'Keep their colors in your ear before we stack them',
+        ],
+      },
+      {
+        id: 'polychord',
+        title: 'D over C major',
+        start: 4.5,
+        end: 10.5,
+        focus: 'D major triad over a complete C major triad',
+        learn: [
+          'C E G anchors the bottom while D F# A floats on top',
+          'Because both triads are complete, this is a true polychord rather than just D/C',
+        ],
+        tryThis: [
+          'Play C major alone, then add the D triad and hear the stack bloom',
+          'On guitar, let the lower shape ring while you place the brighter upper triad above it',
+        ],
+      },
+      {
+        id: 'stack',
+        title: 'A tangier stack',
+        start: 10.5,
+        end: 17.1,
+        focus: 'E major over C major, then resolving to C major',
+        learn: [
+          'E G# B over C E G is spicier — the G# rubs against the C major world',
+          'Collapsing to a plain C major triad resolves all the stacked tension',
+        ],
+        reinforce: [
+          'Polychords get their color from two complete chord identities at once',
+          'The lower triad frames how the upper triad is heard',
+        ],
+      },
+    ],
+  },
+}

@@ -4,6 +4,7 @@ import { Plus, Settings } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Button,
+  isInMoldable,
   popMoldableNavigation,
   pushMoldableNavigation,
   resetMoldableNavigation,
@@ -11,6 +12,10 @@ import {
   useMoldableNavigationPop,
   useWorkspace,
 } from '@moldable-ai/ui'
+import {
+  type HostMeetingRecordingStatus,
+  hostRecordingConflictsWithTask,
+} from '@/lib/host-recording-status'
 import { normalizeGeneratedMarkdown } from '@/lib/markdown'
 import { callMoldableApp } from '@/lib/moldable-apps'
 import { NativePcmMixer } from '@/lib/native-pcm-mixer'
@@ -28,6 +33,7 @@ import {
 } from '@/components/meetings-list'
 import { EmptyState, RecordingDock, SettingsModal } from '@/components'
 import {
+  type CaptureMode,
   useActiveMeeting,
   useAudioRecorder,
   useDeepgram,
@@ -60,8 +66,35 @@ function calendarErrorMessage(code: string | undefined, error: unknown) {
 }
 
 type AudioSource = 'microphone' | 'both' | 'system'
+type NativeAudioSource = 'microphone' | 'system'
+
+type AudioSourceManifestSource = {
+  chunks: number
+  bytes: number
+  frames: number
+  firstSequence?: number
+  lastSequence?: number
+  firstAudioAt?: string
+  lastAudioAt?: string
+  peakMax?: number
+  rmsMax?: number
+}
+
+type AudioSourceManifest = {
+  version: 1
+  captureSource?: AudioSource
+  nativeCaptureSessionId?: string
+  sampleRate: number
+  channels: number
+  mixedAudio: true
+  sources: Record<NativeAudioSource, AudioSourceManifestSource>
+}
 
 const RECORDING_BACKGROUND_TASK_KIND = 'meeting-recording'
+const RECORDING_BACKGROUND_TASK_HEARTBEAT_MS = 10_000
+const RECORDING_SESSION_LEASE_MS = 10_000
+const RECORDING_SESSION_LEASE_STALE_MS = 60_000
+const NATIVE_RECOVERY_REPLAY_LIMIT = 2_000
 
 interface MeetingRecordingStartMessage {
   type: 'moldable:meeting-recording-start'
@@ -71,6 +104,7 @@ interface MeetingRecordingStartMessage {
   detectedAt?: string
   source?: string
   sessionKey?: string
+  recordingRequestId?: string
 }
 
 interface MeetingRecordingStopMessage {
@@ -83,6 +117,7 @@ interface MeetingRecordingStopMessage {
   source?: string
   reason?: string
   sessionKey?: string
+  meetingId?: string
 }
 
 interface StartMeetingOptions {
@@ -93,6 +128,137 @@ interface StartMeetingOptions {
 
 function cleanString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function emptyManifestSource(): AudioSourceManifestSource {
+  return {
+    chunks: 0,
+    bytes: 0,
+    frames: 0,
+  }
+}
+
+function createAudioSourceManifest(
+  captureSource?: AudioSource,
+): AudioSourceManifest {
+  return {
+    version: 1,
+    captureSource,
+    sampleRate: 48000,
+    channels: 1,
+    mixedAudio: true,
+    sources: {
+      microphone: emptyManifestSource(),
+      system: emptyManifestSource(),
+    },
+  }
+}
+
+function makeHostRecordingStatusRequestId() {
+  return `meeting-recording-status-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function requestHostMeetingRecordingStatus(filters?: {
+  taskId?: string | null
+  recordingRequestId?: string | null
+  detectionSessionKey?: string | null
+  sessionKey?: string | null
+}) {
+  return new Promise<HostMeetingRecordingStatus | null>((resolve, reject) => {
+    if (!isInMoldable()) {
+      resolve(null)
+      return
+    }
+
+    const requestId = makeHostRecordingStatusRequestId()
+    const timeout = window.setTimeout(() => {
+      window.removeEventListener('message', handleResponse)
+      reject(new Error('Meeting recording status request timed out.'))
+    }, 5_000)
+
+    function handleResponse(event: MessageEvent) {
+      if (event.data?.type !== 'moldable:meeting-recording-status-response') {
+        return
+      }
+      if (event.data?.requestId !== requestId) return
+
+      window.clearTimeout(timeout)
+      window.removeEventListener('message', handleResponse)
+
+      if (event.data?.ok !== true) {
+        reject(
+          new Error(
+            event.data?.error?.message ||
+              'Failed to read host recording status.',
+          ),
+        )
+        return
+      }
+
+      const status = event.data?.result?.status
+      resolve(status && typeof status === 'object' ? status : null)
+    }
+
+    window.addEventListener('message', handleResponse)
+    window.parent.postMessage(
+      {
+        type: 'moldable:meeting-recording-status-request',
+        requestId,
+        taskId: filters?.taskId ?? undefined,
+        recordingRequestId: filters?.recordingRequestId ?? undefined,
+        detectionSessionKey: filters?.detectionSessionKey ?? undefined,
+        sessionKey: filters?.sessionKey ?? undefined,
+      },
+      '*',
+    )
+  })
+}
+
+async function hasConflictingHostRecording(allowedTaskId?: string | null) {
+  try {
+    const status = await requestHostMeetingRecordingStatus()
+    return hostRecordingConflictsWithTask(status, allowedTaskId)
+  } catch (error) {
+    console.warn('[Meetings] Failed to check host recording state:', error)
+    return false
+  }
+}
+
+function hostRecordingStatusTone(
+  status: HostMeetingRecordingStatus,
+): 'loading' | 'warning' | 'danger' | null {
+  const message =
+    `${status.readinessLine ?? status.statusLine ?? ''}`.toLowerCase()
+  const transcriptionState = status.transcription?.state
+  const captureState = status.capture?.actualState
+
+  if (captureState === 'error' || message.includes('audio error')) {
+    return 'danger'
+  }
+  if (
+    transcriptionState === 'connecting' ||
+    transcriptionState === 'reconnecting' ||
+    captureState === 'restarting' ||
+    message.includes('connecting') ||
+    message.includes('reconnecting') ||
+    message.includes('restarting')
+  ) {
+    return 'loading'
+  }
+  if (
+    transcriptionState === 'error' ||
+    transcriptionState === 'disconnected' ||
+    captureState === 'degraded' ||
+    status.transcription?.issue ||
+    message.includes('paused') ||
+    message.includes('unavailable') ||
+    message.includes('stale') ||
+    message.includes('degraded')
+  ) {
+    return 'warning'
+  }
+
+  return null
 }
 
 function normalizeParticipant(
@@ -291,6 +457,50 @@ function findMatchingCalendarEvent(
   return matches[0]?.event ?? null
 }
 
+function getOpenRecordingSession(meeting: Meeting) {
+  return [...(meeting.recordingSessions ?? [])]
+    .reverse()
+    .find((session) => !session.endedAt)
+}
+
+function recordingSessionLeaseMs(session: RecordingSession) {
+  const value = session.leaseUpdatedAt ?? session.startedAt
+  const time =
+    value instanceof Date ? value.getTime() : new Date(value).getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
+function isRecordingSessionLeaseFresh(session: RecordingSession) {
+  const leaseMs = recordingSessionLeaseMs(session)
+  return leaseMs > 0 && Date.now() - leaseMs <= RECORDING_SESSION_LEASE_STALE_MS
+}
+
+function captureSourceToNativeMode(
+  source: RecordingSession['captureSource'],
+): CaptureMode | null {
+  if (source === 'both') return 'systemMicrophone'
+  if (source === 'system') return 'systemAudio'
+  return null
+}
+
+function findRecoverableRecording(meetings: Meeting[]) {
+  return meetings
+    .map((candidate) => ({
+      meeting: candidate,
+      session: getOpenRecordingSession(candidate),
+    }))
+    .filter(
+      (
+        candidate,
+      ): candidate is { meeting: Meeting; session: RecordingSession } =>
+        Boolean(candidate.session && !candidate.meeting.endedAt),
+    )
+    .sort(
+      (a, b) =>
+        recordingSessionLeaseMs(b.session) - recordingSessionLeaseMs(a.session),
+    )[0]
+}
+
 export default function MeetingsPage() {
   // Workspace
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
@@ -324,6 +534,9 @@ export default function MeetingsPage() {
   const [currentInterim, setCurrentInterim] = useState<string | null>(null)
   const [isMeetingPaused, setIsMeetingPaused] = useState(false)
   const [isAppendingTranscript, setIsAppendingTranscript] = useState(false)
+  const [isRecordingStartPending, setIsRecordingStartPending] = useState(false)
+  const [hostRecordingStatus, setHostRecordingStatus] =
+    useState<HostMeetingRecordingStatus | null>(null)
   const [calendarEvents, setCalendarEvents] = useState<CalendarEventsState>({
     status: 'loading',
     events: [],
@@ -343,30 +556,53 @@ export default function MeetingsPage() {
   const nativeDurationIntervalRef = useRef<ReturnType<
     typeof setInterval
   > | null>(null)
+  const recordingStartInFlightRef = useRef(false)
   const activeDetectionSessionKeyRef = useRef<string | null>(null)
+  const activeRecordingRequestIdRef = useRef<string | null>(null)
   const detectedStopInFlightRef = useRef(false)
   const hasLoggedFirstNativeAudioChunkRef = useRef(false)
   const recordingBackgroundTaskIdRef = useRef<string | null>(null)
+  const expectedNativeStopReasonRef = useRef<string | null>(null)
+  const activeNativeSequenceRef = useRef<number | null>(null)
+  const activeAudioSourceManifestRef = useRef<AudioSourceManifest | null>(null)
+  const activeAudioSourceContentTypesRef = useRef<
+    Partial<Record<NativeAudioSource, string>>
+  >({})
+  const recordingRecoveryAttemptedRef = useRef(false)
   const nativePcmMixerRef = useRef(new NativePcmMixer())
   const deepgramSendAudioRef = useRef<
     ((data: ArrayBuffer | Blob) => void) | null
   >(null)
 
-  const startRecordingBackgroundTask = useCallback((nextMeeting: Meeting) => {
-    const taskId = `${RECORDING_BACKGROUND_TASK_KIND}:${nextMeeting.id}`
-    recordingBackgroundTaskIdRef.current = taskId
-    sendToMoldable({
-      type: 'moldable:background-task-start',
-      id: taskId,
-      kind: RECORDING_BACKGROUND_TASK_KIND,
-      title: nextMeeting.title,
-      meetingId: nextMeeting.id,
-      startedAt: new Date().toISOString(),
-    })
-  }, [])
+  const startRecordingBackgroundTask = useCallback(
+    (
+      nextMeeting: Meeting,
+      acknowledgement?: {
+        recordingRequestId?: string
+        detectionSessionKey?: string
+      },
+    ) => {
+      const taskId = `${RECORDING_BACKGROUND_TASK_KIND}:${nextMeeting.id}`
+      recordingBackgroundTaskIdRef.current = taskId
+      sendToMoldable({
+        type: 'moldable:background-task-start',
+        id: taskId,
+        kind: RECORDING_BACKGROUND_TASK_KIND,
+        title: nextMeeting.title,
+        meetingId: nextMeeting.id,
+        startedAt: new Date().toISOString(),
+        recordingRequestId: acknowledgement?.recordingRequestId,
+        detectionSessionKey: acknowledgement?.detectionSessionKey,
+      })
+    },
+    [],
+  )
 
-  const endRecordingBackgroundTask = useCallback(() => {
-    const taskId = recordingBackgroundTaskIdRef.current
+  const endRecordingBackgroundTask = useCallback((meetingId?: string) => {
+    const fallbackTaskId = meetingId
+      ? `${RECORDING_BACKGROUND_TASK_KIND}:${meetingId}`
+      : null
+    const taskId = recordingBackgroundTaskIdRef.current ?? fallbackTaskId
     if (!taskId) return
 
     sendToMoldable({
@@ -410,7 +646,13 @@ export default function MeetingsPage() {
   })
 
   // Hooks
-  const { meetings, addMeeting, updateMeeting, deleteMeeting } = useMeetings()
+  const {
+    meetings,
+    isLoading: meetingsLoading,
+    addMeeting,
+    updateMeeting,
+    deleteMeeting,
+  } = useMeetings()
   const {
     meeting,
     startMeeting,
@@ -441,9 +683,11 @@ export default function MeetingsPage() {
   )
 
   const createRecordingSession = useCallback((): RecordingSession => {
+    activeNativeSequenceRef.current = null
     const session = {
       id: uuidv4(),
       startedAt: new Date(),
+      leaseUpdatedAt: new Date(),
     }
     activeRecordingSessionRef.current = session
     return session
@@ -474,17 +718,116 @@ export default function MeetingsPage() {
       const finishedSession = {
         ...activeSession,
         endedAt,
+        leaseUpdatedAt: endedAt,
+        lastNativeSequence:
+          activeNativeSequenceRef.current ?? activeSession.lastNativeSequence,
       }
 
       activeRecordingSessionRef.current = null
+      activeNativeSequenceRef.current = null
       return upsertRecordingSession(targetMeeting, finishedSession)
     },
     [upsertRecordingSession],
   )
 
+  const updateActiveRecordingSessionLease = useCallback(
+    (targetMeeting: Meeting | null): Meeting | null => {
+      const activeSession = activeRecordingSessionRef.current
+      if (!targetMeeting || !activeSession) return targetMeeting
+
+      const leasedSession: RecordingSession = {
+        ...activeSession,
+        captureSource:
+          activeCaptureSourceRef.current ?? activeSession.captureSource,
+        lastNativeSequence:
+          activeNativeSequenceRef.current ?? activeSession.lastNativeSequence,
+        leaseUpdatedAt: new Date(),
+      }
+
+      activeRecordingSessionRef.current = leasedSession
+      return upsertRecordingSession(targetMeeting, leasedSession)
+    },
+    [upsertRecordingSession],
+  )
+
+  useEffect(() => {
+    if (!meeting || isMeetingPaused || !activeRecordingSessionRef.current) {
+      return
+    }
+
+    const persistLease = () => {
+      const leasedMeeting = updateActiveRecordingSessionLease(meeting)
+      if (!leasedMeeting) return
+      updateActiveMeeting(leasedMeeting)
+      updateMeeting(leasedMeeting)
+    }
+
+    const interval = window.setInterval(
+      persistLease,
+      RECORDING_SESSION_LEASE_MS,
+    )
+
+    return () => window.clearInterval(interval)
+  }, [
+    isMeetingPaused,
+    meeting,
+    updateActiveMeeting,
+    updateActiveRecordingSessionLease,
+    updateMeeting,
+  ])
+
   const resetAudioSessionPersistence = useCallback(() => {
     activeAudioContentTypeRef.current = null
+    activeAudioSourceManifestRef.current = null
+    activeAudioSourceContentTypesRef.current = {}
   }, [])
+
+  const resetAudioSourceManifest = useCallback(
+    (captureSource?: AudioSource) => {
+      activeAudioSourceManifestRef.current =
+        createAudioSourceManifest(captureSource)
+    },
+    [],
+  )
+
+  const updateAudioSourceManifest = useCallback(
+    (event: {
+      source: NativeAudioSource
+      data: ArrayBuffer
+      sequence: number
+      frameCount?: number
+      peak?: number | null
+      rms?: number | null
+      sessionId?: string
+    }) => {
+      const manifest = activeAudioSourceManifestRef.current
+      if (!manifest) return
+
+      manifest.captureSource =
+        activeCaptureSourceRef.current ?? manifest.captureSource
+      manifest.nativeCaptureSessionId =
+        event.sessionId ?? manifest.nativeCaptureSessionId
+
+      const source = manifest.sources[event.source]
+      source.chunks += 1
+      source.bytes += event.data.byteLength
+      source.frames += event.frameCount ?? Math.floor(event.data.byteLength / 2)
+      source.firstSequence ??= event.sequence
+      source.lastSequence = event.sequence
+
+      const now = new Date().toISOString()
+      source.firstAudioAt ??= now
+      source.lastAudioAt = now
+
+      if (typeof event.peak === 'number') {
+        source.peakMax = Math.max(source.peakMax ?? 0, event.peak)
+      }
+      if (typeof event.rms === 'number') {
+        source.rmsMax = Math.max(source.rmsMax ?? 0, event.rms)
+      }
+    },
+    [],
+  )
 
   const attachAudioToRecordingSession = useCallback(
     (
@@ -492,11 +835,23 @@ export default function MeetingsPage() {
       sessionId: string,
       audioPath: string,
       audioMimeType: string,
+      audioSourceManifestPath?: string,
+      audioSources?: RecordingSession['audioSources'],
     ): Meeting => ({
       ...targetMeeting,
       recordingSessions: targetMeeting.recordingSessions?.map((session) =>
         session.id === sessionId
-          ? { ...session, audioPath, audioMimeType }
+          ? {
+              ...session,
+              audioPath,
+              audioMimeType,
+              audioSourceManifestPath:
+                audioSourceManifestPath ?? session.audioSourceManifestPath,
+              audioSources: {
+                ...session.audioSources,
+                ...audioSources,
+              },
+            }
           : session,
       ),
       updatedAt: new Date(),
@@ -541,11 +896,58 @@ export default function MeetingsPage() {
     [currentSettings.saveAudio, fetchWithWorkspace],
   )
 
+  const enqueueAudioSourceChunkPersist = useCallback(
+    async (
+      meetingId: string,
+      sessionId: string,
+      source: NativeAudioSource,
+      chunk: ArrayBuffer,
+      contentType: string,
+    ) => {
+      if (!currentSettings.saveAudio) return
+
+      activeAudioSourceContentTypesRef.current = {
+        ...activeAudioSourceContentTypesRef.current,
+        [source]: contentType,
+      }
+      const body = new Blob([chunk], { type: contentType })
+
+      audioPersistQueueRef.current = audioPersistQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          if (body.size === 0) return
+          const response = await fetchWithWorkspace(
+            `/api/meetings/${meetingId}/audio/${sessionId}/source/${source}/chunk`,
+            {
+              method: 'POST',
+              headers: { 'content-type': contentType },
+              body,
+            },
+          )
+
+          if (!response.ok) {
+            throw new Error(
+              `Source audio chunk upload failed: ${response.status}`,
+            )
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to persist meeting source audio chunk:', error)
+        })
+    },
+    [currentSettings.saveAudio, fetchWithWorkspace],
+  )
+
   const finalizeSessionAudio = useCallback(
     async (
       meetingId: string,
       sessionId: string,
-    ): Promise<{ audioPath: string; audioMimeType: string } | null> => {
+    ): Promise<{
+      audioPath: string
+      audioMimeType: string
+      audioSourceManifestPath?: string
+      audioSources?: RecordingSession['audioSources']
+    } | null> => {
       if (!currentSettings.saveAudio || !activeAudioContentTypeRef.current) {
         return null
       }
@@ -560,6 +962,8 @@ export default function MeetingsPage() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               contentType: activeAudioContentTypeRef.current,
+              sourceManifest: activeAudioSourceManifestRef.current,
+              sourceContentTypes: activeAudioSourceContentTypesRef.current,
             }),
           },
         )
@@ -572,6 +976,8 @@ export default function MeetingsPage() {
         return (await response.json()) as {
           audioPath: string
           audioMimeType: string
+          audioSourceManifestPath?: string
+          audioSources?: RecordingSession['audioSources']
         }
       } catch (error) {
         console.error('Failed to finalize meeting audio:', error)
@@ -650,9 +1056,73 @@ export default function MeetingsPage() {
     deepgramSendAudioRef.current = deepgram.sendAudio
   }, [deepgram.sendAudio])
 
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      const taskId = recordingBackgroundTaskIdRef.current
+      if (!taskId) return
+
+      const queuedChunks = deepgram.diagnostics.spool.queuedChunks
+      const droppedChunks = deepgram.diagnostics.spool.droppedChunks
+      const replayedChunks = deepgram.diagnostics.spool.replayedChunks
+      const statusLine =
+        deepgram.state === 'connected'
+          ? 'Recording; transcript connected'
+          : deepgram.state === 'connecting'
+            ? 'Recording; connecting transcript'
+            : deepgram.state === 'reconnecting'
+              ? queuedChunks > 0
+                ? `Recording; reconnecting transcript (${queuedChunks} chunks buffered)`
+                : droppedChunks > 0
+                  ? `Recording; reconnecting transcript (${droppedChunks} chunks dropped)`
+                  : 'Recording; reconnecting transcript'
+              : deepgram.issue?.code === 'deepgram_reconnect_exhausted'
+                ? 'Recording; transcript paused'
+                : deepgram.issue
+                  ? 'Recording; transcript unavailable'
+                  : 'Recording'
+
+      sendToMoldable({
+        type: 'moldable:background-task-heartbeat',
+        id: taskId,
+        kind: RECORDING_BACKGROUND_TASK_KIND,
+        statusLine,
+        transcription: {
+          provider: deepgram.diagnostics.provider,
+          state: deepgram.state,
+          streamMode: 'mixed',
+          issue: deepgram.issue?.code ?? null,
+          connectionId: deepgram.diagnostics.connectionId,
+          connectionGeneration: deepgram.diagnostics.connectionGeneration,
+          reconnectAttempts: deepgram.diagnostics.reconnectAttempts,
+          maxReconnectAttempts: deepgram.diagnostics.maxReconnectAttempts,
+          sentChunks: deepgram.diagnostics.sentChunks,
+          queuedChunks,
+          droppedChunks,
+          replayedChunks,
+        },
+      })
+    }, RECORDING_BACKGROUND_TASK_HEARTBEAT_MS)
+
+    return () => window.clearInterval(interval)
+  }, [deepgram.diagnostics, deepgram.issue, deepgram.state])
+
   // Native audio hook (for Moldable desktop system audio + AudioUnit microphone)
   const systemAudio = useSystemAudio({
     onAudioData: (event) => {
+      activeNativeSequenceRef.current = Math.max(
+        activeNativeSequenceRef.current ?? 0,
+        event.sequence,
+      )
+      if (activeRecordingSessionRef.current) {
+        activeRecordingSessionRef.current = {
+          ...activeRecordingSessionRef.current,
+          nativeCaptureSessionId:
+            event.sessionId ??
+            activeRecordingSessionRef.current.nativeCaptureSessionId,
+          lastNativeSequence: activeNativeSequenceRef.current,
+        }
+      }
+
       if (!hasLoggedFirstNativeAudioChunkRef.current) {
         hasLoggedFirstNativeAudioChunkRef.current = true
         console.log('[Meetings] Received first native audio chunk', {
@@ -667,6 +1137,17 @@ export default function MeetingsPage() {
         })
       }
       if (!audioStreamingEnabledRef.current) return
+
+      updateAudioSourceManifest(event)
+      if (activeRecordingSessionRef.current && activeMeetingIdRef.current) {
+        void enqueueAudioSourceChunkPersist(
+          activeMeetingIdRef.current,
+          activeRecordingSessionRef.current.id,
+          event.source,
+          event.data.slice(0),
+          'audio/l16;rate=48000;channels=1',
+        )
+      }
 
       const outputBuffers =
         activeCaptureSourceRef.current === 'both'
@@ -726,69 +1207,101 @@ export default function MeetingsPage() {
 
   const startPreferredCapture = useCallback(
     async (selectedSource: AudioSource, options: { resume?: boolean } = {}) => {
+      const canUseOrRequestNativeBlendedCapture =
+        systemAudio.canCaptureSystemMicrophone ||
+        (systemAudio.canRequestSystemAudioPermission &&
+          systemAudio.capabilities?.canCaptureMicrophone !== false)
+      const canUseOrRequestSystemOnlyCapture =
+        systemAudio.canCaptureSystemAudio ||
+        systemAudio.canRequestSystemAudioPermission
       const useBlendedCapture =
-        selectedSource === 'both' && systemAudio.canCaptureSystemMicrophone
+        selectedSource === 'both' && canUseOrRequestNativeBlendedCapture
       const useSystemOnlyNativeCapture =
-        selectedSource === 'system' && systemAudio.canCaptureSystemAudio
+        selectedSource === 'system' && canUseOrRequestSystemOnlyCapture
 
       if (useBlendedCapture) {
+        expectedNativeStopReasonRef.current = null
         console.log(
           '[Meetings] Starting native systemMicrophone capture with system audio + AudioUnit microphone',
         )
-        audioStreamingEnabledRef.current = true
+        audioStreamingEnabledRef.current = false
         hasLoggedFirstNativeAudioChunkRef.current = false
         nativePcmMixerRef.current.reset()
         stopNativeDurationTimer()
         activeCaptureSourceRef.current = 'both'
-        await deepgram.connect('linear16')
+        resetAudioSourceManifest('both')
 
         const started = await systemAudio.start('systemMicrophone')
         if (started) {
+          audioStreamingEnabledRef.current = true
+          void deepgram.connect('linear16')
           return 'both'
         }
 
         console.warn(
           '[Meetings] Native blended capture failed, falling back to microphone-only capture',
         )
+        expectedNativeStopReasonRef.current = 'native-blended-start-failed'
+        await systemAudio.stop('native-blended-start-failed')
         nativePcmMixerRef.current.reset()
         activeCaptureSourceRef.current = null
-        deepgram.disconnect()
+        activeAudioSourceManifestRef.current = null
+        await deepgram.disconnect({ drainFinal: false })
         audioStreamingEnabledRef.current = false
       }
 
       if (useSystemOnlyNativeCapture) {
+        expectedNativeStopReasonRef.current = null
         console.log(`[Meetings] Starting ${selectedSource} native capture`)
-        audioStreamingEnabledRef.current = true
+        audioStreamingEnabledRef.current = false
         hasLoggedFirstNativeAudioChunkRef.current = false
         nativePcmMixerRef.current.reset()
         stopNativeDurationTimer()
-        await deepgram.connect('linear16')
+        resetAudioSourceManifest(selectedSource)
 
         const started = await systemAudio.start('systemAudio')
         if (started) {
           activeCaptureSourceRef.current = selectedSource
+          audioStreamingEnabledRef.current = true
+          void deepgram.connect('linear16')
           return selectedSource
         }
 
         console.warn(
           `[Meetings] Native ${selectedSource} capture failed, falling back to microphone`,
         )
-        deepgram.disconnect()
+        expectedNativeStopReasonRef.current = 'native-system-start-failed'
+        await systemAudio.stop('native-system-start-failed')
+        activeAudioSourceManifestRef.current = null
+        audioStreamingEnabledRef.current = false
+        await deepgram.disconnect({ drainFinal: false })
       }
 
       console.log('[Meetings] Starting with microphone capture')
       audioStreamingEnabledRef.current = true
       nativePcmMixerRef.current.reset()
-      await deepgram.connect('webm')
-      if (options.resume) {
-        await audioRecorder.resume(true)
-      } else {
-        await audioRecorder.start()
+      void deepgram.connect('webm')
+      const started = options.resume
+        ? await audioRecorder.resume(true)
+        : await audioRecorder.start()
+
+      if (!started) {
+        activeCaptureSourceRef.current = null
+        await deepgram.disconnect({ drainFinal: false })
+        audioStreamingEnabledRef.current = false
+        return null
       }
+
       activeCaptureSourceRef.current = 'microphone'
       return 'microphone'
     },
-    [audioRecorder, deepgram, stopNativeDurationTimer, systemAudio],
+    [
+      audioRecorder,
+      deepgram,
+      resetAudioSourceManifest,
+      stopNativeDurationTimer,
+      systemAudio,
+    ],
   )
 
   const stopActiveCapture = useCallback(
@@ -821,9 +1334,11 @@ export default function MeetingsPage() {
 
       if (activeSource === 'both') {
         flushNativePcmMixer()
+        expectedNativeStopReasonRef.current = stopContext.reason
         await systemAudio.stop(JSON.stringify(stopContext))
       } else if (usingNativeCapture) {
         flushNativePcmMixer()
+        expectedNativeStopReasonRef.current = stopContext.reason
         await systemAudio.stop(JSON.stringify(stopContext))
       } else if (options.pause) {
         await audioRecorder.pause()
@@ -856,17 +1371,39 @@ export default function MeetingsPage() {
   // Prefer the 2026-04-26 blended capture path: it was the last known-good
   // default for capturing both local speech and meeting participant audio.
   useEffect(() => {
-    if (systemAudio.canCaptureSystemMicrophone) {
+    if (
+      systemAudio.canCaptureSystemMicrophone ||
+      (systemAudio.canRequestSystemAudioPermission &&
+        systemAudio.capabilities?.canCaptureMicrophone !== false)
+    ) {
       setAudioSource('both')
       console.log(
         '[Meetings] Native systemMicrophone capture available in Moldable, using blended capture by default',
       )
     }
-  }, [systemAudio.canCaptureSystemMicrophone])
+  }, [
+    systemAudio.canCaptureSystemMicrophone,
+    systemAudio.canRequestSystemAudioPermission,
+    systemAudio.capabilities?.canCaptureMicrophone,
+  ])
 
   useEffect(() => {
     const wasCapturing = previousSystemCapturingRef.current
     const isCapturing = systemAudio.isCapturing
+
+    if (wasCapturing && !isCapturing) {
+      const expectedStopReason = expectedNativeStopReasonRef.current
+      if (expectedStopReason) {
+        console.log('[Meetings] Native capture stopped as requested', {
+          reason: expectedStopReason,
+          meetingId: activeMeetingIdRef.current,
+          sessionId: activeRecordingSessionRef.current?.id ?? null,
+        })
+        expectedNativeStopReasonRef.current = null
+        previousSystemCapturingRef.current = isCapturing
+        return
+      }
+    }
 
     if (
       wasCapturing &&
@@ -884,14 +1421,135 @@ export default function MeetingsPage() {
         deepgramIssue: deepgram.issue?.code ?? null,
         audioStreamingEnabled: audioStreamingEnabledRef.current,
       })
+      audioStreamingEnabledRef.current = false
+      setCurrentInterim(null)
+      setIsMeetingPaused(true)
+      endRecordingBackgroundTask(activeMeetingIdRef.current)
+      void deepgram.disconnect({ drainFinal: false })
+      activeCaptureSourceRef.current = null
+      stopNativeDurationTimer()
+
+      const pausedMeeting = finishActiveRecordingSession(meeting)
+      if (pausedMeeting) {
+        activeDurationBaseRef.current = pausedMeeting.duration
+        updateActiveMeeting(pausedMeeting)
+        updateMeeting(pausedMeeting)
+      }
     }
 
     previousSystemCapturingRef.current = isCapturing
   }, [
-    deepgram.issue?.code,
-    deepgram.state,
+    deepgram,
+    endRecordingBackgroundTask,
+    finishActiveRecordingSession,
     isMeetingPaused,
+    meeting,
+    stopNativeDurationTimer,
     systemAudio.isCapturing,
+    updateActiveMeeting,
+    updateMeeting,
+  ])
+
+  useEffect(() => {
+    if (
+      recordingRecoveryAttemptedRef.current ||
+      meetingsLoading ||
+      meeting ||
+      recordingStartInFlightRef.current ||
+      !systemAudio.isInMoldable
+    ) {
+      return
+    }
+
+    const recoveryCandidate = findRecoverableRecording(meetings)
+    if (!recoveryCandidate) {
+      recordingRecoveryAttemptedRef.current = true
+      return
+    }
+
+    const { meeting: recoverableMeeting, session } = recoveryCandidate
+    if (!isRecordingSessionLeaseFresh(session)) {
+      recordingRecoveryAttemptedRef.current = true
+      return
+    }
+
+    recordingRecoveryAttemptedRef.current = true
+    const captureSource = session.captureSource ?? 'both'
+    const nativeMode = captureSourceToNativeMode(captureSource)
+
+    if (!nativeMode) {
+      activeRecordingSessionRef.current = session
+      activeMeetingIdRef.current = recoverableMeeting.id
+      activeDurationBaseRef.current = recoverableMeeting.duration
+      updateActiveMeeting(recoverableMeeting)
+      setIsMeetingPaused(true)
+      closeSelectedMeeting('none')
+      return
+    }
+
+    let cancelled = false
+    recordingStartInFlightRef.current = true
+    setIsRecordingStartPending(true)
+    activeRecordingSessionRef.current = session
+    activeMeetingIdRef.current = recoverableMeeting.id
+    activeDetectionSessionKeyRef.current = null
+    activeRecordingRequestIdRef.current = null
+    detectedStopInFlightRef.current = false
+    activeDurationBaseRef.current = recoverableMeeting.duration
+    activeCaptureSourceRef.current = captureSource
+    activeNativeSequenceRef.current = session.lastNativeSequence ?? null
+    audioStreamingEnabledRef.current = true
+    activeAudioContentTypeRef.current = 'audio/l16;rate=48000;channels=1'
+    resetAudioSourceManifest(captureSource)
+    appendTranscriptActivatedAtRef.current = null
+    nativePcmMixerRef.current.reset()
+    hasLoggedFirstNativeAudioChunkRef.current = false
+    setCurrentInterim(null)
+    setIsMeetingPaused(false)
+    setIsAppendingTranscript(false)
+    updateActiveMeeting(recoverableMeeting)
+
+    void (async () => {
+      void deepgram.connect('linear16')
+      const recovered = await systemAudio.recover(nativeMode, {
+        afterSequence: session.lastNativeSequence ?? 0,
+        replayLimit: NATIVE_RECOVERY_REPLAY_LIMIT,
+      })
+
+      if (cancelled) return
+
+      if (!recovered) {
+        audioStreamingEnabledRef.current = false
+        activeRecordingSessionRef.current = null
+        activeMeetingIdRef.current = null
+        activeCaptureSourceRef.current = null
+        activeNativeSequenceRef.current = null
+        activeAudioSourceManifestRef.current = null
+        clearMeeting()
+        await deepgram.disconnect({ drainFinal: false })
+      } else {
+        startRecordingBackgroundTask(recoverableMeeting)
+        closeSelectedMeeting('none')
+      }
+
+      recordingStartInFlightRef.current = false
+      setIsRecordingStartPending(false)
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    clearMeeting,
+    closeSelectedMeeting,
+    deepgram,
+    meeting,
+    meetings,
+    meetingsLoading,
+    resetAudioSourceManifest,
+    startRecordingBackgroundTask,
+    systemAudio,
+    updateActiveMeeting,
   ])
 
   const loadCalendarEvents = useCallback(
@@ -1043,14 +1701,35 @@ export default function MeetingsPage() {
   // Start a new meeting
   const handleStartMeeting = useCallback(
     async (input?: unknown) => {
+      if (recordingStartInFlightRef.current || meeting) return
+      recordingStartInFlightRef.current = true
+      setIsRecordingStartPending(true)
+
       const startOptions: StartMeetingOptions =
         typeof input === 'string'
           ? { title: input }
           : isStartMeetingOptions(input)
             ? input
             : {}
-      const matchedCalendarEvent =
-        await resolveCalendarEventForStart(startOptions)
+      const hostRecordingConflict = await hasConflictingHostRecording()
+      if (hostRecordingConflict) {
+        console.warn(
+          '[Meetings] Ignoring start request because a host recording is already active.',
+        )
+        recordingStartInFlightRef.current = false
+        setIsRecordingStartPending(false)
+        return
+      }
+
+      let matchedCalendarEvent: CalendarEvent | null | undefined
+      try {
+        matchedCalendarEvent = await resolveCalendarEventForStart(startOptions)
+      } catch (error) {
+        console.error('[Meetings] Failed to resolve calendar context:', error)
+        recordingStartInFlightRef.current = false
+        setIsRecordingStartPending(false)
+        return
+      }
       const calendarContext = matchedCalendarEvent
         ? calendarEventToMeetingContext(matchedCalendarEvent)
         : undefined
@@ -1066,33 +1745,80 @@ export default function MeetingsPage() {
         calendarContext,
       })
 
-      // Add to meetings list immediately so it appears in sidebar
-      activeDurationBaseRef.current = 0
-      activeMeetingIdRef.current = newMeeting.id
-      activeDetectionSessionKeyRef.current =
-        cleanString(startOptions.detection?.sessionKey) ?? null
-      detectedStopInFlightRef.current = false
-      addMeeting(newMeeting)
-      startRecordingBackgroundTask(newMeeting)
-      closeSelectedMeeting('none') // Clear any selection, show active meeting
-      setCurrentInterim(null)
-      setIsMeetingPaused(false)
-      setIsAppendingTranscript(false)
-      appendTranscriptActivatedAtRef.current = null
-      resetAudioSessionPersistence()
+      try {
+        activeDurationBaseRef.current = 0
+        activeMeetingIdRef.current = newMeeting.id
+        activeDetectionSessionKeyRef.current =
+          cleanString(startOptions.detection?.sessionKey) ?? null
+        activeRecordingRequestIdRef.current =
+          cleanString(startOptions.detection?.recordingRequestId) ?? null
+        detectedStopInFlightRef.current = false
+        setCurrentInterim(null)
+        setIsMeetingPaused(false)
+        setIsAppendingTranscript(false)
+        appendTranscriptActivatedAtRef.current = null
+        resetAudioSessionPersistence()
 
-      await startPreferredCapture(audioSource)
+        const startedSource = await startPreferredCapture(audioSource)
+        if (!startedSource) {
+          throw new Error('Recording could not start.')
+        }
+
+        const leasedSession: RecordingSession = {
+          ...initialRecordingSession,
+          captureSource: startedSource,
+          lastNativeSequence: activeNativeSequenceRef.current ?? undefined,
+          leaseUpdatedAt: new Date(),
+        }
+        activeRecordingSessionRef.current = leasedSession
+        const startedMeeting = upsertRecordingSession(newMeeting, leasedSession)
+        updateActiveMeeting(startedMeeting)
+        addMeeting(startedMeeting)
+        startRecordingBackgroundTask(startedMeeting, {
+          recordingRequestId: cleanString(
+            startOptions.detection?.recordingRequestId,
+          ),
+          detectionSessionKey:
+            activeDetectionSessionKeyRef.current ?? undefined,
+        })
+        closeSelectedMeeting('none')
+      } catch (error) {
+        console.error('[Meetings] Failed to start recording:', error)
+        endRecordingBackgroundTask(newMeeting.id)
+        clearMeeting()
+        activeRecordingSessionRef.current = null
+        activeDurationBaseRef.current = 0
+        activeMeetingIdRef.current = null
+        activeDetectionSessionKeyRef.current = null
+        activeRecordingRequestIdRef.current = null
+        detectedStopInFlightRef.current = false
+        audioStreamingEnabledRef.current = false
+        appendTranscriptActivatedAtRef.current = null
+        setCurrentInterim(null)
+        setIsMeetingPaused(false)
+        setIsAppendingTranscript(false)
+        await deepgram.disconnect({ drainFinal: false })
+      } finally {
+        recordingStartInFlightRef.current = false
+        setIsRecordingStartPending(false)
+      }
     },
     [
       addMeeting,
       closeSelectedMeeting,
+      clearMeeting,
       createRecordingSession,
+      deepgram,
+      endRecordingBackgroundTask,
+      meeting,
       resetAudioSessionPersistence,
       audioSource,
       startMeeting,
       startPreferredCapture,
       startRecordingBackgroundTask,
       resolveCalendarEventForStart,
+      updateActiveMeeting,
+      upsertRecordingSession,
     ],
   )
 
@@ -1115,7 +1841,21 @@ export default function MeetingsPage() {
 
   const handleResumeExistingMeeting = useCallback(
     async (targetMeeting: Meeting) => {
-      if (meeting) return
+      if (meeting || recordingStartInFlightRef.current) return
+      recordingStartInFlightRef.current = true
+      setIsRecordingStartPending(true)
+
+      const hostRecordingConflict = await hasConflictingHostRecording(
+        `${RECORDING_BACKGROUND_TASK_KIND}:${targetMeeting.id}`,
+      )
+      if (hostRecordingConflict) {
+        console.warn(
+          '[Meetings] Ignoring resume request because a host recording is already active.',
+        )
+        recordingStartInFlightRef.current = false
+        setIsRecordingStartPending(false)
+        return
+      }
 
       const nextSession = createRecordingSession()
       const resumedMeeting = upsertRecordingSession(
@@ -1130,24 +1870,58 @@ export default function MeetingsPage() {
       activeDurationBaseRef.current = targetMeeting.duration
       activeMeetingIdRef.current = resumedMeeting.id
       activeDetectionSessionKeyRef.current = null
+      activeRecordingRequestIdRef.current = null
       detectedStopInFlightRef.current = false
-      updateActiveMeeting(resumedMeeting)
-      updateMeeting(resumedMeeting)
-      startRecordingBackgroundTask(resumedMeeting)
-      closeSelectedMeeting('none')
-      setCurrentInterim(null)
-      setIsMeetingPaused(false)
-      setIsAppendingTranscript(false)
-      appendTranscriptActivatedAtRef.current = null
-      resetAudioSessionPersistence()
-      await startPreferredCapture(audioSource)
-      appendTranscriptActivatedAtRef.current = Date.now()
-      setIsAppendingTranscript(true)
+
+      try {
+        setCurrentInterim(null)
+        setIsMeetingPaused(false)
+        setIsAppendingTranscript(false)
+        appendTranscriptActivatedAtRef.current = null
+        resetAudioSessionPersistence()
+
+        const startedSource = await startPreferredCapture(audioSource)
+        if (!startedSource) {
+          throw new Error('Recording could not resume.')
+        }
+
+        const leasedSession: RecordingSession = {
+          ...nextSession,
+          captureSource: startedSource,
+          lastNativeSequence: activeNativeSequenceRef.current ?? undefined,
+          leaseUpdatedAt: new Date(),
+        }
+        activeRecordingSessionRef.current = leasedSession
+        const leasedMeeting = upsertRecordingSession(
+          resumedMeeting,
+          leasedSession,
+        )
+
+        updateActiveMeeting(leasedMeeting)
+        updateMeeting(leasedMeeting)
+        startRecordingBackgroundTask(leasedMeeting)
+        closeSelectedMeeting('none')
+        appendTranscriptActivatedAtRef.current = Date.now()
+        setIsAppendingTranscript(true)
+      } catch (error) {
+        console.error('[Meetings] Failed to resume recording:', error)
+        activeRecordingSessionRef.current = null
+        activeMeetingIdRef.current = null
+        activeDetectionSessionKeyRef.current = null
+        activeRecordingRequestIdRef.current = null
+        detectedStopInFlightRef.current = false
+        audioStreamingEnabledRef.current = false
+        await deepgram.disconnect({ drainFinal: false })
+      } finally {
+        recordingStartInFlightRef.current = false
+        setIsRecordingStartPending(false)
+      }
     },
     [
       audioSource,
       closeSelectedMeeting,
       createRecordingSession,
+      deepgram,
       meeting,
       resetAudioSessionPersistence,
       startPreferredCapture,
@@ -1180,7 +1954,7 @@ export default function MeetingsPage() {
     endRecordingBackgroundTask()
 
     await stopActiveCapture({ reason: 'stop-appending-transcript' })
-    deepgram.disconnect()
+    await deepgram.disconnect()
 
     if (meeting) {
       const completedMeeting = finishActiveRecordingSession(meeting) ?? meeting
@@ -1201,6 +1975,8 @@ export default function MeetingsPage() {
             sessionId,
             savedAudio.audioPath,
             savedAudio.audioMimeType,
+            savedAudio.audioSourceManifestPath,
+            savedAudio.audioSources,
           )
         }
       }
@@ -1213,6 +1989,7 @@ export default function MeetingsPage() {
     activeDurationBaseRef.current = 0
     activeMeetingIdRef.current = null
     activeDetectionSessionKeyRef.current = null
+    activeRecordingRequestIdRef.current = null
     detectedStopInFlightRef.current = false
     appendTranscriptActivatedAtRef.current = null
     setIsAppendingTranscript(false)
@@ -1237,12 +2014,13 @@ export default function MeetingsPage() {
     setIsMeetingPaused(true)
     setCurrentInterim(null)
     appendTranscriptActivatedAtRef.current = null
+    endRecordingBackgroundTask()
 
     await stopActiveCapture({
       pause: true,
       reason: 'pause-recording',
     })
-    deepgram.disconnect()
+    await deepgram.disconnect()
 
     const updated = finishActiveRecordingSession(meeting)
     if (updated) {
@@ -1255,6 +2033,8 @@ export default function MeetingsPage() {
             sessionId,
             savedAudio.audioPath,
             savedAudio.audioMimeType,
+            savedAudio.audioSourceManifestPath,
+            savedAudio.audioSources,
           )
         }
       }
@@ -1265,6 +2045,7 @@ export default function MeetingsPage() {
   }, [
     attachAudioToRecordingSession,
     deepgram,
+    endRecordingBackgroundTask,
     finishActiveRecordingSession,
     finalizeSessionAudio,
     meeting,
@@ -1275,26 +2056,76 @@ export default function MeetingsPage() {
 
   // Resume recording
   const handleResume = useCallback(async () => {
+    if (recordingStartInFlightRef.current) return
+    recordingStartInFlightRef.current = true
+    setIsRecordingStartPending(true)
+
+    const hostRecordingConflict = await hasConflictingHostRecording(
+      meeting ? `${RECORDING_BACKGROUND_TASK_KIND}:${meeting.id}` : null,
+    )
+    if (hostRecordingConflict) {
+      console.warn(
+        '[Meetings] Ignoring pause-resume request because another host recording is already active.',
+      )
+      recordingStartInFlightRef.current = false
+      setIsRecordingStartPending(false)
+      return
+    }
+
     const nextSession = createRecordingSession()
-    if (meeting) {
-      const updated = upsertRecordingSession(meeting, nextSession)
+    const updated = meeting
+      ? upsertRecordingSession(meeting, nextSession)
+      : null
+
+    if (updated) {
       activeDurationBaseRef.current = updated.duration
       activeMeetingIdRef.current = updated.id
-      updateActiveMeeting(updated)
-      updateMeeting(updated)
     }
 
     setCurrentInterim(null)
-    setIsMeetingPaused(false)
-    appendTranscriptActivatedAtRef.current = Date.now()
     resetAudioSessionPersistence()
-    await startPreferredCapture(audioSource, { resume: true })
+
+    try {
+      const startedSource = await startPreferredCapture(audioSource, {
+        resume: true,
+      })
+      if (!startedSource) {
+        throw new Error('Recording could not resume.')
+      }
+
+      if (updated) {
+        const leasedSession: RecordingSession = {
+          ...nextSession,
+          captureSource: startedSource,
+          lastNativeSequence: activeNativeSequenceRef.current ?? undefined,
+          leaseUpdatedAt: new Date(),
+        }
+        activeRecordingSessionRef.current = leasedSession
+        const leasedMeeting = upsertRecordingSession(updated, leasedSession)
+
+        updateActiveMeeting(leasedMeeting)
+        updateMeeting(leasedMeeting)
+        startRecordingBackgroundTask(leasedMeeting)
+      }
+      setIsMeetingPaused(false)
+      appendTranscriptActivatedAtRef.current = Date.now()
+    } catch (error) {
+      console.error('[Meetings] Failed to resume recording:', error)
+      activeRecordingSessionRef.current = null
+      audioStreamingEnabledRef.current = false
+      await deepgram.disconnect({ drainFinal: false })
+    } finally {
+      recordingStartInFlightRef.current = false
+      setIsRecordingStartPending(false)
+    }
   }, [
     audioSource,
     createRecordingSession,
+    deepgram,
     meeting,
     resetAudioSessionPersistence,
     startPreferredCapture,
+    startRecordingBackgroundTask,
     updateActiveMeeting,
     updateMeeting,
     upsertRecordingSession,
@@ -1398,10 +2229,10 @@ export default function MeetingsPage() {
     audioStreamingEnabledRef.current = false
     setIsMeetingPaused(false)
     appendTranscriptActivatedAtRef.current = null
-    endRecordingBackgroundTask()
+    endRecordingBackgroundTask(activeMeetingIdRef.current ?? meeting?.id)
 
     await stopActiveCapture({ reason: 'end-meeting' })
-    deepgram.disconnect()
+    await deepgram.disconnect()
 
     // Update meeting in list and keep it selected
     if (meeting) {
@@ -1423,6 +2254,8 @@ export default function MeetingsPage() {
             sessionId,
             savedAudio.audioPath,
             savedAudio.audioMimeType,
+            savedAudio.audioSourceManifestPath,
+            savedAudio.audioSources,
           )
         }
       }
@@ -1436,6 +2269,7 @@ export default function MeetingsPage() {
       activeDurationBaseRef.current = 0
       activeMeetingIdRef.current = null
       activeDetectionSessionKeyRef.current = null
+      activeRecordingRequestIdRef.current = null
       detectedStopInFlightRef.current = false
       setIsAppendingTranscript(false)
 
@@ -1458,6 +2292,53 @@ export default function MeetingsPage() {
     stopActiveCapture,
   ])
 
+  const handleDeleteMeeting = useCallback(
+    async (meetingId: string) => {
+      const deletingActiveMeeting =
+        meeting?.id === meetingId || activeMeetingIdRef.current === meetingId
+
+      if (deletingActiveMeeting) {
+        audioStreamingEnabledRef.current = false
+        setIsMeetingPaused(false)
+        setCurrentInterim(null)
+        appendTranscriptActivatedAtRef.current = null
+        recordingStartInFlightRef.current = false
+        setIsRecordingStartPending(false)
+        endRecordingBackgroundTask(meetingId)
+
+        await stopActiveCapture({ reason: 'delete-meeting' })
+        await deepgram.disconnect({ drainFinal: false })
+        clearMeeting()
+        activeRecordingSessionRef.current = null
+        activeDurationBaseRef.current = 0
+        activeMeetingIdRef.current = null
+        activeDetectionSessionKeyRef.current = null
+        activeRecordingRequestIdRef.current = null
+        detectedStopInFlightRef.current = false
+        setIsAppendingTranscript(false)
+      }
+
+      if (selectedMeeting?.id === meetingId) {
+        closeSelectedMeeting('pop')
+      }
+
+      setEnhancement((current) =>
+        current?.meetingId === meetingId ? null : current,
+      )
+      deleteMeeting(meetingId)
+    },
+    [
+      clearMeeting,
+      closeSelectedMeeting,
+      deepgram,
+      deleteMeeting,
+      endRecordingBackgroundTask,
+      meeting?.id,
+      selectedMeeting?.id,
+      stopActiveCapture,
+    ],
+  )
+
   useEffect(() => {
     function handleMeetingRecordingStop(event: MessageEvent) {
       if (event.data?.type !== 'moldable:meeting-recording-stop') return
@@ -1465,6 +2346,29 @@ export default function MeetingsPage() {
 
       const message = event.data as MeetingRecordingStopMessage
       const sessionKey = cleanString(message.sessionKey)
+      const messageMeetingId = cleanString(message.meetingId)
+      const isSingletonConflict = message.reason === 'singleton-conflict'
+      const targetsActiveMeeting =
+        !messageMeetingId ||
+        messageMeetingId === activeMeetingIdRef.current ||
+        messageMeetingId === meeting.id
+
+      if (
+        isSingletonConflict &&
+        message.source === 'desktop-singleton-guard' &&
+        targetsActiveMeeting
+      ) {
+        detectedStopInFlightRef.current = true
+        void handleEndMeeting().catch((error) => {
+          detectedStopInFlightRef.current = false
+          console.error(
+            '[Meetings] Failed to stop duplicate singleton recording:',
+            error,
+          )
+        })
+        return
+      }
+
       if (!sessionKey || sessionKey !== activeDetectionSessionKeyRef.current) {
         return
       }
@@ -1518,33 +2422,138 @@ export default function MeetingsPage() {
   const isDetailOpen = isViewingPastMeeting || hasActiveMeeting
   const isRecordingSessionActive =
     hasActiveMeeting && (isRecording || !!isPaused)
-  const transcriptionStatus = deepgram.issue
-    ? {
-        tone:
-          deepgram.issue.code === 'deepgram_permissions' ||
-          deepgram.issue.code === 'deepgram_token_unavailable'
-            ? ('danger' as const)
-            : ('warning' as const),
-        message:
-          deepgram.issue.code === 'deepgram_permissions'
-            ? 'Update Deepgram key to enable transcript.'
-            : deepgram.issue.code === 'deepgram_reconnect_exhausted'
-              ? 'Audio is being saved. Transcript paused.'
-              : deepgram.issue.code === 'deepgram_connection_lost'
-                ? 'Audio is being saved. Reconnecting...'
-                : 'Transcript unavailable. Check Deepgram setup.',
+
+  useEffect(() => {
+    if (!isRecordingSessionActive) {
+      setHostRecordingStatus(null)
+      return
+    }
+
+    let cancelled = false
+    const pollHostStatus = async () => {
+      try {
+        const status = await requestHostMeetingRecordingStatus({
+          taskId: recordingBackgroundTaskIdRef.current,
+          recordingRequestId: activeRecordingRequestIdRef.current,
+          detectionSessionKey: activeDetectionSessionKeyRef.current,
+          sessionKey: activeDetectionSessionKeyRef.current,
+        })
+        if (!cancelled) setHostRecordingStatus(status)
+      } catch (error) {
+        if (!cancelled) {
+          console.warn(
+            '[Meetings] Failed to read host recording status:',
+            error,
+          )
+          setHostRecordingStatus(null)
+        }
       }
-    : deepgram.state === 'connecting'
+    }
+
+    void pollHostStatus()
+    const interval = window.setInterval(() => {
+      void pollHostStatus()
+    }, 2_000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [isRecordingSessionActive])
+
+  const nativeStatus = systemAudio.status
+  const nativeCaptureActive =
+    activeCaptureSourceRef.current === 'both' ||
+    activeCaptureSourceRef.current === 'system'
+  const staleNativeSources = nativeCaptureActive
+    ? (['microphone', 'system'] as const).filter(
+        (source) =>
+          systemAudio.sourceHealth[source].required &&
+          systemAudio.sourceHealth[source].stale,
+      )
+    : []
+  const staleNativeSourceLabel = staleNativeSources
+    .map((source) => (source === 'microphone' ? 'microphone' : 'system audio'))
+    .join(' and ')
+  const deepgramQueuedChunks = deepgram.diagnostics.spool.queuedChunks
+  const deepgramDroppedChunks = deepgram.diagnostics.spool.droppedChunks
+  const deepgramReconnectMessage =
+    deepgramQueuedChunks > 0
+      ? `Audio is being saved. Reconnecting transcript (${deepgramQueuedChunks} chunks buffered).`
+      : deepgramDroppedChunks > 0
+        ? `Audio is being saved. Reconnecting transcript (${deepgramDroppedChunks} older chunks dropped).`
+        : 'Audio is being saved. Reconnecting transcript...'
+  const activeHostRecordingStatus =
+    hostRecordingStatus?.active === true ? hostRecordingStatus : null
+  const hostReadinessMessage =
+    activeHostRecordingStatus?.readinessLine ??
+    activeHostRecordingStatus?.statusLine ??
+    null
+  const hostReadinessStatus =
+    activeHostRecordingStatus && hostReadinessMessage
+      ? {
+          tone:
+            hostRecordingStatusTone(activeHostRecordingStatus) ??
+            ('loading' as const),
+          message: hostReadinessMessage,
+        }
+      : null
+  const readinessStatus =
+    hostReadinessStatus ??
+    (nativeCaptureActive && nativeStatus?.actualState === 'restarting'
       ? {
           tone: 'loading' as const,
-          message: 'Connecting transcript...',
+          message:
+            'Audio helper restarting. Recording will resume automatically.',
         }
-      : deepgram.state === 'reconnecting'
+      : nativeCaptureActive && nativeStatus?.actualState === 'error'
         ? {
-            tone: 'loading' as const,
-            message: 'Audio is being saved. Reconnecting...',
+            tone: 'danger' as const,
+            message:
+              nativeStatus.degradedReason ??
+              nativeStatus.lastCrashReason ??
+              'Native audio capture stopped unexpectedly.',
           }
-        : null
+        : nativeCaptureActive && staleNativeSources.length > 0
+          ? {
+              tone: 'warning' as const,
+              message: `${staleNativeSourceLabel} is not producing audio. Still recording available audio.`,
+            }
+          : nativeCaptureActive && nativeStatus?.degradedReason
+            ? {
+                tone: 'warning' as const,
+                message: nativeStatus.degradedReason,
+              }
+            : deepgram.issue
+              ? {
+                  tone:
+                    deepgram.issue.code === 'deepgram_permissions' ||
+                    deepgram.issue.code === 'deepgram_token_unavailable'
+                      ? ('danger' as const)
+                      : ('warning' as const),
+                  message:
+                    deepgram.issue.code === 'deepgram_permissions'
+                      ? 'Update Deepgram key to enable transcript.'
+                      : deepgram.issue.code === 'deepgram_reconnect_exhausted'
+                        ? 'Audio is being saved. Transcript paused.'
+                        : deepgram.issue.code === 'deepgram_connection_lost'
+                          ? deepgramReconnectMessage
+                          : 'Transcript unavailable. Check Deepgram setup.',
+                }
+              : deepgram.state === 'connecting'
+                ? {
+                    tone: 'loading' as const,
+                    message: isRecording
+                      ? 'Recording audio. Connecting transcript...'
+                      : 'Connecting transcript...',
+                  }
+                : deepgram.state === 'reconnecting'
+                  ? {
+                      tone: 'loading' as const,
+                      message: deepgramReconnectMessage,
+                    }
+                  : null)
+  const transcriptionStatus = readinessStatus
 
   return (
     <div className="bg-background flex h-screen flex-col">
@@ -1600,8 +2609,7 @@ export default function MeetingsPage() {
             currentRecordingSessionId={null}
             onBack={() => closeSelectedMeeting('pop')}
             onMoveToTrash={() => {
-              deleteMeeting(selectedMeeting.id)
-              closeSelectedMeeting('pop')
+              void handleDeleteMeeting(selectedMeeting.id)
             }}
             onResumeRecording={() =>
               void handleResumeExistingMeeting(selectedMeeting)
@@ -1645,7 +2653,7 @@ export default function MeetingsPage() {
               void loadCalendarEvents({ requestAccess: true })
             }
             onSelectMeeting={handleSelectMeeting}
-            onDeleteMeeting={deleteMeeting}
+            onDeleteMeeting={(meetingId) => void handleDeleteMeeting(meetingId)}
           />
         ) : (
           <EmptyState onStart={handleStartMeeting} />
@@ -1658,6 +2666,7 @@ export default function MeetingsPage() {
           duration={meeting.duration}
           audioLevel={recordingAudioLevel}
           isEnhancing={Boolean(enhancement?.isEnhancing)}
+          isStarting={isRecordingStartPending}
           transcriptionStatus={transcriptionStatus}
           onStart={handleStartMeeting}
           onPause={handlePause}

@@ -114,6 +114,11 @@ export interface ActionSuggestionsInput {
   force?: boolean
 }
 
+export interface ActionSuggestionsResult {
+  suggestions: MailActionSuggestion[]
+  syncing: boolean
+}
+
 const actionGroupSchema = z.enum([...ACTION_GROUPS] as [
   MailActionGroupId,
   ...MailActionGroupId[],
@@ -1106,8 +1111,10 @@ async function generateUncachedActionSuggestions(
 export async function generateActionSuggestions(
   input: ActionSuggestionsInput,
   workspaceId?: string,
-): Promise<MailActionSuggestion[]> {
-  if (input.messages.length === 0) return []
+): Promise<ActionSuggestionsResult> {
+  if (input.messages.length === 0) {
+    return { suggestions: [], syncing: false }
+  }
 
   const account = input.account ?? null
   const [cache, rules] = await Promise.all([
@@ -1140,17 +1147,17 @@ export async function generateActionSuggestions(
     messagesToGenerate.push(...input.messages)
   }
 
-  if (messagesToGenerate.length > 0) {
+  const writeGeneratedSuggestions = async (
+    messages: MailMessageSummary[],
+  ): Promise<MailActionSuggestion[]> => {
     const generated = await generateUncachedActionSuggestions(
-      { ...input, messages: messagesToGenerate },
+      { ...input, messages },
       workspaceId,
     )
     const generatedAt = new Date().toISOString()
 
     for (const suggestion of generated) {
-      const message = messagesToGenerate.find(
-        (item) => item.id === suggestion.messageId,
-      )
+      const message = messages.find((item) => item.id === suggestion.messageId)
       if (!message) continue
       suggestionsByMessageId.set(message.id, suggestion)
 
@@ -1170,13 +1177,40 @@ export async function generateActionSuggestions(
     }
 
     await writeSuggestionsCache(workspaceId, account, cache)
+    return generated
   }
 
-  return input.messages
-    .map((message) => suggestionsByMessageId.get(message.id))
-    .filter((suggestion): suggestion is MailActionSuggestion =>
-      Boolean(suggestion),
-    )
+  let syncing = false
+
+  if (messagesToGenerate.length > 0) {
+    if (!input.force) {
+      syncing = true
+      void writeGeneratedSuggestions(messagesToGenerate).catch((error) => {
+        console.warn(
+          'Failed to refresh action suggestions in background:',
+          error,
+        )
+      })
+
+      for (const message of messagesToGenerate) {
+        suggestionsByMessageId.set(
+          message.id,
+          needsTriagingSuggestion(message, 'Triage is refreshing.'),
+        )
+      }
+    } else {
+      await writeGeneratedSuggestions(messagesToGenerate)
+    }
+  }
+
+  return {
+    suggestions: input.messages
+      .map((message) => suggestionsByMessageId.get(message.id))
+      .filter((suggestion): suggestion is MailActionSuggestion =>
+        Boolean(suggestion),
+      ),
+    syncing,
+  }
 }
 
 export const __testing = {

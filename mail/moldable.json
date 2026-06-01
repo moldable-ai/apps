@@ -1,7 +1,10 @@
 {
   "name": "Mail",
-  "version": "0.2.4",
-  "aliases": ["email", "inbox"],
+  "version": "0.2.5",
+  "aliases": [
+    "email",
+    "inbox"
+  ],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Fast Gmail client for triage, search, reading, and sending email",
@@ -9,7 +12,12 @@
   "license": "FSL-1.1-ALv2",
   "icon": "✉️",
   "category": "productivity",
-  "tags": ["email", "gmail", "inbox", "productivity"],
+  "tags": [
+    "email",
+    "gmail",
+    "inbox",
+    "productivity"
+  ],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.13",
     "@moldable-ai/storage": "^0.1.5"
@@ -159,7 +167,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -215,7 +225,11 @@
                   "type": "string"
                 }
               },
-              "required": ["title", "body", "groupId"]
+              "required": [
+                "title",
+                "body",
+                "groupId"
+              ]
             }
           },
           {
@@ -232,7 +246,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -331,7 +347,9 @@
                   "type": "string"
                 }
               },
-              "required": ["ids"]
+              "required": [
+                "ids"
+              ]
             }
           }
         ]
@@ -341,6 +359,71 @@
   "env": [],
   "routeName": "mail",
   "iconPath": "public/icon.png",
-  "screenshots": ["public/screenshots/1.png"],
-  "tagline": "A fast, keyboard-driven Gmail client that triages itself"
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
+  "tagline": "A fast, keyboard-driven Gmail client that triages itself",
+  "upstream": {
+    "repo": "moldable-ai/apps",
+    "path": "mail",
+    "installedVersion": "0.2.4",
+    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
+    "installedAt": "2026-06-01T14:46:39.398Z",
+    "fileHashes": {
+      ".gitignore": "d42bc62af442b401d9e53db232c1321613287763b9dda357bb2d5f6f9eceab11",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "c5f5410ae7eb954f4fb8c1db97565918b31c3ef090426b874d4070afb3be5557",
+      "package.json": "7019ddd7d4b9df8a453f517a1a786a597f756334d92e5302fb37984e7f93b27e",
+      "pnpm-lock.yaml": "0a7601368df154559626a9ba0c1a940ce158a3c3a95c1ac80701a8b847dc380c",
+      "PRD-action-suggestions-learning-mode.md": "f5cd34fedf68f0dfca2ca225f3331dd8178f1d523b3ab704580ab244434a22b2",
+      "public/icon.png": "6f38d713224379dbc7d4a3a78c84a30202f47844891216709ac34976dfac5308",
+      "public/screenshots/1.png": "b3c1a064f9baa82602317014ea7c93d3b5e34c54a658d709f77eb72af4ae99c4",
+      "scripts/moldable-dev.mjs": "c31c224d19ca7d7a37242fd340cdbe61eabc2e6528c027aa37755dd60da7193c",
+      "src/client/app.tsx": "4fc2978665f9c25006f1cf20adb912c7b957d84ea229c9dd06d261d01490e9cc",
+      "src/client/components/action-suggestions-panel.tsx": "f31dd5a39a99241b145ef1d0bfe290fb38568e337eadaee7cb7d31bb1791a5df",
+      "src/client/components/composer.tsx": "05f34fb90f7f089f16d1809359d04591a9b051c1a02dd0f911fa67601aa80e2f",
+      "src/client/components/connect-screen.tsx": "7499da4429c5e0638fcb79bbdca9e67ff3a4b4c456641de90008fc662827c899",
+      "src/client/components/email-action-dock.tsx": "87e150779c05e2438d078cb550c1ff911e27bcd2cb29f03dc747501464411373",
+      "src/client/components/email-view.tsx": "1734f6f3b84d4825ac93f61a0aa7ea464384417df99569d62fb857acbacdbad4",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/components/html-email-frame.tsx": "7980f277f9442373b1c1ddd8886c89ceef2bda507107df0baf65141bef3f4425",
+      "src/client/components/inbox-briefing.tsx": "16d9b79724e9aeaab284b2f1436d0f059b74b861643635882cf9ee88b46c4012",
+      "src/client/components/inbox-view.tsx": "da1564414ce08b8e14a1f87c98678a7e3d9d3abbb710c56de6fe321812e8e11f",
+      "src/client/components/snooze-menu.tsx": "9ccb69d6fbda435a6fb7a54b36cde6018389c015735d1201c818c3b96545bd32",
+      "src/client/globals.css": "adb3e5326e1cd1a979cfd4f8606a911e5206245911075babdd6318496fdea0dd",
+      "src/client/hooks/use-briefing.ts": "86c3ef8be14e539ac75b5191b991f44d6675b1bee9a8b0fc21259b4d6721215c",
+      "src/client/hooks/use-mail-keyboard.ts": "b40d9ec6b715f1f73ef2d65401c413fdaa698e7aef93998e5d02b7cc2849beb2",
+      "src/client/hooks/use-mail.ts": "c51f177ea6e031c0f6301ce0afd2102d98e878424e3b3084f68c4921419a28d1",
+      "src/client/lib/calendar-invite.test.ts": "6b8238fe2b29a4041a24c0e7acd196405a5d9ab2b15752fa975f5d0318bcbb47",
+      "src/client/lib/calendar-invite.ts": "c1bad880ab08b99fed0d5403ea83f91b6a47de2c24a321b0f5553b9d3543c2ad",
+      "src/client/lib/folders.ts": "f5c5f2d1b74796224e2b71a379968671d8cd79c2b34c5d8bc8b96e023f4040a2",
+      "src/client/lib/mail-format.ts": "ce95ddf818afc608bee2d066e802a62d990912c580fcfa6f4e5d27f3a7e4b2b0",
+      "src/client/lib/moldable-apps.ts": "0430d4d5cdbddfbe6323e917fb8f20004d42382f965bb0e1c756f102f5d04c3d",
+      "src/client/lib/snooze-options.ts": "60c1d72dd1919b7b43203214707a5fe136666d40494abee2be7447270c69df61",
+      "src/client/main.tsx": "8ff5ab6bc47d04190aaae1c1975f1a17ff1196c070ae2b41d77aeb0492027cf1",
+      "src/client/query-provider.tsx": "ccd981e9d5208c05ad9d4693e4cec53fcc21082fb44fb8d237808f8d3c67d211",
+      "src/client/types.ts": "ffb3c9a577a4db10d6e87cbc22125801a3480bbcfa19ec1a0ee880ba7c486323",
+      "src/server/action-suggestions.test.ts": "62f27c764f790af1a4c731e8c2bd1ce112a858ede514a246ba4632e0f0f788de",
+      "src/server/action-suggestions.ts": "88a6f62fd148a035c52a7430017681618e0c43e01f3a04b7a8d0778a2bd00dc0",
+      "src/server/aivault.ts": "24f74aad339513f08ff3dcb252d3923aac4548819ff33b2028a95b7ae487d999",
+      "src/server/app.ts": "56a4422bdd31304208cae97b918d60376a1afd16c2b404ca588879fce6f2c913",
+      "src/server/briefing.ts": "ccbb42788996762f1243771d9de245dd1aeb86744fa308de035c449fd3e064b5",
+      "src/server/contacts-cache.ts": "6386069b2d893c597feb2d167b57d2c27f2dec4536c5ee6984635801e710fbd1",
+      "src/server/drafts.ts": "4d6e172d9dab1b62f1764b206e470242130d2af43d686552da96a4ac0e8b9b5a",
+      "src/server/gmail-auth.ts": "4fa519aa441035ac25db544fe5fe67b384b29e22fe661ff4e996484627ee50de",
+      "src/server/gmail-service.ts": "8db713e6bd027b6cf3e21637414f806219dab75e92e67d1e083f69630e008e9f",
+      "src/server/index.test.ts": "196d2a7c2b50b87867b124407c92ebd78e4225c375c9c3cea75922d965f0e73d",
+      "src/server/index.ts": "422232c215ff60e26ca0f83274fcbffab1092e06e48accbefd1d4b9b7d855c05",
+      "src/server/llm.ts": "182b26f82d581a8792a2d93f3df1798dc51278ee631a2075ba51589e99d92114",
+      "src/server/message-cache.ts": "b673533083b7360de55b6d50c1aae7b26bc9e1cd9bdbcaa9abbfd67427c3f62d",
+      "src/server/moldable.ts": "f179b7d35085847121900894ce0c310310230db614828eb537ac652229f6237b",
+      "src/server/search-query.ts": "295b5f9899d491bdcc5f97802bd64aa61dcda03caea99e5a73e277913f104c64",
+      "src/server/snooze.ts": "32f14f050f72978f7c76ae72655da94894b4653b066f4f3f26b22fc6e988931f",
+      "src/server/static.ts": "3f0ab10616534534b6a92651d8659a4556d50c57d425f119677126af4aa54626",
+      "STORE.md": "795c0dfac300de4f6e9b8cf72871f52dd89d33522c0e98f029ea7ac7b9ded696",
+      "tsconfig.json": "2c2086735a1494ec9219070ed35e32706ca3c9b88c25d484f4fd37f5600a4b7a",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
+    }
+  },
+  "modified": false
 }

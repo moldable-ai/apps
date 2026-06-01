@@ -1,7 +1,10 @@
 {
   "name": "Code",
-  "version": "0.1.4",
-  "aliases": ["editor", "ide"],
+  "version": "0.1.5",
+  "aliases": [
+    "editor",
+    "ide"
+  ],
   "visibility": "public",
   "description": "A lightweight, VS Code-like IDE for exploring and editing local codebases with integrated AI context and browser preview.",
   "runtime": "vite_hono",
@@ -96,7 +99,9 @@
                   "type": "boolean"
                 }
               },
-              "required": ["path"]
+              "required": [
+                "path"
+              ]
             }
           },
           {
@@ -115,7 +120,9 @@
                   "maximum": 100000
                 }
               },
-              "required": ["path"]
+              "required": [
+                "path"
+              ]
             }
           }
         ]
@@ -124,6 +131,68 @@
   },
   "env": [],
   "routeName": "code-editor",
-  "screenshots": ["public/screenshots/1.png"],
-  "tagline": "A VS Code-style IDE with live preview, built in"
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
+  "tagline": "A VS Code-style IDE with live preview, built in",
+  "upstream": {
+    "repo": "moldable-ai/apps",
+    "path": "code-editor",
+    "installedVersion": "0.1.4",
+    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
+    "installedAt": "2026-06-01T14:46:22.865Z",
+    "fileHashes": {
+      ".gitignore": "a552cd01b17606c22d31ff4fd57f127a8e6e0f9e16e77ac3b689d2e964acadc9",
+      "components.json": "909291a1890e5d3b34d4e1b5bb36c13a24d4e23861de60c212449a5dceb2eb71",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "af341624a814d9711f67225c9a77520716df2772e5410c4b1094c61dee6091e0",
+      "package.json": "4e4b64b9ec50a606c0ad4779558e215901630103473664906623b97b092b9a26",
+      "pnpm-lock.yaml": "a1466ae08c8acaf399a0ffdae7ee88ffc46080486156825f11f3e8f9571761cb",
+      "public/icon.png": "24c690b068f7e1af560eef26cf00889b1509e407f03c8a0ec7d84ecd25ac2654",
+      "public/screenshots/1.png": "d962642c5a8db7bb89b90f007beb079355275c94ec050075b6799aa5d00537eb",
+      "scripts/moldable-dev.mjs": "eec16a338d5cd856a35f93620d79f162bf0380301f53e011c6d3dd7399f43db7",
+      "src/client/app.tsx": "0be5c759c5077948b9161a5cf5addb1ab68fa9c622c9d9c71df59870afad6e4f",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/globals.css": "d9df7d6581221f54351fb83765f86c06bf59e20a72be7e5204759d124f9c5a94",
+      "src/client/main.tsx": "816f4631c5564eb153b2c1ac250721fe6db2536ab9117c3d98437832a1282da6",
+      "src/components/browser/browser-panel.tsx": "2eff110334de39846fb1036d808b6a9484be73487246fd33bd03f4dfcca5d829",
+      "src/components/browser/index.ts": "6b71020a2bc66bb5c246177bc8d1efe47a3e04f7d7e7ef10c02f14abdc667361",
+      "src/components/command-palette/command-palette.tsx": "0a092e3e6fc68c1f86a8d46fb0654d7a34347097bbd5f2bc3dbd21583eafe3cf",
+      "src/components/command-palette/index.ts": "de5acc0575a7243c70137a97e4b789d9ecdd9da0d1725fa92497ddf6f7718655",
+      "src/components/editor/editor-empty.tsx": "5fb33960196ce493edbf481afb3bf06d4a4be71d308d9711c284c0d40519226b",
+      "src/components/editor/editor-panel.tsx": "4a492bd2ea9615e5481f789d68f9feab084bea691c362c6bcdc793e5ed618d66",
+      "src/components/editor/editor-tabs.tsx": "ce958d4836f516a21d7a4521edbe8f5afc12687f5abc0c649fd16826f0b671a1",
+      "src/components/editor/image-preview.tsx": "37a60b2003579100cc8219b33d2293cdd8a8f5ddb68470f65c0472a1a963f3ee",
+      "src/components/editor/index.ts": "02ec40e64fbae0d67903b853b4412c352c194b6f356ba1de148aec995ce44c8e",
+      "src/components/editor/monaco-editor.tsx": "1cbaa3163c470bcaae4d8b03857e64c8390fdc19a6226ba846b9e648093d0d2d",
+      "src/components/empty-state.tsx": "c76b28042f7985b5fb99d63bd3b69a13878537a08e112cca383bbc321dc6aaeb",
+      "src/components/file-tree/file-icon.tsx": "a22838bb51d6905600ab8460f10ec5a87101bbffb9f38c84557950572f838c5e",
+      "src/components/file-tree/file-tree-item.tsx": "e975690e806f42392256959d266b14461dafe45a0bf2880f133cbe9ef732fac8",
+      "src/components/file-tree/file-tree.tsx": "1fe117ed2fdaf9ae31ad772a45bc7cb7241394b3ed486cfc8000774d9536d6c9",
+      "src/components/file-tree/index.ts": "d1e1c7aafc317d07598c72812bf74b0e10db14658300c266f7ee50987d122ef0",
+      "src/components/layout/header.tsx": "dc047429893e1b4300f4c0a8665879f74a6da3df3ca23a10f371e7b221a15dae",
+      "src/components/layout/ide-layout.tsx": "8d76413aa8eed70a13257133ecb5e0a91c5a86c21aef1dbc3827a52a9dca2c09",
+      "src/components/layout/index.ts": "049c2c975f550137e273f4b9ea2967f3694bc382de9c9f21fe6c7ef556dc5f21",
+      "src/components/layout/resizable-panels.tsx": "c9156f13b3e32cfe0b63e3cd57f4f0974b8f859446d95522fdc63c9da4d6a030",
+      "src/components/layout/sidebar-header.tsx": "306f155c331471140709155c8c848537ecfa0983df8ced7861b82cb0a4a0e791",
+      "src/components/project/index.ts": "f91a0d5d8a8ec13c04b30278a700e52b7b803a8683ea1c2ddbddbf0e127fdc3b",
+      "src/components/project/project-selector.tsx": "8904ddda3562faf6a16841f96326fca5a3bd1c601c1f4bbc6c3ea56da3c54145",
+      "src/components/project/recent-projects.tsx": "cbde662e7b5af1b38811703c57044260bd49ad0de9e6d2fc817614781060d3b3",
+      "src/components/ui/context-menu.tsx": "3312525e9de4b3df5bb6a332881d4a977fb6cb822513b562ecfbd5a0ca07dd50",
+      "src/hooks/index.ts": "a57efc09860436398e8845ba35b279229d9c2d70b484c6347ebfcaf421af8bda",
+      "src/hooks/use-editor-state.ts": "92e8bd9ee396520ce488ef156e23b42d3d442634318d0ccbedc203a9f2326ad6",
+      "src/hooks/use-file-search.ts": "3092f41c1ea38578b1a84bf5fe98e67fab084e265e7f854890d1ef84c6fa53ba",
+      "src/hooks/use-project.ts": "10350baa1d8110bc5f9aa5c523e34143eb28720078a3b8818f3062fafd1b026b",
+      "src/lib/constants.ts": "7aedee24a5158792b50d7b967013936e85c31ab6aa4798f08eaa13b21e65a9c8",
+      "src/lib/file-utils.ts": "f36c8af7cd793cdad95e02c1d4b1ccaba6c36a272e2be14793d4388b53cce9e4",
+      "src/lib/monaco-model-manager.ts": "679dd7d27c2ca032101a843edf9d0ab636a33e7936ad5a8512a9f5c7769a2ef7",
+      "src/lib/query-provider.tsx": "a509db46203df4fbf2e5435f43d49881a330f1cdb95851170362c19e461aece6",
+      "src/server/app.ts": "b248b65b41111f22ed9a2c786caa55b20ad64d78eec76a4bc39d94cfa525e6f5",
+      "src/server/index.ts": "191a7f44271d8a7e4deab08cfebfc9e8667ed575d6b20481f8060a65f76a5291",
+      "STORE.md": "64dedd88275867db8efe3137d15e2f316aefa5144d4dea8b983dd72437634ab6",
+      "tsconfig.json": "bf42036d631d553634cf1435e214edb5e9f1fe74336529ede77b7359abdf49b0",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
+    }
+  },
+  "modified": false
 }

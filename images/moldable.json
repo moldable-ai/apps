@@ -1,7 +1,11 @@
 {
   "name": "Images",
-  "version": "0.1.2",
-  "aliases": ["image generation", "pictures", "art"],
+  "version": "0.1.3",
+  "aliases": [
+    "image generation",
+    "pictures",
+    "art"
+  ],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Generate and iterate images with GPT Image 2",
@@ -10,7 +14,12 @@
   "icon": "🖼️",
   "iconPath": "public/icon.png",
   "category": "graphics-design",
-  "tags": ["images", "generation", "openai", "gpt-image-2"],
+  "tags": [
+    "images",
+    "generation",
+    "openai",
+    "gpt-image-2"
+  ],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.13",
     "@moldable-ai/storage": "^0.1.5"
@@ -49,7 +58,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -74,10 +85,17 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 }
               },
-              "required": ["prompt"]
+              "required": [
+                "prompt"
+              ]
             }
           },
           {
@@ -92,10 +110,17 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -113,7 +138,9 @@
                   "description": "When true or omitted, delete a pending generation thread that has no completed iterations. When false, keep it as failed."
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -127,7 +154,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -149,7 +178,10 @@
                   "description": "Array of iteration IDs to delete from the thread."
                 }
               },
-              "required": ["id", "iterationId"]
+              "required": [
+                "id",
+                "iterationId"
+              ]
             }
           },
           {
@@ -180,10 +212,18 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 }
               },
-              "required": ["id", "prompt"]
+              "required": [
+                "id",
+                "prompt"
+              ]
             }
           },
           {
@@ -214,10 +254,18 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 }
               },
-              "required": ["id", "prompt"]
+              "required": [
+                "id",
+                "prompt"
+              ]
             }
           },
           {
@@ -253,10 +301,17 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 }
               },
-              "required": ["imagePath"]
+              "required": [
+                "imagePath"
+              ]
             }
           },
           {
@@ -280,7 +335,10 @@
                   ]
                 }
               },
-              "required": ["id", "aspectRatio"]
+              "required": [
+                "id",
+                "aspectRatio"
+              ]
             }
           },
           {
@@ -298,7 +356,9 @@
                   "description": "Existing iteration id to process. Omit to process the thread's displayed image."
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           }
         ]
@@ -313,7 +373,9 @@
       "description": "Fallback for GPT Image 2 generation and image edits when Codex CLI auth is unavailable.",
       "url": "https://platform.openai.com/api-keys",
       "required": true,
-      "capabilities": ["openai/image-generation"]
+      "capabilities": [
+        "openai/image-generation"
+      ]
     },
     {
       "key": "REMOVE_BG_API_KEY",
@@ -321,9 +383,42 @@
       "description": "Optional. Enables one-click background removal for the current image.",
       "url": "https://www.remove.bg/api",
       "required": false,
-      "capabilities": ["remove-bg/background-removal"]
+      "capabilities": [
+        "remove-bg/background-removal"
+      ]
     }
   ],
   "routeName": "images",
-  "tagline": "Generate, edit, and branch images with GPT Image 2"
+  "tagline": "Generate, edit, and branch images with GPT Image 2",
+  "upstream": {
+    "repo": "moldable-ai/apps",
+    "path": "images",
+    "installedVersion": "0.1.2",
+    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
+    "installedAt": "2026-06-01T14:46:35.968Z",
+    "fileHashes": {
+      ".gitignore": "d42bc62af442b401d9e53db232c1321613287763b9dda357bb2d5f6f9eceab11",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "b8653dcb3f11264946d7a59ec05f737495a3a245a25a36c29fcb911542da8262",
+      "package.json": "37ac7ce185816e396a1dd15e934d018dea7bd7993d7cff5d24dcf0f8c1e38765",
+      "pnpm-lock.yaml": "d1046ff447ad5cbafd98c8d6f9d9569e3efa1161b202ed15ac786b28dc9643bf",
+      "public/icon.png": "232557d9022e810f2a15e6c8726529946b64b5020dd2b74a8062a4f206840e77",
+      "scripts/moldable-dev.mjs": "92d4138ccf11018af5e83577ca898aa2f81ed5385f761ea18eb2815fc0740e09",
+      "src/client/app.tsx": "8febfa0afda0ee062276618b8b4382bc0947918a4cecc581f87b9a01d69cd9be",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/components/zoomable-image.tsx": "64917d3a01be817fb6125d19f7b610b625e0d03308ad9c4e3a1036a6562bd8bb",
+      "src/client/globals.css": "d39c07774020d3f9f3a698f5bcd03ef03bd8724f0448653c3d73c0b5246097d1",
+      "src/client/main.tsx": "8e97a1d6a687633f96cb050610b05cdc469d39a1558e6e7c819c23bca039b2f3",
+      "src/client/query-provider.tsx": "ccd981e9d5208c05ad9d4693e4cec53fcc21082fb44fb8d237808f8d3c67d211",
+      "src/server/app.ts": "24c672a28e6a62ea2a029e7e0dc631f31f1d1dc09f0558b10282a227f6af622a",
+      "src/server/index.test.ts": "196d2a7c2b50b87867b124407c92ebd78e4225c375c9c3cea75922d965f0e73d",
+      "src/server/index.ts": "6b877c31e22f01de70d574ac003a9387ff429283c93e8dc0bc4bb3b905cbb3ee",
+      "src/server/moldable.ts": "df03e1623c1bbb702c87b5ba55f9a40819ace359e8c546febb713f5532ec774f",
+      "src/server/static.ts": "3f0ab10616534534b6a92651d8659a4556d50c57d425f119677126af4aa54626",
+      "STORE.md": "0adcd2a38e40e1051f1310a3464d46e951f3c9400a82b318f6f5d2bc250f1040",
+      "tsconfig.json": "2c2086735a1494ec9219070ed35e32706ca3c9b88c25d484f4fd37f5600a4b7a",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
+    }
+  },
+  "modified": false
 }

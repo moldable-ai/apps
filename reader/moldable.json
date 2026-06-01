@@ -1,0 +1,120 @@
+{
+  "name": "Reader",
+  "version": "0.1.1",
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "A local-first ebook reader. Open EPUB and text files, organize a library into folders, read with fully configurable typography and themes, or speed-read with an RSVP word-by-word mode.",
+  "author": "Moldable",
+  "license": "FSL-1.1-ALv2",
+  "icon": "📖",
+  "iconPath": "public/icon.png",
+  "category": "reference",
+  "tags": [
+    "reading",
+    "books",
+    "epub",
+    "library"
+  ],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.13",
+    "@moldable-ai/storage": "^0.1.5"
+  },
+  "env": [],
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "reader.library",
+        "name": "Reader library",
+        "description": "Read and import books in the Reader library for the active workspace.",
+        "scopes": [
+          {
+            "id": "books.list",
+            "name": "List books",
+            "description": "List books in the library with summary metadata.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          {
+            "id": "books.import",
+            "name": "Import a book",
+            "description": "Import a local .epub or .txt file into the library.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "filePath": {
+                  "type": "string",
+                  "description": "Absolute local path to an existing .epub or .txt file."
+                },
+                "folderName": {
+                  "type": "string",
+                  "description": "Optional existing folder name to place the imported book in."
+                },
+                "createFolder": {
+                  "type": "boolean",
+                  "description": "Create folderName if it does not already exist. Defaults to false."
+                }
+              },
+              "required": [
+                "filePath"
+              ]
+            }
+          },
+          {
+            "id": "folders.list",
+            "name": "List folders",
+            "description": "List library folders and their book IDs.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          {
+            "id": "store.search",
+            "name": "Search the book store",
+            "description": "Search direct-download public ebook catalogs for books to install.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "query": {
+                  "type": "string",
+                  "description": "Title or author to search for."
+                },
+                "page": {
+                  "type": "number",
+                  "description": "Zero-based page index."
+                }
+              },
+              "required": [
+                "query"
+              ]
+            }
+          },
+          {
+            "id": "store.install",
+            "name": "Install a book from the store",
+            "description": "Download, verify, and install a direct-download EPUB into the library.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": [
+                    "string",
+                    "number"
+                  ],
+                  "description": "Store install key returned by store.search, such as gutenberg:84 or open-library:identifier. Numeric Gutenberg ids are still accepted."
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "tagline": "Read EPUBs your way, or speed-read them"
+}

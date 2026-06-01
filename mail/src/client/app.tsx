@@ -52,6 +52,7 @@ import {
   useMailMessage,
   useMailMessages,
   useMailStatus,
+  useMailThread,
   useMessageAction,
   useRecordActionSuggestionSignal,
   useRetriageActionSuggestions,
@@ -83,6 +84,52 @@ import type {
 
 const DRAFT_FOLDER_ID = 'DRAFTS'
 const READER_CLOSE_ANIMATION_MS = 110
+
+function collapseMessagesIntoThreads(messages: MailMessageSummary[]) {
+  const groups = new Map<string, MailMessageSummary[]>()
+  for (const message of messages) {
+    const key = message.threadId || message.id
+    const group = groups.get(key)
+    if (group) {
+      group.push(message)
+    } else {
+      groups.set(key, [message])
+    }
+  }
+
+  return [...groups.values()]
+    .map((group) => {
+      if (group.length === 1) return group[0]!
+
+      const latest = [...group].sort(
+        (a, b) => b.internalDate - a.internalDate,
+      )[0]!
+      const labelIds = new Set<string>()
+      const participants: string[] = []
+      const seenParticipants = new Set<string>()
+
+      for (const message of group) {
+        for (const labelId of message.labelIds) labelIds.add(labelId)
+        const participant = senderName(message.from)
+        if (participant && !seenParticipants.has(participant)) {
+          seenParticipants.add(participant)
+          participants.push(participant)
+        }
+      }
+
+      return {
+        ...latest,
+        labelIds: [...labelIds],
+        unread: group.some((message) => message.unread),
+        starred: group.some((message) => message.starred),
+        important: group.some((message) => message.important),
+        threadMessageCount: group.length,
+        threadUnreadCount: group.filter((message) => message.unread).length,
+        threadParticipants: participants,
+      }
+    })
+    .sort((a, b) => b.internalDate - a.internalDate)
+}
 
 function currentHistoryState() {
   return window.history.state && typeof window.history.state === 'object'
@@ -342,7 +389,7 @@ export function App() {
     [drafts],
   )
   const inboxMessages = useMemo(
-    () => messagesQuery.data?.messages ?? [],
+    () => collapseMessagesIntoThreads(messagesQuery.data?.messages ?? []),
     [messagesQuery.data?.messages],
   )
   const messages = useMemo(
@@ -364,7 +411,6 @@ export function App() {
       : undefined
   const readerOpen = Boolean(selectedId && selectedMessage)
   const bulkSelectionActive = selectedBulkIds.size > 0
-
   useEffect(() => {
     selectedIdRef.current = selectedId
   }, [selectedId])
@@ -375,6 +421,11 @@ export function App() {
 
   const messageQuery = useMailMessage({
     selectedId,
+    enabled: statusQuery.data?.authenticated === true,
+  })
+  const threadQuery = useMailThread({
+    threadId:
+      selectedMessage && !showingDrafts ? selectedMessage.threadId : null,
     enabled: statusQuery.data?.authenticated === true,
   })
   const contactsQuery = useMailContacts({
@@ -881,6 +932,10 @@ export function App() {
       0,
     [inboxUnreadQuery.data],
   )
+  const triageResponse = actionSuggestionsQuery.data
+  const triageLoading =
+    (actionSuggestionsQuery.isLoading && !actionSuggestionsQuery.data) ||
+    retriageActionSuggestions.isPending
   const {
     fetchNextPage: fetchNextMessagesPage,
     hasNextPage: hasNextMessagesPage,
@@ -1211,8 +1266,9 @@ export function App() {
       {readerOpen ? (
         <EmailView
           message={messageQuery.data}
+          thread={threadQuery.data}
           fallback={selectedMessage}
-          loading={messageQuery.isLoading}
+          loading={messageQuery.isLoading || threadQuery.isLoading}
           folderId={folderId}
           canGoPrevious={Boolean(previousMessage)}
           canGoNext={Boolean(nextMessage)}
@@ -1255,7 +1311,7 @@ export function App() {
             query={query}
             searchInput={searchInput}
             unreadCount={unreadCount}
-            triagedCount={actionSuggestionsQuery.data?.suggestions.length ?? 0}
+            triagedCount={triageResponse?.suggestions.length ?? 0}
             draftCount={drafts.length}
             snoozedCount={snoozedCount}
             refreshing={
@@ -1332,11 +1388,8 @@ export function App() {
                   <ActionSuggestionsPanel
                     messages={messages}
                     labels={labelsQuery.data ?? []}
-                    response={actionSuggestionsQuery.data}
-                    loading={
-                      actionSuggestionsQuery.isLoading ||
-                      retriageActionSuggestions.isPending
-                    }
+                    response={triageResponse}
+                    loading={triageLoading}
                     error={actionSuggestionsQuery.error}
                     onRefresh={() => void refreshActionSuggestions()}
                     onRetriage={retriageSuggestions}

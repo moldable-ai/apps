@@ -1,0 +1,81 @@
+import type { RawTutorial } from '../../tutorial-builder'
+
+export const twoKeysTwoShapesTutorial: RawTutorial = {
+  id: 'tutorial-two-keys-two-shapes',
+  title: 'Two Keys on the Neck',
+  bpm: 60,
+  beatsPerBar: 4,
+  phrase: [
+    // C major: C3 D3 E3 F3 G3 A3 B3 C4
+    ['C3', 0.0, 0.5],
+    ['D3', 0.5, 0.5],
+    ['E3', 1.0, 0.5],
+    ['F3', 1.5, 0.5],
+    ['G3', 2.0, 0.5],
+    ['A3', 2.5, 0.5],
+    ['B3', 3.0, 0.5],
+    ['C4', 3.5, 1.0],
+    ['B3', 5.0, 0.5],
+    ['A3', 5.5, 0.5],
+    ['G3', 6.0, 0.5],
+    ['F3', 6.5, 0.5],
+    ['E3', 7.0, 0.5],
+    ['D3', 7.5, 0.5],
+    ['C3', 8.0, 1.5],
+    // G major: G2 A2 B2 C3 D3 E3 F#3 G3
+    ['G2', 10.0, 0.5],
+    ['A2', 10.5, 0.5],
+    ['B2', 11.0, 0.5],
+    ['C3', 11.5, 0.5],
+    ['D3', 12.0, 0.5],
+    ['E3', 12.5, 0.5],
+    ['F#3', 13.0, 0.5],
+    ['G3', 13.5, 1.0],
+    ['F#3', 15.0, 0.5],
+    ['E3', 15.5, 0.5],
+    ['D3', 16.0, 0.5],
+    ['C3', 16.5, 0.5],
+    ['B2', 17.0, 0.5],
+    ['A2', 17.5, 0.5],
+    ['G2', 18.0, 1.5],
+  ],
+  tutorial: {
+    title: 'Two Keys on the Neck',
+    summary:
+      'C major and G major sit right next to each other on the fretboard and differ by exactly one note. C uses F natural while G uses F#. Play both scales back to back and your ear hooks onto that single fret of difference. This is the heart of key signatures: each step around the keys raises or lowers one note.',
+    level: 'Intermediate',
+    objectives: [
+      'Play the C major scale ascending and descending',
+      'Play the G major scale ascending and descending',
+      'Identify the single different note: F vs F#',
+      'Hear how one note defines a key',
+    ],
+    sections: [
+      {
+        id: 'c-major',
+        title: 'C Major (all naturals)',
+        start: 0,
+        end: 10,
+        focus: 'The white-key scale, no sharps',
+        learn: [
+          'C major is C D E F G A B C with no sharps at all.',
+          'Note the F natural on the way up; remember its fret.',
+        ],
+        tryThis: ['Say the note names aloud as you play.'],
+      },
+      {
+        id: 'g-major',
+        title: 'G Major (one sharp)',
+        start: 10,
+        end: 20,
+        focus: 'Raising the 7th to F#',
+        learn: [
+          'G major is G A B C D E F# G; only F is raised to F#.',
+          'That single sharp is the entire difference between the keys.',
+        ],
+        breakIt: ['Play F natural in G major: it sounds unfinished.'],
+        reinforce: ['One note changed and the whole key changed with it.'],
+      },
+    ],
+  },
+}

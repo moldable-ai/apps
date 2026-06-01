@@ -1,7 +1,10 @@
 {
   "name": "Scribo Languages",
-  "version": "0.1.5",
-  "aliases": ["translation", "languages"],
+  "version": "0.1.6",
+  "aliases": [
+    "translation",
+    "languages"
+  ],
   "visibility": "public",
   "description": "Language learning journal with AI-powered translations",
   "runtime": "vite_hono",
@@ -11,7 +14,12 @@
   "icon": "📓",
   "iconPath": "public/icon.png",
   "category": "education",
-  "tags": ["languages", "translation", "learning", "journal"],
+  "tags": [
+    "languages",
+    "translation",
+    "learning",
+    "journal"
+  ],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.13",
     "@moldable-ai/editor": "^0.1.12",
@@ -84,7 +92,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -138,7 +148,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -152,7 +164,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -172,11 +186,18 @@
                   "type": "string"
                 },
                 "cache": {
-                  "type": ["object", "null"],
+                  "type": [
+                    "object",
+                    "null"
+                  ],
                   "description": "Optional Scribo translation cache."
                 }
               },
-              "required": ["markdown", "from", "to"]
+              "required": [
+                "markdown",
+                "from",
+                "to"
+              ]
             }
           }
         ]
@@ -191,7 +212,9 @@
       "description": "Powers automatic translations between languages",
       "url": "https://www.deepl.com/en/your-account/keys",
       "required": true,
-      "capabilities": ["deepl/translate"]
+      "capabilities": [
+        "deepl/translate"
+      ]
     },
     {
       "key": "ELEVENLABS_API_KEY",
@@ -199,18 +222,61 @@
       "description": "Powers text-to-speech pronunciation playback",
       "url": "https://elevenlabs.io/app/settings/api-keys",
       "required": false,
-      "capabilities": ["elevenlabs/text-to-speech"]
+      "capabilities": [
+        "elevenlabs/text-to-speech"
+      ]
     }
   ],
   "upstream": {
     "repo": "moldable-ai/apps",
     "path": "scribo",
-    "installedVersion": "0.1.0",
-    "installedCommit": "79c470e37f19631020babbc35646d6ef4eb515fa",
-    "installedAt": "2026-01-15T03:56:56Z"
+    "installedVersion": "0.1.5",
+    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
+    "installedAt": "2026-06-01T14:47:04.897Z",
+    "fileHashes": {
+      ".gitignore": "67c999fea403a8b80950fcafe4c711c758dcfe7dcd977048f6ce2b0733c2ef85",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "9ec3f4b2cd7c6879026bec04e8cf1ed3ce209ebb118ca194d328d6f9903f9b0a",
+      "package.json": "2b86030f918bc839839f68ff55b63cfa90bc47917c8fc0b79671090a8edfe737",
+      "pnpm-lock.yaml": "d4ce700295959524495ba6f874f916a1ef55e01bd00ef57db81622f5fd5f4620",
+      "public/icon.png": "58441442582dbbb185dab4285fb7ce92c2bcaaeb4825c3a125101eda903afdcd",
+      "public/screenshots/1.png": "fc9dfb47a44a3f2dff080dd67d997581352fb39c3e7b04ec76acd8133a4b4c4f",
+      "README.md": "251a3ae5f8904a44fce27b9db3f351c2718842c3eb80e953741db33a8b733ced",
+      "scripts/moldable-dev.mjs": "3c8876a1f3f09de4095c0ce95860f4ceca67672e7e38090fbfcfc65ba1b3a41d",
+      "src/client/app.tsx": "50fa43db36b8a78c14eb53ec04e57d3cb85f276770ccf46248396e0dbc3154f5",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/globals.css": "24c564e33a8fa0c5a5898716989ff15a55e20d100b12b4ff983b0f387ee94421",
+      "src/client/main.tsx": "99dc1ae56da3600affb66ef06750d9c33ae6348f5ba3db35e6d8c8f0f231f1a6",
+      "src/components/empty-state.tsx": "efeb6306f0a5a959c408b8091b57d3f59ec7df578a971c2f2f0a52ebef4ccd70",
+      "src/components/language-picker.tsx": "62a82fc33e5ce98248083d35442004ff959c414c09a986cd566354be0e5bfbb0",
+      "src/components/translation-view.tsx": "8fc5bd730befc68a8cf72a9dd4cb78dcec7e3e7aee0b1a48bf52a53cd63f35e1",
+      "src/hooks/use-debounce.ts": "342751d565ae063be98dd41a11a635502b73b7c6fab17c8a500b81782deb42fb",
+      "src/hooks/use-elevenlabs-tts.ts": "d28adc30cfa742a7ca812759081ccc1e21af3686f1afaca2051fa4e0643bd87f",
+      "src/hooks/use-entries.ts": "45905cf35413051c59fce13b6dfabae6b716274a9e732d55b67996a85a769b5c",
+      "src/lib/aivault.ts": "0a91ac93f98abc6ce47cf103df340a6dc6856930a8b52cda365b9245a0345d02",
+      "src/lib/dictionary.ts": "f25d374246f621ee3744af623b33da92e2148ea234f64efe68281840596b2135",
+      "src/lib/headless-editor.ts": "3663dd721cf0e08ba4370a103e6b00777e0ec6a20dcb9d46609cb9fea953edb5",
+      "src/lib/languages.ts": "4c8cf5e491dbe86282756abf154fd7523385d7fd0ff6497756c0f0d989a1aaf3",
+      "src/lib/lexical-translation.test.ts": "7dce90930e66601216014101c1df9a6d350771ab79e75f87624d3e202235d831",
+      "src/lib/lexical-translation.ts": "a912515cfb8385c2116a6a477c3a3f7e388cbd2fbc0e8160fe3891feb3bc6d90",
+      "src/lib/query-provider.tsx": "65c7b47e005462e1cd8d2ba4a3c9b2ca100aa1513df20f928bfe741b54ad1c11",
+      "src/lib/translate.ts": "b2166b8d9653eebf6f7291039a81b56f1a3955a97c88cd2b704efc78e2120140",
+      "src/lib/translation-service.test.ts": "9b7a529d0d69b0ffa47ab6c26fa35f9a084e329fef807523f724fbd3a77c88bf",
+      "src/lib/translation-service.ts": "f306b60edcc1068d034eab365227ba4fd445b498d04750268631f2be952b5046",
+      "src/lib/tts/voice-ids.ts": "498e74bea3aa514ec65df7660e17f58eaf7b66c007b1d3e16275a60058a512d5",
+      "src/lib/types.ts": "35fc180b8b26952cea07df7dc8eade59f413dfe72e3b30a1394ab82eabf84e08",
+      "src/server/app.ts": "7f8115cca451917c2907aa4708df95dd4e92f33610198e8ab3b02a81a5f08f52",
+      "src/server/index.ts": "19f3e35472665b5c7cfb2e4fedaf47a07f241ce60ac10f18f2da29697d36eb04",
+      "STORE.md": "cb3e544b5d019724e5f8828f0d39b6a901894d2eeedee0a005e56883c0c05cab",
+      "tsconfig.json": "1b143b656ced29e1ccb3aa76a2a158a31e831cb219cd4781ef988fef6911685b",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6",
+      "vitest.config.ts": "bf46d301da03d20688992d2fb8024c52aa803dd0767a1a9c8c0fb882b8fa787e"
+    }
   },
   "modified": false,
   "routeName": "scribo",
-  "screenshots": ["public/screenshots/1.png"],
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
   "tagline": "Write in any language, translate and learn as you go"
 }

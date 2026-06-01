@@ -1,7 +1,10 @@
 {
   "name": "Time Tracker",
-  "version": "0.1.4",
-  "aliases": ["timer", "timesheet"],
+  "version": "0.1.5",
+  "aliases": [
+    "timer",
+    "timesheet"
+  ],
   "visibility": "public",
   "description": "Track time for work projects with weekly views and export",
   "runtime": "vite_hono",
@@ -58,7 +61,9 @@
                   "type": "string"
                 }
               },
-              "required": ["name"]
+              "required": [
+                "name"
+              ]
             }
           },
           {
@@ -81,7 +86,9 @@
                   "type": "boolean"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -139,7 +146,10 @@
                   "description": "Duration in seconds."
                 }
               },
-              "required": ["projectId", "startTime"]
+              "required": [
+                "projectId",
+                "startTime"
+              ]
             }
           },
           {
@@ -168,7 +178,9 @@
                   "type": "number"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -182,7 +194,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -204,7 +218,9 @@
                   "type": "string"
                 }
               },
-              "required": ["projectId"]
+              "required": [
+                "projectId"
+              ]
             }
           },
           {
@@ -255,6 +271,46 @@
   },
   "env": [],
   "routeName": "time-tracker",
-  "screenshots": ["public/screenshots/1.png"],
-  "tagline": "One-click time tracking with weekly views and export"
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
+  "tagline": "One-click time tracking with weekly views and export",
+  "upstream": {
+    "repo": "moldable-ai/apps",
+    "path": "time-tracker",
+    "installedVersion": "0.1.4",
+    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
+    "installedAt": "2026-06-01T14:47:13.147Z",
+    "fileHashes": {
+      ".gitignore": "a552cd01b17606c22d31ff4fd57f127a8e6e0f9e16e77ac3b689d2e964acadc9",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "a59c1ec9b3d62f74a390c1b183243363e9dd43eb224573dc9e6a866dc39528f3",
+      "package.json": "09c799b2f6e53fed47959b70c4ab1f4c2a149a97475a4d23e12c22dbfb07fd90",
+      "pnpm-lock.yaml": "69d394017dcb16e6ef52831bb76d90363163f47168cf251b7feb2d5ca30c1cf9",
+      "public/icon.png": "3dda8d71870acb137beabb2401636a390b99c0bc9745387d0a338fb80a28b0a7",
+      "public/screenshots/1.png": "0adf5652054f073a7bf4f3b2f6d6774db6cf37b47a03494a6e61d1539726a41c",
+      "scripts/moldable-dev.mjs": "9a84afd96c135c1def88ab231abe7dca48bfd6b2d9929223af7edc4c688c771a",
+      "src/client/app.tsx": "9e5e6bba61bc43873767c34ecbb714fd9ff3ea771ff5979672a038715eac0ca6",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/globals.css": "5d90b680109cdcdecaf42f947b6045fc8d3fd3d6a644dac5b68dbd60a3ad1383",
+      "src/client/main.tsx": "06b0449916a7c0f2ae55841a765beeb0f75ae8d1b0d392385f1a02d41b46adef",
+      "src/components/empty-state.tsx": "c76b28042f7985b5fb99d63bd3b69a13878537a08e112cca383bbc321dc6aaeb",
+      "src/components/export-dialog.tsx": "51072984ac7748a947d99699a32f9d60b4801b0ca59bd7e245198cab739061cd",
+      "src/components/new-project-dialog.tsx": "5208672e3215af5f7c3d4502ba86988d523441bcbc19b93362a247d1790f5bf3",
+      "src/components/project-manager.tsx": "0f2c54e472fb00ce4867097cc28601481c9b2a1e9195504b4480f07c7a1298b6",
+      "src/components/providers.tsx": "c1f93203aad2248129eb26b1638944e47244bd75681a680bbf8fd91f896d5f15",
+      "src/components/time-list.tsx": "93899dc8e48b70d27e4f90c168370f9ea9bc3ff9e7631361743cfa566777de77",
+      "src/components/time-tracker-context.tsx": "e4e7f6901169aeefb03089c8f9cf8c91e987a86c215728d18466d5fbd997fc26",
+      "src/components/timer.tsx": "56cec823e089f65d614ff9326de655218585bfe3d5622348ea52b954f2cfe553",
+      "src/components/week-calendar.tsx": "4f49457d06c08e77bd0c595d95fbf5f25ff5f31f254c450e3cccfbd3ff256e96",
+      "src/lib/types.ts": "87c6ce23d9e6c6c40efc67dfdd509f5ff377d99eaab42f8f4916503b0fe97f30",
+      "src/lib/utils.ts": "746e4d9beb1a5b6f0e047ec19d5f1c542c9f8117f4ea7c80d7b9bd0fe2128e91",
+      "src/server/app.ts": "cb2d21db885f479ed4bf82a3e487c6b2553a316435035f0b06f38f528725cc49",
+      "src/server/index.ts": "feb62b6b27ff1bef1c9d87c0fe3e7082c96dc038d3307b434efc3fe2ef915d3b",
+      "STORE.md": "d72627e046d9d4ea987cc2cb8bae26ae317b90fd64371ea7ee99ca04657cade3",
+      "tsconfig.json": "1b143b656ced29e1ccb3aa76a2a158a31e831cb219cd4781ef988fef6911685b",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
+    }
+  },
+  "modified": false
 }

@@ -3,6 +3,7 @@ import {
   Ban,
   CalendarDays,
   Check,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -62,6 +63,7 @@ import {
   cleanSnippet,
   emailAddress,
   formatLongDate,
+  formatMessageTime,
   senderName,
 } from '../lib/mail-format'
 import { callMoldableApp } from '../lib/moldable-apps'
@@ -71,6 +73,7 @@ import type {
   MailLabel,
   MailMessageDetail,
   MailMessageSummary,
+  MailThreadDetail,
 } from '../types'
 import { HtmlEmailFrame } from './html-email-frame'
 
@@ -78,6 +81,7 @@ export type ReaderMode = 'rendered' | 'plain'
 
 interface EmailViewProps {
   message?: MailMessageDetail
+  thread?: MailThreadDetail
   fallback?: MailMessageSummary
   loading: boolean
   folderId: string
@@ -96,6 +100,7 @@ interface EmailViewProps {
 
 export function EmailView({
   message,
+  thread,
   fallback,
   loading,
   folderId,
@@ -111,15 +116,48 @@ export function EmailView({
   onMarkImportant,
   onToggleSpam,
 }: EmailViewProps) {
-  const display = message ?? fallback
+  const threadMessages = useMemo(
+    () => thread?.messages ?? [],
+    [thread?.messages],
+  )
+  const latestThreadMessage = threadMessages.at(-1)
+  const display = message ?? latestThreadMessage ?? fallback
   const [mode, setMode] = useState<ReaderMode>('rendered')
+  const visibleMessages = useMemo(
+    () =>
+      threadMessages.length > 0 ? threadMessages : message ? [message] : [],
+    [message, threadMessages],
+  )
+  const [expandedMessageIds, setExpandedMessageIds] = useState<Set<string>>(
+    () => new Set(),
+  )
 
   useEffect(() => {
-    if (!message) return
-    if (!message.bodyHtml && mode === 'rendered') {
+    if (visibleMessages.length === 0) {
+      setExpandedMessageIds(new Set())
+      return
+    }
+
+    if (visibleMessages.length === 1) {
+      setExpandedMessageIds(new Set([visibleMessages[0]!.id]))
+      return
+    }
+
+    const unreadIds = visibleMessages
+      .filter((item) => item.unread)
+      .map((item) => item.id)
+    const latestId = visibleMessages.at(-1)?.id
+    setExpandedMessageIds(
+      new Set(unreadIds.length > 0 ? unreadIds : latestId ? [latestId] : []),
+    )
+  }, [visibleMessages])
+
+  useEffect(() => {
+    const hasRenderedBody = visibleMessages.some((item) => item.bodyHtml)
+    if (!hasRenderedBody && mode === 'rendered') {
       setMode('plain')
     }
-  }, [message, mode])
+  }, [mode, visibleMessages])
 
   if (!display) {
     return (
@@ -130,15 +168,10 @@ export function EmailView({
   }
 
   const folder = folderById(folderId)
-  const plainText =
-    message?.bodyText || message?.bodyHtmlText || display.snippet
-  const hasHtml = Boolean(message?.bodyHtml)
+  const hasHtml = visibleMessages.some((item) => item.bodyHtml)
   const isSpam = display.labelIds.includes('SPAM')
-  const attachments = (
-    message?.attachments ??
-    display.attachments ??
-    []
-  ).filter((attachment) => attachment.attachmentId && !attachment.inline)
+  const conversationCount =
+    thread?.messages.length ?? display.threadMessageCount ?? 1
 
   return (
     <div
@@ -269,46 +302,171 @@ export function EmailView({
               {display.subject || '(No subject)'}
             </h1>
 
-            <EmailMeta message={display} />
+            {conversationCount > 1 ? (
+              <p className="text-muted-foreground mt-3 text-sm font-medium">
+                {conversationCount} messages in this conversation
+              </p>
+            ) : (
+              <EmailMeta message={display} />
+            )}
 
-            {message ? (
-              <CalendarInviteHeaders
-                messageId={message.id}
-                attachments={attachments}
-              />
+            {visibleMessages.length > 0 ? (
+              <div className="mt-6 space-y-5">
+                {visibleMessages.map((item, index) => (
+                  <ThreadMessage
+                    key={item.id}
+                    message={item}
+                    mode={mode}
+                    showFrame={visibleMessages.length > 1}
+                    isLatest={index === visibleMessages.length - 1}
+                    compact={
+                      visibleMessages.length > 1 &&
+                      !expandedMessageIds.has(item.id)
+                    }
+                    onToggleCompact={() => {
+                      setExpandedMessageIds((current) => {
+                        const next = new Set(current)
+                        if (next.has(item.id)) {
+                          next.delete(item.id)
+                        } else {
+                          next.add(item.id)
+                        }
+                        return next
+                      })
+                    }}
+                  />
+                ))}
+              </div>
+            ) : loading ? (
+              <div className="text-muted-foreground mt-8 flex items-center gap-2 text-sm">
+                <Loader2 className="size-4 animate-spin" />
+                Loading conversation
+              </div>
             ) : null}
-
-            <div className="from-border/70 via-border/40 mt-6 h-px w-full bg-gradient-to-r to-transparent" />
-
-            {attachments.length > 0 ? (
-              <AttachmentGrid
-                messageId={display.id}
-                attachments={attachments}
-              />
-            ) : null}
-
-            <div className="emails-document emails-document-body mt-8">
-              {loading && !message ? (
-                <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                  <Loader2 className="size-4 animate-spin" />
-                  Loading message
-                </div>
-              ) : mode === 'rendered' && hasHtml ? (
-                <HtmlEmailFrame html={message!.bodyHtml} />
-              ) : (
-                <div className="text-foreground/90 whitespace-pre-wrap text-[1.0625rem] leading-[1.75]">
-                  {plainText || cleanSnippet(display.snippet) || (
-                    <span className="text-muted-foreground">
-                      This message has no readable body.
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </ScrollArea>
     </div>
+  )
+}
+
+function ThreadMessage({
+  message,
+  mode,
+  showFrame,
+  isLatest,
+  compact,
+  onToggleCompact,
+}: {
+  message: MailMessageDetail
+  mode: ReaderMode
+  showFrame: boolean
+  isLatest: boolean
+  compact: boolean
+  onToggleCompact: () => void
+}) {
+  const attachments = message.attachments.filter(
+    (attachment) => attachment.attachmentId && !attachment.inline,
+  )
+  const plainText = message.bodyText || message.bodyHtmlText || message.snippet
+  const fromLabel = senderName(message.from) || emailAddress(message.from)
+
+  return (
+    <article
+      className={cn(
+        showFrame &&
+          'border-border/70 bg-muted/20 rounded-2xl border px-4 py-4 sm:px-5',
+        compact && 'py-3 sm:px-4',
+      )}
+    >
+      {showFrame ? (
+        compact ? (
+          <button
+            type="button"
+            onClick={onToggleCompact}
+            className="focus-visible:ring-ring/60 grid w-full cursor-pointer grid-cols-[1fr_auto] items-center gap-3 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2"
+          >
+            <div className="min-w-0">
+              <div className="flex min-w-0 items-center gap-2">
+                {message.unread ? (
+                  <span className="emails-row-unread-dot size-1.5 shrink-0 rounded-full" />
+                ) : null}
+                <span className="text-foreground truncate text-[13.5px] font-semibold">
+                  {fromLabel || message.from}
+                </span>
+                {isLatest ? (
+                  <span className="bg-background text-muted-foreground shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                    Latest
+                  </span>
+                ) : null}
+              </div>
+              <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">
+                {cleanSnippet(message.snippet) || plainText || 'No preview'}
+              </p>
+            </div>
+            <div className="text-muted-foreground flex shrink-0 items-center gap-2 text-xs font-medium">
+              <span>{formatMessageTime(message)}</span>
+              <ChevronDown className="size-4" />
+            </div>
+          </button>
+        ) : (
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <EmailMeta message={message} />
+            <div className="flex shrink-0 items-center gap-2">
+              {isLatest ? (
+                <span className="bg-background text-muted-foreground rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide">
+                  Latest
+                </span>
+              ) : null}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={onToggleCompact}
+                    className="text-muted-foreground hover:bg-background hover:text-foreground inline-flex size-8 cursor-pointer items-center justify-center rounded-full transition-colors"
+                    aria-label="Collapse message"
+                  >
+                    <ChevronDown className="size-4 rotate-180" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>Collapse message</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        )
+      ) : null}
+
+      {compact ? null : (
+        <>
+          <CalendarInviteHeaders
+            messageId={message.id}
+            attachments={attachments}
+          />
+
+          <div className="from-border/70 via-border/40 mt-5 h-px w-full bg-gradient-to-r to-transparent" />
+
+          {attachments.length > 0 ? (
+            <AttachmentGrid messageId={message.id} attachments={attachments} />
+          ) : null}
+
+          <div className="emails-document emails-document-body mt-7">
+            {mode === 'rendered' && message.bodyHtml ? (
+              <HtmlEmailFrame html={message.bodyHtml} />
+            ) : (
+              <div className="text-foreground/90 whitespace-pre-wrap text-[1.0625rem] leading-[1.75]">
+                {plainText || cleanSnippet(message.snippet) || (
+                  <span className="text-muted-foreground">
+                    This message has no readable body.
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </article>
   )
 }
 

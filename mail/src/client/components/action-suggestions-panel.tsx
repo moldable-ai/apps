@@ -165,6 +165,11 @@ function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
+function formatThreadParticipants(participants: string[]) {
+  if (participants.length <= 2) return participants.join(', ')
+  return `${participants.slice(0, 2).join(', ')} +${participants.length - 2}`
+}
+
 interface ActionSuggestionsPanelProps {
   messages: MailMessageSummary[]
   labels: MailLabel[]
@@ -250,16 +255,58 @@ export function ActionSuggestionsPanel({
       ),
     [hiddenIds, messageById, suggestions],
   )
+  const threadSuggestions = useMemo(() => {
+    const byThread = new Map<string, MailActionSuggestion[]>()
+
+    for (const suggestion of visibleSuggestions) {
+      const message = messageById.get(suggestion.messageId)
+      if (!message) continue
+
+      const key = message.threadId || message.id
+      const group = byThread.get(key)
+      if (group) {
+        group.push(suggestion)
+      } else {
+        byThread.set(key, [suggestion])
+      }
+    }
+
+    return [...byThread.values()]
+      .map(
+        (group) =>
+          [...group].sort((a, b) => {
+            const messageA = messageById.get(a.messageId)
+            const messageB = messageById.get(b.messageId)
+            return (messageB?.internalDate ?? 0) - (messageA?.internalDate ?? 0)
+          })[0],
+      )
+      .filter((suggestion): suggestion is MailActionSuggestion =>
+        Boolean(suggestion),
+      )
+  }, [messageById, visibleSuggestions])
   const grouped = useMemo(
     () =>
       ACTION_GROUPS.map((group) => ({
         group,
-        suggestions: visibleSuggestions.filter(
+        suggestions: threadSuggestions.filter(
           (suggestion) => suggestion.groupId === group.id,
         ),
       })).filter((group) => group.suggestions.length > 0),
-    [visibleSuggestions],
+    [threadSuggestions],
   )
+
+  const messageIdsForThread = (suggestion: MailActionSuggestion) => {
+    const message = messageById.get(suggestion.messageId)
+    if (!message) return [suggestion.messageId]
+
+    const threadId = message.threadId || message.id
+    return suggestions
+      .filter((item) => {
+        const itemMessage = messageById.get(item.messageId)
+        return (itemMessage?.threadId || itemMessage?.id) === threadId
+      })
+      .map((item) => item.messageId)
+  }
 
   const buildSignal = (
     suggestion: MailActionSuggestion,
@@ -304,9 +351,10 @@ export function ActionSuggestionsPanel({
     nextGroupId: MailActionGroupId,
   ) => {
     if (suggestion.groupId === nextGroupId) return
+    const threadMessageIds = new Set(messageIdsForThread(suggestion))
     setSuggestions((current) =>
       current.map((item) =>
-        item.messageId === suggestion.messageId
+        threadMessageIds.has(item.messageId)
           ? { ...item, groupId: nextGroupId }
           : item,
       ),
@@ -324,9 +372,16 @@ export function ActionSuggestionsPanel({
       suggestedLabelId: label?.id,
       suggestedLabelName: label?.name,
     }
+    const threadMessageIds = new Set(messageIdsForThread(suggestion))
     setSuggestions((current) =>
       current.map((item) =>
-        item.messageId === suggestion.messageId ? nextSuggestion : item,
+        threadMessageIds.has(item.messageId)
+          ? {
+              ...item,
+              suggestedLabelId: nextSuggestion.suggestedLabelId,
+              suggestedLabelName: nextSuggestion.suggestedLabelName,
+            }
+          : item,
       ),
     )
     record(nextSuggestion, 'label_changed', 'label-archive', label?.name)
@@ -342,7 +397,12 @@ export function ActionSuggestionsPanel({
     if (!signal) return
 
     setApprovalError(null)
-    setHiddenIds((current) => new Set(current).add(suggestion.messageId))
+    const threadMessageIds = messageIdsForThread(suggestion)
+    setHiddenIds((current) => {
+      const next = new Set(current)
+      for (const messageId of threadMessageIds) next.add(messageId)
+      return next
+    })
     preserveScrollPosition(scrollAnchorRef.current)
 
     try {
@@ -353,7 +413,7 @@ export function ActionSuggestionsPanel({
       console.error('Failed to approve triage suggestion:', error)
       setHiddenIds((current) => {
         const next = new Set(current)
-        next.delete(suggestion.messageId)
+        for (const messageId of threadMessageIds) next.delete(messageId)
         return next
       })
       setApprovalError(`Failed to approve suggestion: ${message}`)
@@ -376,7 +436,9 @@ export function ActionSuggestionsPanel({
     setHiddenIds((current) => {
       const next = new Set(current)
       for (const suggestion of approvableSuggestions) {
-        next.add(suggestion.messageId)
+        for (const messageId of messageIdsForThread(suggestion)) {
+          next.add(messageId)
+        }
       }
       return next
     })
@@ -398,7 +460,9 @@ export function ActionSuggestionsPanel({
         await onApprove(suggestion)
         await onRecordSignal(signal)
       } catch (error) {
-        failedMessageIds.add(suggestion.messageId)
+        for (const messageId of messageIdsForThread(suggestion)) {
+          failedMessageIds.add(messageId)
+        }
         errors.push(formatError(error))
         console.error('Failed to approve triage suggestion:', error)
       }
@@ -500,7 +564,7 @@ export function ActionSuggestionsPanel({
     )
   }
 
-  if (visibleSuggestions.length === 0) {
+  if (threadSuggestions.length === 0) {
     return (
       <div className="text-muted-foreground flex items-center justify-between gap-3 px-4 py-2 text-xs">
         <span>No triage suggestions for the current inbox.</span>
@@ -519,8 +583,8 @@ export function ActionSuggestionsPanel({
     <>
       <div className="text-muted-foreground flex items-center justify-between gap-3 px-4 text-xs">
         <span>
-          Triage · {visibleSuggestions.length} suggestion
-          {visibleSuggestions.length === 1 ? '' : 's'}
+          Triage · {threadSuggestions.length} conversation
+          {threadSuggestions.length === 1 ? '' : 's'}
         </span>
         <button
           type="button"
@@ -725,6 +789,10 @@ function SuggestionRow({
       label.name === suggestion.suggestedLabelName,
   )
   const GroupIcon = group?.icon ?? Sparkles
+  const senderLabel =
+    message.threadParticipants && message.threadParticipants.length > 0
+      ? formatThreadParticipants(message.threadParticipants)
+      : senderName(message.from)
 
   const applyEdit = () => {
     const nextSuggestion = { ...suggestion, groupId: draftGroupId }
@@ -766,8 +834,13 @@ function SuggestionRow({
                   : 'text-foreground/95 font-medium',
               )}
             >
-              {senderName(message.from)}
+              {senderLabel}
             </p>
+            {message.threadMessageCount && message.threadMessageCount > 1 ? (
+              <span className="bg-muted text-muted-foreground inline-flex h-5 shrink-0 items-center rounded-full px-2 text-[10px] font-semibold tabular-nums">
+                {message.threadMessageCount}
+              </span>
+            ) : null}
           </div>
           <p
             className={cn(

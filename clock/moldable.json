@@ -1,0 +1,277 @@
+{
+  "name": "Clock",
+  "version": "0.1.1",
+  "aliases": [
+    "alarms",
+    "timer",
+    "stopwatch",
+    "world clock"
+  ],
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "Alarms, multiple timers, a stopwatch, and world clocks — all local.",
+  "author": "Moldable",
+  "license": "FSL-1.1-ALv2",
+  "repository": "moldable-ai/apps",
+  "icon": "⏰",
+  "iconPath": "public/icon.png",
+  "category": "utilities",
+  "tags": [
+    "clock",
+    "alarm",
+    "timer",
+    "stopwatch",
+    "world clock",
+    "time"
+  ],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.13",
+    "@moldable-ai/storage": "^0.1.5"
+  },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "clock.timers",
+        "name": "Timers",
+        "description": "Allow approved apps to read and control countdown timers in this workspace.",
+        "scopes": [
+          {
+            "id": "timers.list",
+            "name": "List timers",
+            "description": "List all timers with their label, duration, run state, and remaining time.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "running",
+                    "paused",
+                    "idle",
+                    "finished"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "id": "timers.create",
+            "name": "Create timer",
+            "description": "Create a countdown timer of a given duration and optionally start it.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "durationMs": {
+                  "type": "number",
+                  "minimum": 1000
+                },
+                "start": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "durationMs"
+              ]
+            }
+          },
+          {
+            "id": "timers.start",
+            "name": "Start timer",
+            "description": "Start or resume a timer by id.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          },
+          {
+            "id": "timers.pause",
+            "name": "Pause timer",
+            "description": "Pause a running timer by id.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          },
+          {
+            "id": "timers.reset",
+            "name": "Reset timer",
+            "description": "Reset a timer back to its full duration. Also dismisses a finished timer.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          },
+          {
+            "id": "timers.delete",
+            "name": "Delete timer",
+            "description": "Delete a timer by id.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "clock.alarms",
+        "name": "Alarms",
+        "description": "Allow approved apps to read and manage alarms in this workspace.",
+        "scopes": [
+          {
+            "id": "alarms.list",
+            "name": "List alarms",
+            "description": "List all alarms with their time, label, repeat days, and enabled state.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "enabledOnly": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          {
+            "id": "alarms.next",
+            "name": "Next alarm",
+            "description": "Get the next alarm that will fire and how long until it does.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          {
+            "id": "alarms.create",
+            "name": "Create alarm",
+            "description": "Create an alarm for a time of day with optional repeat days.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "time": {
+                  "type": "string",
+                  "description": "24h HH:mm"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "repeat": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 6
+                  }
+                }
+              },
+              "required": [
+                "time"
+              ]
+            }
+          },
+          {
+            "id": "alarms.update",
+            "name": "Update alarm",
+            "description": "Update an alarm's time, label, repeat days, or enabled state.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "time": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "repeat": {
+                  "type": "array",
+                  "items": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 6
+                  }
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          },
+          {
+            "id": "alarms.delete",
+            "name": "Delete alarm",
+            "description": "Delete an alarm by id.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "id": "clock.worldclocks",
+        "name": "World clocks",
+        "description": "Allow approved apps to read saved world clocks and the current time in each.",
+        "scopes": [
+          {
+            "id": "worldclocks.list",
+            "name": "List world clocks",
+            "description": "List saved world clocks with their current local time and UTC offset.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "env": [],
+  "routeName": "clock",
+  "tagline": "Alarms, timers, stopwatch, and world clocks — local-first"
+}

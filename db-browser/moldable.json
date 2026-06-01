@@ -1,7 +1,10 @@
 {
   "name": "DB Browser",
-  "version": "0.1.3",
-  "aliases": ["database", "postgres"],
+  "version": "0.1.4",
+  "aliases": [
+    "database",
+    "postgres"
+  ],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Connect to PostgreSQL databases and browse schemas, tables, and read-only query results",
@@ -82,7 +85,9 @@
                   "maximum": 100
                 }
               },
-              "required": ["query"]
+              "required": [
+                "query"
+              ]
             }
           },
           {
@@ -102,7 +107,10 @@
                   "type": "string"
                 }
               },
-              "required": ["schema", "table"]
+              "required": [
+                "schema",
+                "table"
+              ]
             }
           },
           {
@@ -119,7 +127,9 @@
                   "type": "string"
                 }
               },
-              "required": ["sql"]
+              "required": [
+                "sql"
+              ]
             }
           },
           {
@@ -136,7 +146,9 @@
                   "type": "string"
                 }
               },
-              "required": ["sql"]
+              "required": [
+                "sql"
+              ]
             }
           },
           {
@@ -197,7 +209,9 @@
                   "type": "boolean"
                 }
               },
-              "required": ["tabId"]
+              "required": [
+                "tabId"
+              ]
             }
           },
           {
@@ -226,7 +240,10 @@
                   "type": "boolean"
                 }
               },
-              "required": ["oldString", "newString"]
+              "required": [
+                "oldString",
+                "newString"
+              ]
             }
           },
           {
@@ -243,7 +260,9 @@
                   "type": "string"
                 }
               },
-              "required": ["tabId"]
+              "required": [
+                "tabId"
+              ]
             }
           },
           {
@@ -416,7 +435,12 @@
                 },
                 "size": {
                   "type": "string",
-                  "enum": ["sm", "md", "lg", "xl"]
+                  "enum": [
+                    "sm",
+                    "md",
+                    "lg",
+                    "xl"
+                  ]
                 },
                 "xAxis": {
                   "type": "string"
@@ -447,7 +471,12 @@
                 },
                 "comparisonMode": {
                   "type": "string",
-                  "enum": ["auto", "percent", "previous-value", "number"]
+                  "enum": [
+                    "auto",
+                    "percent",
+                    "previous-value",
+                    "number"
+                  ]
                 },
                 "tableColumns": {
                   "type": "array",
@@ -476,7 +505,9 @@
                   "type": "boolean"
                 }
               },
-              "required": ["sql"]
+              "required": [
+                "sql"
+              ]
             }
           },
           {
@@ -529,7 +560,12 @@
                 },
                 "size": {
                   "type": "string",
-                  "enum": ["sm", "md", "lg", "xl"]
+                  "enum": [
+                    "sm",
+                    "md",
+                    "lg",
+                    "xl"
+                  ]
                 },
                 "xAxis": {
                   "type": "string"
@@ -560,7 +596,12 @@
                 },
                 "comparisonMode": {
                   "type": "string",
-                  "enum": ["auto", "percent", "previous-value", "number"]
+                  "enum": [
+                    "auto",
+                    "percent",
+                    "previous-value",
+                    "number"
+                  ]
                 },
                 "tableColumns": {
                   "type": "array",
@@ -623,7 +664,10 @@
                   "type": "boolean"
                 }
               },
-              "required": ["oldString", "newString"]
+              "required": [
+                "oldString",
+                "newString"
+              ]
             }
           },
           {
@@ -656,6 +700,65 @@
     ]
   },
   "env": [],
-  "screenshots": ["public/screenshots/1.png"],
-  "tagline": "Browse, query, and chart your Postgres databases locally"
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
+  "tagline": "Browse, query, and chart your Postgres databases locally",
+  "upstream": {
+    "repo": "moldable-ai/apps",
+    "path": "db-browser",
+    "installedVersion": "0.1.3",
+    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
+    "installedAt": "2026-06-01T14:46:26.137Z",
+    "fileHashes": {
+      ".gitignore": "d42bc62af442b401d9e53db232c1321613287763b9dda357bb2d5f6f9eceab11",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "084d7d116e6704333f9443e7d9ef2eb7ddbaba87a6e48bd5d89b3c29019213bc",
+      "package.json": "1ad7fc5b00b6ac33ba1644b6d324749c434e8295615187aec99b033565defa7d",
+      "pnpm-lock.yaml": "80bf12d67b176cb0a296861e754a9f8bf5f9a4cc0c2cb929c9a3fbec37114647",
+      "public/icon.png": "7d0c8eabb050bbc292f2a61ae5ff49efead8b8da5223c2872b68f227a1f9d97f",
+      "public/screenshots/1.png": "137306ae54f220543ff91cf7ef67c4c5e7712c077ca84b7babae3161454c6770",
+      "scripts/moldable-dev.mjs": "f842e94a72802d6f4c5fa447e4738cf225e4bc075abc3f8e8e891f19eed7c1bc",
+      "src/client/app.tsx": "c63f5e34e084fc274b51e4b71398ab368ab3af8925023a05f1f976a877ea7bc1",
+      "src/client/components/connection-dialog.tsx": "b0c29949eb4841bfc4e0e80b36ee272d4b0a2cdfe8325fa6daf78a2cd496b113",
+      "src/client/components/connection-form-dialog.tsx": "0e3bf0f36094cee13e0f7484e3bf99a1c86a0f3e1cd8cea20b69c71608e65f05",
+      "src/client/components/connection-sidebar.tsx": "aaa0b471341ef856566ec37259686c277b3cfab2c2cc2aadb899f6f1dcc1eb4f",
+      "src/client/components/connection-switch.tsx": "3e4b084d12539e95d1c9c0345b9138c57f5f0fbac9b9ee0fd14c6855d4eb91ed",
+      "src/client/components/dashboard-browser.tsx": "6578357e2670ee84224ffda1a2f61aff71695df695b61a3e460bb6ecae79511a",
+      "src/client/components/dashboard-workspace.tsx": "d6fcad406823496477b4adf105fcc4bc1307be382da136f350481387146cae09",
+      "src/client/components/data-transfer-dialogs.tsx": "2a753291f67ebc6c2f7b709c42eaa30d2ad7faabd09955241c6590df1c4e7e78",
+      "src/client/components/db-browser-settings-dialog.tsx": "9b7f3c250e992fd43beb6a60cd4578672032789d5a7b587b4f535cfd9b4b7246",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/components/object-browser.tsx": "a1a3c71961d460ec0f06382d4ed2f400a89148370637a4aea8f5a7511c9bf694",
+      "src/client/components/query-history-dialog.tsx": "1543da303f10a764cfcec48d862a470e99afc13b69f36f54521e771775ab2138",
+      "src/client/components/query-workspace.tsx": "53dbfb495ede9284360229da58739d2bd5fac87c1038585889bfe95a30f19652",
+      "src/client/components/result-grid.tsx": "b5fb5fad883bc07aebd9a48ee3b6ecd68ad7eb8e1f997cea1e97a7dd961d3bb5",
+      "src/client/components/row-details.tsx": "539edbff5a23c07e64426b751bbe1423676d4362a6d4628f2f22c796c7a22cec",
+      "src/client/components/shared.tsx": "08f0ca10e67859b390ee5894a93719505daa8ec97179b386db0a620c8ccc5cc9",
+      "src/client/components/sql-editor.tsx": "091bf13c09fd657a200dca2b1f62a9e096c001c9da8307a42993c9c4fccf7dd1",
+      "src/client/components/sql-workspace-browser.tsx": "64235f25860c95d9d6bc4f46d0e1e945c61cd58f2d56da687fb281dda48cb7ab",
+      "src/client/globals.css": "6b8051e31f3aeca6fad9f3eb333a1086c1ce0b592c91ac8a82b47da3477e958b",
+      "src/client/lib/api.ts": "0c3123a553aac5637786463c7bba8b8cb6649c69b1ff0ba52bae0e50eb83ae38",
+      "src/client/lib/dashboards.ts": "94a1e20874fc9a08b60f0f7d122cbc30cf5cb95d0c35e190f6a5b16a03ff07c2",
+      "src/client/lib/format.ts": "15592e3922ee10d2948faca946e9f5d4e36dc326f929be1c82710c6b29deb5cc",
+      "src/client/lib/sql-statements.ts": "1fec2f62e01c49e0b57d8324185e4a271616f222885799be36a0879374eccb1e",
+      "src/client/lib/sql-tabs.ts": "702b628692c7b434b800170eb8ee9bb643147052cb4979fbb5194cbda577ed1c",
+      "src/client/lib/sql.ts": "a61d07312f58196ca2b804ebfc884a0d915a0ecff10a3cac90a3125188a04e31",
+      "src/client/main.tsx": "c00a7345c142f4f608845a4246dec37803d957906da47514a7d5ac82f38c5551",
+      "src/client/query-provider.tsx": "ccd981e9d5208c05ad9d4693e4cec53fcc21082fb44fb8d237808f8d3c67d211",
+      "src/client/types.ts": "16a885482f9a23d5ec861abac5bcf19820a618780d5897f439e02982ad591005",
+      "src/server/aivault.ts": "587d4d847bd038160244aa0b0a4159db95fe983b21ff9c505bd4f3010ecc9700",
+      "src/server/app.ts": "257d7d29f7776926760973b80851babc09a841f657c4eb6a8ec6c539beb5d421",
+      "src/server/db.ts": "95535766c7fd20a02d4648464a6708c7e24417cbdca35e761b77633565345a80",
+      "src/server/index.test.ts": "196d2a7c2b50b87867b124407c92ebd78e4225c375c9c3cea75922d965f0e73d",
+      "src/server/index.ts": "7745218d35eb417632260e3295bc9a8396cb550c7cee1e85bf450f253fb3354e",
+      "src/server/moldable.ts": "82c91b0c3c8be6533c603fdd13b5c4e8eff64a49325595a40c7f6bf286a108ae",
+      "src/server/static.ts": "3f0ab10616534534b6a92651d8659a4556d50c57d425f119677126af4aa54626",
+      "src/shared/types.ts": "8673cd408b462ed1b6cb0d64f7bad404038bf0848e1e30c2581922ba84099783",
+      "STORE.md": "3b47c9487810473d893f601b9de2bade6afb3322c47fa91f288c7e9e5f933de2",
+      "tsconfig.json": "2c2086735a1494ec9219070ed35e32706ca3c9b88c25d484f4fd37f5600a4b7a",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
+    }
+  },
+  "modified": false
 }

@@ -16,7 +16,12 @@ import {
   sanitizeId,
   writeJson,
 } from '@moldable-ai/storage'
-import type { Meeting, MeetingSettings } from '../types'
+import type {
+  Meeting,
+  MeetingSettings,
+  RecordingSession,
+  TranscriptSegment,
+} from '../types'
 import { DEFAULT_SETTINGS } from '../types'
 import type { MeetingTemplate } from './templates'
 import fs from 'node:fs/promises'
@@ -74,6 +79,17 @@ function getAudioFileName(
   return `${sanitizeId(meetingId)}-${sanitizeId(sessionId)}.${getAudioExtension(contentType)}`
 }
 
+type PersistedAudioSource = 'microphone' | 'system'
+
+function getAudioSourceFileName(
+  meetingId: string,
+  sessionId: string,
+  source: PersistedAudioSource,
+  contentType: string,
+): string {
+  return `${sanitizeId(meetingId)}-${sanitizeId(sessionId)}-${source}.${getAudioExtension(contentType)}`
+}
+
 function createWavHeader(dataByteLength: number): Buffer {
   const header = Buffer.alloc(44)
   header.write('RIFF', 0)
@@ -101,6 +117,19 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
+async function finalizePcmWavIfNeeded(filePath: string, contentType: string) {
+  if (!isPcm16ContentType(contentType)) return
+
+  const stat = await fs.stat(filePath)
+  const dataByteLength = Math.max(0, stat.size - 44)
+  const file = await fs.open(filePath, 'r+')
+  try {
+    await file.write(createWavHeader(dataByteLength), 0, 44, 0)
+  } finally {
+    await file.close()
+  }
+}
+
 /** Get the path to a custom template file */
 function getTemplatePath(id: string, workspaceId?: string): string {
   const safeId = sanitizeId(id)
@@ -124,11 +153,165 @@ function parseMeetingDates(m: Meeting): Meeting {
       ...session,
       startedAt: new Date(session.startedAt),
       endedAt: session.endedAt ? new Date(session.endedAt) : undefined,
+      leaseUpdatedAt: session.leaseUpdatedAt
+        ? new Date(session.leaseUpdatedAt)
+        : undefined,
     })),
     segments: m.segments.map((s) => ({
       ...s,
       createdAt: new Date(s.createdAt),
     })),
+  }
+}
+
+function dateMs(value: Date | string | undefined): number {
+  if (!value) return 0
+  const parsed = value instanceof Date ? value : new Date(value)
+  const time = parsed.getTime()
+  return Number.isFinite(time) ? time : 0
+}
+
+function latestDate<T extends Date | string | undefined>(
+  first: T,
+  second: T,
+): T {
+  return dateMs(second) >= dateMs(first) ? second : first
+}
+
+function mergeTranscriptSegments(
+  existing: TranscriptSegment[],
+  incoming: TranscriptSegment[],
+): TranscriptSegment[] {
+  const byId = new Map<string, TranscriptSegment>()
+
+  for (const segment of existing) {
+    byId.set(segment.id, segment)
+  }
+
+  for (const segment of incoming) {
+    const existingSegment = byId.get(segment.id)
+    byId.set(segment.id, {
+      ...existingSegment,
+      ...segment,
+      createdAt: existingSegment
+        ? latestDate(existingSegment.createdAt, segment.createdAt)
+        : segment.createdAt,
+    })
+  }
+
+  return [...byId.values()].sort((a, b) => {
+    if (a.startTime !== b.startTime) return a.startTime - b.startTime
+    return dateMs(a.createdAt) - dateMs(b.createdAt)
+  })
+}
+
+function mergeRecordingSession(
+  existing: RecordingSession | undefined,
+  incoming: RecordingSession,
+): RecordingSession {
+  if (!existing) return incoming
+  const audioSources = {
+    ...existing.audioSources,
+    ...incoming.audioSources,
+  }
+
+  return {
+    ...existing,
+    ...incoming,
+    endedAt: incoming.endedAt ?? existing.endedAt,
+    audioPath: incoming.audioPath ?? existing.audioPath,
+    audioMimeType: incoming.audioMimeType ?? existing.audioMimeType,
+    audioSourceManifestPath:
+      incoming.audioSourceManifestPath ?? existing.audioSourceManifestPath,
+    audioSources:
+      Object.keys(audioSources).length > 0 ? audioSources : undefined,
+    captureSource: incoming.captureSource ?? existing.captureSource,
+    nativeCaptureSessionId:
+      incoming.nativeCaptureSessionId ?? existing.nativeCaptureSessionId,
+    lastNativeSequence:
+      typeof incoming.lastNativeSequence === 'number'
+        ? Math.max(
+            existing.lastNativeSequence ?? 0,
+            incoming.lastNativeSequence,
+          )
+        : existing.lastNativeSequence,
+    leaseUpdatedAt:
+      dateMs(incoming.leaseUpdatedAt) >= dateMs(existing.leaseUpdatedAt)
+        ? incoming.leaseUpdatedAt
+        : existing.leaseUpdatedAt,
+  }
+}
+
+function mergeRecordingSessions(
+  existing: RecordingSession[] | undefined,
+  incoming: RecordingSession[] | undefined,
+): RecordingSession[] | undefined {
+  if (!existing?.length && !incoming?.length) return undefined
+
+  const byId = new Map<string, RecordingSession>()
+  for (const session of existing ?? []) {
+    byId.set(session.id, session)
+  }
+
+  for (const session of incoming ?? []) {
+    byId.set(session.id, mergeRecordingSession(byId.get(session.id), session))
+  }
+
+  return [...byId.values()].sort(
+    (a, b) => dateMs(a.startedAt) - dateMs(b.startedAt),
+  )
+}
+
+export function mergeMeetingForSave(
+  existing: Meeting | null,
+  incoming: Meeting,
+): Meeting {
+  if (!existing) return parseMeetingDates(incoming)
+
+  const normalizedIncoming = parseMeetingDates(incoming)
+  const incomingIsNewer =
+    dateMs(normalizedIncoming.updatedAt) >= dateMs(existing.updatedAt)
+  const mergedSessions = mergeRecordingSessions(
+    existing.recordingSessions,
+    normalizedIncoming.recordingSessions,
+  )
+  const existingSessionIds = new Set(
+    existing.recordingSessions?.map((session) => session.id) ?? [],
+  )
+  const incomingHasNewOpenSession = Boolean(
+    normalizedIncoming.recordingSessions?.some(
+      (session) => !session.endedAt && !existingSessionIds.has(session.id),
+    ),
+  )
+
+  const endedAt =
+    normalizedIncoming.endedAt ??
+    (existing.endedAt && !(incomingIsNewer && incomingHasNewOpenSession)
+      ? existing.endedAt
+      : undefined)
+
+  return {
+    ...existing,
+    ...normalizedIncoming,
+    createdAt: existing.createdAt,
+    updatedAt: latestDate(existing.updatedAt, normalizedIncoming.updatedAt),
+    endedAt,
+    duration: Math.max(
+      existing.duration ?? 0,
+      normalizedIncoming.duration ?? 0,
+    ),
+    segments: mergeTranscriptSegments(
+      existing.segments ?? [],
+      normalizedIncoming.segments ?? [],
+    ),
+    recordingSessions: mergedSessions,
+    notes: normalizedIncoming.notes ?? existing.notes,
+    enhancedNotes: normalizedIncoming.enhancedNotes ?? existing.enhancedNotes,
+    enhancedTemplateId:
+      normalizedIncoming.enhancedTemplateId ?? existing.enhancedTemplateId,
+    enhancedAt: normalizedIncoming.enhancedAt ?? existing.enhancedAt,
+    calendarContext:
+      normalizedIncoming.calendarContext ?? existing.calendarContext,
   }
 }
 
@@ -173,6 +356,16 @@ export async function saveMeeting(
 ): Promise<void> {
   await ensureDir(getMeetingsDir(workspaceId))
   await writeJson(getMeetingPath(meeting.id, workspaceId), meeting)
+}
+
+export async function mergeAndSaveMeeting(
+  meeting: Meeting,
+  workspaceId?: string,
+): Promise<Meeting> {
+  const existing = await getMeeting(meeting.id, workspaceId)
+  const merged = mergeMeetingForSave(existing, meeting)
+  await saveMeeting(merged, workspaceId)
+  return merged
 }
 
 export async function saveMeetingAudio({
@@ -230,37 +423,124 @@ export async function appendMeetingAudioChunk({
   }
 }
 
-export async function finalizeMeetingAudio({
+export async function appendMeetingAudioSourceChunk({
   meetingId,
   sessionId,
+  source,
   contentType,
+  data,
   workspaceId,
 }: {
   meetingId: string
   sessionId: string
+  source: PersistedAudioSource
   contentType: string
+  data: Buffer
   workspaceId?: string
-}): Promise<{ audioPath: string; audioMimeType: string } | null> {
-  const fileName = getAudioFileName(meetingId, sessionId, contentType)
+}): Promise<{ audioPath: string; audioMimeType: string }> {
+  await ensureDir(getAudioDir(workspaceId))
+
+  const fileName = getAudioSourceFileName(
+    meetingId,
+    sessionId,
+    source,
+    contentType,
+  )
   const filePath = safePath(getAudioDir(workspaceId), fileName)
 
-  if (!(await pathExists(filePath))) return null
-
-  if (isPcm16ContentType(contentType)) {
-    const stat = await fs.stat(filePath)
-    const dataByteLength = Math.max(0, stat.size - 44)
-    const file = await fs.open(filePath, 'r+')
-    try {
-      await file.write(createWavHeader(dataByteLength), 0, 44, 0)
-    } finally {
-      await file.close()
-    }
+  if (isPcm16ContentType(contentType) && !(await pathExists(filePath))) {
+    await fs.writeFile(filePath, createWavHeader(0))
   }
+
+  await fs.appendFile(filePath, data)
 
   return {
     audioPath: `audio/${fileName}`,
     audioMimeType: getAudioMimeType(contentType),
   }
+}
+
+export async function finalizeMeetingAudio({
+  meetingId,
+  sessionId,
+  contentType,
+  sourceManifest,
+  sourceContentTypes,
+  workspaceId,
+}: {
+  meetingId: string
+  sessionId: string
+  contentType: string
+  sourceManifest?: unknown
+  sourceContentTypes?: Partial<Record<PersistedAudioSource, string>>
+  workspaceId?: string
+}): Promise<{
+  audioPath: string
+  audioMimeType: string
+  audioSourceManifestPath?: string
+  audioSources?: RecordingSession['audioSources']
+} | null> {
+  const fileName = getAudioFileName(meetingId, sessionId, contentType)
+  const filePath = safePath(getAudioDir(workspaceId), fileName)
+
+  if (!(await pathExists(filePath))) return null
+
+  await finalizePcmWavIfNeeded(filePath, contentType)
+
+  const saved: {
+    audioPath: string
+    audioMimeType: string
+    audioSourceManifestPath?: string
+    audioSources?: RecordingSession['audioSources']
+  } = {
+    audioPath: `audio/${fileName}`,
+    audioMimeType: getAudioMimeType(contentType),
+  }
+
+  const audioSources: RecordingSession['audioSources'] = {}
+  for (const source of ['microphone', 'system'] as const) {
+    const sourceContentType = sourceContentTypes?.[source]
+    if (!sourceContentType) continue
+
+    const sourceFileName = getAudioSourceFileName(
+      meetingId,
+      sessionId,
+      source,
+      sourceContentType,
+    )
+    const sourceFilePath = safePath(getAudioDir(workspaceId), sourceFileName)
+    if (!(await pathExists(sourceFilePath))) continue
+
+    await finalizePcmWavIfNeeded(sourceFilePath, sourceContentType)
+    audioSources[source] = {
+      audioPath: `audio/${sourceFileName}`,
+      audioMimeType: getAudioMimeType(sourceContentType),
+    }
+  }
+
+  if (Object.keys(audioSources).length > 0) {
+    saved.audioSources = audioSources
+  }
+
+  if (
+    sourceManifest &&
+    typeof sourceManifest === 'object' &&
+    !Array.isArray(sourceManifest)
+  ) {
+    const manifestFileName = `${sanitizeId(meetingId)}-${sanitizeId(sessionId)}.sources.json`
+    await writeJson(safePath(getAudioDir(workspaceId), manifestFileName), {
+      ...sourceManifest,
+      meetingId,
+      sessionId,
+      audioPath: saved.audioPath,
+      audioMimeType: saved.audioMimeType,
+      audioSources: saved.audioSources,
+      finalizedAt: new Date().toISOString(),
+    })
+    saved.audioSourceManifestPath = `audio/${manifestFileName}`
+  }
+
+  return saved
 }
 
 export async function getMeetingAudioAsset({
@@ -321,6 +601,19 @@ export async function deleteMeeting(
         []),
     ].filter((path): path is string => Boolean(path?.startsWith('audio/'))),
   )
+
+  try {
+    const audioDir = getAudioDir(workspaceId)
+    const safeMeetingPrefix = `${sanitizeId(meetingId)}-`
+    const files = await fs.readdir(audioDir)
+    for (const file of files) {
+      if (file.startsWith(safeMeetingPrefix)) {
+        audioPaths.add(`audio/${file}`)
+      }
+    }
+  } catch {
+    // Audio directory might not exist, that's ok.
+  }
 
   for (const audioPath of audioPaths) {
     try {

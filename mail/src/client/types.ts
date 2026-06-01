@@ -7,6 +7,7 @@ export interface MailProfile {
 export interface MailStatus {
   authenticated: boolean
   profile: MailProfile | null
+  syncing?: boolean
 }
 
 export interface MailMessageSummary {
@@ -28,6 +29,9 @@ export interface MailMessageSummary {
   bodyCached?: boolean
   attachments?: MailAttachment[]
   unsubscribe?: MailUnsubscribe
+  threadMessageCount?: number
+  threadUnreadCount?: number
+  threadParticipants?: string[]
 }
 
 export interface MailMessageDetail extends MailMessageSummary {
@@ -36,6 +40,11 @@ export interface MailMessageDetail extends MailMessageSummary {
   bodyHtml: string
   bodyHtmlText: string
   attachments: MailAttachment[]
+}
+
+export interface MailThreadDetail {
+  id: string
+  messages: MailMessageDetail[]
 }
 
 export interface MailAttachment {
@@ -75,6 +84,9 @@ export interface MessagesResponse {
   messages: MailMessageSummary[]
   nextPageToken?: string
   resultSizeEstimate: number
+  source?: 'cache' | 'gmail'
+  syncing?: boolean
+  syncedAt?: string
 }
 
 export interface GeneratedMailSearchQuery {
@@ -113,6 +125,8 @@ export interface ActionSuggestionsResponse {
   fingerprint: string
   generatedAt: string
   signalCount: number
+  source?: 'cache' | 'generated'
+  syncing?: boolean
 }
 
 export interface MailTriageSignalInput {

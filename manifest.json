@@ -1,13 +1,43 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-06-01T12:22:54.734Z",
+  "generatedAt": "2026-06-01T23:41:48.704Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
+      "id": "calculator",
+      "name": "Calculator",
+      "version": "0.1.1",
+      "description": "Everyday, scientific, and unit/currency calculator with history",
+      "tagline": "Everyday, scientific, and unit/currency math — with history",
+      "author": "Moldable",
+      "official": true,
+      "icon": "🧮",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/calculator/public/icon.png",
+      "screenshots": [],
+      "about": null,
+      "category": "utilities",
+      "tags": [
+        "calculator",
+        "math",
+        "scientific",
+        "convert",
+        "currency",
+        "units"
+      ],
+      "path": "calculator",
+      "requiredEnv": [],
+      "credentials": [],
+      "moldableDependencies": {
+        "@moldable-ai/ui": "^0.2.13",
+        "@moldable-ai/storage": "^0.1.5"
+      },
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
+    },
+    {
       "id": "calendar",
       "name": "Calendar",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "description": "Integrated calendar with Google Calendar connection",
       "tagline": "Your Google Calendar, clean month view plus daily agenda",
       "author": "Moldable",
@@ -32,12 +62,42 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
+    },
+    {
+      "id": "clock",
+      "name": "Clock",
+      "version": "0.1.1",
+      "description": "Alarms, multiple timers, a stopwatch, and world clocks — all local.",
+      "tagline": "Alarms, timers, stopwatch, and world clocks — local-first",
+      "author": "Moldable",
+      "official": true,
+      "icon": "⏰",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/clock/public/icon.png",
+      "screenshots": [],
+      "about": null,
+      "category": "utilities",
+      "tags": [
+        "clock",
+        "alarm",
+        "timer",
+        "stopwatch",
+        "world clock",
+        "time"
+      ],
+      "path": "clock",
+      "requiredEnv": [],
+      "credentials": [],
+      "moldableDependencies": {
+        "@moldable-ai/ui": "^0.2.13",
+        "@moldable-ai/storage": "^0.1.5"
+      },
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "code-editor",
       "name": "Code",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "description": "A lightweight, VS Code-like IDE for exploring and editing local codebases with integrated AI context and browser preview.",
       "tagline": "A VS Code-style IDE with live preview, built in",
       "author": "Moldable",
@@ -57,12 +117,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "affirmations",
       "name": "Daily Affirmations",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "description": "A soothing, daily affirmation app to improve mental health and positivity.",
       "tagline": "Daily affirmations across ten themes, saved to your favorites",
       "author": "Moldable",
@@ -82,12 +142,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "db-browser",
       "name": "DB Browser",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "description": "Connect to PostgreSQL databases and browse schemas, tables, and read-only query results",
       "tagline": "Browse, query, and chart your Postgres databases locally",
       "author": "Moldable",
@@ -107,12 +167,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "git-flow",
       "name": "Git",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "description": "Simple Git client for branch management, staging, and diffing",
       "tagline": "A clean Git client with AI commits and review, built in",
       "author": "Moldable",
@@ -137,12 +197,35 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
+    },
+    {
+      "id": "guitar",
+      "name": "Guitar",
+      "version": "0.1.1",
+      "description": "A local-first guitar song library with 88-key playback and falling-note practice visualization.",
+      "tagline": "Practice guitar with falling notes and a full 88-key library",
+      "author": "Moldable",
+      "official": true,
+      "icon": "🎸",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/guitar/public/icon.png",
+      "screenshots": [],
+      "about": "A local-first guitar practice studio: load songs, watch the notes fall toward a full 88-key keyboard, and play along at your own pace. Everything lives in your workspace, so your library, sounds, and progress stay on your machine.\n\n**Highlights**\n\n- Falling-note practice view synced to a full 88-key keyboard that highlights active and upcoming notes as the song plays.\n- Hands-separate practice: isolate the left or right hand with an adjustable split point, or play the whole piece.\n- Variable playback speed (0.1x to 2x) plus scrub, seek, and restart so you can drill tough passages.\n- Organize a song library into folders, and follow structured courses with lessons, section-by-section tutorials, and saved completion progress.\n- Import your own .mid/.midi files, and create or edit songs note-by-note straight from chat using the app's built-in song RPC.\n- Swap instrument sounds with downloadable, high-quality SFZ instrument packs (including the Splendid Grand Guitar); per-song sound settings install and select the right voice automatically.\n- Fully local: no accounts, no external services, and no API keys — your songs and settings stay in your own workspace.\n\nInstall it to turn any MIDI or chat-generated piece into a guided, play-along practice session.",
+      "category": "music",
+      "tags": [],
+      "path": "guitar",
+      "requiredEnv": [],
+      "credentials": [],
+      "moldableDependencies": {
+        "@moldable-ai/ui": "^0.2.13",
+        "@moldable-ai/storage": "^0.1.5"
+      },
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "hello-moldables",
       "name": "Hello Moldables",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "description": "Welcome to Moldable! Learn how to build and modify apps with AI.",
       "tagline": "Your first step into building software with AI",
       "author": "Moldable",
@@ -163,12 +246,12 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.13"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "images",
       "name": "Images",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "description": "Generate and iterate images with GPT Image 2",
       "tagline": "Generate, edit, and branch images with GPT Image 2",
       "author": "Moldable",
@@ -200,12 +283,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "mail",
       "name": "Mail",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "description": "Fast Gmail client for triage, search, reading, and sending email",
       "tagline": "A fast, keyboard-driven Gmail client that triages itself",
       "author": "Moldable",
@@ -230,12 +313,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "meetings",
       "name": "Meetings",
-      "version": "0.1.5",
+      "version": "0.1.7",
       "description": "Record, transcribe, and summarize meetings with real-time transcription",
       "tagline": "Record, transcribe, and summarize every meeting locally",
       "author": "Moldable",
@@ -270,12 +353,12 @@
         "@moldable-ai/storage": "^0.1.5",
         "@moldable-ai/ui": "^0.2.13"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "microscope",
       "name": "Microscope",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "description": "Explore the natural world through generated images, transparent 2D relief layers, procedural 3D models, and optional fal Hunyuan3D or Tripo renders.",
       "tagline": "Explore anything in science as interactive 3D",
       "author": "Moldable",
@@ -299,12 +382,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "notes",
       "name": "Notes",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "description": "A Google Keep-style note taking app with pinning and markdown support",
       "tagline": "A Google Keep-style notebook with markdown and pinning",
       "author": "Moldable",
@@ -330,12 +413,12 @@
         "@moldable-ai/editor": "^0.1.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "piano",
       "name": "Piano",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "description": "A local-first piano song library with 88-key playback and falling-note practice visualization.",
       "tagline": "Practice piano with falling notes and a full 88-key library",
       "author": "Moldable",
@@ -353,12 +436,62 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
+    },
+    {
+      "id": "reader",
+      "name": "Reader",
+      "version": "0.1.1",
+      "description": "A local-first ebook reader. Open EPUB and text files, organize a library into folders, read with fully configurable typography and themes, or speed-read with an RSVP word-by-word mode.",
+      "tagline": "Read EPUBs your way, or speed-read them",
+      "author": "Moldable",
+      "official": true,
+      "icon": "📖",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/reader/public/icon.png",
+      "screenshots": [],
+      "about": null,
+      "category": "reference",
+      "tags": [
+        "reading",
+        "books",
+        "epub",
+        "library"
+      ],
+      "path": "reader",
+      "requiredEnv": [],
+      "credentials": [],
+      "moldableDependencies": {
+        "@moldable-ai/ui": "^0.2.13",
+        "@moldable-ai/storage": "^0.1.5"
+      },
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
+    },
+    {
+      "id": "recipes-app",
+      "name": "Recipes",
+      "version": "0.1.1",
+      "description": "A photo-centric recipes app with beautiful cards, folders, rich Markdown steps, and a hands-free cook mode.",
+      "tagline": "A photo-centric recipes app with beautiful cards, folders, rich Markdown steps, and a hands-free cook mode.",
+      "author": "Moldable",
+      "official": true,
+      "icon": "🍳",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/recipes-app/public/icon.png",
+      "screenshots": [],
+      "about": null,
+      "category": "lifestyle",
+      "tags": [],
+      "path": "recipes-app",
+      "requiredEnv": [],
+      "credentials": [],
+      "moldableDependencies": {
+        "@moldable-ai/ui": "^0.2.13"
+      },
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "remotion",
       "name": "Remotion",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "description": "Create programmatic videos with Remotion - manage projects, preview compositions, and render videos",
       "tagline": "Make videos by describing them, powered by code",
       "author": "Moldable",
@@ -378,12 +511,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "scribo",
       "name": "Scribo Languages",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "description": "Language learning journal with AI-powered translations",
       "tagline": "Write in any language, translate and learn as you go",
       "author": "Moldable",
@@ -418,12 +551,12 @@
         "@moldable-ai/editor": "^0.1.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "tasks",
       "name": "Tasks",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "description": "Linear-style local project and task management",
       "tagline": "A Linear-style task manager that lives on your machine",
       "author": "Moldable",
@@ -441,12 +574,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "time-tracker",
       "name": "Time Tracker",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "description": "Track time for work projects with weekly views and export",
       "tagline": "One-click time tracking with weekly views and export",
       "author": "Moldable",
@@ -466,12 +599,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "todo",
       "name": "Todo",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "description": "Simple task management with quick add and completion tracking",
       "tagline": "Keyboard-fast task management that lives on your machine",
       "author": "Moldable",
@@ -496,12 +629,76 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
+    },
+    {
+      "id": "translate",
+      "name": "Translate",
+      "version": "0.1.1",
+      "description": "Fast, private text translation across dozens of languages",
+      "tagline": "Translate anything, privately",
+      "author": "Moldable",
+      "official": true,
+      "icon": "🌐",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/translate/public/icon.png",
+      "screenshots": [],
+      "about": null,
+      "category": "productivity",
+      "tags": [
+        "translate",
+        "translation",
+        "languages",
+        "essentials"
+      ],
+      "path": "translate",
+      "requiredEnv": [
+        "DEEPL_API_KEY"
+      ],
+      "credentials": [
+        {
+          "key": "DEEPL_API_KEY",
+          "name": "DeepL API Key",
+          "description": "Powers automatic text translation between languages",
+          "url": "https://www.deepl.com/en/your-account/keys"
+        }
+      ],
+      "moldableDependencies": {
+        "@moldable-ai/ui": "^0.2.13",
+        "@moldable-ai/storage": "^0.1.5"
+      },
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
+    },
+    {
+      "id": "weather",
+      "name": "Weather",
+      "version": "0.1.1",
+      "description": "Local forecast and current conditions, at a glance. Keyless and local-first.",
+      "tagline": "Local forecast and current conditions, at a glance. Keyless and local-first.",
+      "author": "Moldable",
+      "official": true,
+      "icon": "⛅",
+      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/weather/public/icon.png",
+      "screenshots": [],
+      "about": null,
+      "category": "weather",
+      "tags": [
+        "weather",
+        "forecast",
+        "essentials"
+      ],
+      "path": "weather",
+      "requiredEnv": [],
+      "credentials": [],
+      "moldableDependencies": {
+        "@moldable-ai/ui": "^0.2.13",
+        "@moldable-ai/storage": "^0.1.5"
+      },
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     },
     {
       "id": "wiki",
       "name": "Wiki",
-      "version": "0.1.2",
+      "version": "0.1.4",
       "description": "Create, edit, and organize a Markdown knowledge base.",
       "tagline": "A linked, local-first Markdown knowledge base",
       "author": "Moldable",
@@ -525,7 +722,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "d9947a0087003a20c229fb69261483d5b8af3fa1"
+      "commit": "5fc261f10395d1ed4d8e7cd7de7ae7d88fb63e79"
     }
   ],
   "categories": [

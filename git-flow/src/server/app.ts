@@ -20,6 +20,7 @@ import {
   getImagePreview,
   getPullRequestContext,
   getRecentRepos,
+  getRepoPreferredCommitAction,
   getStatus,
   openFileInEditor,
   pushCommits,
@@ -101,6 +102,7 @@ type GitPostBody = {
   path?: string
   editorId?: string
   preferredCommitAction?: 'commit' | 'commit-and-push' | 'commit-and-open-pr'
+  repoPath?: string
 }
 
 type GitEditorsResponse = {
@@ -520,6 +522,90 @@ async function commitAndOpenPullRequest(input: {
   }
 }
 
+type QuickShipResult = {
+  ok: true
+  repoPath: string
+  repoName: string
+  action: 'commit' | 'commit-and-push' | 'commit-and-open-pr'
+  summary: string
+  fileCount: number
+  pushed?: boolean
+  pullRequestUrl?: string
+}
+
+// One-click "ship": stage every change in a repo, write the commit message with
+// AI, then run the repo's own default action (commit / push / open PR). Used by
+// the home dashboard's per-row quick action and the "ship all" batch.
+async function quickShipRepo(
+  repoPath: string,
+  workspaceId?: string,
+): Promise<QuickShipResult> {
+  if (!repoPath) {
+    throw new Error('A repository path is required.')
+  }
+
+  // Make this the active repo so the commit/push/PR primitives operate on it.
+  await addRepo(repoPath, workspaceId)
+
+  const status = await getStatus(repoPath, workspaceId)
+  const repoName = status.repoName || repoPath.split('/').pop() || repoPath
+
+  if (status.isClean || status.files.length === 0) {
+    throw new Error(`${repoName} has no uncommitted changes.`)
+  }
+
+  const paths = status.files.map((file) => file.path)
+  const action = await getRepoPreferredCommitAction(repoPath, workspaceId)
+  const { summary, description } = await generateCommitMessage(
+    paths,
+    workspaceId,
+  )
+
+  if (action === 'commit-and-open-pr') {
+    const result = await commitAndOpenPullRequest({
+      paths,
+      summary,
+      description,
+      workspaceId,
+    })
+    return {
+      ok: true,
+      repoPath,
+      repoName,
+      action,
+      summary,
+      fileCount: paths.length,
+      pushed: true,
+      pullRequestUrl: result.draft.url,
+    }
+  }
+
+  await commitFiles(paths, summary, description, workspaceId)
+
+  if (action === 'commit-and-push') {
+    await pushCommits(workspaceId)
+    return {
+      ok: true,
+      repoPath,
+      repoName,
+      action,
+      summary,
+      fileCount: paths.length,
+      pushed: true,
+    }
+  }
+
+  return {
+    ok: true,
+    repoPath,
+    repoName,
+    action,
+    summary,
+    fileCount: paths.length,
+    pushed: false,
+  }
+}
+
 async function generatePullRequestDraft(workspaceId?: string) {
   const context = await getPullRequestContext(workspaceId)
   const prompt = `Repository: ${context.owner}/${context.repo}
@@ -932,7 +1018,13 @@ app.post('/api/git', async (c) => {
             ? 'commit-and-push'
             : 'commit',
         workspaceId,
+        body.repoPath,
       )
+      return c.json(result)
+    }
+
+    if (body.action === 'quickShip') {
+      const result = await quickShipRepo(body.repoPath ?? '', workspaceId)
       return c.json(result)
     }
 

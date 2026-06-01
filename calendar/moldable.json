@@ -1,7 +1,10 @@
 {
   "name": "Calendar",
-  "version": "0.1.5",
-  "aliases": ["schedule", "events"],
+  "version": "0.1.6",
+  "aliases": [
+    "schedule",
+    "events"
+  ],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Integrated calendar with Google Calendar connection",
@@ -11,7 +14,12 @@
   "icon": "🗓️",
   "iconPath": "public/icon.png",
   "category": "productivity",
-  "tags": ["calendar", "schedule", "events", "google"],
+  "tags": [
+    "calendar",
+    "schedule",
+    "events",
+    "google"
+  ],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.13",
     "@moldable-ai/storage": "^0.1.5"
@@ -135,7 +143,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -149,7 +159,9 @@
                   "type": "string"
                 }
               },
-              "required": ["iCalUid"]
+              "required": [
+                "iCalUid"
+              ]
             }
           },
           {
@@ -167,14 +179,25 @@
                 },
                 "responseStatus": {
                   "type": "string",
-                  "enum": ["accepted", "tentative", "declined", "needsAction"]
+                  "enum": [
+                    "accepted",
+                    "tentative",
+                    "declined",
+                    "needsAction"
+                  ]
                 },
                 "sendUpdates": {
                   "type": "string",
-                  "enum": ["all", "externalOnly", "none"]
+                  "enum": [
+                    "all",
+                    "externalOnly",
+                    "none"
+                  ]
                 }
               },
-              "required": ["responseStatus"]
+              "required": [
+                "responseStatus"
+              ]
             }
           },
           {
@@ -195,12 +218,38 @@
   "upstream": {
     "repo": "moldable-ai/apps",
     "path": "calendar",
-    "installedVersion": "0.1.0",
-    "installedCommit": "79c470e37f19631020babbc35646d6ef4eb515fa",
-    "installedAt": "2026-01-15T03:56:56Z"
+    "installedVersion": "0.1.5",
+    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
+    "installedAt": "2026-06-01T14:46:19.161Z",
+    "fileHashes": {
+      ".gitignore": "0a17fbecdb9290b71a9b29be1143f028d2e346639b978ae2358279eadfa5a92b",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "676424e7e0ef160cdff5f1c52b86646c95136989f92537376cfe3231ef1e445f",
+      "package.json": "7a1863b64a488d7a52348eb53aed8a446f949f5bd6b88e03d744d6401eabae57",
+      "pnpm-lock.yaml": "c4e203dc5e9e75add2cc4de734b6e8808f298b8c6d0b729f949bd9fb6f2adb8f",
+      "public/icon.png": "5a4af2049acb66d2706b78d6f803d3536d85e78b357642882a47afe688c47b56",
+      "public/screenshots/1.png": "1477f401eea38fa83e31dfc04fceffe6417898bbb3d3f0cca3e7d9c228e29951",
+      "scripts/moldable-dev.mjs": "663c16f38dd948e9849f6f0df2aa7cfeb52bcf765ab1e22fe8ff3eb4cbc3e70c",
+      "src/client/app.tsx": "2b62e41ac30622ab3fc6bbf2222412e7ba3ae7cf982bbe699ed34e8ca6d6b0b8",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/globals.css": "2eab259997a841ab21bc1fc35be96ce367d5493060215fbde6a7ab3830bf8bab",
+      "src/client/main.tsx": "a9426a32e85b28086056d8b419d8184843bf815835375040af2f5ac1aea750e6",
+      "src/client/query-provider.tsx": "4db1cf96ab6b4e4f4807f37f551fc67143d32f89f409f296d2bb3acb79465c81",
+      "src/components/providers.tsx": "8b853566f79c5cd37dc2b158e3581e6d0274c3351f586071c737a89e96ddc427",
+      "src/lib/aivault.ts": "abdeebe18419237615872dfc4668e850789e9f7cabdb4c2f90d1cdb96beabf06",
+      "src/lib/calendar/google-auth.ts": "65f204053e1b7e878808e6d87407b6e250df382f32ac624c9c10d0d3639a69b9",
+      "src/lib/utils.ts": "746e4d9beb1a5b6f0e047ec19d5f1c542c9f8117f4ea7c80d7b9bd0fe2128e91",
+      "src/server/app.ts": "0c03f030884d56c8edc55bb10adbed6f3078204fa06cefc3c239efa912243ab2",
+      "src/server/index.ts": "0ef93d1486b529a304e4ff1eb2b4891c4559763b5657e7945198aec1d3702038",
+      "STORE.md": "fe7a58598d8cb634e0d26c1ca837e93abc634030f5238c3a0ed9bab2a02b6d06",
+      "tsconfig.json": "8620106457d6cd46b27459d6cff4d46fab0fdecf59987484fba00494c6575249",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
+    }
   },
   "modified": false,
   "routeName": "calendar",
-  "screenshots": ["public/screenshots/1.png"],
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
   "tagline": "Your Google Calendar, clean month view plus daily agenda"
 }

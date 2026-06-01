@@ -33,6 +33,9 @@ export function useMeetings() {
           ...session,
           startedAt: new Date(session.startedAt),
           endedAt: session.endedAt ? new Date(session.endedAt) : undefined,
+          leaseUpdatedAt: session.leaseUpdatedAt
+            ? new Date(session.leaseUpdatedAt)
+            : undefined,
         })),
         segments: m.segments.map((s) => ({
           ...s,
@@ -110,6 +113,9 @@ export function useMeetings() {
           ...session,
           startedAt: new Date(session.startedAt),
           endedAt: session.endedAt ? new Date(session.endedAt) : undefined,
+          leaseUpdatedAt: session.leaseUpdatedAt
+            ? new Date(session.leaseUpdatedAt)
+            : undefined,
         })),
         segments: meeting.segments.map((s) => ({
           ...s,

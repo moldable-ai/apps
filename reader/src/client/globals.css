@@ -1,0 +1,208 @@
+@import 'tailwindcss';
+@import '@moldable-ai/ui/styles';
+@source './**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';
+
+/* OpenDyslexic — bundled reading font for the dyslexic-friendly option.
+   Files live in src/client/fonts and are emitted to dist/assets by Vite. */
+@font-face {
+  font-family: 'OpenDyslexic';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/opendyslexic-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'OpenDyslexic';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/opendyslexic-700.woff2') format('woff2');
+}
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif:
+    'New York', 'Iowan Old Style', Cambria, Palatino, Georgia,
+    'Times New Roman', serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    overflow: hidden;
+  }
+}
+
+@layer components {
+  .reader-serif {
+    font-family: var(--font-serif);
+    letter-spacing: -0.01em;
+  }
+
+  .reader-scrollbar::-webkit-scrollbar {
+    height: 8px;
+    width: 8px;
+  }
+  .reader-scrollbar::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklch, currentColor 16%, transparent);
+    border-radius: 999px;
+  }
+  .reader-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklch, currentColor 28%, transparent);
+  }
+  .reader-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .reader-no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .reader-no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Rendered ebook chapter content. Colors come from inline CSS vars set by
+     the reader (--reader-fg / --reader-accent) so theme switches are instant. */
+  .reader-prose {
+    color: var(--reader-fg, inherit);
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+  .reader-prose p {
+    margin: 0 0 1em;
+    orphans: 2;
+    widows: 2;
+  }
+  .reader-prose h1,
+  .reader-prose h2,
+  .reader-prose h3,
+  .reader-prose h4 {
+    line-height: 1.25;
+    margin: 1.6em 0 0.6em;
+    font-weight: 650;
+  }
+  .reader-prose h1 {
+    font-size: 1.6em;
+  }
+  .reader-prose h2 {
+    font-size: 1.35em;
+  }
+  .reader-prose h3 {
+    font-size: 1.15em;
+  }
+  .reader-prose img,
+  .reader-prose svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 1.2em auto;
+    border-radius: 4px;
+  }
+  .reader-prose a {
+    color: var(--reader-accent, inherit);
+    text-underline-offset: 2px;
+  }
+  .reader-prose blockquote {
+    margin: 1.2em 0;
+    padding-left: 1em;
+    border-left: 3px solid color-mix(in oklch, currentColor 25%, transparent);
+    font-style: italic;
+    opacity: 0.92;
+  }
+  .reader-prose ul,
+  .reader-prose ol {
+    margin: 0 0 1em;
+    padding-left: 1.5em;
+  }
+  .reader-prose li {
+    margin: 0.25em 0;
+  }
+  .reader-prose hr {
+    border: none;
+    border-top: 1px solid color-mix(in oklch, currentColor 20%, transparent);
+    margin: 2em auto;
+    width: 40%;
+  }
+  .reader-prose pre {
+    overflow-x: auto;
+    padding: 0.8em 1em;
+    border-radius: 6px;
+    background: color-mix(in oklch, currentColor 7%, transparent);
+    font-size: 0.85em;
+  }
+  .reader-prose em,
+  .reader-prose i {
+    font-style: italic;
+  }
+  .reader-prose strong,
+  .reader-prose b {
+    font-weight: 650;
+  }
+
+  /* Paginated column flow */
+  .reader-paginated {
+    column-fill: auto;
+    height: 100%;
+  }
+}
+
+@keyframes reader-fade-up {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes reader-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes reader-card-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-reader-fade-up {
+  animation: reader-fade-up 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.animate-reader-fade-in {
+  animation: reader-fade-in 220ms ease-out both;
+}
+.animate-reader-card-in {
+  animation: reader-card-in 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-reader-fade-up,
+  .animate-reader-fade-in,
+  .animate-reader-card-in {
+    animation: none;
+  }
+}

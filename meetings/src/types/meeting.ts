@@ -17,6 +17,17 @@ export interface RecordingSession {
   endedAt?: Date
   audioPath?: string
   audioMimeType?: string
+  audioSourceManifestPath?: string
+  audioSources?: Partial<
+    Record<
+      'microphone' | 'system',
+      { audioPath: string; audioMimeType: string }
+    >
+  >
+  captureSource?: 'microphone' | 'system' | 'both'
+  nativeCaptureSessionId?: string
+  lastNativeSequence?: number
+  leaseUpdatedAt?: Date
 }
 
 export interface MeetingParticipant {

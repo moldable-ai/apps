@@ -50,13 +50,24 @@ const GithubPullRequestSchema = z.object({
   headRefName: z.string().optional(),
 })
 
+const PreferredCommitActionSchema = z.enum([
+  'commit',
+  'commit-and-push',
+  'commit-and-open-pr',
+])
+
+const RepoPreferencesSchema = z.object({
+  preferredCommitAction: PreferredCommitActionSchema.optional(),
+})
+
 const SettingsSchema = z.object({
   currentRepoPath: z.string().default(''),
   recentRepos: z.array(RepoEntrySchema).default([]),
   preferredEditorId: z.string().optional(),
-  preferredCommitAction: z
-    .enum(['commit', 'commit-and-push', 'commit-and-open-pr'])
-    .optional(),
+  preferredCommitAction: PreferredCommitActionSchema.optional(),
+  // Per-repo overrides keyed by absolute repo path. Falls back to the global
+  // preferredCommitAction when a repo has no explicit preference.
+  repoPreferences: z.record(z.string(), RepoPreferencesSchema).default({}),
 })
 
 type Settings = z.infer<typeof SettingsSchema>
@@ -66,6 +77,7 @@ const DEFAULT_SETTINGS: Settings = {
   recentRepos: [],
   preferredEditorId: undefined,
   preferredCommitAction: 'commit',
+  repoPreferences: {},
 }
 
 const MAX_GIT_OUTPUT_CHARS = 16000
@@ -967,11 +979,31 @@ async function saveSettings(settings: Settings, workspaceId?: string) {
   await writeJson(configPath, settings)
 }
 
+function resolveRepoCommitAction(
+  settings: Settings,
+  repoPath: string,
+): PreferredCommitAction {
+  return (
+    settings.repoPreferences?.[repoPath]?.preferredCommitAction ??
+    settings.preferredCommitAction ??
+    'commit'
+  )
+}
+
+export async function getRepoPreferredCommitAction(
+  repoPath: string,
+  workspaceId?: string,
+): Promise<PreferredCommitAction> {
+  const settings = await getSettings(workspaceId)
+  return resolveRepoCommitAction(settings, repoPath)
+}
+
 export async function getRecentRepos(workspaceId?: string) {
   const settings = await getSettings(workspaceId)
 
   const repos = await Promise.all(
     settings.recentRepos.map(async (repo) => {
+      const preferredCommitAction = resolveRepoCommitAction(settings, repo.path)
       try {
         const status = await simpleGit(repo.path).status()
         return {
@@ -980,6 +1012,7 @@ export async function getRecentRepos(workspaceId?: string) {
           changedCount: status.files.length,
           branch: status.current ?? '',
           ahead: status.ahead ?? 0,
+          preferredCommitAction,
         }
       } catch {
         return {
@@ -988,6 +1021,7 @@ export async function getRecentRepos(workspaceId?: string) {
           changedCount: 0,
           branch: '',
           ahead: 0,
+          preferredCommitAction,
         }
       }
     }),
@@ -2000,11 +2034,22 @@ export async function setPreferredEditor(
 export async function setPreferredCommitAction(
   preferredCommitAction: PreferredCommitAction,
   workspaceId?: string,
+  repoPath?: string,
 ) {
   const settings = await getSettings(workspaceId)
-  settings.preferredCommitAction = preferredCommitAction
+
+  if (repoPath) {
+    const existing = settings.repoPreferences[repoPath] ?? {}
+    settings.repoPreferences = {
+      ...settings.repoPreferences,
+      [repoPath]: { ...existing, preferredCommitAction },
+    }
+  } else {
+    settings.preferredCommitAction = preferredCommitAction
+  }
+
   await saveSettings(settings, workspaceId)
-  return { ok: true, preferredCommitAction }
+  return { ok: true, preferredCommitAction, repoPath: repoPath ?? null }
 }
 
 export async function openFileInEditor(

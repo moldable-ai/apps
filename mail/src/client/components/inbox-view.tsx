@@ -397,6 +397,10 @@ function MessageRow({
   showSnoozedUntil: boolean
 }) {
   const snippet = cleanSnippet(message.snippet)
+  const senderLabel =
+    message.threadParticipants && message.threadParticipants.length > 0
+      ? formatThreadParticipants(message.threadParticipants)
+      : senderName(message.from)
   const [avatarHovered, setAvatarHovered] = useState(false)
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -484,8 +488,13 @@ function MessageRow({
                   : 'text-foreground/95 font-medium',
               )}
             >
-              {senderName(message.from)}
+              {senderLabel}
             </p>
+            {message.threadMessageCount && message.threadMessageCount > 1 ? (
+              <span className="bg-muted text-muted-foreground rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                {message.threadMessageCount}
+              </span>
+            ) : null}
           </div>
           <p
             className={cn(
@@ -530,6 +539,12 @@ function MessageRow({
       ) : null}
     </div>
   )
+}
+
+function formatThreadParticipants(participants: string[]) {
+  const visible = participants.slice(0, 3).join(', ')
+  const hidden = participants.length - 3
+  return hidden > 0 ? `${visible} +${hidden}` : visible
 }
 
 function MessageRowActions({

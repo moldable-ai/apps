@@ -82,6 +82,42 @@ export async function writeCachedMessage(
   } satisfies CachedMailMessage)
 }
 
+export async function writeCachedMessageSummary(
+  workspaceId: string,
+  summary: MailMessageSummary,
+) {
+  await ensureDir(messageCacheDir(workspaceId))
+
+  const current = await readJson<CachedMailMessage | null>(
+    messageCachePath(workspaceId, summary.id),
+    null,
+  )
+  const currentMessage = current?.message
+  const detailCached = current?.detailCached === true
+
+  const message: MailMessageDetail = {
+    ...(currentMessage ?? {
+      cc: '',
+      bodyText: '',
+      bodyHtml: '',
+      bodyHtmlText: '',
+      attachments: [],
+    }),
+    ...summary,
+    cc: currentMessage?.cc ?? '',
+    bodyText: currentMessage?.bodyText ?? summary.bodyText ?? '',
+    bodyHtml: currentMessage?.bodyHtml ?? '',
+    bodyHtmlText: currentMessage?.bodyHtmlText ?? summary.bodyHtmlText ?? '',
+    attachments: currentMessage?.attachments ?? summary.attachments ?? [],
+  }
+
+  await writeJson(messageCachePath(workspaceId, summary.id), {
+    cachedAt: new Date().toISOString(),
+    detailCached,
+    message,
+  } satisfies CachedMailMessage)
+}
+
 export async function readCachedMessages(workspaceId: string) {
   let entries: string[]
   try {
@@ -140,6 +176,24 @@ export async function writeCachedAttachment({
   )
 }
 
+function applyLabelChanges<T extends MailMessageDetail>(
+  message: T,
+  changes: { addLabelIds?: string[]; removeLabelIds?: string[] },
+): T {
+  const labelIds = new Set(message.labelIds)
+  for (const labelId of changes.removeLabelIds ?? []) labelIds.delete(labelId)
+  for (const labelId of changes.addLabelIds ?? []) labelIds.add(labelId)
+
+  const nextLabelIds = [...labelIds]
+  return {
+    ...message,
+    labelIds: nextLabelIds,
+    unread: labelIds.has('UNREAD'),
+    starred: labelIds.has('STARRED'),
+    important: labelIds.has('IMPORTANT'),
+  }
+}
+
 export async function updateCachedMessageLabels(
   workspaceId: string,
   id: string,
@@ -152,22 +206,104 @@ export async function updateCachedMessageLabels(
 
   if (!cached?.message || cached.message.id !== id) return
 
-  const labelIds = new Set(cached.message.labelIds)
-  for (const labelId of changes.removeLabelIds ?? []) labelIds.delete(labelId)
-  for (const labelId of changes.addLabelIds ?? []) labelIds.add(labelId)
-
-  const nextLabelIds = [...labelIds]
   await writeJson(messageCachePath(workspaceId, id), {
     ...cached,
     cachedAt: new Date().toISOString(),
-    message: {
-      ...cached.message,
-      labelIds: nextLabelIds,
-      unread: labelIds.has('UNREAD'),
-      starred: labelIds.has('STARRED'),
-      important: labelIds.has('IMPORTANT'),
-    },
+    message: applyLabelChanges(cached.message, changes),
   } satisfies CachedMailMessage)
+}
+
+export async function updateCachedThreadLabels(
+  workspaceId: string,
+  threadId: string,
+  changes: { addLabelIds?: string[]; removeLabelIds?: string[] },
+) {
+  let entries: string[]
+  try {
+    entries = await readdir(messageCacheDir(workspaceId))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 0
+    throw error
+  }
+
+  let changed = 0
+  await Promise.all(
+    entries
+      .filter((entry) => entry.endsWith('.json'))
+      .map(async (entry) => {
+        const filePath = safePath(messageCacheDir(workspaceId), entry)
+        const cached = await readJson<CachedMailMessage | null>(filePath, null)
+        const message = cached?.message
+        if (!cached || !message || message.threadId !== threadId) return
+
+        await writeJson(filePath, {
+          ...cached,
+          cachedAt: new Date().toISOString(),
+          message: applyLabelChanges(message, changes),
+        } satisfies CachedMailMessage)
+        changed += 1
+      }),
+  )
+
+  return changed
+}
+
+export async function reconcileCachedFolderPage({
+  workspaceId,
+  labelId,
+  freshMessages,
+  nextPageToken,
+}: {
+  workspaceId: string
+  labelId: string
+  freshMessages: MailMessageSummary[]
+  nextPageToken?: string
+}) {
+  const freshIds = new Set(freshMessages.map((message) => message.id))
+  const oldestFreshDate = Math.min(
+    ...freshMessages.map((message) => message.internalDate),
+  )
+  const completeFolder = !nextPageToken
+
+  if (freshIds.size === 0 && !completeFolder) return 0
+
+  let entries: string[]
+  try {
+    entries = await readdir(messageCacheDir(workspaceId))
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 0
+    throw error
+  }
+
+  let changed = 0
+  await Promise.all(
+    entries
+      .filter((entry) => entry.endsWith('.json'))
+      .map(async (entry) => {
+        const filePath = safePath(messageCacheDir(workspaceId), entry)
+        const cached = await readJson<CachedMailMessage | null>(filePath, null)
+        const message = cached?.message
+        if (!cached || !message || freshIds.has(message.id)) return
+        if (!message.labelIds.includes(labelId)) return
+        if (!completeFolder && message.internalDate < oldestFreshDate) return
+
+        const labelIds = message.labelIds.filter((id) => id !== labelId)
+        await writeJson(filePath, {
+          ...cached,
+          cachedAt: new Date().toISOString(),
+          message: {
+            ...message,
+            labelIds,
+            unread: labelIds.includes('UNREAD'),
+            starred: labelIds.includes('STARRED'),
+            important: labelIds.includes('IMPORTANT'),
+          },
+        } satisfies CachedMailMessage)
+        changed += 1
+      }),
+  )
+
+  return changed
 }
 
 export function mergeCachedBodyIntoSummary(

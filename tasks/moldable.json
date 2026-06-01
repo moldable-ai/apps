@@ -1,6 +1,6 @@
 {
   "name": "Tasks",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Linear-style local project and task management",
@@ -120,11 +120,16 @@
                         "type": "string"
                       }
                     },
-                    "required": ["name", "color"]
+                    "required": [
+                      "name",
+                      "color"
+                    ]
                   }
                 }
               },
-              "required": ["name"]
+              "required": [
+                "name"
+              ]
             }
           },
           {
@@ -156,7 +161,10 @@
                   "type": "string"
                 },
                 "logoUrl": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "websiteUrl": {
                   "type": "string"
@@ -176,7 +184,10 @@
                         "type": "string"
                       }
                     },
-                    "required": ["name", "color"]
+                    "required": [
+                      "name",
+                      "color"
+                    ]
                   }
                 }
               }
@@ -239,7 +250,12 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": ["none", "low", "medium", "high"]
+                  "enum": [
+                    "none",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
                 },
                 "labelId": {
                   "type": "string"
@@ -286,7 +302,12 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": ["none", "low", "medium", "high"]
+                  "enum": [
+                    "none",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
                 },
                 "limit": {
                   "type": "number",
@@ -358,7 +379,12 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": ["none", "low", "medium", "high"]
+                  "enum": [
+                    "none",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
                 },
                 "labelIds": {
                   "type": "array",
@@ -387,7 +413,10 @@
                         "type": "string"
                       }
                     },
-                    "required": ["name", "color"]
+                    "required": [
+                      "name",
+                      "color"
+                    ]
                   }
                 },
                 "attachments": {
@@ -417,11 +446,16 @@
                         "type": "string"
                       }
                     },
-                    "required": ["name", "size"]
+                    "required": [
+                      "name",
+                      "size"
+                    ]
                   }
                 }
               },
-              "required": ["title"]
+              "required": [
+                "title"
+              ]
             }
           },
           {
@@ -467,7 +501,12 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": ["none", "low", "medium", "high"]
+                  "enum": [
+                    "none",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
                 },
                 "completed": {
                   "type": "boolean"
@@ -499,7 +538,10 @@
                         "type": "string"
                       }
                     },
-                    "required": ["name", "color"]
+                    "required": [
+                      "name",
+                      "color"
+                    ]
                   }
                 },
                 "attachments": {
@@ -529,7 +571,10 @@
                         "type": "string"
                       }
                     },
-                    "required": ["name", "size"]
+                    "required": [
+                      "name",
+                      "size"
+                    ]
                   }
                 }
               }
@@ -609,7 +654,10 @@
                   "type": "string"
                 }
               },
-              "required": ["name", "color"]
+              "required": [
+                "name",
+                "color"
+              ]
             }
           },
           {
@@ -723,7 +771,9 @@
                   "type": "string"
                 }
               },
-              "required": ["content"]
+              "required": [
+                "content"
+              ]
             }
           },
           {
@@ -752,7 +802,10 @@
                   "type": "string"
                 }
               },
-              "required": ["commentId", "content"]
+              "required": [
+                "commentId",
+                "content"
+              ]
             }
           },
           {
@@ -778,7 +831,9 @@
                   "type": "string"
                 }
               },
-              "required": ["commentId"]
+              "required": [
+                "commentId"
+              ]
             }
           }
         ]
@@ -816,5 +871,58 @@
   },
   "env": [],
   "iconPath": "public/icon.png",
-  "tagline": "A Linear-style task manager that lives on your machine"
+  "tagline": "A Linear-style task manager that lives on your machine",
+  "upstream": {
+    "repo": "moldable-ai/apps",
+    "path": "tasks",
+    "installedVersion": "0.1.2",
+    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
+    "installedAt": "2026-06-01T14:47:09.834Z",
+    "fileHashes": {
+      ".gitignore": "d42bc62af442b401d9e53db232c1321613287763b9dda357bb2d5f6f9eceab11",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "36e6c336c01e0090acc8fb0254d61258c6f934e809ae7e0b9386c7fa4b1e3092",
+      "package.json": "0fca7507f794357de3aa8e53ec937fd293bf5bdef7539739b0903475181a924e",
+      "pnpm-lock.yaml": "e26746874fb32c0fdf6a19c33eed44502ba1ad1daaabf1daf38412e962aae1a1",
+      "public/fonts/Geist-Bold.ttf": "ce86ff787fd1bbf47f2590ea096f0e9b38c8ba2644298d37d5c7911cf25900fa",
+      "public/fonts/Geist-Regular.ttf": "2ad37212f14cf44f76ae04d2eb23461472c0a2a91eaf5e46a2579a6743a367a8",
+      "public/fonts/GeistMono-Regular.ttf": "57c4401cf9d61f49e420768f7631adaf57445421541f1b6fca76f8eb565cf802",
+      "public/fonts/GeistMono-SemiBold.ttf": "5bfb87149504c39323f01355217bc0dcab4c6700b62f7a8b735dfdd7a7b43439",
+      "public/icon.png": "2b611c0908c0791fa807362ec14c28dc86f36f35a5a9e0ffff67824de39c971f",
+      "scripts/moldable-dev.mjs": "0a03a3ac56a20fbde8aff2ff5712733286607b8fa39ab931e58c5b49cc53fd41",
+      "src/client/app.tsx": "0c86d56d4e31a720daeedf5c1cdef34e67273bfa4b0bef933b4bb8a254f7b365",
+      "src/client/components/app-button.tsx": "4031d3852847d713751c79d8da62b760e3c1d35bb6e33ccbeb32402eb42dc1b9",
+      "src/client/components/attachment-upload.tsx": "3762b32a700475df5da5eb3168d3e2bd5d7d248b9b730c19f324c49c0d91fe6b",
+      "src/client/components/editor-screens.tsx": "170d41808d8153ca3eba7094804262b6a99d98ad502857bd6e3f1a5cafda3245",
+      "src/client/components/empty-states.tsx": "c132b0a9518e62907cf77c3619e727a36caadd929d1154b7e83cb4376834c8ad",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/components/kanban-board.tsx": "cac6044ec7a6423fbfd67d1478bfb4caedef5fa9359e1d27a86ef83a34018e1f",
+      "src/client/components/label-picker.tsx": "ca7081d6532e15502fe951417d0aa8362ca00da2c9c3604be34a79d0338563ba",
+      "src/client/components/project-directory.tsx": "77b60cf9fe1328f00416879a1006f36b859b52fb89663d8051d7ea8d74094ea7",
+      "src/client/components/project-page-header.tsx": "e98bd41d28ec0256f386b3385d135285bd9be829d0dfe14b30eb2cdd8bc21ca4",
+      "src/client/components/project-tabs.tsx": "ba4ffc9b6b9fd7797af8504b6790d6be679f8f9093c8625d0bac9598fe01ec12",
+      "src/client/components/readme-tab.tsx": "4b43cf2ec9ece6534efb279fed0e71b198ea9c2b11df334621c1dbaaba87f8d1",
+      "src/client/components/status.tsx": "977e507ee763765f202b9fcc42573c4c830b7e8e50aad528a82d5aa55a8d6ea9",
+      "src/client/components/task-filters.tsx": "2f139376b6dedab14b1221243e3692d12a8fb2badb111d712197ee38625aee09",
+      "src/client/components/task-list.tsx": "f91b0fc5d5174b079acdb1966a33d3a68b196728f1e207841fc070875b3a0c84",
+      "src/client/components/toolbar.tsx": "69d6f990ba577d8dc947857a7778ddbf5b3ae3c7a3463ff7c8480ac68acc6748",
+      "src/client/globals.css": "756696c0e675252d91cc58a9cf84b4a520d2fe1d4555ec16bc7a06ec91e87acc",
+      "src/client/lib/forms.ts": "3134244cc7ef56437ed19aae74b69341e74027c19e848b3ab070983a1a95fd2c",
+      "src/client/lib/task-links.ts": "abd4854c6e02483acaa5731286d64e38cf69bb9ae5b1c2036f38631bfdb149a2",
+      "src/client/main.tsx": "e10c449c18091e13f80bae75c2a023536a3b46e4ae7d4c636082abbc51f28aed",
+      "src/client/query-provider.tsx": "ccd981e9d5208c05ad9d4693e4cec53fcc21082fb44fb8d237808f8d3c67d211",
+      "src/server/app.ts": "55424a26b526a92968eb671fad513c200529e55b3be0e203921e12af3920a463",
+      "src/server/index.test.ts": "d49a463caa64601c2a0af3551859415de450862ad7b97f4ceacb65d8edf7e9c7",
+      "src/server/index.ts": "8f24d42968953505964a1946e793485f2e00545dd2d149780df2dea2f4454ad5",
+      "src/server/moldable.ts": "7f40a251c553cf68212e93f32e6747bc8fb339129e79882cf3e7bda8ed366271",
+      "src/server/static.ts": "3f0ab10616534534b6a92651d8659a4556d50c57d425f119677126af4aa54626",
+      "src/server/tasks-api.test.ts": "d2bb0fa7135ae232f789bda223ccf3503ad810b8031ac99255f072c96a3dae70",
+      "src/shared/task-utils.ts": "5fd692bc882912ce16f90321365c29ca84b06b23b0a2885d0d61b7c2517862ac",
+      "src/shared/types.ts": "d7c501b1b6b8bf14ac8a85af82012a9a408b2e62fa282a87979fd39c1f4bea76",
+      "STORE.md": "3aa1b9e08552e1a8aae3df28632faa859a4e4b58a1abc32de8aec5874500c8f5",
+      "tsconfig.json": "2c2086735a1494ec9219070ed35e32706ca3c9b88c25d484f4fd37f5600a4b7a",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
+    }
+  },
+  "modified": false
 }

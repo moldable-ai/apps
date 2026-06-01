@@ -6,9 +6,12 @@ import {
   readCachedAttachment,
   readCachedMessage,
   readCachedMessages,
+  reconcileCachedFolderPage,
   updateCachedMessageLabels,
+  updateCachedThreadLabels,
   writeCachedAttachment,
   writeCachedMessage,
+  writeCachedMessageSummary,
 } from './message-cache'
 import {
   getActiveSnoozeIds,
@@ -53,6 +56,11 @@ export interface MailMessageDetail extends MailMessageSummary {
   bodyHtml: string
   bodyHtmlText: string
   attachments: MailAttachment[]
+}
+
+export interface MailThreadDetail {
+  id: string
+  messages: MailMessageDetail[]
 }
 
 export interface MailAttachment {
@@ -114,12 +122,27 @@ const detailWarmups = new Map<string, Promise<MailMessageDetail>>()
 const contactsWarmups = new Map<string, Promise<MailContact[]>>()
 const contactsScopeWarnings = new Set<string>()
 const gmailTokenKeepalives = new Map<string, ReturnType<typeof setInterval>>()
+const messageListSyncs = new Map<string, Promise<void>>()
+const messageListSyncedAt = new Map<string, number>()
+const mailBackgroundSyncs = new Map<string, ReturnType<typeof setInterval>>()
 
 const GMAIL_TOKEN_KEEPALIVE_INTERVAL_MS = 55 * 60 * 1000
 const GMAIL_TOKEN_KEEPALIVE_INITIAL_DELAY_MS = 30 * 1000
+const BACKGROUND_MESSAGE_SYNC_MIN_INTERVAL_MS = 5_000
+const MAIL_BACKGROUND_SYNC_INTERVAL_MS = 60_000
+const CACHE_PAGE_TOKEN_PREFIX = 'cache:'
 
 function detailWarmupKey(workspaceId: string, id: string) {
   return `${workspaceId}:${id}`
+}
+
+function messageListSyncKey(workspaceId: string, options: ListMessagesOptions) {
+  return JSON.stringify({
+    workspaceId,
+    labelId: options.labelId ?? 'INBOX',
+    query: options.query ?? '',
+    maxResults: options.maxResults ?? 20,
+  })
 }
 
 export function isAuthError(error: unknown) {
@@ -1012,17 +1035,201 @@ async function wakeExpiredSnoozes(workspaceId: string) {
   }
 }
 
-export async function listMessages(
-  workspaceId: string,
-  options: {
-    labelId?: string
-    query?: string
-    pageToken?: string
-    maxResults?: number
-  } = {},
-) {
-  await ensureGmailConnected(workspaceId)
+interface ListMessagesOptions {
+  labelId?: string
+  query?: string
+  pageToken?: string
+  maxResults?: number
+}
 
+interface MessageListResponse {
+  messages: MailMessageSummary[]
+  nextPageToken?: string
+  resultSizeEstimate: number
+  source?: 'cache' | 'gmail'
+  syncing?: boolean
+  syncedAt?: string
+}
+
+function normalizeListQuery(query: string | undefined) {
+  return query?.trim().toLowerCase() ?? ''
+}
+
+function supportsCachedListQuery(query: string | undefined) {
+  const normalized = normalizeListQuery(query)
+  return (
+    normalized === '' ||
+    normalized === 'is:unread' ||
+    normalized === 'is:important is:unread' ||
+    normalized === 'is:unread is:important'
+  )
+}
+
+function messageMatchesListQuery(
+  message: MailMessageSummary,
+  query: string | undefined,
+) {
+  const normalized = normalizeListQuery(query)
+  if (!normalized) return true
+  if (normalized === 'is:unread') return message.unread
+  if (
+    normalized === 'is:important is:unread' ||
+    normalized === 'is:unread is:important'
+  ) {
+    return message.important && message.unread
+  }
+  return false
+}
+
+function messageMatchesFolder(
+  message: MailMessageSummary,
+  labelId: string | undefined,
+  activeSnoozeIds: Set<string> | null,
+) {
+  const folderId = labelId ?? 'INBOX'
+  if (folderId === 'all') {
+    return (
+      !message.labelIds.includes('SPAM') && !message.labelIds.includes('TRASH')
+    )
+  }
+  if (folderId === 'SNOOZED') return activeSnoozeIds?.has(message.id) ?? false
+  if (folderId === 'INBOX') {
+    return (
+      message.labelIds.includes('INBOX') &&
+      !(activeSnoozeIds?.has(message.id) ?? false)
+    )
+  }
+  return message.labelIds.includes(folderId)
+}
+
+function cacheOffsetFromPageToken(pageToken: string | undefined) {
+  if (!pageToken) return 0
+  if (!pageToken.startsWith(CACHE_PAGE_TOKEN_PREFIX)) return null
+
+  const offset = Number(pageToken.slice(CACHE_PAGE_TOKEN_PREFIX.length))
+  return Number.isInteger(offset) && offset >= 0 ? offset : null
+}
+
+async function listMessagesFromCache(
+  workspaceId: string,
+  options: ListMessagesOptions,
+): Promise<MessageListResponse | null> {
+  if (!supportsCachedListQuery(options.query)) return null
+
+  const offset = cacheOffsetFromPageToken(options.pageToken)
+  if (offset === null) return null
+
+  const cachedMessages = await readCachedMessages(workspaceId)
+  if (cachedMessages.length === 0) return null
+
+  const activeSnoozeIds =
+    options.labelId === 'INBOX' ||
+    !options.labelId ||
+    options.labelId === 'SNOOZED'
+      ? await getActiveSnoozeIds(workspaceId)
+      : null
+  const maxResults = options.maxResults ?? 20
+  const filtered = cachedMessages
+    .filter((message) =>
+      messageMatchesFolder(message, options.labelId, activeSnoozeIds),
+    )
+    .filter((message) => messageMatchesListQuery(message, options.query))
+    .sort((a, b) => b.internalDate - a.internalDate)
+
+  const page = filtered.slice(offset, offset + maxResults)
+  const nextOffset = offset + page.length
+  return {
+    messages: page,
+    nextPageToken:
+      nextOffset < filtered.length
+        ? `${CACHE_PAGE_TOKEN_PREFIX}${nextOffset}`
+        : undefined,
+    resultSizeEstimate: filtered.length,
+    source: 'cache',
+  }
+}
+
+async function cacheMessageSummaries(
+  workspaceId: string,
+  messages: MailMessageSummary[],
+) {
+  await Promise.all(
+    messages.map((message) => writeCachedMessageSummary(workspaceId, message)),
+  )
+}
+
+function syncedAtFor(key: string) {
+  const syncedAt = messageListSyncedAt.get(key)
+  return syncedAt ? new Date(syncedAt).toISOString() : undefined
+}
+
+function syncMessagesInBackground(
+  workspaceId: string,
+  options: ListMessagesOptions,
+) {
+  const syncOptions = { ...options, pageToken: undefined }
+  const key = messageListSyncKey(workspaceId, syncOptions)
+  const existing = messageListSyncs.get(key)
+  if (existing) return true
+
+  const lastSyncedAt = messageListSyncedAt.get(key) ?? 0
+  if (Date.now() - lastSyncedAt < BACKGROUND_MESSAGE_SYNC_MIN_INTERVAL_MS) {
+    return false
+  }
+
+  const sync = listMessagesFromGmail(workspaceId, syncOptions)
+    .then(() => {
+      messageListSyncedAt.set(key, Date.now())
+    })
+    .catch((error) => {
+      if (isAuthError(error)) return
+      console.warn('Failed to sync mail in background:', error)
+    })
+    .finally(() => {
+      if (messageListSyncs.get(key) === sync) messageListSyncs.delete(key)
+    })
+  messageListSyncs.set(key, sync)
+  return true
+}
+
+export function startMailBackgroundSync(workspaceId: string) {
+  if (mailBackgroundSyncs.has(workspaceId)) return
+
+  const refresh = () => {
+    void isAuthenticated(workspaceId)
+      .then((authenticated) => {
+        if (!authenticated) return
+
+        const folders: ListMessagesOptions[] = [
+          { labelId: 'INBOX', maxResults: 24 },
+          { labelId: 'INBOX', query: 'is:unread', maxResults: 24 },
+          { labelId: 'SENT', maxResults: 24 },
+          { labelId: 'all', maxResults: 24 },
+          { labelId: 'SNOOZED', maxResults: 24 },
+          { labelId: 'SPAM', maxResults: 24 },
+          { labelId: 'TRASH', maxResults: 24 },
+        ]
+
+        for (const options of folders) {
+          syncMessagesInBackground(workspaceId, options)
+        }
+      })
+      .catch((error) => {
+        if (isAuthError(error)) return
+        console.warn('Failed to run background mail sync:', error)
+      })
+  }
+
+  refresh()
+  const interval = setInterval(refresh, MAIL_BACKGROUND_SYNC_INTERVAL_MS)
+  interval.unref?.()
+  mailBackgroundSyncs.set(workspaceId, interval)
+}
+
+async function listMessagesFromGmail(
+  workspaceId: string,
+  options: ListMessagesOptions = {},
+): Promise<MessageListResponse> {
   if (options.labelId === 'SNOOZED') {
     const entries = await listActiveSnoozes(workspaceId)
     const limited = entries.slice(0, options.maxResults ?? 20)
@@ -1045,6 +1252,7 @@ export async function listMessages(
         }),
       )
     ).filter((message): message is MailMessageSummary => message !== null)
+    await cacheMessageSummaries(workspaceId, summaries)
     const messages = await hydrateSummaryBodies(workspaceId, summaries)
     void warmMessageDetails(workspaceId, summaries)
 
@@ -1083,6 +1291,21 @@ export async function listMessages(
       .filter((id): id is string => !!id)
       .map((id) => getMessageSummary(workspaceId, id)),
   )
+  await cacheMessageSummaries(workspaceId, summaries)
+  const reconciledLabelId =
+    options.labelId && options.labelId !== 'all' && !options.query
+      ? options.labelId
+      : null
+  if (reconciledLabelId && !options.pageToken) {
+    await reconcileCachedFolderPage({
+      workspaceId,
+      labelId: reconciledLabelId,
+      freshMessages: summaries,
+      nextPageToken: response.nextPageToken ?? undefined,
+    }).catch((error) => {
+      console.warn(`Failed to reconcile ${reconciledLabelId} cache:`, error)
+    })
+  }
 
   const activeSnoozeIds =
     options.labelId === 'INBOX' || !options.labelId
@@ -1097,8 +1320,37 @@ export async function listMessages(
 
   return {
     messages,
-    nextPageToken: response.nextPageToken,
+    nextPageToken: response.nextPageToken ?? undefined,
     resultSizeEstimate: response.resultSizeEstimate ?? messages.length,
+    source: 'gmail',
+  }
+}
+
+export async function listMessages(
+  workspaceId: string,
+  options: ListMessagesOptions = {},
+) {
+  await ensureGmailConnected(workspaceId)
+
+  const cached = await listMessagesFromCache(workspaceId, options)
+  if (cached) {
+    const syncing = syncMessagesInBackground(workspaceId, options)
+    const key = messageListSyncKey(workspaceId, {
+      ...options,
+      pageToken: undefined,
+    })
+    return {
+      ...cached,
+      syncing,
+      syncedAt: syncedAtFor(key),
+    }
+  }
+
+  const fresh = await listMessagesFromGmail(workspaceId, options)
+  messageListSyncedAt.set(messageListSyncKey(workspaceId, options), Date.now())
+  return {
+    ...fresh,
+    syncedAt: new Date().toISOString(),
   }
 }
 
@@ -1112,9 +1364,43 @@ export async function getMessage(workspaceId: string, id: string) {
   )
 }
 
+export async function getThread(
+  workspaceId: string,
+  threadId: string,
+): Promise<MailThreadDetail> {
+  await ensureGmailConnected(workspaceId)
+
+  const params = new URLSearchParams()
+  params.set('format', 'full')
+  const thread = await gmailJson<gmail_v1.Schema$Thread>(
+    workspaceId,
+    'google-gmail/messages-read',
+    { path: gmailPath(`/threads/${encodeURIComponent(threadId)}`, params) },
+  )
+
+  const messages = (
+    await Promise.all(
+      (thread.messages ?? []).map(async (message) => {
+        const detail = await mapMessageDetail(workspaceId, message, {
+          resolveInlineImages: true,
+        })
+        await writeCachedMessage(workspaceId, detail, { detailCached: true })
+        return detail
+      }),
+    )
+  ).sort((a, b) => a.internalDate - b.internalDate)
+
+  return {
+    id: thread.id ?? threadId,
+    messages,
+  }
+}
+
 type GmailLabelChanges = { addLabelIds?: string[]; removeLabelIds?: string[] }
-type GmailLabelResponse = { labelIds?: string[] }
+type GmailLabelResponse = { id?: string; labelIds?: string[] }
+type GmailThreadLabelResponse = { messages?: GmailLabelResponse[] }
 const LOCAL_ONLY_LABEL_IDS = new Set(['SNOOZED'])
+const THREAD_WIDE_LABEL_IDS = new Set(['INBOX', 'SPAM', 'TRASH'])
 
 function splitLocalOnlyLabelChanges(changes: GmailLabelChanges) {
   const gmailChanges = {
@@ -1166,6 +1452,25 @@ async function modifyGmailMessageLabels(
   )
 }
 
+async function modifyGmailThreadLabels(
+  workspaceId: string,
+  threadId: string,
+  changes: GmailLabelChanges,
+) {
+  const body = gmailLabelChangesBody(changes)
+  if (!body) return { messages: undefined }
+
+  return gmailJson<GmailThreadLabelResponse>(
+    workspaceId,
+    'google-gmail/messages-modify',
+    {
+      method: 'POST',
+      path: gmailPath(`/threads/${encodeURIComponent(threadId)}/modify`),
+      body,
+    },
+  )
+}
+
 function assertGmailLabels(
   message: GmailLabelResponse,
   expected: { include?: string[]; exclude?: string[] },
@@ -1187,6 +1492,106 @@ function assertGmailLabels(
   }
 }
 
+function assertGmailThreadLabels(
+  thread: GmailThreadLabelResponse,
+  expected: { include?: string[]; exclude?: string[] },
+) {
+  if (!Array.isArray(thread.messages) || thread.messages.length === 0) {
+    throw new Error('Gmail did not confirm the thread label update.')
+  }
+
+  for (const message of thread.messages) {
+    assertGmailLabels(message, expected)
+  }
+}
+
+function matchesExpectedLabels(
+  message: { labelIds: string[] },
+  expected: { include?: string[]; exclude?: string[] },
+) {
+  const labels = new Set(message.labelIds)
+  return (
+    (expected.include ?? []).every((labelId) => labels.has(labelId)) &&
+    (expected.exclude ?? []).every((labelId) => !labels.has(labelId))
+  )
+}
+
+async function enforceConfirmedGmailThreadLabelChanges(
+  workspaceId: string,
+  threadId: string,
+  changes: GmailLabelChanges,
+  expected: { include?: string[]; exclude?: string[] },
+) {
+  const thread = await getThread(workspaceId, threadId)
+  const remainingMessages = thread.messages.filter(
+    (message) => !matchesExpectedLabels(message, expected),
+  )
+  if (remainingMessages.length === 0) return
+
+  await Promise.all(
+    remainingMessages.map(async (message) => {
+      const updated = await modifyGmailMessageLabels(
+        workspaceId,
+        message.id,
+        changes,
+      )
+      assertGmailLabels(updated, expected)
+      await updateCachedMessageLabels(workspaceId, message.id, changes)
+    }),
+  )
+}
+
+function shouldModifyThreadLabels(changes: GmailLabelChanges) {
+  return [
+    ...(changes.addLabelIds ?? []),
+    ...(changes.removeLabelIds ?? []),
+  ].some((labelId) => THREAD_WIDE_LABEL_IDS.has(labelId))
+}
+
+async function getThreadIdForMessage(workspaceId: string, id: string) {
+  const cached = await readCachedMessage(workspaceId, id)
+  if (cached?.threadId) return cached.threadId
+
+  const summary = await getMessageSummary(workspaceId, id)
+  return summary.threadId
+}
+
+async function applyConfirmedGmailLabelChanges(
+  workspaceId: string,
+  id: string,
+  changes: GmailLabelChanges,
+) {
+  const body = gmailLabelChangesBody(changes)
+  if (!body) return
+
+  const expected = {
+    include: changes.addLabelIds,
+    exclude: changes.removeLabelIds,
+  }
+
+  if (shouldModifyThreadLabels(changes)) {
+    const threadId = await getThreadIdForMessage(workspaceId, id)
+    const updated = await modifyGmailThreadLabels(
+      workspaceId,
+      threadId,
+      changes,
+    )
+    assertGmailThreadLabels(updated, expected)
+    await updateCachedThreadLabels(workspaceId, threadId, changes)
+    await enforceConfirmedGmailThreadLabelChanges(
+      workspaceId,
+      threadId,
+      changes,
+      expected,
+    )
+    return
+  }
+
+  const updated = await modifyGmailMessageLabels(workspaceId, id, changes)
+  assertGmailLabels(updated, expected)
+  await updateCachedMessageLabels(workspaceId, id, changes)
+}
+
 export async function modifyMessageLabels(
   workspaceId: string,
   id: string,
@@ -1194,13 +1599,10 @@ export async function modifyMessageLabels(
 ) {
   await ensureGmailConnected(workspaceId)
   const { gmailChanges, localChanges } = splitLocalOnlyLabelChanges(changes)
-  const body = gmailLabelChangesBody(gmailChanges)
-  if (body) {
-    await modifyGmailMessageLabels(workspaceId, id, gmailChanges)
-  }
+  await applyConfirmedGmailLabelChanges(workspaceId, id, gmailChanges)
 
-  const cacheBody = gmailLabelChangesBody(changes)
-  if (cacheBody) await updateCachedMessageLabels(workspaceId, id, cacheBody)
+  const localBody = gmailLabelChangesBody(localChanges)
+  if (localBody) await updateCachedMessageLabels(workspaceId, id, localChanges)
 
   if (localChanges.removeLabelIds?.includes('SNOOZED')) {
     await unsnoozeMessage({ workspaceId, id })
@@ -1220,18 +1622,14 @@ export async function applyMessageAction(
       addLabelIds: ['TRASH'],
       removeLabelIds: ['INBOX'],
     }
-    const updated = await modifyGmailMessageLabels(workspaceId, id, changes)
-    assertGmailLabels(updated, { include: ['TRASH'], exclude: ['INBOX'] })
-    await updateCachedMessageLabels(workspaceId, id, changes)
+    await applyConfirmedGmailLabelChanges(workspaceId, id, changes)
     await unsnoozeMessage({ workspaceId, id })
     return
   }
 
   if (action === 'untrash') {
     const changes = { removeLabelIds: ['TRASH'] }
-    const updated = await modifyGmailMessageLabels(workspaceId, id, changes)
-    assertGmailLabels(updated, { exclude: ['TRASH'] })
-    await updateCachedMessageLabels(workspaceId, id, changes)
+    await applyConfirmedGmailLabelChanges(workspaceId, id, changes)
     return
   }
 
@@ -1241,12 +1639,7 @@ export async function applyMessageAction(
       throw new Error('Snooze requires a future wake time.')
     }
     const changes = { removeLabelIds: ['INBOX'] }
-    await gmailJson<unknown>(workspaceId, 'google-gmail/messages-modify', {
-      method: 'POST',
-      path: gmailPath(`/messages/${encodeURIComponent(id)}/modify`),
-      body: changes,
-    })
-    await updateCachedMessageLabels(workspaceId, id, changes)
+    await applyConfirmedGmailLabelChanges(workspaceId, id, changes)
     const cached = await readCachedMessage(workspaceId, id)
     await snoozeMessage({
       workspaceId,
@@ -1259,12 +1652,7 @@ export async function applyMessageAction(
 
   if (action === 'unsnooze') {
     const changes = { addLabelIds: ['INBOX'] }
-    await gmailJson<unknown>(workspaceId, 'google-gmail/messages-modify', {
-      method: 'POST',
-      path: gmailPath(`/messages/${encodeURIComponent(id)}/modify`),
-      body: changes,
-    })
-    await updateCachedMessageLabels(workspaceId, id, changes)
+    await applyConfirmedGmailLabelChanges(workspaceId, id, changes)
     await unsnoozeMessage({ workspaceId, id })
     return
   }
@@ -1285,12 +1673,7 @@ export async function applyMessageAction(
   }
 
   const changes = labelChanges[action]
-  await gmailJson<unknown>(workspaceId, 'google-gmail/messages-modify', {
-    method: 'POST',
-    path: gmailPath(`/messages/${encodeURIComponent(id)}/modify`),
-    body: changes,
-  })
-  await updateCachedMessageLabels(workspaceId, id, changes)
+  await applyConfirmedGmailLabelChanges(workspaceId, id, changes)
 
   if (action === 'archive' || action === 'spam') {
     await unsnoozeMessage({ workspaceId, id })

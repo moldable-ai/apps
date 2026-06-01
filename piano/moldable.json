@@ -1,6 +1,6 @@
 {
   "name": "Piano",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "A local-first piano song library with 88-key playback and falling-note practice visualization.",
@@ -44,7 +44,9 @@
                   "pattern": "^[a-z0-9-]+$"
                 }
               },
-              "required": ["songId"]
+              "required": [
+                "songId"
+              ]
             }
           },
           {
@@ -59,7 +61,9 @@
                   "pattern": "^[a-z0-9-]+$"
                 }
               },
-              "required": ["songId"]
+              "required": [
+                "songId"
+              ]
             }
           },
           {
@@ -74,7 +78,10 @@
                   "pattern": "^[a-z0-9-]+$"
                 },
                 "suggested": {
-                  "type": ["object", "null"],
+                  "type": [
+                    "object",
+                    "null"
+                  ],
                   "properties": {
                     "presetId": {
                       "type": "string"
@@ -88,7 +95,10 @@
                   }
                 },
                 "override": {
-                  "type": ["object", "null"],
+                  "type": [
+                    "object",
+                    "null"
+                  ],
                   "properties": {
                     "presetId": {
                       "type": "string"
@@ -102,7 +112,9 @@
                   }
                 }
               },
-              "required": ["songId"]
+              "required": [
+                "songId"
+              ]
             }
           },
           {
@@ -163,7 +175,9 @@
                   "type": "string"
                 }
               },
-              "required": ["filePath"]
+              "required": [
+                "filePath"
+              ]
             }
           },
           {
@@ -202,7 +216,9 @@
                   "description": "Optional suggested/override sound settings for the song."
                 }
               },
-              "required": ["song"]
+              "required": [
+                "song"
+              ]
             }
           },
           {
@@ -245,7 +261,9 @@
                   "description": "Optional suggested/override sound settings. Overrides the file envelope."
                 }
               },
-              "required": ["filePath"]
+              "required": [
+                "filePath"
+              ]
             }
           },
           {
@@ -292,7 +310,10 @@
                   "description": "Optional suggested/override sound settings for the song."
                 }
               },
-              "required": ["songId", "noteOperations"]
+              "required": [
+                "songId",
+                "noteOperations"
+              ]
             }
           },
           {
@@ -340,7 +361,9 @@
                   "description": "Optional suggested/override sound settings. Overrides the file envelope."
                 }
               },
-              "required": ["filePath"]
+              "required": [
+                "filePath"
+              ]
             }
           },
           {
@@ -372,5 +395,181 @@
       }
     ]
   },
-  "tagline": "Practice piano with falling notes and a full 88-key library"
+  "tagline": "Practice piano with falling notes and a full 88-key library",
+  "upstream": {
+    "repo": "moldable-ai/apps",
+    "path": "piano",
+    "installedVersion": "0.1.3",
+    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
+    "installedAt": "2026-06-01T14:46:56.012Z",
+    "fileHashes": {
+      ".gitignore": "d42bc62af442b401d9e53db232c1321613287763b9dda357bb2d5f6f9eceab11",
+      "data/song-catalog/mutopia/mutopia-piano-index.json": "2a3897a4c122c5d503c3c83f464a19af24df8c14b523cc54cc562ee568b58615",
+      "data/songs/beethoven-moonlight-sonata-1.json": "3dfcdd5a1405e14346b7baafd8f81181cc759764d1b4648b7f2644abee8740f9",
+      "data/songs/beethoven-symphony-no-5.json": "65d9f85cde945a3722ecfa6b563c1ee6c28a64b096b044ab0c30d929925acf96",
+      "data/songs/chopin-nocturne-op-9-no-2.json": "ce21e24c2bfe2f385247801c6c0cdd09ad902cc87f92cf8a212c845494e8bb4c",
+      "data/songs/chopin-raindrop-prelude.json": "379561adf701ac293900f568e716e89af087c5ed0daefef02e4d99cfa738754b",
+      "data/songs/clair-de-lune.json": "49ec43a177bbd50fdd4d7fd5b4f4de922fea62c3deec14eadc1866c22fa89128",
+      "data/songs/debussy-reverie.json": "59744fb8456b72fbbd3e983f40ceae80cbd7defa78cc47c2692c381f1c438976",
+      "data/songs/fur-elise.json": "5d6acaeb51d6a306b2ff5777780809a4eb36d4af067a57d55bd8d12f4085d382",
+      "data/songs/satie-gnossienne-no-1.json": "91de9f51b40843782d3eb8acff7e73ef7ed4b98654ef5b34f70b49ddd63c32d5",
+      "docs/courses-plan.md": "d809d98b4678fde9c2f214a119723d0bd3a9c44067f4d5a949f3fea9b1def40d",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "3311cae3626462b10947ff20695c67e5d5f3f630d7833f5edcb61e5ddb4fab1e",
+      "package.json": "1a7fa5e2734eb2229dffad8a88db675babaaa6c40b03437c29fbb410f99746ef",
+      "pnpm-lock.yaml": "09a5aa6c1238f7db7599b4400256e00075e08b9e434b6637c0efce381b69286f",
+      "public/icon.png": "82f8c6e69803dfecc36f2221b3f551e3c0221b1d606d25a7fc7f64d4980e6c63",
+      "public/instruments/splendid-grand-piano/FF C2.m4a": "ae58dfbc0f1d463bee31b244041b8619e21d2f5de4152dc1857433179b8c06e5",
+      "public/instruments/splendid-grand-piano/FF C3.m4a": "d2895a5cd181875dc0e737c9e9ffbc281ca8f502b4e555c1a7558ab81e9ad769",
+      "public/instruments/splendid-grand-piano/FF C4.m4a": "70a4adf2118591e1085f7e1c748aa04e2c06904e8eecad8fc9a3b17207d0112a",
+      "public/instruments/splendid-grand-piano/FF E1.m4a": "d19004d26fdd6fd158664b074c153aa1826b2bf110b98e0f1e93f7efa2edff7e",
+      "public/instruments/splendid-grand-piano/FF E2.m4a": "902adc7104ab89f80fc2241b0e8c259357fb0fbd2e1c008a6df5989a50f55857",
+      "public/instruments/splendid-grand-piano/FF E3.m4a": "297fdde84f5179ee59826e2e8532d648786c7a9a316aa86dd7081c1ee68af672",
+      "public/instruments/splendid-grand-piano/FF E4.m4a": "7f47f70ebbcab7ee2e1e500796416530a8eb5eccfab1d90bc2c9d00eb87acbd0",
+      "public/instruments/splendid-grand-piano/FF E5.m4a": "6a393d83463a307e7b55732732f254a3adb58b8e685047e18deeaf006b9253b1",
+      "public/instruments/splendid-grand-piano/FF G0.m4a": "773b317db57d532effb607f827ab0e75b2366d6a4b9801879a0373709af6a309",
+      "public/instruments/splendid-grand-piano/FF G1.m4a": "a7b01040b2f14735f4bd439e5525b5e6a8d68af648d3f011024c19b485f26c8d",
+      "public/instruments/splendid-grand-piano/FF G2.m4a": "c8d42ecc368b9e2cebb213278b2429affcd90a918c23aa62c574c93ca1a2c413",
+      "public/instruments/splendid-grand-piano/FF G3.m4a": "76f0d845b18c056c1a1d898caf4a64a649a4a7924537e358b64cc726c5b7da68",
+      "public/instruments/splendid-grand-piano/FF G4.m4a": "e6705997446078069a95f7a943e66616e6f281624b4b59ffdd1fcb86ff39e751",
+      "public/instruments/splendid-grand-piano/FF G5.m4a": "7432f7bc8978dd70e610591b495e6bf9763e12d88f00e1df7aca8869adac2406",
+      "public/instruments/splendid-grand-piano/MF C2.m4a": "f83ca5a58610cfdd0628b08dcfb07897e843500b7fec9d69126001a62ef3a5be",
+      "public/instruments/splendid-grand-piano/MF C3.m4a": "42d4d5dcf205f54e18b92481749ec21290ce1f5fcd6c228d3c90a0ff54a1df73",
+      "public/instruments/splendid-grand-piano/MF C4.m4a": "87d38de30449443992798997203442f705be6aed557ee59c9e48f9ec396fada4",
+      "public/instruments/splendid-grand-piano/Mf C6.m4a": "1d11e9f0d10f114e330f0c111f9ed77e646104815748faa2abc3d8a3bcd1c6bf",
+      "public/instruments/splendid-grand-piano/Mf C7.m4a": "f325d7c6bf70fe3f952c9ba830c2aa6678d1f491bec568dab4678f744dc7f34d",
+      "public/instruments/splendid-grand-piano/MF E1.m4a": "3e7a1ce0302842cd1a774eb20a4a5a3e8725bfa20c48afac5c2ed23da19929b3",
+      "public/instruments/splendid-grand-piano/MF E2.m4a": "7c6b0e013a0921e8aee7917f17aca9b8c108d8de2c428f3aa1f93d9b592cf942",
+      "public/instruments/splendid-grand-piano/MF E3.m4a": "f1c8dc8e12419f861eb84d7b17c07e9dd3586155fbc6d7bf3e4c04f6001b8709",
+      "public/instruments/splendid-grand-piano/Mf E4.m4a": "7854d29215ef8f28f136b1b3db6f4881a6ebb4ab4399f9446667a22df0b84548",
+      "public/instruments/splendid-grand-piano/Mf E5.m4a": "40b044ea6b6678c90b5758d8de476b86086fe3f1ea749f8231d952aa0709b614",
+      "public/instruments/splendid-grand-piano/Mf E6.m4a": "09c70508f66e05970d0226775665f1e18d5d4cb10a352046db0c8c600510303e",
+      "public/instruments/splendid-grand-piano/Mf G0.m4a": "308eedebce261d3361893b30a5f523927cde2ad246b384a106bd0eef96a6fba0",
+      "public/instruments/splendid-grand-piano/MF G1.m4a": "617b8a9667c36e4fb92125e1336bbced645856b664357a43245ba9d552dc3058",
+      "public/instruments/splendid-grand-piano/MF G2.m4a": "19d5bafde1c37d715f1ffb5a7a5e2ac44172c2895b25b3ee71980137a5985597",
+      "public/instruments/splendid-grand-piano/MF G3.m4a": "f91f7d17836330e3d850b9ca7847864920f934f10332bc631ac9a7b7cce57dd3",
+      "public/instruments/splendid-grand-piano/Mf G4.m4a": "3164e0648e9246347ab10d649d14a928d92e535af9b2252d08807a63590e9f7b",
+      "public/instruments/splendid-grand-piano/Mf G5.m4a": "693f2582526bd10a0e32b2bfff1f8278fc0314954203de4a77013fd7e8d84b1c",
+      "public/instruments/splendid-grand-piano/Mf G6.m4a": "223ebd285f844801959b37fa7c5defea460fc809abab1b39053c366a3d27392f",
+      "public/instruments/splendid-grand-piano/Mp C2.m4a": "b768d12e83424a8c322ebe93d03ae28b2a7b2baffcb6fb4f7106587a1d954f52",
+      "public/instruments/splendid-grand-piano/Mp C3.m4a": "2d45d6a09cb4cf57cf040264beff9a926c08e3fe2516671d06b1d185b9d91cbd",
+      "public/instruments/splendid-grand-piano/Mp C4.m4a": "ecc288a15b0f36e2cf6c52c5a25dab56768d5d1028f9648d004b209ccbb2aaf8",
+      "public/instruments/splendid-grand-piano/Mp C6.m4a": "eacc16c8b6f3812214b3e7631e69c341137f493ee3e0753b97c62841b4759310",
+      "public/instruments/splendid-grand-piano/Mp E1.m4a": "9d9a7a797c1d0b897b39388bde61842d45400798d3ab45666365e8ad85ab69e5",
+      "public/instruments/splendid-grand-piano/Mp E2.m4a": "8bbff570781e9e2098f81959f6a815bc50ac97af92e6911b65d718e11eca19fe",
+      "public/instruments/splendid-grand-piano/Mp E3.m4a": "a820f38506bda8a1169e23400d27192d4e98bc3fd3ee9bd8e398153b29cfcf03",
+      "public/instruments/splendid-grand-piano/Mp E4.m4a": "c01c8fc81d6934e637bc83b7fe485e5d5765616c588162126ccdb1fe34b73ec6",
+      "public/instruments/splendid-grand-piano/Mp E5.m4a": "bf79b7899aa05562bff55428975355bd23c36abb4513b9e1beac130e2ae1d218",
+      "public/instruments/splendid-grand-piano/Mp G0.m4a": "cfa51a3592d4b474c4d560aebcfb6c176350e2ccbb4bd7da037b0857de448690",
+      "public/instruments/splendid-grand-piano/Mp G1.m4a": "ff707099a4d9a4b95950d27af4cb5caef9210b76b26dab5237dd8e5f181d1812",
+      "public/instruments/splendid-grand-piano/Mp G2.m4a": "070b017ae471eab35865abe754dd19df15966260ca26456acfa7fbe2682104a8",
+      "public/instruments/splendid-grand-piano/Mp G3.m4a": "2fd5bb0aed0662240d46955284cabbf6e2235e24ad7d55bb517af31dbc92e2f5",
+      "public/instruments/splendid-grand-piano/Mp G4.m4a": "15f25e6f4d034325ce6092ea861cd19d7ccb7fc733814bc850c1571e610aa796",
+      "public/instruments/splendid-grand-piano/Mp G5.m4a": "21e832ed4f59f3c1727f0d8d396bbc71d4e326f2cf26ab7a38888c9540ccb0a3",
+      "public/instruments/splendid-grand-piano/Mp G6.m4a": "e1717784f061aa712b4c365bb957ad5f3b6e01914b18a48e711b5040d2d31d1e",
+      "public/instruments/splendid-grand-piano/PP C2.m4a": "4e087e9bc304c80ef37df89e0846412fb8aa99c3271d4897b00eabbf689e4c42",
+      "public/instruments/splendid-grand-piano/PP C3.m4a": "78bb4ff62019ecd3f490af26d5d4ac71eeaa4f673ea848f7d715ec6698b1cc29",
+      "public/instruments/splendid-grand-piano/PP C4.m4a": "eda43f897e51e6ca6ac642faa319abbb76dec0921f6a730cb65e1ee8f3b7e27a",
+      "public/instruments/splendid-grand-piano/PP C6.m4a": "5ce41964e3f94d19b18c7e3c481b41b6ed814967320a96283d7e9a96ec25d414",
+      "public/instruments/splendid-grand-piano/PP C7.m4a": "fcac30153da165910d90f2ba03305fc13c82ac212fa307fda3507bf4c0d386e6",
+      "public/instruments/splendid-grand-piano/PP E1.m4a": "8ead4ef2380ae9f56390639031ef1e3f7c58eee5d00b26594396d3ba867fce61",
+      "public/instruments/splendid-grand-piano/PP E2.m4a": "14c9151e70284bdd1122f8126667f6ab1638a8a00eb8e4bb654ec74e014e1fd3",
+      "public/instruments/splendid-grand-piano/PP E3.m4a": "3eaf109443be68be4e57941dee18ab343f01dc3b61fd865a0419e5fb0881f15d",
+      "public/instruments/splendid-grand-piano/PP E4.m4a": "75e68894a3edc32deaa40d6e9b8e7545e8f6b7ee9229f11b0666a5a3f9c497b9",
+      "public/instruments/splendid-grand-piano/PP E6.m4a": "a40ad4f86b61f39ec9cd36e6023987ca4ef3d6eded0a4ac7b188bc69d162af0a",
+      "public/instruments/splendid-grand-piano/PP G0.m4a": "02dae8c2c37225337e755e1f9f35e0e3518f0d75d2ff093e4ef5bcd8a03ef91e",
+      "public/instruments/splendid-grand-piano/PP G1.m4a": "3565bb0c8fce8ee5602e41cf4d5226a4ade9bee34c1dbae4e0461cb33f9755c2",
+      "public/instruments/splendid-grand-piano/PP G2.m4a": "4fe63ca532b01458a6ad938bfd468221a7368735440f78cab5a1283640b45c12",
+      "public/instruments/splendid-grand-piano/PP G3.m4a": "62a46f709c8e0505d5c62a7c09b9260d10071eb2c550379fc31125e3aefc274a",
+      "public/instruments/splendid-grand-piano/PP G4.m4a": "29e4604920e9a914347ba6d42cc7cbfc1bc34081691c51186de9518ca4e0245a",
+      "public/instruments/splendid-grand-piano/PP G5.m4a": "3a90bbb72b7ad1a670756e9a5346a35f242e9b25f3326c2d6ef0cdbc4c4716c0",
+      "public/instruments/splendid-grand-piano/PP G6.m4a": "4c43d7784a56e2192f316d4298adcedd8f2f20cd6aee9eed6f82289248daeb02",
+      "public/instruments/splendid-grand-piano/README.md": "fa2df0eeb753bcfb7d715973b80b00efef7810c6ad8b5aedefb24f8095ba9e33",
+      "scripts/import-mutopia-songs.mjs": "5e46fecd1b8d1327f52762e7abbc24bd818bc2f4ac257bc95093792a24b1d838",
+      "scripts/moldable-dev.mjs": "1a8c228ccdd8579ab456bb432840c8c88ae0e476a8a7a23957e2c9f6b70f0b7a",
+      "src/client/app.tsx": "2bedd3b1f8216edf464d3dccd0c1d5d7876c0080d96904142a16dbb94b275fd9",
+      "src/client/audio-presets.ts": "0decc9b310c75892f720a74b58973f3d8bae99a0794e575122036c8a34bc5c92",
+      "src/client/components/catalog-search-dialog.tsx": "9d87f63ef269ab0c4741a2f7237377e44ba20a6d69f0cb127a84a0e76f43d652",
+      "src/client/components/course-view.tsx": "3f36dd141d99c6c31c46b347b0c10eb4edb07b841ac51dcdd4385747e0f38766",
+      "src/client/components/courses-row.tsx": "e20a77e1d065009cb5df3a3b1c463ccbb5fa350357254c70c7d42b056d31e9f4",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/components/falling-notes.tsx": "6dbca7a272747730762709db9c89fb2874974016dce25774262c60ae1f0fea4f",
+      "src/client/components/library-view.tsx": "32232bd29c8cd257a1574745d467d370a313208b7a955cf7cc5752c3fc89a807",
+      "src/client/components/move-to-menu.tsx": "57b5c1d0b84204587840b94f4ce815ae9fa0217adc5fcb24b7fd8679bc09a323",
+      "src/client/components/new-folder-dialog.tsx": "c0e668d69e1338c6d3f594c7dfd70a72c3685ef674bbaa61113106fae2f4c070",
+      "src/client/components/piano-keyboard.tsx": "6503e98cc18a2862e0208cdf9dc6bdc6c94c52ffa9d5e4bd9b24ff7da2a9a5b7",
+      "src/client/components/practice-view.tsx": "383e4fd2f4a9c40cbd0c9773d3793430a193fab183d09ab34c0d841ba41e9d88",
+      "src/client/components/sound-picker.tsx": "2b6069bc30b822ca5c50e1d1307a3c61638e7b76eb8924adbae7fa020c31e661",
+      "src/client/globals.css": "0ffbd052f3c2b98470187781f49bfd4bbf9b79ddf25d35a720e92f5e4bd10726",
+      "src/client/main.tsx": "86e3fb4591dd0de4878139f16137d5444074eb4212d9faa7aa997a7ababc40b6",
+      "src/client/piano-utils.ts": "066d87d31a8998bb6155708d04ccde10ffbfe31da19f454013e61eaf2035a21b",
+      "src/client/query-provider.tsx": "ccd981e9d5208c05ad9d4693e4cec53fcc21082fb44fb8d237808f8d3c67d211",
+      "src/client/use-audio-options.ts": "2a4e87ed2b9d5b086da3f06e0eb1c6edba09cc44b16115d9a3ff69fb5095aa4e",
+      "src/client/use-courses.ts": "5f4c16168dd5e42b3a3db52d3ae9ccbdadb0a4d6222703ad04542af0b2ec4c24",
+      "src/client/use-folders.ts": "37947043b9e0c0398a7b5b0691e9ea204b066fb01ab2ca59b0b539ea5b6867c8",
+      "src/client/use-piano-audio.ts": "63e50a8458178ef3c280d3cc518fb7539aa21985574146b66baba89393b3f594",
+      "src/client/use-song-catalog.ts": "5ad1f556a79c9eb1f53103cb8895732bd915750b60969f5a97292196395d46d4",
+      "src/server/app.ts": "d700229f28098bde631e6eca7e38dca72f46ec9d14bfd8698a1c2ccd30fa5ea7",
+      "src/server/courses/expression-and-color.ts": "b7860c2f9478783020dd4dab77a71100890982038fd0430ee91351b0c3139490",
+      "src/server/courses/index.ts": "13b75241ea3ce73d83293b4f4dcd8b789fea02c08abeec4d63ae45a3333eb01b",
+      "src/server/courses/keys-modes-color.ts": "316e9d6471fc865ebdeab466b8495d0ec1a970e8e174c5250e129c785c375800",
+      "src/server/courses/piano-beginnings.ts": "30fa9738f4d1066af2a51978448ead03ff4958bf1ee42de59d1a98012155d7c9",
+      "src/server/default-song-library.ts": "e83007a1d4891f13724a277a4e40adbd236c3326250cf71a8b83fca1ce15b072",
+      "src/server/default-songs.ts": "1f40763482be4258b20cacce15a1f7f1dbe5888b5f82e7a550a54992cf80c099",
+      "src/server/index.test.ts": "ebc1185398bf1779c049bfe2c01194c5b64ad5c5fff4bd33f6eb293ab3c5d027",
+      "src/server/index.ts": "1a42c0712b410d3e7be8caf82375df5eaecc5e3839c6652a56e6a9a5544fef39",
+      "src/server/instrument-installer.ts": "dcc8669a040377233a3fcfba0ad410056c55adb996fe718b3454ee29b0bd9c7f",
+      "src/server/moldable.ts": "7f40a251c553cf68212e93f32e6747bc8fb339129e79882cf3e7bda8ed366271",
+      "src/server/mutopia-catalog.ts": "8022fdb29a82a600ab8cbd22afbb8234665129b2d1f603b8a846a5d246e31f68",
+      "src/server/sfz-preset.ts": "4e5149238bd13725d1b04334ef87321f79d9c7ad8313274385e2796e48911a48",
+      "src/server/song-importer.ts": "f0159cedb2768b9d47fd2b521c38a45e33e2601b6c8e2e6fbfce46f55494700a",
+      "src/server/static.ts": "e31ad82570673ed139f4cf06953622be53c0c87681bd1be5412ba402099f9153",
+      "src/server/tutorial-builder.ts": "d2ce68c4e05af372cda0db1f046a6094db28f44f733d7237d2a6ad85bda5e637",
+      "src/server/tutorials/advanced/01-blue-notes.ts": "eec23a583db5636ce5541764083249d43df304ad6c530f66a31487941b0d899b",
+      "src/server/tutorials/advanced/02-modal-interchange.ts": "82a2dd2ff6d5c4170e05605d17b123932eb2403976a02b1f488e6f17757149e5",
+      "src/server/tutorials/advanced/03-chromatic-approach.ts": "7b1bb17336162dfe8de61d6bfe994ad01b98676982acae7954901d5125312bc0",
+      "src/server/tutorials/advanced/04-tritone-devil.ts": "71d7c75ebc24bf67b21762e52fe9993cc6c20e20e594b7da971449e57f82cbd6",
+      "src/server/tutorials/advanced/05-tritone-substitution.ts": "cd20124226d5b98b58a2b0ed5c5b5621c36747937689cf2a57e1baae384097f2",
+      "src/server/tutorials/advanced/06-sus-chords.ts": "4b037c5246b94243e0f0f74f4cf4e194d8dc58483ba24c71d27d731361143de9",
+      "src/server/tutorials/advanced/07-polychords.ts": "5daf6f087f3583a7e8cb50517db8381692a5ceaaa7057792128cb98acedb5be2",
+      "src/server/tutorials/advanced/08-rubato.ts": "34483c9d98674f5cc5c1ba816d561b4a662f27c4d5d255ef92980d0dfa907a5d",
+      "src/server/tutorials/advanced/index.ts": "4834bbd9785435adb29e76d491aa18720ee7c710a6599dbb91fb07068c0499ee",
+      "src/server/tutorials/beginner/a-keyboard-pattern.ts": "58097b20adca25404594f95e31e4d31afc09963add84f6771e4a3eb87709b6c3",
+      "src/server/tutorials/beginner/a-octaves-and-names.ts": "ca90e288871b3d3c6576f61f95f1d8be38cfd24ed36fbd6b8972b8857d03adfb",
+      "src/server/tutorials/beginner/b-counting-four.ts": "05947bee641e981f7aa872ca9c5cbaec561f56c13e11c47b4d558f61b85223c4",
+      "src/server/tutorials/beginner/b-one-note-in-time.ts": "a0d85568f21cad15522cf44ce5b03acc34b4ae5c5721980442b6c467da051902",
+      "src/server/tutorials/beginner/c-c-position.ts": "1badb7ac3ae1697fefb6dcc5e1f0dd3bc5ec373d2407839cc5f4c1e60fa65625",
+      "src/server/tutorials/beginner/c-first-melodies.ts": "185f7f6d7dd51bd04ea79f96701b947197f6186baafba3eaf15c29aa9866ac05",
+      "src/server/tutorials/beginner/d-c-is-home.ts": "3d7764a55f782e7b2a280b6d850c476866829ffe6ce144d2b5d56534ebe2ac68",
+      "src/server/tutorials/beginner/d-c-major-up-down.ts": "45fbdd34d15d882a8ef4f17fbb835cbc41ecf2a2f1bebe58e1abec0a2c27ab89",
+      "src/server/tutorials/beginner/e-steps-vs-skips.ts": "9cc71a0eaf19be1f0383a2c765cf0795c25ed94cab27867f8c3928d040710936",
+      "src/server/tutorials/beginner/e-thirds-and-fifths.ts": "1d1d30cd1768a0d1b470305f950c8e0c80103a74c963ab6e5ce4e631b4a95fbd",
+      "src/server/tutorials/beginner/f-major-triad.ts": "97a23ba58b89d47c775f7441c3406d94bb9406cade393393856e16bdbde4affa",
+      "src/server/tutorials/beginner/f-minor-triad.ts": "c7afa55787c0cb73ea31eb86882d959b1ce052315084b83cbeec578553e8c14b",
+      "src/server/tutorials/beginner/g-leading-tone.ts": "5fe3825f81843cf6749c3c36e2f3be836839e7b8403fb6170428a3ab78e71719",
+      "src/server/tutorials/beginner/g-pentatonic-safety.ts": "099ced1498483ea3a6b22f1b9d7fa5b1eda2279adb667296e82e3f147049e1e0",
+      "src/server/tutorials/beginner/index.ts": "b723a3427f16c1ad6a6ff214e029ae4abcd38774b80c5b6cacdd6636a0cc9bbb",
+      "src/server/tutorials/index.ts": "2507d09066357c6fe0ba00bf4d154cbb2df20d410baf8fd934a69efa4fc6b459",
+      "src/server/tutorials/intermediate/01-major-scale-recipe.ts": "f0d3c84fefa2d9fc063cfbc3e4e823bdd1165d7dbb836ae2141ef21f9bc5654e",
+      "src/server/tutorials/intermediate/02-c-vs-g-major.ts": "da6f44e8164ccce68fe8b262ad100356918b37dbf3d2f7a548a997681d53d919",
+      "src/server/tutorials/intermediate/03-e-major.ts": "5bf0cb137b5acbbb9a63a16440310fe93a006dfc71a5f131edd180af483e8d2d",
+      "src/server/tutorials/intermediate/04-major-vs-minor.ts": "19b1db9983ad262de801c9cb10a3f0e98e2fe45803eea63ced8cad6b99cd2fbc",
+      "src/server/tutorials/intermediate/05-mode-dorian.ts": "a6a5461be1b4770a5775b1a3957015824aa1a1b25f8af8d1bae5a1b31ff0b2bf",
+      "src/server/tutorials/intermediate/06-mode-mixolydian.ts": "4f7d86f26e73a0b6ea994080f6d7da512ee6e2e271c818bc977d8ba2c28523c4",
+      "src/server/tutorials/intermediate/07-circle-of-fifths.ts": "11d8b1f3ed0e5a47a4104ef2afb39a02011bcf25077e46c33fd919faae320855",
+      "src/server/tutorials/intermediate/08-triad-inversions.ts": "f69bb9e1b9378b3983e0842236b633e4634c297ab9cd46a54b97f7776e5f3571",
+      "src/server/tutorials/intermediate/09-seventh-chords.ts": "bece3f6d667b3e15acbc1f4388c5795790c502fdef4a621472b2b17217249678",
+      "src/server/tutorials/intermediate/10-voice-leading.ts": "330ae08f05ba74be90672a9d9a00841643a3cefde763e9e0fa501f132dcb0279",
+      "src/server/tutorials/intermediate/index.ts": "f82daf37383347a3d3c91fd4c5a0b0816060f6cce994b770b29beaee43bd67fb",
+      "src/shared/audio.ts": "129ec0e10f3dcd4d1bbba0f06aceb2ba99729c7a75f8fe11f8d29a5abb1e861e",
+      "src/shared/course.ts": "4c9097c8c388671e3595d537986bdbde789017e2e47210920951885c769b4d2a",
+      "src/shared/folder.ts": "0125c7c009e5b30e22e45e12f0945535bd90a91f51914868365c646ccbb3f847",
+      "src/shared/practice-part.ts": "28db6ec0c81a1d8b4817ba773ceab209d1a4680f613c80003b7f565622b8b98a",
+      "src/shared/song.ts": "b24f32d58c4d00b620abe54af0789bcda3fb32eb09b1207bd9d79cbfa827560c",
+      "STORE.md": "76f5eccec100b8df4fb4ef9f1d5b694bb8043f219581c0a41f45cb51c6bd42e0",
+      "tsconfig.json": "2c2086735a1494ec9219070ed35e32706ca3c9b88c25d484f4fd37f5600a4b7a",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
+    }
+  },
+  "modified": false
 }

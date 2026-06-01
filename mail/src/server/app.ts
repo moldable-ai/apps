@@ -33,15 +33,19 @@ import {
   getLabels,
   getMessage,
   getProfile,
+  getThread,
   isAuthError,
   listContacts,
   listMessages,
   modifyMessageLabels,
   sendMessage,
   startGmailTokenKeepalive,
+  startMailBackgroundSync,
   unsubscribeAndArchive,
 } from './gmail-service'
+import { readCachedProfile, writeCachedProfile } from './profile-cache'
 import { generateMailSearchQuery } from './search-query'
+import { readCachedToday, writeCachedToday } from './today-cache'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
@@ -49,6 +53,10 @@ import { z } from 'zod'
 export const app = new Hono()
 
 app.use('/api/*', cors())
+
+const profileRefreshes = new Map<string, Promise<void>>()
+const profileRefreshedAt = new Map<string, number>()
+const PROFILE_REFRESH_MIN_INTERVAL_MS = 60_000
 
 const sendMailSchema = z.object({
   to: z.string().trim().min(1),
@@ -274,6 +282,32 @@ function logGmailError(error: unknown, context: Record<string, unknown>) {
   }
 }
 
+function refreshProfileInBackground(workspaceId: string) {
+  const existing = profileRefreshes.get(workspaceId)
+  if (existing) return true
+
+  const lastRefreshedAt = profileRefreshedAt.get(workspaceId) ?? 0
+  if (Date.now() - lastRefreshedAt < PROFILE_REFRESH_MIN_INTERVAL_MS) {
+    return false
+  }
+
+  const refresh = getProfile(workspaceId)
+    .then((profile) => writeCachedProfile(workspaceId, profile))
+    .catch((error) => {
+      if (isAuthError(error)) return
+      console.warn('Gmail profile refresh failed:', error)
+    })
+    .finally(() => {
+      profileRefreshedAt.set(workspaceId, Date.now())
+      if (profileRefreshes.get(workspaceId) === refresh) {
+        profileRefreshes.delete(workspaceId)
+      }
+    })
+
+  profileRefreshes.set(workspaceId, refresh)
+  return true
+}
+
 function gmailErrorResponse(
   error: unknown,
   context: Record<string, unknown> = {},
@@ -375,6 +409,10 @@ app.get('/api/moldable/health', (c) => {
 app.get('/api/moldable/today', async (c) => {
   const workspaceId = getWorkspaceId(c.req.raw)
   const generatedAt = new Date().toISOString()
+  const cachedToday = await readCachedToday(workspaceId).catch((error) => {
+    console.warn('Failed to read Today mail cache:', error)
+    return null
+  })
   const items: unknown[] = []
   let resume: unknown = null
 
@@ -390,7 +428,7 @@ app.get('/api/moldable/today', async (c) => {
       labelId: 'INBOX',
       query: 'is:important is:unread',
       maxResults: 5,
-    }).catch(() => null)
+    })
 
     if (important && important.messages.length > 0) {
       const messages = important.messages
@@ -453,11 +491,16 @@ app.get('/api/moldable/today', async (c) => {
       }
     }
   } catch {
-    // Gmail not connected or transient failure: stay quiet.
+    // Transient Gmail failures should not make Today cards flicker out.
+    if (cachedToday) return c.json(cachedToday)
     return c.json({ items: [], resume: null, generatedAt })
   }
 
-  return c.json({ items, resume, generatedAt })
+  const payload = { items, resume, generatedAt }
+  await writeCachedToday(workspaceId, payload).catch((error) => {
+    console.warn('Failed to write Today mail cache:', error)
+  })
+  return c.json(payload)
 })
 
 app.get('/api/moldable/commands', async (c) => {
@@ -574,7 +617,9 @@ app.get('/api/auth/callback', async (c) => {
 })
 
 app.post('/api/auth/logout', async (c) => {
-  await clearTokens(getWorkspaceId(c.req.raw))
+  const workspaceId = getWorkspaceId(c.req.raw)
+  await clearTokens(workspaceId)
+  await writeCachedProfile(workspaceId, null)
   return c.json({ success: true })
 })
 
@@ -587,16 +632,10 @@ app.get('/api/status', async (c) => {
     }
 
     startGmailTokenKeepalive(workspaceId)
-
-    try {
-      return c.json({
-        authenticated: true,
-        profile: await getProfile(workspaceId),
-      })
-    } catch (error) {
-      console.warn('Gmail profile lookup failed:', error)
-      return c.json({ authenticated: true, profile: null })
-    }
+    startMailBackgroundSync(workspaceId)
+    const profile = await readCachedProfile(workspaceId)
+    const syncing = refreshProfileInBackground(workspaceId)
+    return c.json({ authenticated: true, profile, syncing })
   } catch (error) {
     const response = gmailErrorResponse(error)
     if (response.status === 401) {
@@ -663,6 +702,17 @@ app.get('/api/messages/:id', async (c) => {
   try {
     return c.json({
       message: await getMessage(getWorkspaceId(c.req.raw), c.req.param('id')),
+    })
+  } catch (error) {
+    const response = gmailErrorResponse(error)
+    return c.json(response.body, response.status)
+  }
+})
+
+app.get('/api/threads/:id', async (c) => {
+  try {
+    return c.json({
+      thread: await getThread(getWorkspaceId(c.req.raw), c.req.param('id')),
     })
   } catch (error) {
     const response = gmailErrorResponse(error)
@@ -987,7 +1037,7 @@ app.post('/api/action-suggestions', async (c) => {
       account: body.account ?? null,
       force: body.force,
     }
-    const suggestions = await generateActionSuggestions(input, workspaceId)
+    const result = await generateActionSuggestions(input, workspaceId)
     const account = input.account ?? null
     const [signals, rules] = await Promise.all([
       readTriageSignals(workspaceId, account),
@@ -995,10 +1045,12 @@ app.post('/api/action-suggestions', async (c) => {
     ])
 
     return c.json({
-      suggestions,
+      suggestions: result.suggestions,
       fingerprint: computeActionSuggestionsFingerprint(input, rules),
       generatedAt: new Date().toISOString(),
       signalCount: signals.length,
+      source: result.syncing ? 'cache' : 'generated',
+      syncing: result.syncing,
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -1358,7 +1410,7 @@ app.post('/api/moldable/rpc', async (c) => {
         Promise.all(params.ids.map((id) => getMessage(workspaceId, id))),
       ])
       const account = await resolveTriageAccount(workspaceId, params.account)
-      const suggestions = await generateActionSuggestions(
+      const result = await generateActionSuggestions(
         {
           messages,
           labels,
@@ -1370,7 +1422,7 @@ app.post('/api/moldable/rpc', async (c) => {
       return c.json({
         ok: true,
         result: {
-          suggestions,
+          suggestions: result.suggestions,
           messages: params.includeMessages
             ? messages
             : messages.map(rpcMessageSummary),
@@ -1394,7 +1446,7 @@ app.post('/api/moldable/rpc', async (c) => {
         maxResults: params?.maxResults ?? 25,
       })
       const account = await resolveTriageAccount(workspaceId, params?.account)
-      const suggestions = await generateActionSuggestions(
+      const result = await generateActionSuggestions(
         {
           messages: list.messages,
           labels,
@@ -1406,7 +1458,7 @@ app.post('/api/moldable/rpc', async (c) => {
       return c.json({
         ok: true,
         result: {
-          suggestions,
+          suggestions: result.suggestions,
           messages: params?.includeMessages
             ? list.messages
             : list.messages.map(rpcMessageSummary),
