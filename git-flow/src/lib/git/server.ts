@@ -887,7 +887,11 @@ async function resolveCommitPaths(paths: string[], repoPath: string) {
   return activePaths
 }
 
-async function runGit(args: string[], cwd: string, timeoutMs = 120_000) {
+async function runGit(
+  args: string[],
+  cwd: string,
+  timeoutMs: number | null = 120_000,
+) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn('git', args, {
       cwd,
@@ -898,17 +902,20 @@ async function runGit(args: string[], cwd: string, timeoutMs = 120_000) {
     let stdout = ''
     let stderr = ''
     let settled = false
-    const timeout = setTimeout(() => {
-      if (settled) return
-      child.kill('SIGTERM')
-      reject(
-        new Error(
-          `git ${args.join(' ')} timed out after ${Math.round(
-            timeoutMs / 1000,
-          )} seconds.`,
-        ),
-      )
-    }, timeoutMs)
+    const timeout =
+      timeoutMs === null
+        ? null
+        : setTimeout(() => {
+            if (settled) return
+            child.kill('SIGTERM')
+            reject(
+              new Error(
+                `git ${args.join(' ')} timed out after ${Math.round(
+                  timeoutMs / 1000,
+                )} seconds.`,
+              ),
+            )
+          }, timeoutMs)
 
     child.stdin.end()
 
@@ -923,13 +930,13 @@ async function runGit(args: string[], cwd: string, timeoutMs = 120_000) {
     child.on('error', (error) => {
       if (settled) return
       settled = true
-      clearTimeout(timeout)
+      if (timeout) clearTimeout(timeout)
       reject(error)
     })
     child.on('close', (code, signal) => {
       if (settled) return
       settled = true
-      clearTimeout(timeout)
+      if (timeout) clearTimeout(timeout)
       if (code === 0) {
         resolve({ stdout, stderr })
         return
@@ -1288,15 +1295,17 @@ export async function commitFiles(
   try {
     const activePaths = await resolveCommitPaths(paths, repoPath)
 
-    // 1. Stage only the selected files that are still present in git status
-    await runGit(['add', '--', ...activePaths], repoPath)
+    // 1. Stage only the selected files that are still present in git status.
+    // Large commits and pre-commit hooks can legitimately take a long time, so
+    // commit workflows intentionally do not impose a fixed timeout.
+    await runGit(['add', '--', ...activePaths], repoPath, null)
 
     // 2. Commit with summary and description
     const commitArgs = ['commit', '-m', summary]
     if (description) {
       commitArgs.push('-m', description)
     }
-    await runGit(commitArgs, repoPath)
+    await runGit(commitArgs, repoPath, null)
     const result = await runGit(['rev-parse', 'HEAD'], repoPath)
 
     return { success: true, commit: result.stdout.trim() }

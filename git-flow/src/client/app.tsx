@@ -742,7 +742,6 @@ export default function GitFlowPage() {
     mutationFn: async (input: CommitInput) => {
       const res = await fetchWithWorkspace('/api/git', {
         method: 'POST',
-        signal: AbortSignal.timeout(180_000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'commitAndOpenPullRequest',
