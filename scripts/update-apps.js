@@ -9,12 +9,25 @@
  *
  * This syncs changes FROM ~/moldable-apps TO ~/.moldable/shared/apps
  */
-import { cpSync, existsSync, readdirSync, rmSync, statSync } from 'fs'
+import { execSync } from 'child_process'
+import { createHash } from 'crypto'
+import {
+  cpSync,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'fs'
 import { homedir } from 'os'
-import { basename, join } from 'path'
+import { basename, join, relative } from 'path'
 
-const SOURCE_DIR = join(homedir(), 'moldable-apps')
-const TARGET_DIR = join(homedir(), '.moldable', 'shared', 'apps')
+const SOURCE_DIR =
+  process.env.MOLDABLE_APPS_SOURCE_DIR || join(homedir(), 'moldable-apps')
+const TARGET_DIR =
+  process.env.MOLDABLE_APPS_TARGET_DIR ||
+  join(homedir(), '.moldable', 'shared', 'apps')
 
 // Files/folders to preserve in the target (not overwrite from source)
 const PRESERVE = [
@@ -52,9 +65,87 @@ function isRepoOnly(name) {
   return REPO_ONLY.includes(name)
 }
 
+function shouldSkipHashPath(relativePath) {
+  if (
+    relativePath === 'moldable.json' ||
+    relativePath === '.moldable-install-state.json' ||
+    relativePath === '.moldable.install.json' ||
+    relativePath === '.moldable.migrations.json'
+  ) {
+    return true
+  }
+
+  return relativePath
+    .split('/')
+    .some((part) =>
+      ['node_modules', '.git', 'dist', 'build', '.next', '.turbo'].includes(
+        part,
+      ),
+    )
+}
+
+function computeAppFileHashes(appDir) {
+  const hashes = {}
+  if (!existsSync(appDir)) return hashes
+
+  const visit = (dir) => {
+    for (const entry of readdirSync(dir)) {
+      const fullPath = join(dir, entry)
+      const stat = statSync(fullPath)
+      if (stat.isDirectory()) {
+        visit(fullPath)
+        continue
+      }
+      if (!stat.isFile()) continue
+
+      const relPath = relative(appDir, fullPath).split('\\').join('/')
+      if (shouldSkipHashPath(relPath)) continue
+
+      const hash = createHash('sha256')
+        .update(readFileSync(fullPath))
+        .digest('hex')
+      hashes[relPath] = hash
+    }
+  }
+
+  visit(appDir)
+  return Object.fromEntries(
+    Object.entries(hashes).sort(([a], [b]) => a.localeCompare(b)),
+  )
+}
+
+function getSourceCommit() {
+  try {
+    return execSync('git rev-parse HEAD', {
+      cwd: SOURCE_DIR,
+      encoding: 'utf-8',
+    }).trim()
+  } catch {
+    return null
+  }
+}
+
+function stampUpstreamMetadata(targetApp, appId, commit) {
+  const manifestPath = join(targetApp, 'moldable.json')
+  if (!existsSync(manifestPath)) return
+
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
+  manifest.upstream = {
+    repo: 'moldable-ai/apps',
+    path: appId,
+    installedVersion: manifest.version ?? '0.1.0',
+    installedCommit: commit ?? 'local',
+    installedAt: new Date().toISOString(),
+    fileHashes: computeAppFileHashes(targetApp),
+  }
+  manifest.modified = false
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+}
+
 function updateApp(appId) {
   const sourceApp = join(SOURCE_DIR, appId)
   const targetApp = join(TARGET_DIR, appId)
+  const sourceCommit = getSourceCommit()
 
   if (!existsSync(sourceApp)) {
     console.error(`❌ App '${appId}' not found in ${SOURCE_DIR}`)
@@ -75,6 +166,7 @@ function updateApp(appId) {
   if (!existsSync(targetApp)) {
     console.log(`   Creating new app directory...`)
     cpSync(sourceApp, targetApp, { recursive: true })
+    stampUpstreamMetadata(targetApp, appId, sourceCommit)
     console.log(`   ✅ Done (new app)`)
     return true
   }
@@ -103,6 +195,8 @@ function updateApp(appId) {
       return true
     },
   })
+
+  stampUpstreamMetadata(targetApp, appId, sourceCommit)
 
   console.log(`   ✅ Done`)
   return true
