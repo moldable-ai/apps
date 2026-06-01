@@ -20,7 +20,7 @@
     "path": "hello-moldables",
     "repo": "moldable-ai/apps"
   },
-  "version": "0.1.2",
+  "version": "0.1.3",
   "aliases": ["welcome", "tutorial"],
   "visibility": "public",
   "routeName": "hello-moldables",

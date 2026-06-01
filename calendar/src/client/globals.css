@@ -9,6 +9,80 @@
   --font-sans: Inter, system-ui, -apple-system, sans-serif;
 }
 
+/* Month-change slide transitions for the grid. Direction is driven by a
+   data attribute set in app.tsx so navigating forward/back reads correctly. */
+@keyframes cal-slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(2%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes cal-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(-2%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes cal-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
+.cal-grid-anim[data-dir='next'] {
+  animation: cal-slide-in-left 0.22s ease-out;
+}
+
+.cal-grid-anim[data-dir='prev'] {
+  animation: cal-slide-in-right 0.22s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cal-grid-anim[data-dir] {
+    animation: none;
+  }
+}
+
+@layer components {
+  /* Dashed hairline between agenda rows — borrowed from the meetings app's
+     "Coming up" panel for the same restrained, editorial rhythm. */
+  .cal-dashed-separator {
+    position: relative;
+  }
+
+  .cal-dashed-separator::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: var(--cal-dash-inset, 0);
+    height: 1px;
+    background-image: repeating-linear-gradient(
+      to right,
+      color-mix(in oklch, var(--border) 72%, transparent) 0 5.25px,
+      transparent 5.25px 10.5px
+    );
+    pointer-events: none;
+  }
+
+  .cal-dashed-separator:last-child::after {
+    display: none;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

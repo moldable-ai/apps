@@ -409,17 +409,95 @@ function todayRange(onlyFuture = true) {
   }
 }
 
+// Shared, theme-aware styles for the OAuth handoff pages. These render in a
+// popup that is outside the React app, so they can't use design-system tokens —
+// instead they mirror the token palette via prefers-color-scheme so the page
+// reads correctly whether the user's system is light or dark.
+function authPageStyles() {
+  return `
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --card: #ffffff;
+      --border: #e4e4e7;
+      --fg: #18181b;
+      --muted: #71717a;
+      --accent: #16a34a;
+      --accent-soft: #dcfce7;
+      --danger: #dc2626;
+      --danger-soft: #fee2e2;
+      --link: #2563eb;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0a0a0a;
+        --card: #161616;
+        --border: #27272a;
+        --fg: #fafafa;
+        --muted: #a1a1aa;
+        --accent: #4ade80;
+        --accent-soft: rgba(74, 222, 128, 0.12);
+        --danger: #f87171;
+        --danger-soft: rgba(248, 113, 113, 0.12);
+        --link: #60a5fa;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: Inter, system-ui, -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--fg);
+    }
+    .card {
+      width: 100%;
+      max-width: 360px;
+      text-align: center;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px 28px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 8px 24px rgba(0, 0, 0, 0.06);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 48px;
+      height: 48px;
+      border-radius: 9999px;
+      margin: 0 auto 16px;
+      font-size: 22px;
+    }
+    .badge.ok { background: var(--accent-soft); color: var(--accent); }
+    .badge.err { background: var(--danger-soft); color: var(--danger); }
+    h1 { font-size: 18px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+    p { font-size: 14px; line-height: 1.5; color: var(--muted); margin: 0; }
+    a { color: var(--link); text-decoration: none; font-weight: 500; }
+    a:hover { text-decoration: underline; }
+    .footer { margin-top: 20px; }
+  `
+}
+
 function authSuccessHtml() {
   return `<!DOCTYPE html>
-    <html>
+    <html lang="en">
       <head>
         <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Authentication Successful</title>
+        <style>${authPageStyles()}</style>
       </head>
-      <body style="font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #000; color: #fff;">
-        <div style="text-align: center;">
-          <h1 style="color: #4ade80;">✓ Authenticated!</h1>
-          <p>Redirecting back to Calendar...</p>
+      <body>
+        <div class="card">
+          <div class="badge ok">✓</div>
+          <h1>Calendar connected</h1>
+          <p>Redirecting you back…</p>
           <script>
             if (window.opener) {
               window.opener.postMessage({ type: 'oauth-success' }, '*');
@@ -444,16 +522,19 @@ function escapeHtml(value: string) {
 
 function authFailureHtml(message: string) {
   return `<!DOCTYPE html>
-    <html>
+    <html lang="en">
       <head>
         <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Authentication Failed</title>
+        <style>${authPageStyles()}</style>
       </head>
-      <body style="font-family: system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #000; color: #fff;">
-        <div style="text-align: center; max-width: 400px;">
-          <h1 style="color: #f87171;">✗ Authentication Failed</h1>
-          <p style="color: #a1a1aa;">${escapeHtml(message)}</p>
-          <p style="margin-top: 20px;"><a href="/" style="color: #60a5fa;">Return to Calendar</a></p>
+      <body>
+        <div class="card">
+          <div class="badge err">✕</div>
+          <h1>Couldn’t connect</h1>
+          <p>${escapeHtml(message)}</p>
+          <p class="footer"><a href="/">Return to Calendar</a></p>
         </div>
       </body>
     </html>`

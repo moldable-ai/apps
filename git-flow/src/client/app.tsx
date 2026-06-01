@@ -500,6 +500,18 @@ export default function GitFlowPage() {
     () => data?.files.find((file) => file.path === selectedFile),
     [data?.files, selectedFile],
   )
+  const changedPathSet = useMemo(
+    () => new Set((data?.files ?? []).map((file) => file.path)),
+    [data?.files],
+  )
+  const selectedCommitPaths = useMemo(
+    () =>
+      Array.from(selectedFiles).filter((filePath) =>
+        changedPathSet.has(filePath),
+      ),
+    [changedPathSet, selectedFiles],
+  )
+  const selectedCommitPathCount = selectedCommitPaths.length
   const selectedCommitFileEntry = useMemo(
     () => commitFiles.find((file) => file.path === selectedCommitFile),
     [commitFiles, selectedCommitFile],
@@ -627,7 +639,7 @@ export default function GitFlowPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'generateCommitMessage',
-          paths: Array.from(selectedFiles),
+          paths: selectedCommitPaths,
         }),
       })
       const json = await res.json()
@@ -649,7 +661,7 @@ export default function GitFlowPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'reviewCode',
-          paths: Array.from(selectedFiles),
+          paths: selectedCommitPaths,
         }),
       })
       const json = await res.json()
@@ -676,7 +688,7 @@ export default function GitFlowPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'commit',
-          paths: Array.from(selectedFiles),
+          paths: selectedCommitPaths,
           summary: input.summary,
           description: input.description,
         }),
@@ -734,7 +746,7 @@ export default function GitFlowPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'commitAndOpenPullRequest',
-          paths: Array.from(selectedFiles),
+          paths: selectedCommitPaths,
           summary: input.summary,
           description: input.description,
         }),
@@ -965,6 +977,66 @@ export default function GitFlowPage() {
   }, [data?.files, fileFilter])
 
   const visibleChangedFileCount = filteredFiles.length
+
+  useEffect(() => {
+    if (!data?.repoPath) return
+
+    const hadStaleSelectedPaths = Array.from(selectedFiles).some(
+      (filePath) => !changedPathSet.has(filePath),
+    )
+
+    setSelectedFiles((previous) => {
+      let didDropPath = false
+      const next = new Set<string>()
+
+      previous.forEach((filePath) => {
+        if (changedPathSet.has(filePath)) {
+          next.add(filePath)
+        } else {
+          didDropPath = true
+        }
+      })
+
+      return didDropPath ? next : previous
+    })
+
+    setSelectedActionFiles((previous) => {
+      let didDropPath = false
+      const next = new Set<string>()
+
+      previous.forEach((filePath) => {
+        if (changedPathSet.has(filePath)) {
+          next.add(filePath)
+        } else {
+          didDropPath = true
+        }
+      })
+
+      return didDropPath ? next : previous
+    })
+
+    if (selectedFile && !changedPathSet.has(selectedFile)) {
+      const nextPath = filteredFiles[0]?.path ?? data.files[0]?.path ?? null
+      setSelectedFile(nextPath)
+      selectionAnchorRef.current = nextPath
+    }
+
+    if (
+      hadStaleSelectedPaths &&
+      error &&
+      (error.includes('pathspec') || error.includes('did not match any files'))
+    ) {
+      setError(null)
+    }
+  }, [
+    changedPathSet,
+    data?.files,
+    data?.repoPath,
+    error,
+    filteredFiles,
+    selectedFile,
+    selectedFiles,
+  ])
 
   const selectRelativeFile = useCallback(
     (direction: -1 | 1) => {
@@ -1299,8 +1371,8 @@ export default function GitFlowPage() {
   )
 
   const prepareCommitInput = async (): Promise<CommitInput | null> => {
-    if (selectedFiles.size === 0) {
-      setError('Please select at least one file to commit.')
+    if (selectedCommitPathCount === 0) {
+      setError('Please select at least one changed file to commit.')
       return null
     }
 
@@ -1370,7 +1442,7 @@ export default function GitFlowPage() {
   const buildReviewPrompt = (findings?: CodeReviewFinding[]) => {
     if (!codeReview) return ''
 
-    const selectedPaths = Array.from(selectedFiles)
+    const selectedPaths = selectedCommitPaths
     const reviewFindings = findings ?? codeReview.findings
 
     return [
@@ -1554,8 +1626,8 @@ export default function GitFlowPage() {
   }, [])
 
   const handleReviewCode = () => {
-    if (selectedFiles.size === 0) {
-      setError('Please select at least one file to review.')
+    if (selectedCommitPathCount === 0) {
+      setError('Please select at least one changed file to review.')
       return
     }
     setError(null)
@@ -2541,7 +2613,7 @@ export default function GitFlowPage() {
                         id="select-all"
                         checked={
                           hasChangedFiles &&
-                          selectedFiles.size === changedFileCount
+                          selectedCommitPathCount === changedFileCount
                         }
                         onCheckedChange={(checked) =>
                           handleSelectAll(checked === true)
@@ -2771,7 +2843,7 @@ export default function GitFlowPage() {
                           onClick={handleReviewCode}
                           className="border-border bg-background text-foreground hover:bg-accent flex w-full cursor-pointer items-center justify-center gap-2 rounded-md border py-2 text-xs font-bold shadow-sm transition-all active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                           disabled={
-                            selectedFiles.size === 0 ||
+                            selectedCommitPathCount === 0 ||
                             commitMutation.isPending ||
                             generateCommitMessageMutation.isPending ||
                             reviewCodeMutation.isPending ||
@@ -2802,7 +2874,7 @@ export default function GitFlowPage() {
                             }
                             className="flex flex-1 cursor-pointer items-center justify-center gap-2 py-2 text-xs font-bold transition-all hover:opacity-90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
                             disabled={
-                              selectedFiles.size === 0 ||
+                              selectedCommitPathCount === 0 ||
                               commitMutation.isPending ||
                               generateCommitMessageMutation.isPending ||
                               reviewCodeMutation.isPending ||
@@ -2842,7 +2914,7 @@ export default function GitFlowPage() {
                                 aria-label="Choose commit action"
                                 className="hover:bg-primary-foreground/10 inline-flex w-10 shrink-0 cursor-pointer items-center justify-center transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                                 disabled={
-                                  selectedFiles.size === 0 ||
+                                  selectedCommitPathCount === 0 ||
                                   commitMutation.isPending ||
                                   generateCommitMessageMutation.isPending ||
                                   reviewCodeMutation.isPending ||

@@ -1,6 +1,6 @@
 {
   "name": "Time Tracker",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "aliases": ["timer", "timesheet"],
   "visibility": "public",
   "description": "Track time for work projects with weekly views and export",

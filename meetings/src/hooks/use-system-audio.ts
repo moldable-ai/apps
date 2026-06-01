@@ -4,21 +4,75 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { isInMoldable, sendToMoldable } from '@moldable-ai/ui'
 
 export interface UseSystemAudioOptions {
-  onAudioData?: (data: ArrayBuffer) => void
+  onAudioData?: (event: SystemAudioDataEvent) => void
   onError?: (error: Error) => void
   onStateChange?: (isCapturing: boolean) => void
 }
 
-export type CaptureMode = 'microphone' | 'systemAudio' | 'both'
+export type CaptureMode = 'systemAudio' | 'systemMicrophone'
+
+interface AudioCaptureArchitecture {
+  microphonePath?: string
+  systemPath?: string
+  sourceSeparation?: string
+  userFacingMixedStream?: boolean
+  mixedStreamAecRequired?: boolean
+  nativeAecLayer?: string
+  echoCancellationPolicy?: string
+  mixedStreamPolicy?: string
+}
+
+export interface AudioCaptureCapabilities {
+  osVersion?: string
+  osSupported?: boolean
+  microphonePermission?: string
+  canCaptureMicrophone?: boolean
+  screenCapturePermission?: string
+  systemAudioPermission?: string
+  systemAudioPermissionPreflight?: string
+  systemAudioPermissionRequest?: string
+  systemAudioPermissionGuidance?: string
+  screenCaptureKitAvailable?: boolean
+  coreAudioProcessTapAvailable?: boolean
+  defaultInputDeviceAvailable?: boolean
+  defaultInputDevice?: string
+  defaultOutputDeviceAvailable?: boolean
+  defaultOutputDevice?: string
+  canRequestSystemAudioPermission?: boolean
+  systemAudioPermissionRequired?: boolean
+  canCaptureSystemAudio?: boolean
+  architecture?: AudioCaptureArchitecture
+  degradedReason?: string
+}
+
+export interface SystemAudioDataEvent {
+  data: ArrayBuffer
+  source: 'microphone' | 'system'
+  sequence: number
+  sessionId?: string
+  sampleRate?: number
+  channels?: number
+  frameCount?: number
+  peak?: number
+  rms?: number
+}
 
 interface SystemAudioRequestMessage {
   type: 'moldable:system-audio-request'
   requestId: string
-  action: 'availability' | 'start' | 'stop'
-  mode?: number
+  action:
+    | 'availability'
+    | 'start'
+    | 'stop'
+    | 'requestPermission'
+    | 'status'
+    | 'replay'
+  captureMode?: CaptureMode
   sampleRate?: number
   channels?: number
   reason?: string
+  afterSequence?: number
+  limit?: number
 }
 
 interface SystemAudioResponseMessage {
@@ -29,6 +83,11 @@ interface SystemAudioResponseMessage {
     available?: boolean
     started?: boolean
     stopped?: boolean
+    replayed?: number
+    sessionId?: string
+    capabilities?: AudioCaptureCapabilities
+    requested?: boolean
+    status?: unknown
   }
   error?: {
     code?: string
@@ -40,6 +99,15 @@ interface SystemAudioEventMessage {
   type: 'moldable:system-audio-event'
   event: 'started' | 'stopped' | 'data' | 'error'
   payload?: string
+  data?: ArrayBuffer
+  source?: 'microphone' | 'system'
+  sequence?: number
+  sessionId?: string
+  sampleRate?: number
+  channels?: number
+  frameCount?: number
+  peak?: number
+  rms?: number
 }
 
 function makeRequestId() {
@@ -48,17 +116,6 @@ function makeRequestId() {
   }
 
   return `system-audio-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
-
-function decodeBase64Audio(base64: string): ArrayBuffer {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-
-  return bytes.buffer
 }
 
 function requestSystemAudio(
@@ -103,6 +160,8 @@ export function useSystemAudio(options: UseSystemAudioOptions = {}) {
   const { onAudioData, onError, onStateChange } = options
 
   const [available, setAvailable] = useState(false)
+  const [capabilities, setCapabilities] =
+    useState<AudioCaptureCapabilities | null>(null)
   const [capturing, setCapturing] = useState(false)
   const [runningInMoldable, setRunningInMoldable] = useState(false)
 
@@ -120,6 +179,7 @@ export function useSystemAudio(options: UseSystemAudioOptions = {}) {
 
     if (!insideMoldable) {
       setAvailable(false)
+      setCapabilities(null)
       return
     }
 
@@ -132,13 +192,20 @@ export function useSystemAudio(options: UseSystemAudioOptions = {}) {
           )
         }
 
+        const nextCapabilities = response.result?.capabilities ?? null
+        setCapabilities(nextCapabilities)
         setAvailable(response.result?.available === true)
       })
       .catch((error) => {
         console.error('[SystemAudio] Failed to check availability:', error)
         setAvailable(false)
+        setCapabilities(null)
       })
   }, [])
+
+  const canCaptureSystemAudio = capabilities?.canCaptureSystemAudio ?? available
+  const canCaptureSystemMicrophone =
+    canCaptureSystemAudio && capabilities?.canCaptureMicrophone !== false
 
   useEffect(() => {
     if (!runningInMoldable) return
@@ -167,12 +234,22 @@ export function useSystemAudio(options: UseSystemAudioOptions = {}) {
           onStateChangeRef.current?.(false)
           break
         case 'data':
-          if (message.payload) {
-            try {
-              onAudioDataRef.current?.(decodeBase64Audio(message.payload))
-            } catch (error) {
-              console.error('[SystemAudio] Failed to decode audio data:', error)
-            }
+          if (
+            message.data &&
+            message.source &&
+            message.sequence !== undefined
+          ) {
+            onAudioDataRef.current?.({
+              data: message.data,
+              source: message.source,
+              sequence: message.sequence,
+              sessionId: message.sessionId,
+              sampleRate: message.sampleRate,
+              channels: message.channels,
+              frameCount: message.frameCount,
+              peak: message.peak,
+              rms: message.rms,
+            })
           }
           break
         case 'error': {
@@ -190,22 +267,21 @@ export function useSystemAudio(options: UseSystemAudioOptions = {}) {
   }, [runningInMoldable])
 
   const start = useCallback(
-    async (mode: CaptureMode = 'systemAudio') => {
-      if (!runningInMoldable || !available) {
+    async (captureMode: CaptureMode = 'systemMicrophone') => {
+      const captureModeAvailable =
+        captureMode === 'systemAudio'
+          ? canCaptureSystemAudio
+          : canCaptureSystemMicrophone
+
+      if (!runningInMoldable || !captureModeAvailable) {
         onErrorRef.current?.(new Error('System audio capture not available'))
         return false
-      }
-
-      const modeMap: Record<CaptureMode, number> = {
-        microphone: 0,
-        systemAudio: 1,
-        both: 2,
       }
 
       try {
         const response = await requestSystemAudio({
           action: 'start',
-          mode: modeMap[mode],
+          captureMode,
           sampleRate: 48_000,
           channels: 1,
         })
@@ -223,7 +299,7 @@ export function useSystemAudio(options: UseSystemAudioOptions = {}) {
         return false
       }
     },
-    [available, runningInMoldable],
+    [canCaptureSystemAudio, canCaptureSystemMicrophone, runningInMoldable],
   )
 
   const stop = useCallback(
@@ -252,6 +328,9 @@ export function useSystemAudio(options: UseSystemAudioOptions = {}) {
   return {
     isInMoldable: runningInMoldable,
     isAvailable: available,
+    capabilities,
+    canCaptureSystemAudio,
+    canCaptureSystemMicrophone,
     isCapturing: capturing,
     start,
     stop,

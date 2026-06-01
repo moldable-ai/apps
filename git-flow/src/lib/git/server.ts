@@ -826,6 +826,67 @@ function requireRepoPath(repoPath?: string | null) {
   return repoPath
 }
 
+function normalizeCommitPaths(paths: string[]) {
+  const normalized: string[] = []
+  const seen = new Set<string>()
+
+  for (const filePath of paths) {
+    if (typeof filePath !== 'string') continue
+
+    const trimmed = filePath.trim()
+    if (!trimmed || seen.has(trimmed)) continue
+
+    seen.add(trimmed)
+    normalized.push(trimmed)
+  }
+
+  return normalized
+}
+
+async function getCurrentChangedPathSet(repoPath: string) {
+  const status = await simpleGit(repoPath).status()
+  const changedPaths = new Set<string>()
+
+  for (const file of status.files) {
+    if (file.path) changedPaths.add(file.path)
+
+    const previousPath = (file as { from?: unknown }).from
+    if (typeof previousPath === 'string' && previousPath) {
+      changedPaths.add(previousPath)
+    }
+  }
+
+  return changedPaths
+}
+
+async function resolveCommitPaths(paths: string[], repoPath: string) {
+  const requestedPaths = normalizeCommitPaths(paths)
+  if (requestedPaths.length === 0) {
+    throw new Error('At least one selected file is required.')
+  }
+
+  const changedPaths = await getCurrentChangedPathSet(repoPath)
+  const activePaths = requestedPaths.filter((filePath) =>
+    changedPaths.has(filePath),
+  )
+
+  if (activePaths.length === 0) {
+    throw new Error(
+      'Selected files are no longer changed. Refresh the file list and choose files again.',
+    )
+  }
+
+  if (activePaths.length !== requestedPaths.length) {
+    console.info(
+      `[git-flow] Ignoring ${
+        requestedPaths.length - activePaths.length
+      } stale selected path(s) before commit`,
+    )
+  }
+
+  return activePaths
+}
+
 async function runGit(args: string[], cwd: string, timeoutMs = 120_000) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
     const child = spawn('git', args, {
@@ -1225,8 +1286,10 @@ export async function commitFiles(
   )
 
   try {
-    // 1. Stage only the selected files
-    await runGit(['add', '--', ...paths], repoPath)
+    const activePaths = await resolveCommitPaths(paths, repoPath)
+
+    // 1. Stage only the selected files that are still present in git status
+    await runGit(['add', '--', ...activePaths], repoPath)
 
     // 2. Commit with summary and description
     const commitArgs = ['commit', '-m', summary]

@@ -40,6 +40,7 @@ interface SettingsModalProps {
   onAudioSourceChange: (source: AudioSource) => void
   showAudioSource: boolean
   systemAudioAvailable: boolean
+  systemMicrophoneAvailable: boolean
   recordingActive: boolean
 }
 
@@ -73,6 +74,7 @@ export function SettingsModal({
   onAudioSourceChange,
   showAudioSource,
   systemAudioAvailable,
+  systemMicrophoneAvailable,
   recordingActive,
 }: SettingsModalProps) {
   return (
@@ -117,10 +119,10 @@ export function SettingsModal({
                       type="button"
                       size="sm"
                       variant="ghost"
-                      disabled={recordingActive || !systemAudioAvailable}
+                      disabled={recordingActive || !systemMicrophoneAvailable}
                       onClick={() => onAudioSourceChange('both')}
                       title={
-                        !systemAudioAvailable
+                        !systemMicrophoneAvailable
                           ? 'Mixed audio requires native system capture in Moldable desktop'
                           : undefined
                       }

@@ -1,6 +1,6 @@
 {
   "name": "Microscope",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Explore the natural world through generated images, transparent 2D relief layers, procedural 3D models, and optional fal Hunyuan3D or Tripo renders.",

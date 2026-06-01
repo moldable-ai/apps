@@ -1,6 +1,6 @@
 {
   "name": "Wiki",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Create, edit, and organize a Markdown knowledge base.",

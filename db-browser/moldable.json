@@ -1,6 +1,6 @@
 {
   "name": "DB Browser",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "aliases": ["database", "postgres"],
   "runtime": "vite_hono",
   "visibility": "public",

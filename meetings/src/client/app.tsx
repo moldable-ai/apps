@@ -13,6 +13,7 @@ import {
 } from '@moldable-ai/ui'
 import { normalizeGeneratedMarkdown } from '@/lib/markdown'
 import { callMoldableApp } from '@/lib/moldable-apps'
+import { NativePcmMixer } from '@/lib/native-pcm-mixer'
 import { DEFAULT_MEETING_TEMPLATE_ID } from '@/lib/templates'
 import {
   type EnhancementStatus,
@@ -346,6 +347,7 @@ export default function MeetingsPage() {
   const detectedStopInFlightRef = useRef(false)
   const hasLoggedFirstNativeAudioChunkRef = useRef(false)
   const recordingBackgroundTaskIdRef = useRef<string | null>(null)
+  const nativePcmMixerRef = useRef(new NativePcmMixer())
   const deepgramSendAudioRef = useRef<
     ((data: ArrayBuffer | Blob) => void) | null
   >(null)
@@ -600,6 +602,30 @@ export default function MeetingsPage() {
     }, 100)
   }, [updateDuration])
 
+  const sendNativePcmBuffer = useCallback(
+    (buffer: ArrayBuffer, options: { force?: boolean } = {}) => {
+      if (!audioStreamingEnabledRef.current && !options.force) return
+
+      if (activeRecordingSessionRef.current && activeMeetingIdRef.current) {
+        void enqueueAudioChunkPersist(
+          activeMeetingIdRef.current,
+          activeRecordingSessionRef.current.id,
+          buffer.slice(0),
+          'audio/l16;rate=48000;channels=1',
+        )
+      }
+
+      deepgramSendAudioRef.current?.(buffer)
+    },
+    [enqueueAudioChunkPersist],
+  )
+
+  const flushNativePcmMixer = useCallback(() => {
+    for (const buffer of nativePcmMixerRef.current.flush()) {
+      sendNativePcmBuffer(buffer, { force: true })
+    }
+  }, [sendNativePcmBuffer])
+
   // Handle new segments from Deepgram
   const handleSegment = useCallback(
     (segment: TranscriptSegment) => {
@@ -624,13 +650,16 @@ export default function MeetingsPage() {
     deepgramSendAudioRef.current = deepgram.sendAudio
   }, [deepgram.sendAudio])
 
-  // System audio hook (for Moldable desktop)
+  // Native audio hook (for Moldable desktop system audio + AudioUnit microphone)
   const systemAudio = useSystemAudio({
-    onAudioData: (buffer: ArrayBuffer) => {
+    onAudioData: (event) => {
       if (!hasLoggedFirstNativeAudioChunkRef.current) {
         hasLoggedFirstNativeAudioChunkRef.current = true
         console.log('[Meetings] Received first native audio chunk', {
-          byteLength: buffer.byteLength,
+          byteLength: event.data.byteLength,
+          source: event.source,
+          peak: event.peak,
+          rms: event.rms,
           meetingId: activeMeetingIdRef.current,
           sessionId: activeRecordingSessionRef.current?.id ?? null,
           activeCaptureSource: activeCaptureSourceRef.current,
@@ -639,16 +668,14 @@ export default function MeetingsPage() {
       }
       if (!audioStreamingEnabledRef.current) return
 
-      if (activeRecordingSessionRef.current && activeMeetingIdRef.current) {
-        void enqueueAudioChunkPersist(
-          activeMeetingIdRef.current,
-          activeRecordingSessionRef.current.id,
-          buffer.slice(0),
-          'audio/l16;rate=48000;channels=1',
-        )
+      const outputBuffers =
+        activeCaptureSourceRef.current === 'both'
+          ? nativePcmMixerRef.current.push(event)
+          : [event.data]
+
+      for (const outputBuffer of outputBuffers) {
+        sendNativePcmBuffer(outputBuffer)
       }
-      // Send raw PCM to Deepgram
-      deepgram.sendAudio(buffer)
     },
     onError: (error: Error) =>
       console.error('[Meetings] System audio error:', error, {
@@ -700,21 +727,22 @@ export default function MeetingsPage() {
   const startPreferredCapture = useCallback(
     async (selectedSource: AudioSource, options: { resume?: boolean } = {}) => {
       const useBlendedCapture =
-        selectedSource === 'both' && systemAudio.isAvailable
+        selectedSource === 'both' && systemAudio.canCaptureSystemMicrophone
       const useSystemOnlyNativeCapture =
-        selectedSource === 'system' && systemAudio.isAvailable
+        selectedSource === 'system' && systemAudio.canCaptureSystemAudio
 
       if (useBlendedCapture) {
         console.log(
-          '[Meetings] Starting native blended capture with system audio + microphone sidecar',
+          '[Meetings] Starting native systemMicrophone capture with system audio + AudioUnit microphone',
         )
         audioStreamingEnabledRef.current = true
         hasLoggedFirstNativeAudioChunkRef.current = false
+        nativePcmMixerRef.current.reset()
         stopNativeDurationTimer()
         activeCaptureSourceRef.current = 'both'
         await deepgram.connect('linear16')
 
-        const started = await systemAudio.start('both')
+        const started = await systemAudio.start('systemMicrophone')
         if (started) {
           return 'both'
         }
@@ -722,6 +750,7 @@ export default function MeetingsPage() {
         console.warn(
           '[Meetings] Native blended capture failed, falling back to microphone-only capture',
         )
+        nativePcmMixerRef.current.reset()
         activeCaptureSourceRef.current = null
         deepgram.disconnect()
         audioStreamingEnabledRef.current = false
@@ -731,6 +760,7 @@ export default function MeetingsPage() {
         console.log(`[Meetings] Starting ${selectedSource} native capture`)
         audioStreamingEnabledRef.current = true
         hasLoggedFirstNativeAudioChunkRef.current = false
+        nativePcmMixerRef.current.reset()
         stopNativeDurationTimer()
         await deepgram.connect('linear16')
 
@@ -748,6 +778,7 @@ export default function MeetingsPage() {
 
       console.log('[Meetings] Starting with microphone capture')
       audioStreamingEnabledRef.current = true
+      nativePcmMixerRef.current.reset()
       await deepgram.connect('webm')
       if (options.resume) {
         await audioRecorder.resume(true)
@@ -789,8 +820,10 @@ export default function MeetingsPage() {
       })
 
       if (activeSource === 'both') {
+        flushNativePcmMixer()
         await systemAudio.stop(JSON.stringify(stopContext))
       } else if (usingNativeCapture) {
+        flushNativePcmMixer()
         await systemAudio.stop(JSON.stringify(stopContext))
       } else if (options.pause) {
         await audioRecorder.pause()
@@ -799,12 +832,14 @@ export default function MeetingsPage() {
       }
 
       activeCaptureSourceRef.current = null
+      nativePcmMixerRef.current.reset()
       stopNativeDurationTimer()
     },
     [
       audioRecorder,
       deepgram.issue?.code,
       deepgram.state,
+      flushNativePcmMixer,
       isAppendingTranscript,
       isMeetingPaused,
       stopNativeDurationTimer,
@@ -821,13 +856,13 @@ export default function MeetingsPage() {
   // Prefer the 2026-04-26 blended capture path: it was the last known-good
   // default for capturing both local speech and meeting participant audio.
   useEffect(() => {
-    if (systemAudio.isAvailable) {
+    if (systemAudio.canCaptureSystemMicrophone) {
       setAudioSource('both')
       console.log(
-        '[Meetings] Native audio available in Moldable, using blended capture by default',
+        '[Meetings] Native systemMicrophone capture available in Moldable, using blended capture by default',
       )
     }
-  }, [systemAudio.isAvailable])
+  }, [systemAudio.canCaptureSystemMicrophone])
 
   useEffect(() => {
     const wasCapturing = previousSystemCapturingRef.current
@@ -1549,7 +1584,8 @@ export default function MeetingsPage() {
         audioSource={audioSource}
         onAudioSourceChange={setAudioSource}
         showAudioSource={systemAudio.isInMoldable}
-        systemAudioAvailable={systemAudio.isAvailable}
+        systemAudioAvailable={systemAudio.canCaptureSystemAudio}
+        systemMicrophoneAvailable={systemAudio.canCaptureSystemMicrophone}
         recordingActive={isRecording}
       />
 
