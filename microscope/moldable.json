@@ -1,6 +1,6 @@
 {
   "name": "Microscope",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Explore the natural world through generated images, transparent 2D relief layers, procedural 3D models, and optional fal Hunyuan3D or Tripo renders.",
@@ -17,7 +17,7 @@
     "microscope"
   ],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.12",
+    "@moldable-ai/ui": "^0.2.13",
     "@moldable-ai/storage": "^0.1.5"
   },
   "env": [],

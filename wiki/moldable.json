@@ -1,6 +1,6 @@
 {
   "name": "Wiki",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Create, edit, and organize a Markdown knowledge base.",
@@ -10,8 +10,8 @@
   "category": "reference",
   "tags": ["markdown", "notes", "wiki", "knowledge-base"],
   "moldableDependencies": {
-    "@moldable-ai/editor": "^0.1.11",
-    "@moldable-ai/ui": "^0.2.12",
+    "@moldable-ai/editor": "^0.1.12",
+    "@moldable-ai/ui": "^0.2.13",
     "@moldable-ai/storage": "^0.1.5"
   },
   "appApi": {
