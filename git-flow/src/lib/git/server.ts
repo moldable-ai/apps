@@ -1539,6 +1539,41 @@ export async function commitFiles(
   }
 }
 
+export async function commitAllFiles(
+  paths: string[],
+  summary: string,
+  description: string,
+  workspaceId?: string,
+  repoPath?: string,
+) {
+  const settings = await getSettings(workspaceId)
+  const pathToUse = requireRepoPath(
+    resolveRepoPath(repoPath, settings.currentRepoPath),
+  )
+
+  try {
+    const activePaths = await resolveCommitPaths(paths, pathToUse)
+
+    // Quick ship is explicitly an all-current-changes workflow. Use the normal
+    // commit index instead of `git commit --only` so repo hooks that format and
+    // `git add -u` tracked files can be swept into the same commit.
+    await runGit(['add', '-A', '--', ...activePaths], pathToUse, null)
+
+    const commitArgs = ['commit', '-m', summary]
+    if (description) {
+      commitArgs.push('-m', description)
+    }
+    await runGit(commitArgs, pathToUse, null)
+    const result = await runGit(['rev-parse', 'HEAD'], pathToUse)
+
+    return { success: true, commit: result.stdout.trim() }
+  } catch (err) {
+    console.error('Git commit all error:', err)
+    const message = err instanceof Error ? err.message : 'Git commit failed'
+    throw new Error(message)
+  }
+}
+
 export async function pushCommits(workspaceId?: string, repoPath?: string) {
   const settings = await getSettings(workspaceId)
   const pathToUse = requireRepoPath(

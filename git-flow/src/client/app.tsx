@@ -1796,7 +1796,7 @@ export default function GitFlowPage() {
         return result
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Quick action failed')
-        throw err
+        return null
       } finally {
         setShippingPaths((previous) => {
           const next = new Set(previous)
@@ -1854,10 +1854,10 @@ export default function GitFlowPage() {
           const repo = reposToShip[nextRepoIndex]
           nextRepoIndex += 1
 
-          try {
-            await shipRepo(repo.path)
+          const result = await shipRepo(repo.path)
+          if (result) {
             shipped += 1
-          } catch {
+          } else {
             failed += 1
           }
         }

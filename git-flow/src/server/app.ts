@@ -9,6 +9,7 @@ import {
   addFileToGitignore,
   addRepo,
   checkoutBranch,
+  commitAllFiles,
   commitFiles,
   createBranchFromBaseIfNeeded,
   createPullRequestDraft,
@@ -496,6 +497,7 @@ async function commitAndOpenPullRequest(input: {
   description: string
   workspaceId?: string
   repoPath?: string
+  commitMode?: 'selected' | 'all'
 }) {
   console.info('[git-flow] Commit & open PR: starting')
   const branchName = await generateBranchName({
@@ -515,7 +517,9 @@ async function commitAndOpenPullRequest(input: {
     }`,
   )
 
-  const commit = await commitFiles(
+  const commit = await (
+    input.commitMode === 'all' ? commitAllFiles : commitFiles
+  )(
     input.paths,
     input.summary,
     input.description,
@@ -612,6 +616,7 @@ async function quickShipRepo(
       description,
       workspaceId,
       repoPath: knownRepoPath,
+      commitMode: 'all',
     })
     return {
       ok: true,
@@ -625,7 +630,7 @@ async function quickShipRepo(
     }
   }
 
-  const commit = await commitFiles(
+  const commit = await commitAllFiles(
     paths,
     summary,
     description,

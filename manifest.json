@@ -1,7 +1,7 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-06-02T10:39:29.071Z",
+  "generatedAt": "2026-06-02T10:48:29.592Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
@@ -32,7 +32,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "calendar",
@@ -62,7 +62,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "clock",
@@ -92,7 +92,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "code-editor",
@@ -117,7 +117,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "affirmations",
@@ -142,7 +142,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "db-browser",
@@ -167,12 +167,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "git-flow",
       "name": "Git",
-      "version": "0.1.10",
+      "version": "0.1.11",
       "description": "Simple Git client for branch management, staging, and diffing",
       "tagline": "A clean Git client with AI commits and review, built in",
       "author": "Moldable",
@@ -197,7 +197,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "guitar",
@@ -220,7 +220,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "hello-moldables",
@@ -246,7 +246,7 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.13"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "images",
@@ -283,7 +283,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "mail",
@@ -313,7 +313,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "meetings",
@@ -353,7 +353,7 @@
         "@moldable-ai/storage": "^0.1.5",
         "@moldable-ai/ui": "^0.2.13"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "microscope",
@@ -382,7 +382,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "notes",
@@ -413,7 +413,7 @@
         "@moldable-ai/editor": "^0.1.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "piano",
@@ -436,30 +436,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
-    },
-    {
-      "id": "plants",
-      "name": "Plants",
-      "version": "0.1.1",
-      "description": "Keep your house plants alive: identify each plant, get an AI watering schedule and care guide, and water them on time.",
-      "tagline": "Keep your house plants alive: identify each plant, get an AI watering schedule and care guide, and water them on time.",
-      "author": "",
-      "official": false,
-      "icon": "🪴",
-      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/plants/public/icon.png",
-      "screenshots": [],
-      "about": null,
-      "category": "lifestyle",
-      "tags": [],
-      "path": "plants",
-      "requiredEnv": [],
-      "credentials": [],
-      "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.13",
-        "@moldable-ai/storage": "^0.1.5"
-      },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "reader",
@@ -487,7 +464,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "recipes-app",
@@ -509,48 +486,7 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.13"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
-    },
-    {
-      "id": "redecorate",
-      "name": "Redecorate",
-      "version": "0.1.1",
-      "description": "Reimagine your home, inside and out — a folder-based playground for AI room, exterior, backyard, and floorplan redesigns.",
-      "tagline": "Reimagine every room, facade, and backyard — in one tap",
-      "author": "Moldable",
-      "official": false,
-      "icon": "🛋️",
-      "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/redecorate/public/icon.png",
-      "screenshots": [],
-      "about": "Reimagine your home, inside and out. Redecorate is a folder-based playground for AI room, exterior, backyard, and floorplan redesigns — drop a photo of any space, tap a style, and watch it transform while the room keeps its bones. Built on GPT Image 2.\n\n**Highlights**\n\n- Organize ideas into folders by room or zone — Living Room, Kitchen, Backyard, Front Exterior, Floorplans — with starter folders ready on day one\n- 140+ curated style presets across interior aesthetics, architecture, landscapes, color palettes, room makeovers, and seasonal looks — no design experience needed\n- 16 fill-in-the-blank quick edits for targeted changes: swap the flooring, repaint a wall, redo the landscaping, add a feature, change the time of day\n- Restyle from your original photo so geometry, windows, and architecture stay intact — or describe a space and generate one from scratch\n- Branch freely: every redesign and remix is kept as a render you can return to, with a hold-to-compare against the original\n- Favorite the keepers, move designs between folders, change aspect ratio, download, and archive or delete the rest\n\n**Connects to** OpenAI for GPT Image 2 generation and edits, with optional remove.bg for background removal.\n\nWorth installing if you want to actually see a change before you make it — a calm, image-forward gallery where every room idea has a home.",
-      "category": "graphics-design",
-      "tags": [
-        "interior design",
-        "home",
-        "redesign",
-        "renovation",
-        "architecture",
-        "landscape",
-        "staging",
-        "gpt-image-2"
-      ],
-      "path": "redecorate",
-      "requiredEnv": [
-        "OPENAI_API_KEY"
-      ],
-      "credentials": [
-        {
-          "key": "OPENAI_API_KEY",
-          "name": "OpenAI API Key",
-          "description": "Powers GPT Image 2 redesigns, remixes, and reference renders when Codex CLI auth is unavailable.",
-          "url": "https://platform.openai.com/api-keys"
-        }
-      ],
-      "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.13",
-        "@moldable-ai/storage": "^0.1.5"
-      },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "remotion",
@@ -575,7 +511,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "scribo",
@@ -615,7 +551,7 @@
         "@moldable-ai/editor": "^0.1.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "tasks",
@@ -638,7 +574,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "time-tracker",
@@ -663,7 +599,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "todo",
@@ -693,7 +629,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "translate",
@@ -730,7 +666,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "weather",
@@ -757,7 +693,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     },
     {
       "id": "wiki",
@@ -786,7 +722,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "b5fad4cb754c29337d44b3679a64a6d49feb120e"
+      "commit": "9bfc82809d2b3c5eaac22f58db2f47e846eab9a3"
     }
   ],
   "categories": [

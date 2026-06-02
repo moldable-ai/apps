@@ -10,7 +10,7 @@
     "landscape design"
   ],
   "runtime": "vite_hono",
-  "visibility": "public",
+  "visibility": "private",
   "description": "Reimagine your home, inside and out — a folder-based playground for AI room, exterior, backyard, and floorplan redesigns.",
   "author": "Moldable",
   "license": "MIT",

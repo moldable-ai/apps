@@ -3,7 +3,7 @@
   "version": "0.1.1",
   "aliases": ["houseplants", "garden"],
   "runtime": "vite_hono",
-  "visibility": "public",
+  "visibility": "private",
   "description": "Keep your house plants alive: identify each plant, get an AI watering schedule and care guide, and water them on time.",
   "author": "",
   "license": "FSL-1.1-ALv2",
