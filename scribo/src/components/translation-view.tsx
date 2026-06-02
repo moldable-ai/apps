@@ -2,7 +2,7 @@
 
 import { BookOpen, Loader2, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Markdown, cn } from '@moldable-ai/ui'
+import { Markdown, cn, useWorkspace } from '@moldable-ai/ui'
 import type { Language } from '@/lib/languages'
 
 // Map our language codes to BCP 47 language tags for the lang attribute
@@ -83,6 +83,7 @@ export function TranslationView({
   isTranslating,
   className,
 }: TranslationViewProps) {
+  const { fetchWithWorkspace } = useWorkspace()
   const [popup, setPopup] = useState<WordPopup | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -123,7 +124,9 @@ export function TranslationView({
           to: sourceLanguage,
         })
 
-        const response = await fetch(`/api/lookup?${params.toString()}`)
+        const response = await fetchWithWorkspace(
+          `/api/lookup?${params.toString()}`,
+        )
         const result: LookupResult = await response.json()
 
         setPopup((prev) =>
@@ -147,7 +150,7 @@ export function TranslationView({
         )
       }
     },
-    [sourceLanguage, targetLanguage],
+    [fetchWithWorkspace, sourceLanguage, targetLanguage],
   )
 
   // Handle double-click to select and look up word

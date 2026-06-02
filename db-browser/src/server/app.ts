@@ -237,9 +237,7 @@ app.get('/api/moldable/today', async (c) => {
   const generatedAt = new Date().toISOString()
 
   try {
-    const workspaceId = requiredWorkspaceId(
-      c.req.header('x-moldable-workspace-id') ?? getWorkspaceId(c),
-    )
+    const workspaceId = requiredWorkspaceId(getWorkspaceId(c))
     const dataDir = getDataDir(c)
 
     const connections = await listConnections(workspaceId, dataDir)
@@ -321,9 +319,7 @@ app.get('/api/moldable/today', async (c) => {
 })
 
 app.post('/api/moldable/rpc', async (c) => {
-  const workspaceId = requiredWorkspaceId(
-    c.req.header('x-moldable-workspace-id') ?? getWorkspaceId(c),
-  )
+  const workspaceId = requiredWorkspaceId(getWorkspaceId(c))
   const dataDir = getDataDir(c)
 
   try {

@@ -7,12 +7,16 @@
 import type { Meeting, MeetingSettings } from '@/types'
 import { DEFAULT_SETTINGS } from '@/types'
 
+type WorkspaceFetch = typeof fetch
+
 /**
  * Load all meetings from the server
  */
-export async function loadMeetings(): Promise<Meeting[]> {
+export async function loadMeetings(
+  fetchWithWorkspace: WorkspaceFetch,
+): Promise<Meeting[]> {
   try {
-    const res = await fetch('/api/meetings')
+    const res = await fetchWithWorkspace('/api/meetings')
     if (!res.ok) {
       console.error('Failed to load meetings:', res.statusText)
       return []
@@ -47,9 +51,12 @@ export async function loadMeetings(): Promise<Meeting[]> {
 /**
  * Save a single meeting (creates or updates)
  */
-export async function saveMeeting(meeting: Meeting): Promise<void> {
+export async function saveMeeting(
+  fetchWithWorkspace: WorkspaceFetch,
+  meeting: Meeting,
+): Promise<void> {
   try {
-    await fetch('/api/meetings', {
+    await fetchWithWorkspace('/api/meetings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(meeting),
@@ -62,9 +69,12 @@ export async function saveMeeting(meeting: Meeting): Promise<void> {
 /**
  * Delete a meeting
  */
-export async function deleteMeeting(meetingId: string): Promise<void> {
+export async function deleteMeeting(
+  fetchWithWorkspace: WorkspaceFetch,
+  meetingId: string,
+): Promise<void> {
   try {
-    await fetch(`/api/meetings/${meetingId}`, {
+    await fetchWithWorkspace(`/api/meetings/${meetingId}`, {
       method: 'DELETE',
     })
   } catch (e) {
@@ -75,9 +85,12 @@ export async function deleteMeeting(meetingId: string): Promise<void> {
 /**
  * Get a single meeting by ID
  */
-export async function getMeeting(meetingId: string): Promise<Meeting | null> {
+export async function getMeeting(
+  fetchWithWorkspace: WorkspaceFetch,
+  meetingId: string,
+): Promise<Meeting | null> {
   try {
-    const res = await fetch(`/api/meetings/${meetingId}`)
+    const res = await fetchWithWorkspace(`/api/meetings/${meetingId}`)
     if (!res.ok) {
       return null
     }
@@ -110,9 +123,11 @@ export async function getMeeting(meetingId: string): Promise<Meeting | null> {
 /**
  * Load settings from the server
  */
-export async function loadSettings(): Promise<MeetingSettings> {
+export async function loadSettings(
+  fetchWithWorkspace: WorkspaceFetch,
+): Promise<MeetingSettings> {
   try {
-    const res = await fetch('/api/settings')
+    const res = await fetchWithWorkspace('/api/settings')
     if (!res.ok) {
       return DEFAULT_SETTINGS
     }
@@ -130,9 +145,12 @@ export async function loadSettings(): Promise<MeetingSettings> {
 /**
  * Save settings to the server
  */
-export async function saveSettings(settings: MeetingSettings): Promise<void> {
+export async function saveSettings(
+  fetchWithWorkspace: WorkspaceFetch,
+  settings: MeetingSettings,
+): Promise<void> {
   try {
-    await fetch('/api/settings', {
+    await fetchWithWorkspace('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settings),

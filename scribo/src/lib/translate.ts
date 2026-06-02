@@ -46,8 +46,9 @@ export async function translateText(
   to: Language,
   existingCache?: TranslationCache | null,
   signal?: AbortSignal,
+  fetcher: typeof fetch = fetch,
 ): Promise<TranslationResult> {
-  const response = await fetch('/api/translate', {
+  const response = await fetcher('/api/translate', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

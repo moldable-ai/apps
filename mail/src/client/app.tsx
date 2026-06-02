@@ -883,9 +883,15 @@ export function App() {
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'oauth-success') {
-        void queryClient.invalidateQueries({ queryKey: ['mail-status'] })
-        void queryClient.invalidateQueries({ queryKey: ['mail-messages'] })
-        void queryClient.invalidateQueries({ queryKey: ['mail-contacts'] })
+        void queryClient.invalidateQueries({
+          queryKey: ['mail-status', workspaceId],
+        })
+        void queryClient.invalidateQueries({
+          queryKey: ['mail-messages', workspaceId],
+        })
+        void queryClient.invalidateQueries({
+          queryKey: ['mail-contacts', workspaceId],
+        })
       }
 
       if (event.data?.type === 'moldable:chat-state') {
@@ -901,7 +907,7 @@ export function App() {
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [queryClient])
+  }, [queryClient, workspaceId])
 
   useEffect(() => {
     if (!messageQuery.data) return

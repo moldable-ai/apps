@@ -2,7 +2,6 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactNode, useState } from 'react'
-import { WorkspaceProvider } from '@moldable-ai/ui'
 import { TimeTrackerProvider } from './time-tracker-context'
 
 export function Providers({ children }: { children: ReactNode }) {
@@ -18,10 +17,8 @@ export function Providers({ children }: { children: ReactNode }) {
   )
 
   return (
-    <WorkspaceProvider>
-      <QueryClientProvider client={queryClient}>
-        <TimeTrackerProvider>{children}</TimeTrackerProvider>
-      </QueryClientProvider>
-    </WorkspaceProvider>
+    <QueryClientProvider client={queryClient}>
+      <TimeTrackerProvider>{children}</TimeTrackerProvider>
+    </QueryClientProvider>
   )
 }

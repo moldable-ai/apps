@@ -826,7 +826,7 @@ export function App() {
   })
 
   const removeBgStatusQuery = useQuery({
-    queryKey: ['remove-bg-status'],
+    queryKey: ['remove-bg-status', workspaceId],
     queryFn: async () => {
       const response = await fetchWithWorkspace('/api/remove-bg/status')
       return parseResponse<RemoveBgStatus>(
@@ -1252,7 +1252,7 @@ export function App() {
         setRemoveBgKeyDialogOpen(false)
       }
       void queryClient.invalidateQueries({
-        queryKey: ['remove-bg-status'],
+        queryKey: ['remove-bg-status', variables.workspaceId],
       })
       if (
         workspaceId === variables.workspaceId &&

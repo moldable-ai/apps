@@ -8,7 +8,6 @@
       ;(function () {
         var params = new URLSearchParams(window.location.search)
         var theme = params.get('theme')
-        if (!theme) theme = localStorage.getItem('moldable-theme')
         if (theme === 'system' || !theme) {
           theme = window.matchMedia('(prefers-color-scheme: dark)').matches
             ? 'dark'

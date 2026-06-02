@@ -117,6 +117,7 @@ const MODEL_PROVIDER_OPTIONS: Array<{
 const DEFAULT_SETTINGS: MicroscopeSettings = {
   modelProvider: 'fal',
   quality: 'medium',
+  autoRotate: true,
 }
 
 const DEFAULT_SCENE_LIGHTING: SceneLighting = {
@@ -144,8 +145,6 @@ const PROMPT_SAMPLES = interleavedCategoryPrompts()
 
 const FALLBACK_TONE =
   'linear-gradient(135deg, hsl(var(--primary) / 0.4), hsl(var(--muted)))'
-const AUTO_ROTATE_STORAGE_KEY = 'microscope:auto-rotate'
-const MODEL_PROVIDER_STORAGE_PREFIX = 'microscope:model-provider:'
 const ACTION_DOCK_BOTTOM =
   'calc(var(--microscope-action-dock-safe-padding, var(--chat-safe-padding, 0px)) + 1.25rem)'
 const INSPECTOR_WIDTH = '340px'
@@ -166,67 +165,21 @@ function compactScale(scale: Exploration['scale']) {
   return scale.charAt(0).toUpperCase() + scale.slice(1)
 }
 
-function readAutoRotatePreference() {
-  try {
-    return window.localStorage.getItem(AUTO_ROTATE_STORAGE_KEY) !== 'false'
-  } catch {
-    return true
-  }
-}
-
-function writeAutoRotatePreference(value: boolean) {
-  try {
-    window.localStorage.setItem(AUTO_ROTATE_STORAGE_KEY, String(value))
-  } catch {
-    // Ignore storage failures; the in-memory toggle should still work.
-  }
-}
-
-function readModelProviderPreference(
-  explorationId: string,
-  variants: ModelVariant[],
-) {
-  try {
-    const provider = window.localStorage.getItem(
-      `${MODEL_PROVIDER_STORAGE_PREFIX}${explorationId}`,
-    ) as ModelProvider | null
-    if (!provider) return null
-    return variants.some((variant) => variant.provider === provider)
-      ? provider
-      : null
-  } catch {
-    return null
-  }
-}
-
-function writeModelProviderPreference(
-  explorationId: string,
-  provider: ModelProvider,
-) {
-  try {
-    window.localStorage.setItem(
-      `${MODEL_PROVIDER_STORAGE_PREFIX}${explorationId}`,
-      provider,
-    )
-  } catch {
-    // Ignore storage failures; the current selection should still work.
-  }
-}
-
 function preferredModelProviderFor(
-  explorationId: string,
   variants: ModelVariant[],
   currentProvider: ModelProvider | undefined,
+  selectedProvider: ModelProvider | undefined,
 ) {
-  const savedProvider = readModelProviderPreference(explorationId, variants)
-  const savedVariant = variants.find(
-    (variant) => variant.provider === savedProvider,
+  const selectedVariant = variants.find(
+    (variant) => variant.provider === selectedProvider,
   )
   const currentVariant = variants.find(
     (variant) => variant.provider === currentProvider,
   )
   const readyProvider =
-    (savedVariant?.status === 'ready' ? savedVariant.provider : undefined) ??
+    (selectedVariant?.status === 'ready'
+      ? selectedVariant.provider
+      : undefined) ??
     (currentVariant?.status === 'ready'
       ? currentVariant.provider
       : undefined) ??
@@ -234,7 +187,7 @@ function preferredModelProviderFor(
 
   return (
     readyProvider ??
-    savedProvider ??
+    selectedVariant?.provider ??
     currentProvider ??
     variants[0]?.provider ??
     null
@@ -905,6 +858,9 @@ function SpecimenView({
   onMoveCategory,
   onDelete,
   onCancel,
+  autoRotate,
+  onAutoRotateChange,
+  onModelProviderPreference,
   regenerating,
   retryingBackground,
   moving,
@@ -923,13 +879,18 @@ function SpecimenView({
   onMoveCategory?: (categoryId: string) => void
   onDelete?: () => void
   onCancel?: () => void
+  autoRotate: boolean
+  onAutoRotateChange: (value: boolean) => void
+  onModelProviderPreference?: (
+    explorationId: string,
+    provider: ModelProvider,
+  ) => void
   regenerating?: boolean
   retryingBackground?: boolean
   moving?: boolean
   deleting?: boolean
   canceling?: boolean
 }) {
-  const [autoRotate, setAutoRotate] = useState(readAutoRotatePreference)
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('3d')
   const [inspectorOpen, setInspectorOpen] = useState(true)
   const [lightingOpen, setLightingOpen] = useState(false)
@@ -1010,13 +971,18 @@ function SpecimenView({
 
     setActiveModelProvider(
       preferredModelProviderFor(
-        generatedId,
         modelVariants,
         generatedModelProvider,
+        generated?.selectedModelProvider,
       ),
     )
     setModelMenuOpen(false)
-  }, [generatedId, generatedModelProvider, modelVariants])
+  }, [
+    generated?.selectedModelProvider,
+    generatedId,
+    generatedModelProvider,
+    modelVariants,
+  ])
 
   useEffect(() => {
     if (!modelVariants.length || !activeModelProvider) return
@@ -1026,21 +992,23 @@ function SpecimenView({
       setActiveModelProvider(
         generatedId
           ? preferredModelProviderFor(
-              generatedId,
               modelVariants,
               generatedModelProvider,
+              generated?.selectedModelProvider,
             )
           : (generatedModelProvider ?? modelVariants[0]?.provider ?? null),
       )
     }
-  }, [activeModelProvider, generatedId, generatedModelProvider, modelVariants])
+  }, [
+    activeModelProvider,
+    generated?.selectedModelProvider,
+    generatedId,
+    generatedModelProvider,
+    modelVariants,
+  ])
 
   function toggleAutoRotate() {
-    setAutoRotate((value) => {
-      const next = !value
-      writeAutoRotatePreference(next)
-      return next
-    })
+    onAutoRotateChange(!autoRotate)
   }
 
   function showDetailsPanel() {
@@ -1075,7 +1043,7 @@ function SpecimenView({
   function selectModelProvider(provider: ModelProvider) {
     setActiveModelProvider(provider)
     if (generated) {
-      writeModelProviderPreference(generated.id, provider)
+      onModelProviderPreference?.(generated.id, provider)
     }
     setViewMode('3d')
     setModelMenuOpen(false)
@@ -1413,7 +1381,7 @@ function SpecimenView({
             onRegenerateModel={(provider) => {
               if (generated && provider) {
                 setActiveModelProvider(provider)
-                writeModelProviderPreference(generated.id, provider)
+                onModelProviderPreference?.(generated.id, provider)
               }
               onRegenerateModel?.(provider)
             }}
@@ -2648,8 +2616,47 @@ export function App() {
         }),
         'Microscope settings could not be saved.',
       ),
+    onMutate: (next) => {
+      queryClient.setQueryData(['microscope-settings', workspaceId], next)
+    },
     onSuccess: (next) => {
       queryClient.setQueryData(['microscope-settings', workspaceId], next)
+    },
+  })
+
+  const modelProviderPreferenceMutation = useMutation({
+    mutationFn: async (input: {
+      explorationId: string
+      modelProvider: ModelProvider
+    }) =>
+      parseJson<GenerateExplorationResponse>(
+        await fetchWithWorkspace(
+          `/api/explorations/${encodeURIComponent(
+            input.explorationId,
+          )}/model-provider`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ modelProvider: input.modelProvider }),
+          },
+        ),
+        'Microscope model provider preference could not be saved.',
+      ),
+    onSuccess: (response) => {
+      queryClient.setQueryData<LibraryResponse>(
+        ['microscope-library', workspaceId],
+        (current) =>
+          current
+            ? {
+                ...current,
+                generated: current.generated.map((item) =>
+                  item.id === response.exploration.id
+                    ? response.exploration
+                    : item,
+                ),
+              }
+            : current,
+      )
     },
   })
 
@@ -3206,6 +3213,20 @@ export function App() {
     }
   }
 
+  function updateAutoRotate(autoRotate: boolean) {
+    settingsMutation.mutate({
+      ...settings,
+      autoRotate,
+    })
+  }
+
+  function updateExplorationModelProvider(
+    explorationId: string,
+    modelProvider: ModelProvider,
+  ) {
+    modelProviderPreferenceMutation.mutate({ explorationId, modelProvider })
+  }
+
   return (
     <main className="bg-background text-foreground flex h-full min-h-0 overflow-hidden">
       {view === 'worlds' ? (
@@ -3286,6 +3307,9 @@ export function App() {
                 ? () => cancelMutation.mutate(selected.id)
                 : undefined
             }
+            autoRotate={settings.autoRotate}
+            onAutoRotateChange={updateAutoRotate}
+            onModelProviderPreference={updateExplorationModelProvider}
             regenerating={
               regeneratingId === selected.id &&
               (regenerateMutation.isPending ||

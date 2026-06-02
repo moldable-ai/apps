@@ -8,6 +8,7 @@ import {
   writeJson,
 } from '@moldable-ai/storage'
 import { categories, getAffirmations } from '../lib/affirmations'
+import { type StreakState, calculateStreakCount } from '../lib/streak'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { z } from 'zod'
@@ -36,6 +37,17 @@ const favoritesUpdateParamsSchema = z.object({
 const favoriteItemSchema = z.object({
   text: z.string().trim().min(1),
   favorite: z.boolean(),
+})
+
+const dayKeySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+
+const streakUpdateSchema = z.object({
+  dayKey: dayKeySchema,
+})
+
+const streakStateSchema = z.object({
+  count: z.number().int().positive(),
+  lastVisit: dayKeySchema,
 })
 
 function normalizeFavorites(favorites: string[]): string[] {
@@ -85,10 +97,20 @@ function getFavoritesPath(workspaceId?: string): string {
   return safePath(getAppDataDir(workspaceId), 'favorites.json')
 }
 
+function getStreakPath(workspaceId?: string): string {
+  return safePath(getAppDataDir(workspaceId), 'streak.json')
+}
+
 async function loadFavorites(workspaceId?: string): Promise<string[]> {
   await ensureDir(getAppDataDir(workspaceId))
   const favorites = await readJson<unknown>(getFavoritesPath(workspaceId), [])
   return favoritesSchema.safeParse(favorites).data ?? []
+}
+
+async function loadStreak(workspaceId?: string): Promise<StreakState | null> {
+  await ensureDir(getAppDataDir(workspaceId))
+  const streak = await readJson<unknown>(getStreakPath(workspaceId), null)
+  return streakStateSchema.safeParse(streak).data ?? null
 }
 
 function getRpcWorkspaceId(request: Request): string | undefined {
@@ -152,10 +174,9 @@ app.get('/api/moldable/health', (c) => {
 
 // Today contribution.
 //
-// Affirmations is a calm, manual app: the only thing it persists is a list of
-// favorited affirmation texts (favorites.json, with no timestamps, no streaks,
-// no "last viewed", no deadlines, agents, or in-progress work). A stable count
-// of saved favorites is NOT an event that earns attention — surfacing it would
+// Affirmations is a calm, manual app: its persisted favorites and daily streak
+// are private app state, not work that needs attention. A stable count of saved
+// favorites or visits is NOT an event that earns attention — surfacing it would
 // be exactly the always-on empty-state nag the Today view forbids.
 //
 // There is no honest signal here and no genuine in-progress state to resume,
@@ -238,6 +259,36 @@ app.post('/api/favorites/item', async (c) => {
 
     console.error('Failed to update favorite affirmation:', error)
     return c.json({ error: 'Failed to update favorite affirmation' }, 500)
+  }
+})
+
+app.post('/api/streak', async (c) => {
+  try {
+    const workspaceId = getRequestWorkspaceId(c.req.raw)
+    const body: unknown = await c.req.json().catch(() => null)
+    const parsed = streakUpdateSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return c.json({ error: 'Expected a valid day key' }, 400)
+    }
+
+    const previous = await loadStreak(workspaceId)
+    const count = calculateStreakCount(previous, parsed.data.dayKey)
+    const next: StreakState = { count, lastVisit: parsed.data.dayKey }
+
+    if (!previous || previous.lastVisit !== next.lastVisit) {
+      await ensureDir(getAppDataDir(workspaceId))
+      await writeJson(getStreakPath(workspaceId), next)
+    }
+
+    return c.json(next)
+  } catch (error) {
+    if (isInvalidWorkspaceIdError(error)) {
+      return c.json({ error: 'Invalid workspace ID' }, 400)
+    }
+
+    console.error('Failed to update affirmation streak:', error)
+    return c.json({ error: 'Failed to update affirmation streak' }, 500)
   }
 })
 

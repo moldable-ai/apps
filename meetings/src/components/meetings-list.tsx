@@ -1,6 +1,13 @@
 'use client'
 
-import { CalendarDays, MoreHorizontal, Trash2 } from 'lucide-react'
+import {
+  CalendarDays,
+  Loader2,
+  Mic,
+  MoreHorizontal,
+  Pause,
+  Trash2,
+} from 'lucide-react'
 import { useMemo } from 'react'
 import {
   Button,
@@ -12,6 +19,7 @@ import {
   Skeleton,
   cn,
 } from '@moldable-ai/ui'
+import { formatDuration } from '@/lib/format'
 import { MeetingCard } from './meeting-card'
 import type { Meeting } from '@/types'
 
@@ -67,9 +75,16 @@ interface MeetingDayGroup {
 interface MeetingsListProps {
   meetings: Meeting[]
   calendarEvents: CalendarEventsState
+  activeMeeting?: Meeting | null
+  activeMeetingStatus?: {
+    isRecording: boolean
+    isPaused: boolean
+    isStarting: boolean
+  }
   onStartEvent: (event: CalendarEvent) => void
   onGrantCalendarAccess: () => void
   onSelectMeeting: (meeting: Meeting) => void
+  onSelectActiveMeeting?: () => void
   onDeleteMeeting: (meetingId: string) => void
 }
 
@@ -254,9 +269,12 @@ function isToday(date: Date) {
 export function MeetingsList({
   meetings,
   calendarEvents,
+  activeMeeting,
+  activeMeetingStatus,
   onStartEvent,
   onGrantCalendarAccess,
   onSelectMeeting,
+  onSelectActiveMeeting,
   onDeleteMeeting,
 }: MeetingsListProps) {
   const groupedMeetings = useMemo(
@@ -267,11 +285,20 @@ export function MeetingsList({
   return (
     <ScrollArea className="h-full px-5 pt-3">
       <div className="mx-auto w-full max-w-[44rem] space-y-8 pb-[calc(var(--chat-safe-padding,0px)+10rem)]">
-        <UpcomingEvents
-          state={calendarEvents}
-          onStartEvent={onStartEvent}
-          onGrantCalendarAccess={onGrantCalendarAccess}
-        />
+        <div className="space-y-3">
+          {activeMeeting && activeMeetingStatus && onSelectActiveMeeting ? (
+            <ActiveMeetingBanner
+              meeting={activeMeeting}
+              status={activeMeetingStatus}
+              onSelect={onSelectActiveMeeting}
+            />
+          ) : null}
+          <UpcomingEvents
+            state={calendarEvents}
+            onStartEvent={onStartEvent}
+            onGrantCalendarAccess={onGrantCalendarAccess}
+          />
+        </div>
         {groupedMeetings.map((group) => (
           <section key={group.label}>
             <h2 className="text-muted-foreground mb-2 text-xs font-medium">
@@ -291,6 +318,67 @@ export function MeetingsList({
         ))}
       </div>
     </ScrollArea>
+  )
+}
+
+function ActiveMeetingBanner({
+  meeting,
+  status,
+  onSelect,
+}: {
+  meeting: Meeting
+  status: NonNullable<MeetingsListProps['activeMeetingStatus']>
+  onSelect: () => void
+}) {
+  const title = meeting.title || 'Untitled meeting'
+  const statusLabel = status.isStarting
+    ? status.isPaused
+      ? 'Resuming'
+      : 'Starting'
+    : status.isPaused
+      ? 'Paused'
+      : null
+  const StatusIcon = status.isStarting ? Loader2 : status.isPaused ? Pause : Mic
+
+  return (
+    <section aria-label="Active meeting" className="-mx-2">
+      <button
+        type="button"
+        onClick={onSelect}
+        className="bg-primary/10 text-primary hover:bg-primary/15 group flex h-8 w-full cursor-pointer items-center gap-2 rounded-xl px-4 text-left transition-colors"
+      >
+        <span
+          className={cn(
+            'size-2 shrink-0 rounded-full',
+            status.isRecording && !status.isPaused
+              ? 'bg-destructive animate-pulse'
+              : 'bg-primary/70',
+            status.isPaused && 'opacity-60',
+          )}
+        />
+        <StatusIcon
+          className={cn('size-3 shrink-0', status.isStarting && 'animate-spin')}
+          fill={status.isPaused ? 'currentColor' : undefined}
+        />
+        <span className="text-foreground min-w-0 flex-1 truncate text-xs font-medium">
+          {title}
+        </span>
+        <span className="hidden shrink-0 items-center gap-1.5 text-[11px] font-medium sm:flex">
+          {statusLabel ? (
+            <>
+              <span className="max-w-24 truncate">{statusLabel}</span>
+              <span className="opacity-50">·</span>
+            </>
+          ) : null}
+          <span className="font-mono tabular-nums">
+            {formatDuration(meeting.duration)}
+          </span>
+        </span>
+        <span className="hidden shrink-0 text-[11px] font-medium opacity-0 transition-opacity group-hover:opacity-80 md:inline">
+          Open
+        </span>
+      </button>
+    </section>
   )
 }
 

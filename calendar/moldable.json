@@ -1,6 +1,6 @@
 {
   "name": "Calendar",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "aliases": ["schedule", "events"],
   "runtime": "vite_hono",
   "visibility": "public",

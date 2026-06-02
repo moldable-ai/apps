@@ -21,41 +21,6 @@ interface SoundPickerProps {
   align?: 'start' | 'center' | 'end'
 }
 
-const ACTIVE_PACK_STORAGE_KEY = 'guitar:active-pack'
-const ACTIVE_INSTRUMENT_STORAGE_KEY = 'guitar:active-instrument'
-
-export function readActivePackId(): string | null {
-  try {
-    return window.localStorage.getItem(ACTIVE_PACK_STORAGE_KEY)
-  } catch {
-    return null
-  }
-}
-
-export function writeActivePackId(id: string) {
-  try {
-    window.localStorage.setItem(ACTIVE_PACK_STORAGE_KEY, id)
-  } catch {
-    // ignore storage failure
-  }
-}
-
-export function readActiveInstrumentId(): string | null {
-  try {
-    return window.localStorage.getItem(ACTIVE_INSTRUMENT_STORAGE_KEY)
-  } catch {
-    return null
-  }
-}
-
-export function writeActiveInstrumentId(id: string) {
-  try {
-    window.localStorage.setItem(ACTIVE_INSTRUMENT_STORAGE_KEY, id)
-  } catch {
-    // ignore storage failure
-  }
-}
-
 function formatSize(mb?: number) {
   if (mb === undefined) return ''
   if (mb < 1024) return `${Math.round(mb)} MB`

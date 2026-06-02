@@ -1,6 +1,6 @@
 {
   "name": "Scribo Languages",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "aliases": ["translation", "languages"],
   "visibility": "public",
   "description": "Language learning journal with AI-powered translations",

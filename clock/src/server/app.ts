@@ -3,6 +3,7 @@ import {
   getWorkspaceFromRequest,
   readJson,
   safePath,
+  sanitizeId,
   writeJson,
 } from '@moldable-ai/storage'
 import { isOneShotAlarmExpired, nextAlarmOccurrenceAfter } from '@/lib/alarms'
@@ -27,6 +28,22 @@ app.use('/api/*', cors())
 // ---------------------------------------------------------------------------
 // Storage
 // ---------------------------------------------------------------------------
+
+function normalizeWorkspaceId(value: string | null | undefined) {
+  if (!value) return undefined
+  try {
+    return sanitizeId(value)
+  } catch {
+    return undefined
+  }
+}
+
+function getRequestWorkspaceId(request: Request) {
+  return normalizeWorkspaceId(
+    getWorkspaceFromRequest(request) ??
+      request.headers.get('x-moldable-workspace-id'),
+  )
+}
 
 function alarmsPath(workspaceId?: string) {
   return safePath(getAppDataDir(workspaceId), 'alarms.json')
@@ -276,12 +293,12 @@ app.get('/api/moldable/commands', (c) => {
 // ---------------------------------------------------------------------------
 
 app.get('/api/alarms', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   return c.json({ alarms: await readAlarms(workspaceId) })
 })
 
 app.post('/api/alarms', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const body = await c.req.json().catch(() => ({}))
   const time = normalizeTime(body.time)
   if (!time) return c.json({ error: 'A valid HH:mm time is required.' }, 400)
@@ -300,7 +317,7 @@ app.post('/api/alarms', async (c) => {
 })
 
 app.patch('/api/alarms/:id', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const id = c.req.param('id')
   const body = await c.req.json().catch(() => ({}))
   const alarms = await readAlarms(workspaceId)
@@ -324,7 +341,7 @@ app.patch('/api/alarms/:id', async (c) => {
 })
 
 app.delete('/api/alarms/:id', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const id = c.req.param('id')
   const alarms = await readAlarms(workspaceId)
   const filtered = alarms.filter((a) => a.id !== id)
@@ -340,7 +357,7 @@ app.delete('/api/alarms/:id', async (c) => {
 // ---------------------------------------------------------------------------
 
 app.get('/api/timers', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const now = Date.now()
   const timers = await readTimers(workspaceId)
   return c.json({
@@ -350,7 +367,7 @@ app.get('/api/timers', async (c) => {
 })
 
 app.post('/api/timers', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const body = await c.req.json().catch(() => ({}))
   const durationMs = Number(body.durationMs)
   if (!Number.isFinite(durationMs) || durationMs < 1000) {
@@ -388,7 +405,7 @@ async function mutateTimer(
 }
 
 app.post('/api/timers/:id/:action', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const id = c.req.param('id')
   const action = c.req.param('action')
   const mutator =
@@ -407,7 +424,7 @@ app.post('/api/timers/:id/:action', async (c) => {
 })
 
 app.delete('/api/timers/:id', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const id = c.req.param('id')
   const timers = await readTimers(workspaceId)
   const filtered = timers.filter((t) => t.id !== id)
@@ -423,7 +440,7 @@ app.delete('/api/timers/:id', async (c) => {
 // ---------------------------------------------------------------------------
 
 app.get('/api/stopwatch', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   return c.json({
     stopwatch: await readStopwatch(workspaceId),
     serverNow: new Date().toISOString(),
@@ -431,7 +448,7 @@ app.get('/api/stopwatch', async (c) => {
 })
 
 app.post('/api/stopwatch/:action', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const action = c.req.param('action')
   const now = Date.now()
   const state = await readStopwatch(workspaceId)
@@ -469,12 +486,12 @@ app.post('/api/stopwatch/:action', async (c) => {
 // ---------------------------------------------------------------------------
 
 app.get('/api/worldclocks', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   return c.json({ worldClocks: await readWorldClocks(workspaceId) })
 })
 
 app.post('/api/worldclocks', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const body = await c.req.json().catch(() => ({}))
   const timeZone = typeof body.timeZone === 'string' ? body.timeZone : ''
   try {
@@ -501,7 +518,7 @@ app.post('/api/worldclocks', async (c) => {
 })
 
 app.delete('/api/worldclocks/:id', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const id = c.req.param('id')
   const clocks = await readWorldClocks(workspaceId)
   const filtered = clocks.filter((x) => x.id !== id)
@@ -517,10 +534,7 @@ app.delete('/api/worldclocks/:id', async (c) => {
 // ---------------------------------------------------------------------------
 
 app.get('/api/moldable/today', async (c) => {
-  const workspaceId =
-    c.req.header('x-moldable-workspace-id') ??
-    getWorkspaceFromRequest(c.req.raw) ??
-    'personal'
+  const workspaceId = getRequestWorkspaceId(c.req.raw) ?? 'personal'
 
   const now = Date.now()
   const [timers, alarms, stopwatch] = await Promise.all([
@@ -651,10 +665,7 @@ function rpcErr(code: string, message: string) {
 }
 
 app.post('/api/moldable/rpc', async (c) => {
-  const workspaceId =
-    c.req.header('x-moldable-workspace-id') ??
-    getWorkspaceFromRequest(c.req.raw) ??
-    'personal'
+  const workspaceId = getRequestWorkspaceId(c.req.raw) ?? 'personal'
 
   try {
     const body = (await c.req.json()) as { method?: unknown; params?: unknown }

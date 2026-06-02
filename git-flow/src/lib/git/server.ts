@@ -1,4 +1,9 @@
-import { getAppDataDir, readJson, writeJson } from '@moldable-ai/storage'
+import {
+  getAppDataDir,
+  readJson,
+  safePath,
+  writeJson,
+} from '@moldable-ai/storage'
 import { execFile, spawn } from 'child_process'
 import { createHash } from 'crypto'
 import { existsSync, readdirSync } from 'fs'
@@ -1012,8 +1017,7 @@ async function runGit(
 }
 
 async function getSettings(workspaceId?: string): Promise<Settings> {
-  const dataDir = getAppDataDir(workspaceId)
-  const configPath = path.join(dataDir, 'settings.json')
+  const configPath = safePath(getAppDataDir(workspaceId), 'settings.json')
   try {
     const raw = await readJson(configPath, createDefaultSettings())
     return SettingsSchema.parse(raw)
@@ -1023,8 +1027,7 @@ async function getSettings(workspaceId?: string): Promise<Settings> {
 }
 
 async function saveSettings(settings: Settings, workspaceId?: string) {
-  const dataDir = getAppDataDir(workspaceId)
-  const configPath = path.join(dataDir, 'settings.json')
+  const configPath = safePath(getAppDataDir(workspaceId), 'settings.json')
   await writeJson(configPath, settings)
 }
 
@@ -2126,10 +2129,10 @@ export async function getEditorIconPngPath(
     return editor.iconPath
   }
 
-  const iconsDir = path.join(getAppDataDir(workspaceId), 'editor-icons-v2')
+  const iconsDir = safePath(getAppDataDir(workspaceId), 'editor-icons-v2')
   await mkdir(iconsDir, { recursive: true })
 
-  const pngPath = path.join(iconsDir, `${editor.id}.png`)
+  const pngPath = safePath(iconsDir, `${editor.id}.png`)
 
   const [sourceStat, pngStat] = await Promise.all([
     stat(editor.iconPath).catch(() => null),

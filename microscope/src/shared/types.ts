@@ -82,6 +82,7 @@ export type GeneratedExploration = {
   modelMaterialUrl?: string | null
   modelTextureUrl?: string | null
   modelProvider?: ModelProvider
+  selectedModelProvider?: ModelProvider
   modelVariants?: ModelVariant[]
   modelTaskId?: string
   model: ModelRecipe
@@ -117,6 +118,7 @@ export type ModelVariant = {
 export type MicroscopeSettings = {
   modelProvider: ModelProvider
   quality: Extract<ImageQuality, 'medium' | 'high'>
+  autoRotate: boolean
 }
 
 export type GenerateExplorationInput = {

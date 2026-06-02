@@ -18,6 +18,12 @@ interface TaskResponse {
   task: Task
 }
 
+interface SettingsResponse {
+  settings: {
+    viewMode: 'list' | 'kanban'
+  }
+}
+
 interface RpcResponse<T> {
   ok: boolean
   result: T
@@ -179,6 +185,62 @@ describe('tasks api', () => {
       await request('/api/projects'),
     )
     expect(afterDelete.projects[0]?.tasks).toHaveLength(0)
+  })
+
+  it('stores view mode settings in workspace-scoped app data', async () => {
+    const defaults = await json<SettingsResponse>(
+      await request('/api/settings'),
+    )
+    expect(defaults.settings.viewMode).toBe('list')
+
+    const updated = await json<SettingsResponse>(
+      await request('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ viewMode: 'kanban' }),
+      }),
+    )
+    expect(updated.settings.viewMode).toBe('kanban')
+
+    const persisted = await json<SettingsResponse>(
+      await request('/api/settings'),
+    )
+    expect(persisted.settings.viewMode).toBe('kanban')
+
+    const settingsFile = JSON.parse(
+      await readFile(
+        path.join(
+          tempHome,
+          'workspaces',
+          'test-workspace',
+          'apps',
+          'tasks',
+          'data',
+          'tasks-settings.json',
+        ),
+        'utf8',
+      ),
+    ) as SettingsResponse['settings']
+    expect(settingsFile).toEqual({ viewMode: 'kanban' })
+
+    const otherWorkspace = await json<SettingsResponse>(
+      await app.request('/api/settings', {
+        headers: {
+          [WORKSPACE_HEADER]: 'other-workspace',
+        },
+      }),
+    )
+    expect(otherWorkspace.settings.viewMode).toBe('list')
+  })
+
+  it('rejects invalid view mode settings', async () => {
+    const response = await request('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ viewMode: 'grid' }),
+    })
+
+    expect(response.status).toBe(400)
   })
 
   it('normalizes project keys to Shippy-style three-letter prefixes', async () => {

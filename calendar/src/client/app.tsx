@@ -1084,7 +1084,7 @@ function EventPopover({
   openExternalLink: (url: string) => void
   children: React.ReactNode
 }) {
-  const { fetchWithWorkspace } = useWorkspace()
+  const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
   const [optimisticRsvp, setOptimisticRsvp] = useState<ResponseStatus | null>(
     null,
@@ -1110,7 +1110,7 @@ function EventPopover({
     onError: () => setOptimisticRsvp(null),
     onSettled: () => {
       setOptimisticRsvp(null)
-      queryClient.invalidateQueries({ queryKey: ['events'] })
+      queryClient.invalidateQueries({ queryKey: ['events', workspaceId] })
     },
   })
 

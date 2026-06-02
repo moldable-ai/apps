@@ -19,16 +19,44 @@ function favoritesPath(workspaceId: string) {
   )
 }
 
+function streakPath(workspaceId: string) {
+  return path.join(
+    moldableHome,
+    'workspaces',
+    workspaceId,
+    'apps',
+    'affirmations',
+    'data',
+    'streak.json',
+  )
+}
+
 async function seedFavorites(workspaceId: string, favorites: string[]) {
   const filePath = favoritesPath(workspaceId)
   await mkdir(path.dirname(filePath), { recursive: true })
   await writeFile(filePath, JSON.stringify(favorites), 'utf8')
 }
 
+async function seedStreak(
+  workspaceId: string,
+  streak: { count: number; lastVisit: string },
+) {
+  const filePath = streakPath(workspaceId)
+  await mkdir(path.dirname(filePath), { recursive: true })
+  await writeFile(filePath, JSON.stringify(streak), 'utf8')
+}
+
 async function readSeededFavorites(workspaceId: string) {
   return JSON.parse(
     await readFile(favoritesPath(workspaceId), 'utf8'),
   ) as string[]
+}
+
+async function readSeededStreak(workspaceId: string) {
+  return JSON.parse(await readFile(streakPath(workspaceId), 'utf8')) as {
+    count: number
+    lastVisit: string
+  }
 }
 
 async function requestJson(
@@ -145,6 +173,81 @@ describe('favorites API', () => {
 
     await expect(readSeededFavorites('personal')).resolves.toEqual(['Personal'])
     await expect(readSeededFavorites('work')).resolves.toEqual(['Work'])
+  })
+})
+
+describe('streak API', () => {
+  it('rejects invalid workspace headers before touching storage', async () => {
+    const response = await requestJson('/api/streak', {
+      method: 'POST',
+      workspaceId: '../../outside',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dayKey: '2026-06-02' }),
+    })
+
+    expect(response.status).toBe(400)
+  })
+
+  it('starts a workspace-scoped streak on first visit', async () => {
+    const response = await requestJson('/api/streak', {
+      method: 'POST',
+      workspaceId: 'personal',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dayKey: '2026-06-02' }),
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      count: 1,
+      lastVisit: '2026-06-02',
+    })
+    await expect(readSeededStreak('personal')).resolves.toEqual({
+      count: 1,
+      lastVisit: '2026-06-02',
+    })
+  })
+
+  it('increments consecutive visits and keeps workspaces isolated', async () => {
+    await seedStreak('personal', { count: 4, lastVisit: '2026-06-01' })
+    await seedStreak('work', { count: 2, lastVisit: '2026-05-31' })
+
+    const response = await requestJson('/api/streak', {
+      method: 'POST',
+      workspaceId: 'personal',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dayKey: '2026-06-02' }),
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      count: 5,
+      lastVisit: '2026-06-02',
+    })
+    await expect(readSeededStreak('personal')).resolves.toEqual({
+      count: 5,
+      lastVisit: '2026-06-02',
+    })
+    await expect(readSeededStreak('work')).resolves.toEqual({
+      count: 2,
+      lastVisit: '2026-05-31',
+    })
+  })
+
+  it('returns the existing count when already opened today', async () => {
+    await seedStreak('personal', { count: 4, lastVisit: '2026-06-02' })
+
+    const response = await requestJson('/api/streak', {
+      method: 'POST',
+      workspaceId: 'personal',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dayKey: '2026-06-02' }),
+    })
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      count: 4,
+      lastVisit: '2026-06-02',
+    })
   })
 })
 

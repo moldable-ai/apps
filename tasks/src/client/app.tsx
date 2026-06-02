@@ -49,6 +49,12 @@ interface ProjectsResponse {
   projects: ProjectWithTasks[]
 }
 
+interface SettingsResponse {
+  settings: {
+    viewMode: ViewMode
+  }
+}
+
 type EditorState =
   | { type: 'project'; mode: 'create' | 'edit'; project?: Project }
   | { type: 'task'; mode: 'create' | 'edit'; task?: Task }
@@ -58,27 +64,29 @@ type DeleteTarget =
   | { type: 'project'; project: Project }
   | { type: 'task'; task: Task }
 
-const VIEW_MODE_STORAGE_KEY = 'tasks:view-mode'
-
-function readStoredViewMode(): ViewMode {
-  if (typeof window === 'undefined') return 'list'
-
-  const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY)
-  return stored === 'kanban' || stored === 'list' ? stored : 'list'
-}
-
 export function App() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null,
   )
-  const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode)
   const [activeTab, setActiveTab] = useState<'tasks' | 'readme'>('tasks')
   const [filters, setFilters] = useState<TaskFiltersState>(emptyTaskFilters)
   const [activeEditor, setActiveEditor] = useState<EditorState | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const didRestoreHashRef = useRef(false)
+  const settingsQueryKey = useMemo(
+    () => ['tasks-settings', workspaceId] as const,
+    [workspaceId],
+  )
+
+  const settingsQuery = useQuery({
+    queryKey: settingsQueryKey,
+    queryFn: async ({ signal }) =>
+      parseJsonResponse<SettingsResponse>(
+        await fetchWithWorkspace('/api/settings', { signal }),
+      ),
+  })
 
   const projectsQuery = useQuery({
     queryKey: ['tasks-projects', workspaceId],
@@ -90,6 +98,7 @@ export function App() {
 
   const projectsData = projectsQuery.data?.projects
   const projects = useMemo(() => projectsData ?? [], [projectsData])
+  const viewMode = settingsQuery.data?.settings.viewMode ?? 'list'
   const selectedProject =
     projects.find((project) => project.id === selectedProjectId) ?? null
 
@@ -156,8 +165,15 @@ export function App() {
   }, [])
 
   useEffect(() => {
-    window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode)
-  }, [viewMode])
+    resetMoldableNavigation()
+    setSelectedProjectId(null)
+    setActiveEditor(null)
+    setDeleteTarget(null)
+    setActiveTab('tasks')
+    setFilters(emptyTaskFilters())
+    didRestoreHashRef.current = false
+    void queryClient.invalidateQueries({ queryKey: settingsQueryKey })
+  }, [queryClient, settingsQueryKey, workspaceId])
 
   useMoldableNavigationPop(() => {
     if (activeEditor) {
@@ -220,6 +236,50 @@ export function App() {
         queryKey: ['tasks-projects', workspaceId],
       }),
     [queryClient, workspaceId],
+  )
+
+  const updateSettings = useMutation<
+    SettingsResponse,
+    Error,
+    ViewMode,
+    { previousSettings?: SettingsResponse }
+  >({
+    mutationFn: async (nextViewMode) =>
+      parseJsonResponse<SettingsResponse>(
+        await fetchWithWorkspace('/api/settings', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ viewMode: nextViewMode }),
+        }),
+      ),
+    onMutate: async (nextViewMode) => {
+      await queryClient.cancelQueries({ queryKey: settingsQueryKey })
+      const previousSettings =
+        queryClient.getQueryData<SettingsResponse>(settingsQueryKey)
+
+      queryClient.setQueryData<SettingsResponse>(settingsQueryKey, {
+        settings: { viewMode: nextViewMode },
+      })
+
+      return { previousSettings }
+    },
+    onError: (_error, _nextViewMode, context) => {
+      if (!context?.previousSettings) return
+      queryClient.setQueryData(settingsQueryKey, context.previousSettings)
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(settingsQueryKey, data)
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: settingsQueryKey })
+    },
+  })
+
+  const handleViewModeChange = useCallback(
+    (nextViewMode: ViewMode) => {
+      updateSettings.mutate(nextViewMode)
+    },
+    [updateSettings],
   )
 
   useEffect(() => {
@@ -718,7 +778,7 @@ export function App() {
                 activeTab={activeTab}
                 onActiveTabChange={setActiveTab}
                 viewMode={viewMode}
-                onViewModeChange={setViewMode}
+                onViewModeChange={handleViewModeChange}
                 filters={filters}
                 onFiltersChange={setFilters}
                 visibleTasks={filteredTasks}

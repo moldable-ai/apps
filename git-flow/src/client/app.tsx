@@ -393,6 +393,8 @@ const COMMIT_ACTIONS: {
   },
 ]
 
+const SHIP_ALL_CONCURRENCY = 3
+
 export default function GitFlowPage() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
@@ -1835,19 +1837,37 @@ export default function GitFlowPage() {
 
     setIsShippingAll(true)
     setShipFeedback(null)
-    let shipped = 0
-    let failed = 0
 
-    // Sequential so each repo gets its own commit/push and one failure does not
-    // abort the rest — the goal is to clear the whole list.
-    for (const repo of dirtyRepos) {
-      try {
-        await shipRepo(repo.path)
-        shipped += 1
-      } catch {
-        failed += 1
-      }
-    }
+    const reposToShip = [...dirtyRepos]
+    let nextRepoIndex = 0
+
+    // Run a small worker pool instead of a waterfall. Three concurrent repos is
+    // fast enough for multi-repo cleanup without stampeding git hooks, pushes,
+    // or AI commit-message generation.
+    const workerCount = Math.min(SHIP_ALL_CONCURRENCY, reposToShip.length)
+    const results = await Promise.all(
+      Array.from({ length: workerCount }, async () => {
+        let shipped = 0
+        let failed = 0
+
+        while (nextRepoIndex < reposToShip.length) {
+          const repo = reposToShip[nextRepoIndex]
+          nextRepoIndex += 1
+
+          try {
+            await shipRepo(repo.path)
+            shipped += 1
+          } catch {
+            failed += 1
+          }
+        }
+
+        return { shipped, failed }
+      }),
+    )
+
+    const shipped = results.reduce((total, result) => total + result.shipped, 0)
+    const failed = results.reduce((total, result) => total + result.failed, 0)
 
     setIsShippingAll(false)
     setShipFeedback(

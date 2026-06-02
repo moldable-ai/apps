@@ -98,7 +98,9 @@ export function useInstallCatalogSong() {
       void queryClient.invalidateQueries({
         queryKey: ['song-previews', workspaceId],
       })
-      void queryClient.invalidateQueries({ queryKey: ['catalog-search'] })
+      void queryClient.invalidateQueries({
+        queryKey: ['catalog-search', workspaceId],
+      })
     },
   })
 }

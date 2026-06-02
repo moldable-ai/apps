@@ -1600,8 +1600,17 @@ export function App() {
     setDeleteTarget(null)
     setDraggedEntry(null)
     setDropTarget(null)
+    setIsDraggingMedia(false)
     setAutoSelectedVaultId(null)
+    setSearchOpen(false)
+    setTemplateOpen(false)
+    setLinkPreview(null)
+    dragDepthRef.current = 0
   }, [])
+
+  useEffect(() => {
+    resetVaultUi()
+  }, [resetVaultUi, workspaceId])
 
   useEffect(() => {
     function handleAppApiChanged(event: MessageEvent) {

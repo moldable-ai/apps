@@ -1,4 +1,4 @@
-import { calculateStreakCount } from './use-streak'
+import { calculateStreakCount } from '@/lib/streak'
 import { describe, expect, it } from 'vitest'
 
 describe('calculateStreakCount', () => {

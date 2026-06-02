@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { useWorkspace } from '@moldable-ai/ui'
 
 interface UseElevenLabsTTSOptions {
   onEnd?: () => void
@@ -9,6 +10,7 @@ interface UseElevenLabsTTSOptions {
  * Hook for ElevenLabs text-to-speech with streaming audio playback
  */
 export function useElevenLabsTTS(options: UseElevenLabsTTSOptions = {}) {
+  const { fetchWithWorkspace } = useWorkspace()
   const [isPlaying, setIsPlaying] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -48,7 +50,7 @@ export function useElevenLabsTTS(options: UseElevenLabsTTSOptions = {}) {
         setIsLoading(true)
 
         // Fetch streaming audio from API
-        const response = await fetch('/api/tts', {
+        const response = await fetchWithWorkspace('/api/tts', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -173,7 +175,7 @@ export function useElevenLabsTTS(options: UseElevenLabsTTSOptions = {}) {
         console.error('TTS error:', error)
       }
     },
-    [stop, options],
+    [fetchWithWorkspace, stop, options],
   )
 
   return {

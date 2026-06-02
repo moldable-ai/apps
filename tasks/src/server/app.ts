@@ -227,8 +227,28 @@ const commentDeleteRpcSchema = taskSelectorSchema.extend({
 
 const attachmentsListParamsSchema = taskSelectorSchema
 
+const viewModeSchema = z.enum(['list', 'kanban'])
+
+const settingsSchema = z.object({
+  viewMode: viewModeSchema,
+})
+
+const settingsInputSchema = z.object({
+  viewMode: viewModeSchema,
+})
+
+type TasksSettings = z.infer<typeof settingsSchema>
+
+const DEFAULT_SETTINGS: TasksSettings = {
+  viewMode: 'list',
+}
+
 function dataPath(dataDir: string) {
   return safePath(dataDir, 'tasks-data.json')
+}
+
+function settingsPath(dataDir: string) {
+  return safePath(dataDir, 'tasks-settings.json')
 }
 
 function nowIso() {
@@ -375,6 +395,24 @@ async function readData(
 
 async function writeData(c: Parameters<typeof getDataDir>[0], data: TasksData) {
   await writeJson(dataPath(getDataDir(c)), data)
+}
+
+async function readSettings(
+  c: Parameters<typeof getDataDir>[0],
+): Promise<TasksSettings> {
+  const data = await readJson<unknown>(
+    settingsPath(getDataDir(c)),
+    DEFAULT_SETTINGS,
+  )
+  const parsed = settingsSchema.safeParse(data)
+  return parsed.success ? parsed.data : DEFAULT_SETTINGS
+}
+
+async function writeSettings(
+  c: Parameters<typeof getDataDir>[0],
+  settings: TasksSettings,
+) {
+  await writeJson(settingsPath(getDataDir(c)), settings)
 }
 
 function uniqueProjectKey(
@@ -1093,6 +1131,36 @@ app.get('/api/projects', async (c) => {
     return jsonError(
       c,
       error instanceof Error ? error.message : 'Failed to read projects',
+    )
+  }
+})
+
+app.get('/api/settings', async (c) => {
+  try {
+    const settings = await readSettings(c)
+    return c.json({ settings })
+  } catch (error) {
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to read settings',
+    )
+  }
+})
+
+app.put('/api/settings', async (c) => {
+  try {
+    const input = settingsInputSchema.parse(
+      await c.req.json().catch(() => ({})),
+    )
+    const settings = settingsSchema.parse(input)
+    await writeSettings(c, settings)
+    return c.json({ settings })
+  } catch (error) {
+    if (error instanceof z.ZodError)
+      return jsonError(c, error.issues[0]?.message ?? 'Invalid settings', 400)
+    return jsonError(
+      c,
+      error instanceof Error ? error.message : 'Failed to update settings',
     )
   }
 })

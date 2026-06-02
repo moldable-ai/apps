@@ -20,6 +20,7 @@ import {
   pushMoldableNavigation,
   resetMoldableNavigation,
   useMoldableNavigationPop,
+  useWorkspace,
 } from '@moldable-ai/ui'
 import { LANGUAGES, Language, isRTL } from '@/lib/languages'
 import { TranslationError, translateText } from '@/lib/translate'
@@ -42,6 +43,7 @@ interface ErrorState {
 }
 
 export default function Home() {
+  const { fetchWithWorkspace } = useWorkspace()
   const { data: entries = [], isLoading } = useEntries()
   const { mutate: saveEntries } = useSaveEntries()
   const updateCache = useUpdateEntriesCache()
@@ -137,6 +139,7 @@ export default function Home() {
           tgtLang,
           existingCache,
           abortControllerRef.current.signal,
+          fetchWithWorkspace,
         )
 
         // Update entry with translation AND the updated cache (both saved to disk)
@@ -173,7 +176,7 @@ export default function Home() {
         setIsTranslating(false)
       }
     },
-    [entries, updateCache, saveEntries],
+    [entries, fetchWithWorkspace, updateCache, saveEntries],
   )
 
   // Debounced translation - waits 1000ms after typing stops

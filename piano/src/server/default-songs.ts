@@ -18,6 +18,12 @@ export { defaultTutorialIds }
 
 export const defaultClassicsIds = defaultSongLibrary.map((song) => song.id)
 
+const tutorialSourceInfo = {
+  provider: 'Moldable Piano',
+  sourceUrl: 'moldable://piano/tutorials',
+  license: 'Bundled educational content',
+} satisfies NonNullable<PianoSong['sourceInfo']>
+
 export function defaultSongs(now = new Date().toISOString()): PianoSong[] {
   const fromLibrary = defaultSongLibrary.map((song) => ({
     ...song,
@@ -26,6 +32,7 @@ export function defaultSongs(now = new Date().toISOString()): PianoSong[] {
   }))
   const fromTutorials = defaultTutorialSongs.map((song) => ({
     ...song,
+    sourceInfo: song.sourceInfo ?? tutorialSourceInfo,
     createdAt: now,
     updatedAt: now,
   }))

@@ -63,6 +63,11 @@ export function TimeTrackerProvider({ children }: { children: ReactNode }) {
   const activeProjects = projects.filter((p) => !p.archived)
   const selectedProject = activeProjects.find((p) => p.id === selectedProjectId)
 
+  useEffect(() => {
+    setSelectedProjectIdState(null)
+    setHasInitialized(false)
+  }, [workspaceId])
+
   // Set selected project and persist to server
   const setSelectedProjectId = useCallback(
     async (projectId: string | null) => {

@@ -4,6 +4,7 @@ import {
   getWorkspaceFromRequest,
   readJson,
   safePath,
+  sanitizeId,
   writeJson,
 } from '@moldable-ai/storage'
 import { CalcError, evaluate, formatResult } from '../lib/calc'
@@ -26,6 +27,24 @@ export const app = new Hono()
 app.use('/api/*', cors())
 
 const HISTORY_LIMIT = 500
+
+function normalizeWorkspaceId(
+  value: string | null | undefined,
+): string | undefined {
+  if (!value) return undefined
+  try {
+    return sanitizeId(value)
+  } catch {
+    return undefined
+  }
+}
+
+function getRequestWorkspaceId(request: Request): string | undefined {
+  return normalizeWorkspaceId(
+    getWorkspaceFromRequest(request) ??
+      request.headers.get('x-moldable-workspace-id'),
+  )
+}
 
 function getHistoryPath(workspaceId?: string): string {
   return safePath(getAppDataDir(workspaceId), 'history.json')
@@ -194,7 +213,7 @@ app.get('/api/moldable/health', (c) => {
 
 // List history. Supports ?limit and ?q (search).
 app.get('/api/history', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const limitRaw = c.req.query('limit')
   const query = c.req.query('q')
   let entries = await readHistory(workspaceId)
@@ -206,7 +225,7 @@ app.get('/api/history', async (c) => {
 
 // Record a calculation or conversion the client already computed locally.
 app.post('/api/history', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const body = await parseJsonBody(c)
   const parsed = recordEntrySchema.safeParse(body)
   if (!parsed.success) {
@@ -218,7 +237,7 @@ app.post('/api/history', async (c) => {
 
 // Delete one entry.
 app.delete('/api/history/:id', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const id = c.req.param('id')
   const history = await readHistory(workspaceId)
   const next = history.filter((e) => e.id !== id)
@@ -231,7 +250,7 @@ app.delete('/api/history/:id', async (c) => {
 
 // Clear all history.
 app.delete('/api/history', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   await writeHistory(workspaceId, [])
   return c.json({ ok: true })
 })
@@ -244,7 +263,7 @@ app.get('/api/categories', (c) => {
 
 // Live currency exchange rates (units per 1 USD), cached per workspace.
 app.get('/api/rates', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   try {
     const payload = await getRates(workspaceId)
     return c.json(payload, 200, { 'Cache-Control': 'no-store' })
@@ -261,10 +280,7 @@ app.get('/api/rates', async (c) => {
 // calculation done *today* — letting you pick the running thread back up. Stale
 // (> 24h) history stays silent.
 app.get('/api/moldable/today', async (c) => {
-  const workspaceId =
-    c.req.header('x-moldable-workspace-id') ??
-    getWorkspaceFromRequest(c.req.raw) ??
-    'personal'
+  const workspaceId = getRequestWorkspaceId(c.req.raw) ?? 'personal'
 
   try {
     const history = await readHistory(workspaceId)
@@ -310,10 +326,7 @@ app.get('/api/moldable/today', async (c) => {
 
 // App-to-app RPC surface. Mirrors the capabilities declared in moldable.json.
 app.post('/api/moldable/rpc', async (c) => {
-  const workspaceId =
-    c.req.header('x-moldable-workspace-id') ??
-    getWorkspaceFromRequest(c.req.raw) ??
-    'personal'
+  const workspaceId = getRequestWorkspaceId(c.req.raw) ?? 'personal'
 
   let body: z.infer<typeof rpcRequestSchema>
   try {

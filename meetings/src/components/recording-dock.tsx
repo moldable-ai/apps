@@ -8,6 +8,7 @@ import {
   Play,
   Sparkles,
   Square,
+  StickyNote,
 } from 'lucide-react'
 import { Button, cn } from '@moldable-ai/ui'
 import { formatDuration } from '@/lib/format'
@@ -30,6 +31,7 @@ interface RecordingDockProps {
   onPause: () => void
   onResume: () => void
   onStop: () => void
+  onOpenDetails?: () => void
   disabled?: boolean
   className?: string
 }
@@ -46,6 +48,7 @@ export function RecordingDock({
   onPause,
   onResume,
   onStop,
+  onOpenDetails,
   disabled,
   className,
 }: RecordingDockProps) {
@@ -95,6 +98,22 @@ export function RecordingDock({
             {formatDuration(duration)}
           </span>
         </Button>
+
+        {onOpenDetails && (
+          <>
+            <div className="bg-border h-7 w-px" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onOpenDetails}
+              className="text-muted-foreground hover:text-foreground h-10 cursor-pointer gap-2 rounded-full px-3"
+              title="View active meeting notes"
+            >
+              <StickyNote className="size-4" />
+              <span className="hidden sm:inline">View notes</span>
+            </Button>
+          </>
+        )}
 
         <div className="bg-border h-7 w-px" />
 

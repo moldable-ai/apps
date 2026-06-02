@@ -2,16 +2,24 @@ import {
   WORKSPACE_HEADER,
   getAppDataDir,
   getWorkspaceFromRequest,
+  sanitizeId,
 } from '@moldable-ai/storage'
 import type { Context } from 'hono'
 
 type JsonErrorStatus = 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500 | 502 | 503
 
 export function getWorkspaceId(c: Context): string | undefined {
-  return (
+  const workspaceId =
     c.req.header('x-moldable-workspace-id') ??
     getWorkspaceFromRequest(c.req.raw)
-  )
+
+  if (!workspaceId) return undefined
+
+  try {
+    return sanitizeId(workspaceId)
+  } catch {
+    return undefined
+  }
 }
 
 export function getDataDir(c: Context): string {

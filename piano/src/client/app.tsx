@@ -14,12 +14,7 @@ import {
 import { CourseView } from './components/course-view'
 import { LibraryView } from './components/library-view'
 import { type CourseContext, PracticeView } from './components/practice-view'
-import {
-  readActiveInstrumentId,
-  readActivePackId,
-  writeActiveInstrumentId,
-  writeActivePackId,
-} from './components/sound-picker'
+import { SoundPicker } from './components/sound-picker'
 import {
   type PianoAudioSettings,
   type PianoInstrumentPack,
@@ -83,7 +78,15 @@ export function App() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
   const { folders } = useFolders()
-  const [presetId, setPresetId] = useState<PianoPresetId>('classic-grand')
+  const cachedAudioSettings = queryClient.getQueryData<AudioSettingsResponse>([
+    'audio-settings',
+    workspaceId,
+  ])?.settings
+  const [presetId, setPresetId] = useState<PianoPresetId>(
+    isPianoPresetId(cachedAudioSettings?.presetId)
+      ? cachedAudioSettings.presetId
+      : 'classic-grand',
+  )
   const [activeSongId, setActiveSongId] = useState<string | null>(null)
   const [activeFolderId, setActiveFolderId] = useState<string | null>(null)
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null)
@@ -105,11 +108,11 @@ export function App() {
     () => audioOptionsQuery.data?.instrumentPacks ?? [],
     [audioOptionsQuery.data?.instrumentPacks],
   )
-  const [activePackId, setActivePackId] = useState<string | null>(() =>
-    readActivePackId(),
+  const [activePackId, setActivePackId] = useState<string | null>(
+    cachedAudioSettings?.instrumentPackId ?? SPLENDID_GRAND_SAMPLE_SET_ID,
   )
   const [activeInstrumentId, setActiveInstrumentId] = useState<string | null>(
-    () => readActiveInstrumentId(),
+    cachedAudioSettings?.instrumentId ?? SPLENDID_GRAND_SAMPLE_SET_ID,
   )
   const [installingPackIds, setInstallingPackIds] = useState<Set<string>>(
     () => new Set(),
@@ -178,8 +181,6 @@ export function App() {
     ) => {
       setActivePackId(packId)
       setActiveInstrumentId(instrumentId)
-      writeActivePackId(packId)
-      writeActiveInstrumentId(instrumentId)
       if (options.persist !== false) {
         void persistAudioSettings({
           instrumentPackId: packId,
@@ -189,6 +190,20 @@ export function App() {
     },
     [persistAudioSettings],
   )
+
+  useEffect(() => {
+    const settings = queryClient.getQueryData<AudioSettingsResponse>([
+      'audio-settings',
+      workspaceId,
+    ])?.settings
+    setPresetId(
+      isPianoPresetId(settings?.presetId) ? settings.presetId : 'classic-grand',
+    )
+    setActivePackId(settings?.instrumentPackId ?? SPLENDID_GRAND_SAMPLE_SET_ID)
+    setActiveInstrumentId(
+      settings?.instrumentId ?? SPLENDID_GRAND_SAMPLE_SET_ID,
+    )
+  }, [queryClient, workspaceId])
 
   const persistSongSoundSettings = useCallback(
     async (
@@ -246,28 +261,9 @@ export function App() {
     if (activeSongId) return
     const settings = audioSettingsQuery.data?.settings
     if (!settings) return
-    setPresetId(settings.presetId as PianoPresetId)
-    const settingsUseDefaultInstrument =
-      settings.instrumentPackId === SPLENDID_GRAND_SAMPLE_SET_ID &&
-      settings.instrumentId === SPLENDID_GRAND_SAMPLE_SET_ID
-    const localPack = instrumentPacks.find((pack) => pack.id === activePackId)
-    const localInstrument = localPack?.instruments.find(
-      (instrument) =>
-        instrument.id === activeInstrumentId && instrument.playable,
-    )
-    if (
-      settingsUseDefaultInstrument &&
-      activePackId &&
-      activeInstrumentId &&
-      localPack?.status === 'installed' &&
-      localInstrument &&
-      (activePackId !== settings.instrumentPackId ||
-        activeInstrumentId !== settings.instrumentId)
-    ) {
-      setActiveInstrumentChoice(activePackId, activeInstrumentId)
-      return
+    if (isPianoPresetId(settings.presetId)) {
+      setPresetId(settings.presetId)
     }
-
     setActiveInstrumentChoice(
       settings.instrumentPackId,
       settings.instrumentId,
@@ -276,15 +272,13 @@ export function App() {
       },
     )
   }, [
-    activeInstrumentId,
-    activePackId,
     activeSongId,
     audioSettingsQuery.data?.settings,
-    instrumentPacks,
     setActiveInstrumentChoice,
   ])
 
   useEffect(() => {
+    if (!activeSongId && !audioSettingsQuery.data?.settings) return
     if (instrumentPacks.length === 0) return
     const current = instrumentPacks.find((pack) => pack.id === activePackId)
     if (
@@ -318,6 +312,8 @@ export function App() {
   }, [
     activeInstrumentId,
     activePackId,
+    activeSongId,
+    audioSettingsQuery.data?.settings,
     instrumentPacks,
     setActiveInstrumentChoice,
   ])
@@ -354,7 +350,6 @@ export function App() {
             })
           } else {
             setActivePackId(body.pack.id)
-            writeActivePackId(body.pack.id)
           }
         }
         await queryClient.invalidateQueries({

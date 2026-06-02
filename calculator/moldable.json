@@ -1,6 +1,6 @@
 {
   "name": "Calculator",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "aliases": ["calc", "convert", "converter"],
   "runtime": "vite_hono",
   "visibility": "public",

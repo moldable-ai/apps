@@ -42,6 +42,7 @@ const DEFAULT_QUALITY: ImageQuality = 'medium'
 const DEFAULT_SETTINGS: MicroscopeSettings = {
   modelProvider: 'fal',
   quality: DEFAULT_QUALITY,
+  autoRotate: true,
 }
 const activeModelRenderTokens = new Map<string, string>()
 const generatedWriteQueues = new Map<string, Promise<void>>()
@@ -119,6 +120,7 @@ const settingsSchema = z
   .object({
     modelProvider: modelProviderSchema.default(DEFAULT_SETTINGS.modelProvider),
     quality: z.enum(['medium', 'high']).default(DEFAULT_SETTINGS.quality),
+    autoRotate: z.boolean().default(DEFAULT_SETTINGS.autoRotate),
   })
   .strict()
 
@@ -139,6 +141,10 @@ const regenerateModelSchema = z.object({
   id: z.string().trim().min(1),
   quality: z.enum(['low', 'medium', 'high', 'auto']).optional(),
   modelProvider: modelProviderSchema.optional(),
+})
+
+const modelProviderPreferenceSchema = z.object({
+  modelProvider: modelProviderSchema,
 })
 
 const cancelSchema = z.object({
@@ -1255,6 +1261,7 @@ async function queueGeneration(
     sourceImageUrl: null,
     modelUrl: null,
     modelProvider,
+    selectedModelProvider: modelProvider,
     model: modelForPrompt(input.prompt, category.id),
     quality,
     createdAt: now,
@@ -1337,6 +1344,7 @@ async function queueRegeneration(
       modelTextureUrl: null,
       modelVariants: [],
       modelProvider,
+      selectedModelProvider: modelProvider,
       modelTaskId: undefined,
       model: modelForPrompt(item.prompt, item.categoryId),
       quality,
@@ -1389,6 +1397,7 @@ async function queueModelRegeneration(
       errorMessage: undefined,
       modelErrorMessage: undefined,
       modelProvider,
+      selectedModelProvider: modelProvider,
       modelTaskId: undefined,
       modelFileName: undefined,
       modelMaterialFileName: undefined,
@@ -1448,6 +1457,7 @@ async function queueBackgroundRemovalRetry(
       imageFileName: sourceImageFileName,
       imageUrl: imageUrl(explorationId, sourceImageFileName, workspaceId),
       modelProvider,
+      selectedModelProvider: modelProvider,
       quality,
     }
   })
@@ -1503,6 +1513,17 @@ async function moveExploration(
     categoryId: category.id,
     subtitle: category.name,
     scale: category.scale,
+  }))
+}
+
+async function selectExplorationModelProvider(
+  workspaceId: string | undefined,
+  explorationId: string,
+  modelProvider: ModelProvider,
+): Promise<GeneratedExploration | null> {
+  return patchExploration(workspaceId, explorationId, (item) => ({
+    ...item,
+    selectedModelProvider: modelProvider,
   }))
 }
 
@@ -2373,6 +2394,30 @@ app.post('/api/explorations/:id/retry-background', async (c) => {
     exploration: serializeGenerated(exploration, workspaceId),
   }
   return c.json(response, 202)
+})
+
+app.post('/api/explorations/:id/model-provider', async (c) => {
+  const workspaceId = getWorkspaceId(c.req.raw)
+  const parsed = modelProviderPreferenceSchema.safeParse(
+    await c.req.json().catch(() => null),
+  )
+  if (!parsed.success) {
+    return c.json({ error: 'Invalid model provider preference.' }, 400)
+  }
+
+  const exploration = await selectExplorationModelProvider(
+    workspaceId,
+    c.req.param('id'),
+    parsed.data.modelProvider,
+  )
+  if (!exploration) {
+    return c.json({ error: 'Generated exploration not found.' }, 404)
+  }
+
+  const response: { exploration: GeneratedExploration } = {
+    exploration: serializeGenerated(exploration, workspaceId),
+  }
+  return c.json(response, 200)
 })
 
 app.post('/api/explorations/:id/cancel', async (c) => {

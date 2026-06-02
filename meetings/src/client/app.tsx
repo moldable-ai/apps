@@ -555,6 +555,8 @@ export default function MeetingsPage() {
   const [enhancement, setEnhancement] = useState<EnhancementStatus | null>(null)
   const [preferredDetailView, setPreferredDetailView] =
     useState<MeetingViewMode | null>(null)
+  const [isActiveMeetingDetailOpen, setIsActiveMeetingDetailOpen] =
+    useState(false)
   const [currentInterim, setCurrentInterim] = useState<string | null>(null)
   const [isMeetingPaused, setIsMeetingPaused] = useState(false)
   const [isAppendingTranscript, setIsAppendingTranscript] = useState(false)
@@ -645,6 +647,35 @@ export default function MeetingsPage() {
     setPreferredDetailView(null)
   }, [])
 
+  const closeActiveMeetingDetail = useCallback(
+    (sync: 'pop' | 'none' = 'pop') => {
+      if (sync === 'pop') popMoldableNavigation()
+      setIsActiveMeetingDetailOpen(false)
+      setSelectedMeeting(null)
+      setPreferredDetailView(null)
+    },
+    [],
+  )
+
+  const openActiveMeetingDetail = useCallback(
+    (
+      active: Meeting,
+      preferredView: MeetingViewMode | null = null,
+      sync: 'push' | 'none' = 'push',
+    ) => {
+      if (sync === 'push') {
+        pushMoldableNavigation({
+          id: `active-meeting:${active.id}`,
+          title: active.title,
+        })
+      }
+      setSelectedMeeting(null)
+      setPreferredDetailView(preferredView)
+      setIsActiveMeetingDetailOpen(true)
+    },
+    [],
+  )
+
   const openSelectedMeeting = useCallback(
     (
       nextMeeting: Meeting,
@@ -668,7 +699,14 @@ export default function MeetingsPage() {
   }, [])
 
   useMoldableNavigationPop(() => {
-    if (selectedMeeting) closeSelectedMeeting('none')
+    if (selectedMeeting) {
+      closeSelectedMeeting('none')
+      return
+    }
+
+    if (isActiveMeetingDetailOpen) {
+      closeActiveMeetingDetail('none')
+    }
   })
 
   // Hooks
@@ -1540,7 +1578,7 @@ export default function MeetingsPage() {
       activeDurationBaseRef.current = recoverableMeeting.duration
       updateActiveMeeting(recoverableMeeting)
       setIsMeetingPaused(true)
-      closeSelectedMeeting('none')
+      openActiveMeetingDetail(recoverableMeeting, null, 'none')
       return
     }
 
@@ -1586,7 +1624,7 @@ export default function MeetingsPage() {
         await deepgram.disconnect({ drainFinal: false })
       } else {
         startRecordingBackgroundTask(recoverableMeeting)
-        closeSelectedMeeting('none')
+        openActiveMeetingDetail(recoverableMeeting, null, 'none')
       }
 
       recordingStartInFlightRef.current = false
@@ -1598,8 +1636,8 @@ export default function MeetingsPage() {
     }
   }, [
     clearMeeting,
-    closeSelectedMeeting,
     deepgram,
+    openActiveMeetingDetail,
     meeting,
     meetings,
     meetingsLoading,
@@ -1838,7 +1876,7 @@ export default function MeetingsPage() {
           detectionSessionKey:
             activeDetectionSessionKeyRef.current ?? undefined,
         })
-        closeSelectedMeeting('none')
+        openActiveMeetingDetail(startedMeeting, null, 'none')
       } catch (error) {
         console.error('[Meetings] Failed to start recording:', error)
         endRecordingBackgroundTask(newMeeting.id)
@@ -1862,8 +1900,8 @@ export default function MeetingsPage() {
     },
     [
       addMeeting,
-      closeSelectedMeeting,
       clearMeeting,
+      openActiveMeetingDetail,
       createRecordingSession,
       deepgram,
       endRecordingBackgroundTask,
@@ -1957,7 +1995,7 @@ export default function MeetingsPage() {
         updateActiveMeeting(leasedMeeting)
         updateMeeting(leasedMeeting)
         startRecordingBackgroundTask(leasedMeeting)
-        closeSelectedMeeting('none')
+        openActiveMeetingDetail(leasedMeeting, 'transcript', 'none')
         appendTranscriptActivatedAtRef.current = Date.now()
         setIsAppendingTranscript(true)
       } catch (error) {
@@ -1976,8 +2014,8 @@ export default function MeetingsPage() {
     },
     [
       audioSource,
-      closeSelectedMeeting,
       createRecordingSession,
+      openActiveMeetingDetail,
       deepgram,
       meeting,
       resetAudioSessionPersistence,
@@ -2043,6 +2081,7 @@ export default function MeetingsPage() {
     }
 
     clearMeeting()
+    setIsActiveMeetingDetailOpen(false)
     activeDurationBaseRef.current = 0
     activeMeetingIdRef.current = null
     activeDetectionSessionKeyRef.current = null
@@ -2323,6 +2362,7 @@ export default function MeetingsPage() {
         isAppendingTranscript ? 'transcript' : 'enhanced',
       )
       clearMeeting()
+      setIsActiveMeetingDetailOpen(false)
       activeDurationBaseRef.current = 0
       activeMeetingIdRef.current = null
       activeDetectionSessionKeyRef.current = null
@@ -2366,6 +2406,7 @@ export default function MeetingsPage() {
         await stopActiveCapture({ reason: 'delete-meeting' })
         await deepgram.disconnect({ drainFinal: false })
         clearMeeting()
+        setIsActiveMeetingDetailOpen(false)
         activeRecordingSessionRef.current = null
         activeDurationBaseRef.current = 0
         activeMeetingIdRef.current = null
@@ -2448,9 +2489,14 @@ export default function MeetingsPage() {
   // View a past meeting
   const handleSelectMeeting = useCallback(
     (m: Meeting) => {
+      if (meeting?.id === m.id) {
+        openActiveMeetingDetail(meeting, null, 'none')
+        return
+      }
+
       openSelectedMeeting(m)
     },
-    [openSelectedMeeting],
+    [meeting, openActiveMeetingDetail, openSelectedMeeting],
   )
 
   // Update meeting handler (for notes changes)
@@ -2476,7 +2522,8 @@ export default function MeetingsPage() {
   const hasActiveMeeting = meeting !== null
   const isPaused = hasActiveMeeting && isMeetingPaused
   const isViewingPastMeeting = selectedMeeting !== null
-  const isDetailOpen = isViewingPastMeeting || hasActiveMeeting
+  const isViewingActiveMeeting = hasActiveMeeting && isActiveMeetingDetailOpen
+  const isDetailOpen = isViewingPastMeeting || isViewingActiveMeeting
   const isRecordingSessionActive =
     hasActiveMeeting && (isRecording || !!isPaused)
 
@@ -2687,21 +2734,17 @@ export default function MeetingsPage() {
               }}
             />
           </Suspense>
-        ) : hasActiveMeeting ? (
+        ) : isViewingActiveMeeting && meeting ? (
           <Suspense fallback={null}>
             <MeetingView
               meeting={meeting}
               isActive={isRecording}
               isPaused={!!isPaused}
-              backDisabled
               preferredView={preferredDetailView ?? undefined}
               enhancement={enhancement}
               currentInterim={currentInterim}
               currentRecordingSessionId={activeRecordingSessionRef.current?.id}
-              onBack={() => {
-                setSelectedMeeting(null)
-                setPreferredDetailView(null)
-              }}
+              onBack={() => closeActiveMeetingDetail('none')}
               onUpdateMeeting={handleUpdateMeeting}
               onResumeRecording={
                 isAppendingTranscript ? handleResume : undefined
@@ -2713,10 +2756,16 @@ export default function MeetingsPage() {
               }
             />
           </Suspense>
-        ) : meetings.length > 0 ? (
+        ) : meetings.length > 0 || hasActiveMeeting ? (
           <MeetingsList
             meetings={meetings}
             calendarEvents={calendarEvents}
+            activeMeeting={meeting}
+            activeMeetingStatus={{
+              isRecording: isRecordingSessionActive,
+              isPaused: Boolean(isPaused),
+              isStarting: isRecordingStartPending,
+            }}
             onStartEvent={(event) =>
               void handleStartMeeting({
                 title: event.title || 'Calendar meeting',
@@ -2727,6 +2776,9 @@ export default function MeetingsPage() {
               void loadCalendarEvents({ requestAccess: true })
             }
             onSelectMeeting={handleSelectMeeting}
+            onSelectActiveMeeting={() => {
+              if (meeting) openActiveMeetingDetail(meeting, null, 'none')
+            }}
             onDeleteMeeting={(meetingId) => void handleDeleteMeeting(meetingId)}
           />
         ) : (
@@ -2746,6 +2798,11 @@ export default function MeetingsPage() {
           onPause={handlePause}
           onResume={handleResume}
           onStop={handleEndMeeting}
+          onOpenDetails={
+            isViewingActiveMeeting || !meeting
+              ? undefined
+              : () => openActiveMeetingDetail(meeting, null, 'none')
+          }
           disabled={!hasActiveMeeting}
         />
       )}

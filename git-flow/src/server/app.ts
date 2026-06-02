@@ -2,6 +2,8 @@ import {
   getAppDataDir,
   getWorkspaceFromRequest,
   readJson,
+  safePath,
+  sanitizeId,
 } from '@moldable-ai/storage'
 import {
   addFileToGitignore,
@@ -214,11 +216,26 @@ export const app = new Hono()
 
 app.use('/api/*', cors())
 
-function getRpcWorkspaceId(request: Request): string | undefined {
-  return (
-    request.headers.get('x-moldable-workspace-id') ??
-    getWorkspaceFromRequest(request)
+function normalizeWorkspaceId(
+  value: string | null | undefined,
+): string | undefined {
+  if (!value) return undefined
+  try {
+    return sanitizeId(value)
+  } catch {
+    return undefined
+  }
+}
+
+function getRequestWorkspaceId(request: Request): string | undefined {
+  return normalizeWorkspaceId(
+    getWorkspaceFromRequest(request) ??
+      request.headers.get('x-moldable-workspace-id'),
   )
+}
+
+function getRpcWorkspaceId(request: Request): string | undefined {
+  return getRequestWorkspaceId(request)
 }
 
 function asParams(value: unknown): RpcParams {
@@ -253,7 +270,7 @@ function rpcError(code: string, message: string, status: RpcStatus = 400) {
 }
 
 app.get('/api/moldable/commands', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const repos = await getRecentRepos(workspaceId)
 
   return c.json({
@@ -569,13 +586,19 @@ async function quickShipRepo(
   const status = await getStatus(knownRepoPath, workspaceId)
   const repoName =
     status.repoName || knownRepoPath.split('/').pop() || knownRepoPath
+  const startingAhead = status.ahead ?? 0
 
-  if (status.isClean || status.files.length === 0) {
+  if (status.files.length === 0) {
     throw new Error(`${repoName} has no uncommitted changes.`)
   }
 
   const paths = status.files.map((file) => file.path)
   const action = await getRepoPreferredCommitAction(knownRepoPath, workspaceId)
+  console.info(
+    `[git-flow] Quick ship: ${repoName} starting with ${paths.length} dirty file${
+      paths.length === 1 ? '' : 's'
+    }, ${startingAhead} unpushed commit${startingAhead === 1 ? '' : 's'}, action=${action}`,
+  )
   const { summary, description } = await generateCommitMessage(
     paths,
     workspaceId,
@@ -602,10 +625,27 @@ async function quickShipRepo(
     }
   }
 
-  await commitFiles(paths, summary, description, workspaceId, knownRepoPath)
+  const commit = await commitFiles(
+    paths,
+    summary,
+    description,
+    workspaceId,
+    knownRepoPath,
+  )
+  console.info(`[git-flow] Quick ship: ${repoName} committed ${commit.commit}`)
 
   if (action === 'commit-and-push') {
     await pushCommits(workspaceId, knownRepoPath)
+    console.info(`[git-flow] Quick ship: ${repoName} pushed`)
+    const finalStatus = await getStatus(knownRepoPath, workspaceId)
+    const remainingCount = finalStatus.files.length
+    if (remainingCount > 0) {
+      const message = `${repoName} pushed, but ${remainingCount} uncommitted change${
+        remainingCount === 1 ? '' : 's'
+      } remain. Review the repo and run Commit & push again.`
+      console.warn(`[git-flow] Quick ship: ${message}`)
+      throw new Error(message)
+    }
     return {
       ok: true,
       repoPath: knownRepoPath,
@@ -745,7 +785,7 @@ app.get('/api/moldable/today', async (c) => {
   let resume: unknown = null
 
   try {
-    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const workspaceId = getRequestWorkspaceId(c.req.raw)
     const repos = await getRecentRepos(workspaceId)
 
     const label = (name: string, branch: string) =>
@@ -781,7 +821,7 @@ app.get('/api/moldable/today', async (c) => {
 
 app.get('/api/git', async (c) => {
   try {
-    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const workspaceId = getRequestWorkspaceId(c.req.raw)
     const filePath = c.req.query('file')
     const hash = c.req.query('hash')
     const files = c.req.query('files')
@@ -832,7 +872,7 @@ app.get('/api/git', async (c) => {
           | 'commit'
           | 'commit-and-push'
           | 'commit-and-open-pr'
-      }>(path.join(getAppDataDir(workspaceId), 'settings.json'), {}).catch(
+      }>(safePath(getAppDataDir(workspaceId), 'settings.json'), {}).catch(
         () => ({}),
       )) as {
         preferredEditorId?: string
@@ -921,7 +961,7 @@ app.get('/api/git', async (c) => {
 
 app.post('/api/git', async (c) => {
   try {
-    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const workspaceId = getRequestWorkspaceId(c.req.raw)
     const body = await c.req.json<GitPostBody>()
 
     if (body.action === 'commit') {
@@ -946,6 +986,19 @@ app.post('/api/git', async (c) => {
         repoPath,
       )
       const push = await pushCommits(workspaceId, repoPath)
+      if (repoPath) {
+        const finalStatus = await getStatus(repoPath, workspaceId)
+        const remainingCount = finalStatus.files.length
+        if (remainingCount > 0) {
+          const repoName =
+            finalStatus.repoName || repoPath.split('/').pop() || repoPath
+          throw new Error(
+            `${repoName} pushed, but ${remainingCount} uncommitted change${
+              remainingCount === 1 ? '' : 's'
+            } remain. Review the repo and run Commit & push again.`,
+          )
+        }
+      }
       return c.json({ success: true, commit, push })
     }
 

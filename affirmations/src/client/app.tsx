@@ -15,7 +15,6 @@ import {
   pushMoldableNavigation,
   resetMoldableNavigation,
   useMoldableNavigationPop,
-  useWorkspace,
 } from '@moldable-ai/ui'
 import {
   type Category,
@@ -26,7 +25,6 @@ import {
 } from '@/lib/affirmations'
 import {
   useFavorites,
-  useSaveFavorites,
   useSetFavorite,
   useUpdateFavoritesCache,
 } from '@/hooks/use-favorites'
@@ -41,33 +39,6 @@ import {
 } from 'framer-motion'
 
 const DAILY_CATEGORY_ID = 'daily'
-
-function getLocalFavoritesKey(workspaceId: string) {
-  return `affirmations-favorites-${workspaceId}`
-}
-
-function readLocalFavorites(workspaceId: string): string[] {
-  try {
-    const saved = localStorage.getItem(getLocalFavoritesKey(workspaceId))
-    const parsed: unknown = saved ? JSON.parse(saved) : []
-    return Array.isArray(parsed)
-      ? parsed.filter((item): item is string => typeof item === 'string')
-      : []
-  } catch {
-    return []
-  }
-}
-
-function writeLocalFavorites(workspaceId: string, favorites: string[]) {
-  try {
-    localStorage.setItem(
-      getLocalFavoritesKey(workspaceId),
-      JSON.stringify(favorites),
-    )
-  } catch {
-    // localStorage is a best-effort cache; the server save still runs.
-  }
-}
 
 function dateFromDayKey(dayKey: string) {
   const [year, month, day] = dayKey.split('-').map(Number)
@@ -90,9 +61,7 @@ function shuffle<T>(input: T[]): T[] {
 }
 
 export default function DailyAffirmations() {
-  const { workspaceId } = useWorkspace()
   const { data: favorites = [], isLoading, isError } = useFavorites()
-  const { mutate: saveFavorites } = useSaveFavorites()
   const { mutate: setFavorite } = useSetFavorite()
   const updateFavoritesCache = useUpdateFavoritesCache()
   const reduceMotion = useReducedMotion()
@@ -103,13 +72,12 @@ export default function DailyAffirmations() {
   const [deckPosition, setDeckPosition] = useState(0)
   const [showFavorites, setShowFavorites] = useState(false)
   const [dayKey, setDayKey] = useState(() => getDayKey())
-  const streak = useStreak(workspaceId, dayKey)
+  const streak = useStreak(dayKey)
 
   // A shuffled deck per category. The cursor is the index of the affirmation
   // currently on screen, so ← / → step through it and `r` jumps to a random one.
   const deckRef = useRef<string[]>([])
   const deckCursorRef = useRef(0)
-  const migratedWorkspacesRef = useRef(new Set<string>())
 
   const today = useMemo(() => dateFromDayKey(dayKey), [dayKey])
   const dailyAffirmation = useMemo(() => getDailyAffirmation(today), [today])
@@ -132,30 +100,6 @@ export default function DailyAffirmations() {
 
     return () => window.clearTimeout(timeout)
   }, [dayKey])
-
-  useEffect(() => {
-    if (
-      !workspaceId ||
-      isLoading ||
-      migratedWorkspacesRef.current.has(workspaceId)
-    ) {
-      return
-    }
-
-    const localFavorites = readLocalFavorites(workspaceId)
-    if (localFavorites.length > 0 && favorites.length === 0) {
-      updateFavoritesCache(() => localFavorites)
-      saveFavorites(localFavorites)
-    }
-
-    migratedWorkspacesRef.current.add(workspaceId)
-  }, [
-    favorites.length,
-    isLoading,
-    saveFavorites,
-    updateFavoritesCache,
-    workspaceId,
-  ])
 
   // Show the affirmation at `index`, wrapping around the deck in both directions.
   const showAt = useCallback((index: number) => {
@@ -207,17 +151,9 @@ export default function DailyAffirmations() {
           ? prev.filter((favorite) => favorite !== text)
           : [...prev, text]
 
-        if (workspaceId) {
-          writeLocalFavorites(workspaceId, nextFavorites)
-        }
         setFavorite(
           { text, favorite: !prev.includes(text) },
           {
-            onSuccess: (serverFavorites) => {
-              if (workspaceId) {
-                writeLocalFavorites(workspaceId, serverFavorites)
-              }
-            },
             onError: () =>
               notify("Couldn't sync your favorites", { variant: 'error' }),
           },
@@ -233,7 +169,7 @@ export default function DailyAffirmations() {
         ),
       })
     },
-    [favorites, notify, setFavorite, updateFavoritesCache, workspaceId],
+    [favorites, notify, setFavorite, updateFavoritesCache],
   )
 
   const activeCat = useMemo<Category | undefined>(

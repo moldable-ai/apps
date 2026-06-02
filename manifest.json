@@ -1,13 +1,13 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-06-02T09:32:44.803Z",
+  "generatedAt": "2026-06-02T10:20:41.190Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
       "id": "calculator",
       "name": "Calculator",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "description": "Everyday, scientific, and unit/currency calculator with history",
       "tagline": "Everyday, scientific, and unit/currency math — with history",
       "author": "Moldable",
@@ -32,12 +32,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "calendar",
       "name": "Calendar",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "description": "Integrated calendar with Google Calendar connection",
       "tagline": "Your Google Calendar, clean month view plus daily agenda",
       "author": "Moldable",
@@ -62,12 +62,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "clock",
       "name": "Clock",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "description": "Alarms, multiple timers, a stopwatch, and world clocks — all local.",
       "tagline": "Alarms, timers, stopwatch, and world clocks — local-first",
       "author": "Moldable",
@@ -92,7 +92,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "code-editor",
@@ -117,12 +117,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "affirmations",
       "name": "Daily Affirmations",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "description": "A soothing, daily affirmation app to improve mental health and positivity.",
       "tagline": "Daily affirmations across ten themes, saved to your favorites",
       "author": "Moldable",
@@ -142,12 +142,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "db-browser",
       "name": "DB Browser",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "description": "Connect to PostgreSQL databases and browse schemas, tables, and read-only query results",
       "tagline": "Browse, query, and chart your Postgres databases locally",
       "author": "Moldable",
@@ -167,12 +167,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "git-flow",
       "name": "Git",
-      "version": "0.1.8",
+      "version": "0.1.9",
       "description": "Simple Git client for branch management, staging, and diffing",
       "tagline": "A clean Git client with AI commits and review, built in",
       "author": "Moldable",
@@ -197,12 +197,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "guitar",
       "name": "Guitar",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "description": "A local-first guitar song library with 88-key playback and falling-note practice visualization.",
       "tagline": "Practice guitar with falling notes and a full 88-key library",
       "author": "Moldable",
@@ -220,7 +220,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "hello-moldables",
@@ -246,12 +246,12 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.13"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "images",
       "name": "Images",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "description": "Generate and iterate images with GPT Image 2",
       "tagline": "Generate, edit, and branch images with GPT Image 2",
       "author": "Moldable",
@@ -283,12 +283,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "mail",
       "name": "Mail",
-      "version": "0.2.6",
+      "version": "0.2.7",
       "description": "Fast Gmail client for triage, search, reading, and sending email",
       "tagline": "A fast, keyboard-driven Gmail client that triages itself",
       "author": "Moldable",
@@ -313,12 +313,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "meetings",
       "name": "Meetings",
-      "version": "0.1.8",
+      "version": "0.1.9",
       "description": "Record, transcribe, and summarize meetings with real-time transcription",
       "tagline": "Record, transcribe, and summarize every meeting locally",
       "author": "Moldable",
@@ -353,12 +353,12 @@
         "@moldable-ai/storage": "^0.1.5",
         "@moldable-ai/ui": "^0.2.13"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "microscope",
       "name": "Microscope",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "description": "Explore the natural world through generated images, transparent 2D relief layers, procedural 3D models, and optional fal Hunyuan3D or Tripo renders.",
       "tagline": "Explore anything in science as interactive 3D",
       "author": "Moldable",
@@ -382,7 +382,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "notes",
@@ -413,12 +413,12 @@
         "@moldable-ai/editor": "^0.1.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "piano",
       "name": "Piano",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "description": "A local-first piano song library with 88-key playback and falling-note practice visualization.",
       "tagline": "Practice piano with falling notes and a full 88-key library",
       "author": "Moldable",
@@ -436,7 +436,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "plants",
@@ -459,7 +459,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "reader",
@@ -487,7 +487,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "recipes-app",
@@ -509,7 +509,7 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.13"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "redecorate",
@@ -550,12 +550,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "remotion",
       "name": "Remotion",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "description": "Create programmatic videos with Remotion - manage projects, preview compositions, and render videos",
       "tagline": "Make videos by describing them, powered by code",
       "author": "Moldable",
@@ -575,12 +575,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "scribo",
       "name": "Scribo Languages",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "description": "Language learning journal with AI-powered translations",
       "tagline": "Write in any language, translate and learn as you go",
       "author": "Moldable",
@@ -615,12 +615,12 @@
         "@moldable-ai/editor": "^0.1.12",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "tasks",
       "name": "Tasks",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "description": "Linear-style local project and task management",
       "tagline": "A Linear-style task manager that lives on your machine",
       "author": "Moldable",
@@ -638,12 +638,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "time-tracker",
       "name": "Time Tracker",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "description": "Track time for work projects with weekly views and export",
       "tagline": "One-click time tracking with weekly views and export",
       "author": "Moldable",
@@ -663,7 +663,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "todo",
@@ -693,7 +693,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "translate",
@@ -730,7 +730,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "weather",
@@ -757,12 +757,12 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     },
     {
       "id": "wiki",
       "name": "Wiki",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "description": "Create, edit, and organize a Markdown knowledge base.",
       "tagline": "A linked, local-first Markdown knowledge base",
       "author": "Moldable",
@@ -786,7 +786,7 @@
         "@moldable-ai/ui": "^0.2.13",
         "@moldable-ai/storage": "^0.1.5"
       },
-      "commit": "98e8f7ad5cd5d69a6a33a15299cb89041415ad5b"
+      "commit": "8f08fd4fa0370c27549f86a52452efc3c33c3a47"
     }
   ],
   "categories": [

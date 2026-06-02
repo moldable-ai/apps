@@ -1,4 +1,4 @@
-import { getWorkspaceFromRequest } from '@moldable-ai/storage'
+import { getWorkspaceFromRequest, sanitizeId } from '@moldable-ai/storage'
 import { invokeAivaultJson } from '../lib/aivault'
 import {
   clearTokens,
@@ -467,11 +467,18 @@ function isCalendarAuthError(error: unknown) {
 }
 
 function workspaceIdFromRequest(request: Request): string | null {
-  return (
+  const workspaceId =
     request.headers.get('x-moldable-workspace-id') ??
     getWorkspaceFromRequest(request) ??
     null
-  )
+
+  if (!workspaceId) return null
+
+  try {
+    return sanitizeId(workspaceId)
+  } catch {
+    return null
+  }
 }
 
 function workspaceRequiredResponse() {

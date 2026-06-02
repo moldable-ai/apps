@@ -402,7 +402,7 @@ app.get('/api/projects/:id/public/*', async (c) => {
   const url = new URL(c.req.url)
   const workspaceId =
     url.searchParams.get('workspace') ||
-    c.req.header('x-moldable-workspace') ||
+    getWorkspaceFromRequest(c.req.raw) ||
     undefined
   const dataDir = getAppDataDir(workspaceId)
   const pathParts = publicPath.split('/').filter(Boolean)

@@ -23,49 +23,15 @@ import type {
   MessagesResponse,
 } from '../types'
 
-const CACHE_PREFIX = 'moldable:emails:v1'
-
-function cacheKey(parts: Array<string | number | null | undefined>) {
-  return [CACHE_PREFIX, ...parts.map((part) => part ?? '')].join(':')
-}
-
-function readCachedValue<T>(key: string): T | undefined {
-  if (typeof window === 'undefined') return undefined
-
-  try {
-    const raw = window.localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T) : undefined
-  } catch {
-    return undefined
-  }
-}
-
-function writeCachedValue<T>(key: string, value: T) {
-  if (typeof window === 'undefined') return
-
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // Cache writes are best-effort. The network-backed query result is still valid.
-  }
-}
-
 export function useMailStatus() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
-  const statusCacheKey = cacheKey(['status', workspaceId])
 
   const query = useQuery({
     queryKey: ['mail-status', workspaceId],
-    initialData: () => {
-      const cached = readCachedValue<MailStatus>(statusCacheKey)
-      return cached?.authenticated ? cached : undefined
-    },
     queryFn: async () => {
       const res = await fetchWithWorkspace('/api/status')
       if (!res.ok) throw new Error('Failed to load Gmail status')
-      const status = (await res.json()) as MailStatus
-      writeCachedValue(statusCacheKey, status)
-      return status
+      return (await res.json()) as MailStatus
     },
     refetchInterval: (query) =>
       query.state.data?.syncing
@@ -89,8 +55,8 @@ function flattenMessagePages(
 ): MessagesResponse | undefined {
   if (!data) return undefined
 
-  // Be defensive: older/background cache writes may have stored a plain
-  // MessagesResponse under this infinite-query key. Treat it as one page
+  // Be defensive: older query data may have used a plain MessagesResponse
+  // under this infinite-query key. Treat it as one page
   // instead of throwing during render and blanking the app.
   if (!('pages' in data)) {
     return Array.isArray(data.messages) ? data : undefined
@@ -147,14 +113,11 @@ export function useMailMessages({
 }) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
-  const isSearch = Boolean(query.trim())
-  const messagesCacheKey = cacheKey(['messages', workspaceId, folderId, query])
 
   const fetchMessageDetail = async (id: string) => {
     const res = await fetchWithWorkspace(`/api/messages/${id}`)
     if (!res.ok) throw new Error('Failed to load message')
     const data = (await res.json()) as { message: MailMessageDetail }
-    writeCachedValue(cacheKey(['message', workspaceId, id]), data.message)
     return data.message
   }
 
@@ -168,11 +131,6 @@ export function useMailMessages({
     queryKey: ['mail-messages', workspaceId, folderId, query],
     enabled,
     initialPageParam: undefined,
-    initialData: () => {
-      if (isSearch) return undefined
-      const cached = readCachedValue<MessagesResponse>(messagesCacheKey)
-      return cached ? { pages: [cached], pageParams: [undefined] } : undefined
-    },
     getNextPageParam: (lastPage) => lastPage.nextPageToken || undefined,
     refetchOnMount: 'always',
     refetchInterval: folderId === 'INBOX' && !query ? 15_000 : false,
@@ -187,15 +145,14 @@ export function useMailMessages({
 
       const res = await fetchWithWorkspace(`/api/messages?${params.toString()}`)
       if (res.status === 401) {
-        await queryClient.invalidateQueries({ queryKey: ['mail-status'] })
+        await queryClient.invalidateQueries({
+          queryKey: ['mail-status', workspaceId],
+        })
         throw new Error('Reconnect Gmail to continue')
       }
       if (!res.ok) throw new Error('Failed to load messages')
 
       const data = (await res.json()) as MessagesResponse
-      if (!isSearch && !pageParam) {
-        writeCachedValue(messagesCacheKey, { ...data, syncing: false })
-      }
 
       for (const message of data.messages) {
         void queryClient.prefetchQuery({
@@ -292,14 +249,11 @@ export function useActionSuggestions({
 }) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const key = actionSuggestionsKey({ messages, labels, account })
-  const suggestionsCacheKey = cacheKey(['action-suggestions', workspaceId, key])
 
   const query = useQuery({
     queryKey: ['mail-action-suggestions', workspaceId, key],
     enabled: enabled && messages.length > 0,
     staleTime: 60_000,
-    initialData: () =>
-      readCachedValue<ActionSuggestionsResponse>(suggestionsCacheKey),
     placeholderData: (previousData) => previousData,
     queryFn: async () => {
       const res = await fetchWithWorkspace('/api/action-suggestions', {
@@ -311,9 +265,7 @@ export function useActionSuggestions({
         const data = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(data.error ?? 'Failed to suggest actions')
       }
-      const data = (await res.json()) as ActionSuggestionsResponse
-      writeCachedValue(suggestionsCacheKey, { ...data, syncing: false })
-      return data
+      return (await res.json()) as ActionSuggestionsResponse
     },
   })
 
@@ -430,10 +382,6 @@ export function useWarmMailFolders({ enabled }: { enabled: boolean }) {
             pages: [data],
             pageParams: [undefined],
           })
-          writeCachedValue(
-            cacheKey(['messages', workspaceId, folderId, query]),
-            { ...data, syncing: false },
-          )
 
           for (const message of data.messages) {
             void queryClient.prefetchQuery({
@@ -446,10 +394,6 @@ export function useWarmMailFolders({ enabled }: { enabled: boolean }) {
                 const detailData = (await detailRes.json()) as {
                   message: MailMessageDetail
                 }
-                writeCachedValue(
-                  cacheKey(['message', workspaceId, message.id]),
-                  detailData.message,
-                )
                 return detailData.message
               },
               staleTime: 5 * 60_000,
@@ -477,29 +421,16 @@ export function useMailMessage({
   enabled: boolean
 }) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
-  const messageCacheKey = selectedId
-    ? cacheKey(['message', workspaceId, selectedId])
-    : null
 
   return useQuery({
     queryKey: ['mail-message', workspaceId, selectedId],
     enabled: !!selectedId && enabled,
-    initialData: () =>
-      messageCacheKey
-        ? readCachedValue<MailMessageDetail>(messageCacheKey)
-        : undefined,
     refetchOnMount: 'always',
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const res = await fetchWithWorkspace(`/api/messages/${selectedId}`)
       if (!res.ok) throw new Error('Failed to load message')
       const data = (await res.json()) as { message: MailMessageDetail }
-      if (selectedId) {
-        writeCachedValue(
-          cacheKey(['message', workspaceId, selectedId]),
-          data.message,
-        )
-      }
       return data.message
     },
   })
@@ -513,17 +444,10 @@ export function useMailThread({
   enabled: boolean
 }) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
-  const threadCacheKey = threadId
-    ? cacheKey(['thread', workspaceId, threadId])
-    : null
 
   return useQuery({
     queryKey: ['mail-thread', workspaceId, threadId],
     enabled: !!threadId && enabled,
-    initialData: () =>
-      threadCacheKey
-        ? readCachedValue<MailThreadDetail>(threadCacheKey)
-        : undefined,
     refetchOnMount: 'always',
     staleTime: 5 * 60_000,
     queryFn: async () => {
@@ -532,18 +456,6 @@ export function useMailThread({
       )
       if (!res.ok) throw new Error('Failed to load thread')
       const data = (await res.json()) as { thread: MailThreadDetail }
-      if (threadId) {
-        writeCachedValue(
-          cacheKey(['thread', workspaceId, threadId]),
-          data.thread,
-        )
-        for (const message of data.thread.messages) {
-          writeCachedValue(
-            cacheKey(['message', workspaceId, message.id]),
-            message,
-          )
-        }
-      }
       return data.thread
     },
   })
@@ -558,12 +470,10 @@ export function useMailContacts({
 }) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const normalizedQuery = query.trim()
-  const contactsCacheKey = cacheKey(['contacts', workspaceId, normalizedQuery])
 
   return useQuery({
     queryKey: ['mail-contacts', workspaceId, normalizedQuery],
     enabled,
-    initialData: () => readCachedValue<MailContact[]>(contactsCacheKey),
     staleTime: 10 * 60_000,
     refetchOnMount: 'always',
     queryFn: async () => {
@@ -575,7 +485,6 @@ export function useMailContacts({
       )
       if (!res.ok) throw new Error('Failed to load contacts')
       const data = (await res.json()) as { contacts: MailContact[] }
-      writeCachedValue(contactsCacheKey, data.contacts)
       return data.contacts
     },
   })
@@ -583,17 +492,14 @@ export function useMailContacts({
 
 export function useMailDrafts({ enabled }: { enabled: boolean }) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
-  const draftsCacheKey = cacheKey(['drafts', workspaceId])
 
   return useQuery({
     queryKey: ['mail-drafts', workspaceId],
     enabled,
-    initialData: () => readCachedValue<MailDraft[]>(draftsCacheKey),
     queryFn: async () => {
       const res = await fetchWithWorkspace('/api/drafts')
       if (!res.ok) throw new Error('Failed to load drafts')
       const data = (await res.json()) as { drafts: MailDraft[] }
-      writeCachedValue(draftsCacheKey, data.drafts)
       return data.drafts
     },
   })
@@ -602,7 +508,6 @@ export function useMailDrafts({ enabled }: { enabled: boolean }) {
 export function useSaveMailDraft() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
-  const draftsCacheKey = cacheKey(['drafts', workspaceId])
 
   return useMutation({
     mutationFn: async (draft: ComposerState) => {
@@ -639,7 +544,6 @@ export function useSaveMailDraft() {
         ...(snapshot ?? []).filter((item) => item.id !== optimisticId),
       ]
       queryClient.setQueryData<MailDraft[]>(['mail-drafts', workspaceId], next)
-      writeCachedValue(draftsCacheKey, next)
       return { snapshot, optimisticId }
     },
     onSuccess: (data, _draft, context) => {
@@ -654,16 +558,16 @@ export function useSaveMailDraft() {
         ),
       ]
       queryClient.setQueryData<MailDraft[]>(['mail-drafts', workspaceId], next)
-      writeCachedValue(draftsCacheKey, next)
     },
     onError: (_error, _draft, context) => {
       if (!context) return
       const next = context.snapshot ?? []
       queryClient.setQueryData<MailDraft[]>(['mail-drafts', workspaceId], next)
-      writeCachedValue(draftsCacheKey, next)
     },
     onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['mail-drafts'] })
+      await queryClient.invalidateQueries({
+        queryKey: ['mail-drafts', workspaceId],
+      })
     },
   })
 }
@@ -671,7 +575,6 @@ export function useSaveMailDraft() {
 export function useDeleteMailDraft() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
-  const draftsCacheKey = cacheKey(['drafts', workspaceId])
 
   return useMutation({
     mutationFn: async (id: string) => {
@@ -690,42 +593,19 @@ export function useDeleteMailDraft() {
       ])
       const next = (snapshot ?? []).filter((draft) => draft.id !== id)
       queryClient.setQueryData<MailDraft[]>(['mail-drafts', workspaceId], next)
-      writeCachedValue(draftsCacheKey, next)
       return { snapshot }
     },
     onError: (_error, _id, context) => {
       if (!context) return
       const next = context.snapshot ?? []
       queryClient.setQueryData<MailDraft[]>(['mail-drafts', workspaceId], next)
-      writeCachedValue(draftsCacheKey, next)
     },
     onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['mail-drafts'] })
+      await queryClient.invalidateQueries({
+        queryKey: ['mail-drafts', workspaceId],
+      })
     },
   })
-}
-
-function writeMessagesResponseCache(
-  queryKey: readonly unknown[],
-  response: MessagesResponse,
-) {
-  writeCachedValue(
-    cacheKey([
-      'messages',
-      queryKey[1] as string,
-      queryKey[2] as string,
-      queryKey[3] as string,
-    ]),
-    response,
-  )
-}
-
-function writeMessagesQueryCache(
-  queryKey: readonly unknown[],
-  data: MailMessagesQueryData,
-) {
-  const response = flattenMessagePages(data)
-  if (response) writeMessagesResponseCache(queryKey, response)
 }
 
 function restoreMessageListSnapshots(
@@ -734,9 +614,6 @@ function restoreMessageListSnapshots(
 ) {
   for (const [queryKey, snapshot] of snapshots) {
     queryClient.setQueryData<MailMessagesQueryData>(queryKey, snapshot)
-    if (snapshot && Array.isArray(queryKey)) {
-      writeMessagesQueryCache(queryKey, snapshot)
-    }
   }
 }
 
@@ -886,7 +763,7 @@ function applyOptimisticMessageAction({
   until?: number
 }) {
   const listSnapshots = queryClient.getQueriesData<MailMessagesQueryData>({
-    queryKey: ['mail-messages'],
+    queryKey: ['mail-messages', workspaceId],
   })
   const detailSnapshot = queryClient.getQueryData<MailMessageDetail>([
     'mail-message',
@@ -910,7 +787,6 @@ function applyOptimisticMessageAction({
     optimisticMessage ??= next.updatedMessage
 
     queryClient.setQueryData<MailMessagesQueryData>(queryKey, next.data)
-    if (Array.isArray(queryKey)) writeMessagesQueryCache(queryKey, next.data)
   }
 
   queryClient.setQueryData<MailMessageDetail>(
@@ -919,7 +795,6 @@ function applyOptimisticMessageAction({
       if (!current) return current
       const next = messageWithAction(current, action, { until })
       optimisticMessage = next
-      writeCachedValue(cacheKey(['message', workspaceId, id]), next)
       return next
     },
   )
@@ -943,7 +818,6 @@ function applyOptimisticMessageAction({
 
       const next = insertMessageIntoQueryData(current, nextMessage)
       queryClient.setQueryData<MailMessagesQueryData>(queryKey, next)
-      writeMessagesQueryCache(queryKey, next)
     }
   }
 
@@ -1056,12 +930,10 @@ function shouldInsertMissingMessage(
 
 export function useLabels(enabled: boolean = true) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
-  const labelsCacheKey = cacheKey(['labels', workspaceId])
 
   return useQuery({
     queryKey: ['mail-labels', workspaceId],
     enabled,
-    initialData: () => readCachedValue<MailLabel[]>(labelsCacheKey),
     staleTime: 60_000,
     refetchOnMount: 'always',
     queryFn: async () => {
@@ -1069,7 +941,6 @@ export function useLabels(enabled: boolean = true) {
       if (!res.ok) throw new Error('Failed to load labels')
       const data = (await res.json()) as { labels: MailLabel[] }
       const labels = data.labels ?? []
-      writeCachedValue(labelsCacheKey, labels)
       return labels
     },
   })
@@ -1143,13 +1014,15 @@ export function useUpdateMessageLabels() {
     },
     onMutate: async (variables) => {
       await Promise.all([
-        queryClient.cancelQueries({ queryKey: ['mail-messages'] }),
+        queryClient.cancelQueries({
+          queryKey: ['mail-messages', workspaceId],
+        }),
         queryClient.cancelQueries({
           queryKey: ['mail-message', workspaceId, variables.id],
         }),
       ])
       const listSnapshots = queryClient.getQueriesData<MailMessagesQueryData>({
-        queryKey: ['mail-messages'],
+        queryKey: ['mail-messages', workspaceId],
       })
       const detailSnapshot = queryClient.getQueryData<MailMessageDetail>([
         'mail-message',
@@ -1164,7 +1037,7 @@ export function useUpdateMessageLabels() {
         queryKey,
         current,
       ] of queryClient.getQueriesData<MailMessagesQueryData>({
-        queryKey: ['mail-messages'],
+        queryKey: ['mail-messages', workspaceId],
       })) {
         if (!current) continue
         const folderId = Array.isArray(queryKey) ? queryKey[2] : undefined
@@ -1177,19 +1050,12 @@ export function useUpdateMessageLabels() {
             messageVisibleWithLabels(message, folderId, query),
         }).data
         queryClient.setQueryData<MailMessagesQueryData>(queryKey, next)
-        if (Array.isArray(queryKey)) {
-          writeMessagesQueryCache(queryKey, next)
-        }
       }
       queryClient.setQueryData<MailMessageDetail>(
         ['mail-message', workspaceId, variables.id],
         (current) => {
           if (!current) return current
           const next = applyLabelChanges(current, changes)
-          writeCachedValue(
-            cacheKey(['message', workspaceId, variables.id]),
-            next,
-          )
           return next
         },
       )
@@ -1203,15 +1069,13 @@ export function useUpdateMessageLabels() {
           ['mail-message', workspaceId, context.id],
           context.detailSnapshot,
         )
-        writeCachedValue(
-          cacheKey(['message', workspaceId, context.id]),
-          context.detailSnapshot,
-        )
       }
     },
     onSettled: async (_data, _error, variables) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['mail-messages'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['mail-messages', workspaceId],
+        }),
         queryClient.invalidateQueries({
           queryKey: ['mail-action-suggestions', workspaceId],
         }),
@@ -1253,7 +1117,9 @@ export function useMessageAction({
     },
     onMutate: async (variables) => {
       await Promise.all([
-        queryClient.cancelQueries({ queryKey: ['mail-messages'] }),
+        queryClient.cancelQueries({
+          queryKey: ['mail-messages', workspaceId],
+        }),
         queryClient.cancelQueries({
           queryKey: ['mail-message', workspaceId, variables.id],
         }),
@@ -1278,15 +1144,13 @@ export function useMessageAction({
           ['mail-message', workspaceId, context.id],
           context.detailSnapshot,
         )
-        writeCachedValue(
-          cacheKey(['message', workspaceId, context.id]),
-          context.detailSnapshot,
-        )
       }
     },
     onSettled: async (_data, _error, variables) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['mail-messages'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['mail-messages', workspaceId],
+        }),
         queryClient.invalidateQueries({
           queryKey: ['mail-action-suggestions', workspaceId],
         }),
@@ -1321,7 +1185,9 @@ export function useUnsubscribeAndArchive({
     },
     onMutate: async (id) => {
       await Promise.all([
-        queryClient.cancelQueries({ queryKey: ['mail-messages'] }),
+        queryClient.cancelQueries({
+          queryKey: ['mail-messages', workspaceId],
+        }),
         queryClient.cancelQueries({
           queryKey: ['mail-message', workspaceId, id],
         }),
@@ -1345,15 +1211,13 @@ export function useUnsubscribeAndArchive({
           ['mail-message', workspaceId, context.id],
           context.detailSnapshot,
         )
-        writeCachedValue(
-          cacheKey(['message', workspaceId, context.id]),
-          context.detailSnapshot,
-        )
       }
     },
     onSettled: async (_data, _error, id) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['mail-messages'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['mail-messages', workspaceId],
+        }),
         queryClient.invalidateQueries({
           queryKey: ['mail-action-suggestions', workspaceId],
         }),
@@ -1366,7 +1230,7 @@ export function useUnsubscribeAndArchive({
 }
 
 export function useSendMail() {
-  const { fetchWithWorkspace } = useWorkspace()
+  const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -1382,13 +1246,15 @@ export function useSendMail() {
       }
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['mail-messages'] })
+      await queryClient.invalidateQueries({
+        queryKey: ['mail-messages', workspaceId],
+      })
     },
   })
 }
 
 export function useDisconnectGmail() {
-  const { fetchWithWorkspace } = useWorkspace()
+  const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -1399,10 +1265,12 @@ export function useDisconnectGmail() {
       if (!res.ok) throw new Error('Failed to disconnect Gmail')
     },
     onSuccess: async () => {
-      queryClient.removeQueries({ queryKey: ['mail-messages'] })
-      queryClient.removeQueries({ queryKey: ['mail-message'] })
-      queryClient.removeQueries({ queryKey: ['mail-contacts'] })
-      await queryClient.invalidateQueries({ queryKey: ['mail-status'] })
+      queryClient.removeQueries({ queryKey: ['mail-messages', workspaceId] })
+      queryClient.removeQueries({ queryKey: ['mail-message', workspaceId] })
+      queryClient.removeQueries({ queryKey: ['mail-contacts', workspaceId] })
+      await queryClient.invalidateQueries({
+        queryKey: ['mail-status', workspaceId],
+      })
     },
   })
 }
