@@ -1,6 +1,6 @@
 {
   "name": "Daily Affirmations",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "aliases": ["mindfulness", "wellness"],
   "visibility": "public",
   "description": "A soothing, daily affirmation app to improve mental health and positivity.",

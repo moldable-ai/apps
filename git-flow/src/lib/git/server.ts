@@ -1466,6 +1466,36 @@ export function createPullRequestDraft({
   }
 }
 
+async function selectedPathsMatchHead(repoPath: string, paths: string[]) {
+  try {
+    await runGit(['diff', '--quiet', 'HEAD', '--', ...paths], repoPath, null)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function reconcileSelectedPathsIndex(repoPath: string, paths: string[]) {
+  if (paths.length === 0) return
+
+  // `git commit --only -- <paths>` protects unrelated staged changes, but Git
+  // runs hooks against a temporary commit index. If a pre-commit hook formats
+  // selected files and then the commit aborts as a no-op, the real index can be
+  // restored to Git Flow's pre-hook `git add` state while the working tree has
+  // the formatted content. Only reconcile when those paths now match HEAD so we
+  // clear stale index-only noise without auto-staging fresh hook output.
+  if (!(await selectedPathsMatchHead(repoPath, paths))) return
+
+  try {
+    await runGit(['add', '-A', '--', ...paths], repoPath, null)
+  } catch (error) {
+    console.warn(
+      '[git-flow] Failed to reconcile selected paths after commit.',
+      error,
+    )
+  }
+}
+
 export async function commitFiles(
   paths: string[],
   summary: string,
@@ -1493,7 +1523,11 @@ export async function commitFiles(
       commitArgs.push('-m', description)
     }
     commitArgs.push('--', ...activePaths)
-    await runGit(commitArgs, pathToUse, null)
+    try {
+      await runGit(commitArgs, pathToUse, null)
+    } finally {
+      await reconcileSelectedPathsIndex(pathToUse, activePaths)
+    }
     const result = await runGit(['rev-parse', 'HEAD'], pathToUse)
 
     return { success: true, commit: result.stdout.trim() }
