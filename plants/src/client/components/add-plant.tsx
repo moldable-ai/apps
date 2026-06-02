@@ -1,6 +1,6 @@
 'use client'
 
-import { ImagePlus, Loader2, Sparkles, Trash2, X } from 'lucide-react'
+import { ImagePlus, Loader2, Search, Trash2, X } from 'lucide-react'
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -37,7 +37,8 @@ interface AddPlantProps {
     room?: string
     heroImagePath?: string
   }) => Promise<void>
-  sendToChatIdentify: (args: { absPath?: string; relPath: string }) => void
+  onIdentifyPhoto: (media: MediaResult) => Promise<void>
+  importPaths: (paths: string[]) => Promise<MediaResult[]>
 }
 
 function imageFilesFromList(list: FileList | File[]): File[] {
@@ -59,13 +60,15 @@ export function AddPlant({
   onClose,
   uploadFile,
   createManual,
-  sendToChatIdentify,
+  onIdentifyPhoto,
+  importPaths,
 }: AddPlantProps) {
   const [tab, setTab] = useState<'photo' | 'manual'>('photo')
 
   // From-photo state
   const [uploaded, setUploaded] = useState<MediaResult | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [identifying, setIdentifying] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -84,6 +87,7 @@ export function AddPlant({
     setTab('photo')
     setUploaded(null)
     setUploading(false)
+    setIdentifying(false)
     setDragging(false)
     setPhotoError(null)
     setCommonName('')
@@ -93,6 +97,56 @@ export function AddPlant({
     setManualError(null)
     dragDepth.current = 0
   }, [open])
+
+  // While open, the dialog owns drag & drop — handle host Finder drops
+  // (delivered as messages) here so the main window overlay doesn't grab them.
+  useEffect(() => {
+    if (!open) return
+    const onMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; paths?: unknown } | null
+      if (!data || typeof data !== 'object') return
+      if (data.type === 'moldable:file-drag-over') {
+        setDragging(true)
+        return
+      }
+      if (data.type === 'moldable:file-drag-leave') {
+        dragDepth.current = 0
+        setDragging(false)
+        return
+      }
+      if (data.type !== 'moldable:file-drop') return
+      dragDepth.current = 0
+      setDragging(false)
+      const paths = Array.isArray(data.paths)
+        ? (data.paths as unknown[]).filter(
+            (p): p is string =>
+              typeof p === 'string' && /\.(png|jpe?g|gif|webp)$/i.test(p),
+          )
+        : []
+      if (paths.length === 0) {
+        if (Array.isArray(data.paths) && data.paths.length > 0) {
+          setPhotoError('Use a PNG, JPEG, WebP, or GIF image.')
+        }
+        return
+      }
+      void (async () => {
+        setUploading(true)
+        setPhotoError(null)
+        try {
+          const results = await importPaths(paths)
+          if (results[0]) setUploaded(results[0])
+        } catch (e) {
+          setPhotoError(
+            e instanceof Error ? e.message : "Couldn't add that photo",
+          )
+        } finally {
+          setUploading(false)
+        }
+      })()
+    }
+    window.addEventListener('message', onMessage)
+    return () => window.removeEventListener('message', onMessage)
+  }, [open, importPaths])
 
   const upload = useCallback(
     async (file: File) => {
@@ -135,10 +189,21 @@ export function AddPlant({
     }
   }
 
-  const onIdentify = () => {
-    if (!uploaded) return
-    sendToChatIdentify({ absPath: uploaded.absPath, relPath: uploaded.path })
-    onClose()
+  const onIdentify = async () => {
+    if (!uploaded || identifying) return
+    setIdentifying(true)
+    setPhotoError(null)
+    try {
+      await onIdentifyPhoto(uploaded)
+      onClose()
+    } catch (e) {
+      setPhotoError(
+        e instanceof Error
+          ? e.message
+          : "Couldn't identify that plant. Try another photo, or add it manually.",
+      )
+      setIdentifying(false)
+    }
   }
 
   const onManualSubmit = async (event: FormEvent) => {
@@ -298,18 +363,22 @@ export function AddPlant({
             </div>
 
             <p className="text-muted-foreground mt-4 text-xs">
-              Identification runs in chat. We&apos;ll then generate a care
-              schedule for you.
+              We&apos;ll identify it from the photo and build a care plan — you
+              can confirm or adjust it next.
             </p>
 
             <Button
               type="button"
               className="mt-4 w-full cursor-pointer"
-              disabled={!uploaded || uploading}
+              disabled={!uploaded || uploading || identifying}
               onClick={onIdentify}
             >
-              <Sparkles className="mr-1.5 size-4" />
-              Identify with chat
+              {identifying ? (
+                <Loader2 className="mr-1.5 size-4 animate-spin" />
+              ) : (
+                <Search className="mr-1.5 size-4" />
+              )}
+              {identifying ? 'Identifying…' : 'Identify plant'}
             </Button>
           </TabsContent>
 

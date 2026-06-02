@@ -80,6 +80,8 @@ function getAudioFileName(
 }
 
 type PersistedAudioSource = 'microphone' | 'system'
+const OPEN_RECORDING_SESSION_STALE_MS = 60_000
+const SERVER_STARTED_AT_MS = Date.now()
 
 function getAudioSourceFileName(
   meetingId: string,
@@ -169,6 +171,80 @@ function dateMs(value: Date | string | undefined): number {
   const parsed = value instanceof Date ? value : new Date(value)
   const time = parsed.getTime()
   return Number.isFinite(time) ? time : 0
+}
+
+function openRecordingSessionLeaseMs(session: RecordingSession): number {
+  return dateMs(session.leaseUpdatedAt ?? session.startedAt)
+}
+
+function shouldCloseOpenRecordingSession(
+  session: RecordingSession,
+  options: {
+    nowMs?: number
+    serverStartedAtMs?: number
+    staleMs?: number
+  } = {},
+): boolean {
+  if (session.endedAt) return false
+
+  const leaseMs = openRecordingSessionLeaseMs(session)
+  if (leaseMs <= 0) return true
+
+  const nowMs = options.nowMs ?? Date.now()
+  const serverStartedAtMs = options.serverStartedAtMs ?? SERVER_STARTED_AT_MS
+  const staleMs = options.staleMs ?? OPEN_RECORDING_SESSION_STALE_MS
+
+  return leaseMs < serverStartedAtMs || nowMs - leaseMs > staleMs
+}
+
+export function closeStaleOpenRecordingSessionsForMeeting(
+  meeting: Meeting,
+  options: {
+    nowMs?: number
+    serverStartedAtMs?: number
+    staleMs?: number
+  } = {},
+): { meeting: Meeting; changed: boolean } {
+  let changed = false
+  const now = new Date(options.nowMs ?? Date.now())
+
+  const recordingSessions = meeting.recordingSessions?.map((session) => {
+    if (!shouldCloseOpenRecordingSession(session, options)) return session
+
+    changed = true
+    const leaseMs = openRecordingSessionLeaseMs(session)
+    const endedAt = new Date(leaseMs > 0 ? leaseMs : now.getTime())
+    return {
+      ...session,
+      endedAt,
+      leaseUpdatedAt: endedAt,
+    }
+  })
+
+  if (!changed) return { meeting, changed: false }
+
+  const openSessionRemaining = recordingSessions?.some(
+    (session) => !session.endedAt,
+  )
+  const endedAt =
+    meeting.endedAt ??
+    (openSessionRemaining
+      ? undefined
+      : new Date(
+          Math.max(
+            ...recordingSessions!.map((session) => dateMs(session.endedAt)),
+          ),
+        ))
+
+  return {
+    meeting: {
+      ...meeting,
+      endedAt,
+      updatedAt: now,
+      recordingSessions,
+    },
+    changed: true,
+  }
 }
 
 function latestDate<T extends Date | string | undefined>(
@@ -366,6 +442,23 @@ export async function mergeAndSaveMeeting(
   const merged = mergeMeetingForSave(existing, meeting)
   await saveMeeting(merged, workspaceId)
   return merged
+}
+
+export async function closeStaleOpenRecordingSessions(
+  meetings: Meeting[],
+  workspaceId?: string,
+): Promise<Meeting[]> {
+  const nextMeetings: Meeting[] = []
+
+  for (const meeting of meetings) {
+    const result = closeStaleOpenRecordingSessionsForMeeting(meeting)
+    if (result.changed) {
+      await saveMeeting(result.meeting, workspaceId)
+    }
+    nextMeetings.push(result.meeting)
+  }
+
+  return nextMeetings
 }
 
 export async function saveMeetingAudio({

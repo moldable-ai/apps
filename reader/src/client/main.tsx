@@ -1,10 +1,17 @@
 import { StrictMode } from 'react'
 import { type Root, createRoot } from 'react-dom/client'
-import { ThemeProvider, WorkspaceProvider } from '@moldable-ai/ui'
-import { ErrorBoundary, type ErrorSource } from './components/error-boundary'
+import {
+  AppErrorBoundary,
+  type AppErrorSource,
+  ThemeProvider,
+  WorkspaceProvider,
+  installMoldableFrameLifecycle,
+} from '@moldable-ai/ui'
 import './globals.css'
 import './moldable-chat-safe-area'
 import { QueryProvider } from './query-provider'
+
+installMoldableFrameLifecycle()
 
 function toError(value: unknown): Error {
   if (value instanceof Error) return value
@@ -16,16 +23,16 @@ function toError(value: unknown): Error {
   }
 }
 
-function renderError(root: Root, error: unknown, source: ErrorSource) {
+function renderError(root: Root, error: unknown, source: AppErrorSource) {
   root.render(
     <StrictMode>
-      <ErrorBoundary
+      <AppErrorBoundary
         appName="Reader"
         initialError={toError(error)}
         initialSource={source}
       >
         <div />
-      </ErrorBoundary>
+      </AppErrorBoundary>
     </StrictMode>,
   )
 }
@@ -43,7 +50,7 @@ async function startReader() {
 
     root.render(
       <StrictMode>
-        <ErrorBoundary appName="Reader">
+        <AppErrorBoundary appName="Reader">
           <ThemeProvider>
             <WorkspaceProvider>
               <QueryProvider>
@@ -51,7 +58,7 @@ async function startReader() {
               </QueryProvider>
             </WorkspaceProvider>
           </ThemeProvider>
-        </ErrorBoundary>
+        </AppErrorBoundary>
       </StrictMode>,
     )
   } catch (error) {

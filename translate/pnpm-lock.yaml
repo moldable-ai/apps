@@ -12,8 +12,8 @@ importers:
         specifier: ^0.1.5
         version: 0.1.5
       '@moldable-ai/ui':
-        specifier: ^0.2.13
-        version: 0.2.13(@date-fns/tz@1.5.0)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        specifier: ^0.2.17
+        version: 0.2.17(@date-fns/tz@1.5.0)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@tanstack/react-query':
         specifier: ^5.99.2
         version: 5.100.14(react@19.2.5)
@@ -484,8 +484,8 @@ packages:
   '@moldable-ai/typescript-config@0.1.4':
     resolution: {integrity: sha512-eSRLkG4oqtIH9H75AFusRRlaQLBPNMSp4IiCaJf5TU9NC5LM8awvEtlLOoknlKSwugZZ+Grt7VagSJ9nTqZvLQ==}
 
-  '@moldable-ai/ui@0.2.13':
-    resolution: {integrity: sha512-XjIlgx/Ov9i4GJHIOvIjI0+3EqIRJzFatNQD/FgDrLGVWO3JYEZhO7YH4I/QpYz6qz6cqZ8RDn9V6QrJayfZrg==}
+  '@moldable-ai/ui@0.2.17':
+    resolution: {integrity: sha512-fTcQjjDw7dMBziam2sA8VdLDGVCqthM5kBOFA/XcHekXzigwcEtb7Ttx/b+s1k1uhhylQB0FKD32mo2ojfT/Hw==}
     peerDependencies:
       react: ^19.0.0
       react-dom: ^19.0.0
@@ -2004,7 +2004,7 @@ packages:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
     engines: {node: '>=12.0.0'}
     peerDependencies:
-      picomatch: 3.0.2
+      picomatch: 4.0.4
     peerDependenciesMeta:
       picomatch:
         optional: true
@@ -3716,7 +3716,7 @@ snapshots:
 
   '@moldable-ai/typescript-config@0.1.4': {}
 
-  '@moldable-ai/ui@0.2.13(@date-fns/tz@1.5.0)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@moldable-ai/ui@0.2.17(@date-fns/tz@1.5.0)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@base-ui/react': 1.5.0(@date-fns/tz@1.5.0)(@types/react@19.2.14)(date-fns@4.4.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@dnd-kit/core': 6.3.1(react-dom@19.2.5(react@19.2.5))(react@19.2.5)

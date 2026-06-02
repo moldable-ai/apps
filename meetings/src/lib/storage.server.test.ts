@@ -2,6 +2,7 @@ import type { Meeting } from '../types'
 import {
   appendMeetingAudioChunk,
   appendMeetingAudioSourceChunk,
+  closeStaleOpenRecordingSessionsForMeeting,
   deleteMeeting,
   finalizeMeetingAudio,
   mergeMeetingForSave,
@@ -223,6 +224,58 @@ describe('mergeMeetingForSave', () => {
     expect(merged.recordingSessions?.[0]?.leaseUpdatedAt?.toISOString()).toBe(
       '2026-06-01T15:00:10.000Z',
     )
+  })
+})
+
+describe('closeStaleOpenRecordingSessionsForMeeting', () => {
+  it('closes open sessions from a previous app-server run', () => {
+    const result = closeStaleOpenRecordingSessionsForMeeting(
+      meeting({
+        recordingSessions: [
+          {
+            id: 'session-1',
+            startedAt: new Date('2026-06-02T13:59:00.000Z'),
+            leaseUpdatedAt: new Date('2026-06-02T14:00:00.000Z'),
+          },
+        ],
+      }),
+      {
+        nowMs: new Date('2026-06-02T14:00:05.000Z').getTime(),
+        serverStartedAtMs: new Date('2026-06-02T14:00:03.000Z').getTime(),
+        staleMs: 60_000,
+      },
+    )
+
+    expect(result.changed).toBe(true)
+    expect(result.meeting.endedAt?.toISOString()).toBe(
+      '2026-06-02T14:00:00.000Z',
+    )
+    expect(result.meeting.recordingSessions?.[0]?.endedAt?.toISOString()).toBe(
+      '2026-06-02T14:00:00.000Z',
+    )
+  })
+
+  it('keeps fresh open sessions from the current app-server run', () => {
+    const result = closeStaleOpenRecordingSessionsForMeeting(
+      meeting({
+        recordingSessions: [
+          {
+            id: 'session-1',
+            startedAt: new Date('2026-06-02T14:00:01.000Z'),
+            leaseUpdatedAt: new Date('2026-06-02T14:00:10.000Z'),
+          },
+        ],
+      }),
+      {
+        nowMs: new Date('2026-06-02T14:00:20.000Z').getTime(),
+        serverStartedAtMs: new Date('2026-06-02T14:00:00.000Z').getTime(),
+        staleMs: 60_000,
+      },
+    )
+
+    expect(result.changed).toBe(false)
+    expect(result.meeting.endedAt).toBeUndefined()
+    expect(result.meeting.recordingSessions?.[0]?.endedAt).toBeUndefined()
   })
 })
 

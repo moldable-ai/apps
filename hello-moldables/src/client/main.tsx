@@ -1,19 +1,25 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ThemeProvider, WorkspaceProvider } from '@moldable-ai/ui'
-import { ErrorBoundary } from './components/error-boundary'
+import {
+  AppErrorBoundary,
+  ThemeProvider,
+  WorkspaceProvider,
+  installMoldableFrameLifecycle,
+} from '@moldable-ai/ui'
 import { App } from './app'
 import './globals.css'
 import './moldable-chat-safe-area'
 
+installMoldableFrameLifecycle()
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ErrorBoundary appName="Hello Moldables">
+    <AppErrorBoundary appName="Hello Moldables">
       <ThemeProvider>
         <WorkspaceProvider>
           <App />
         </WorkspaceProvider>
       </ThemeProvider>
-    </ErrorBoundary>
+    </AppErrorBoundary>
   </StrictMode>,
 )

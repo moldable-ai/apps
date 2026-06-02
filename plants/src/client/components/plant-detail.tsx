@@ -2,14 +2,22 @@
 
 import {
   ArrowLeft,
-  ExternalLink,
+  Heart,
   ImageOff,
+  MapPin,
   MoreVertical,
   Sprout,
-  Star,
+  Sun,
   Trash2,
 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  type JSX,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { MarkdownEditor } from '@moldable-ai/editor'
 import {
   AlertDialog,
@@ -20,210 +28,91 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Input,
-  Separator,
-  Spinner,
   cn,
-  sendToMoldable,
-  useWorkspace,
 } from '@moldable-ai/ui'
-import type { Plant } from '../../lib/types'
-import { CarePanel } from './care-panel'
-import { WaterButton } from './water-button'
-import { ZoomableImage } from './zoomable-image'
+import type { IdCandidate, Plant } from '../../lib/types'
+import { CareView } from './care-view'
+import { IdConfirm } from './id-confirm'
+import { EditableChip, InlineInput } from './inline-edit'
+import { fallbackGradient } from './plant-card'
+import { PlantJournal } from './plant-journal'
+import { WaterStatus } from './water-status'
 
-// ---------------------------------------------------------------------------
-// ID-confirmation strip — fetches free reference photos (iNaturalist) and a
-// Wikipedia summary so the user can visually confirm the plant ID is correct.
-// ---------------------------------------------------------------------------
-
-type InatMatch = {
+// ── Hero: full-bleed photo (slow Ken-Burns) or a tonal gradient + sprout ──
+function Hero({
+  url,
+  name,
+  children,
+}: {
+  url: string | undefined
   name: string
-  commonName?: string
-  photo?: string
-  wikipediaUrl?: string
-}
-
-type WikiSummary = {
-  title: string
-  extract: string
-  thumbnail?: string
-}
-
-type ConfirmResponse = {
-  inaturalist: InatMatch[]
-  wikipedia?: WikiSummary
-}
-
-function IdConfirmStrip({ name }: { name: string }) {
-  const { fetchWithWorkspace } = useWorkspace()
-  const [data, setData] = useState<ConfirmResponse | null>(null)
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-    if (!name.trim()) {
-      setData(null)
-      return
-    }
-    setLoading(true)
-    setData(null)
-    fetchWithWorkspace(
-      `/api/plants/identify-confirm?name=${encodeURIComponent(name)}`,
-    )
-      .then((r) => (r.ok ? r.json() : null))
-      .then((body: ConfirmResponse | null) => {
-        if (!cancelled) setData(body)
-      })
-      .catch(() => {
-        if (!cancelled) setData(null)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [name, fetchWithWorkspace])
-
-  const photos = (data?.inaturalist ?? []).filter((m) => m.photo).slice(0, 6)
-  const wiki = data?.wikipedia
-  const wikiUrl = wiki
-    ? `https://en.wikipedia.org/wiki/${encodeURIComponent(wiki.title.replace(/ /g, '_'))}`
-    : undefined
-
-  if (loading) {
-    return (
-      <div className="text-muted-foreground flex items-center gap-2 text-xs">
-        <Spinner className="size-3.5" />
-        Loading reference photos…
-      </div>
-    )
-  }
-
-  if (photos.length === 0 && !wiki) return null
+  children: React.ReactNode
+}): JSX.Element {
+  const [broken, setBroken] = useState(false)
+  useEffect(() => setBroken(false), [url])
+  const showImage = Boolean(url) && !broken
 
   return (
-    <div className="space-y-3">
-      {photos.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-muted-foreground text-xs font-medium">
-            Looks right? Hover to zoom in
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {photos.map((m, i) => (
-              <ZoomableImage
-                key={i}
-                src={m.photo!}
-                alt={m.commonName ?? m.name}
-                zoomScale={2.6}
-                className="bg-muted aspect-square w-full rounded-lg"
-                imageClassName="size-full rounded-lg object-cover"
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {wiki && (
-        <div className="space-y-1.5">
-          <p className="text-muted-foreground line-clamp-3 text-xs leading-relaxed">
-            {wiki.extract}
-          </p>
-          {wikiUrl && (
-            <button
-              type="button"
-              onClick={() =>
-                sendToMoldable({ type: 'moldable:open-url', url: wikiUrl })
-              }
-              className="text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1 text-xs"
-            >
-              <ExternalLink className="size-3" />
-              Open in browser
-            </button>
+    <div className="relative h-[42vh] max-h-[460px] min-h-[280px] w-full overflow-hidden">
+      {showImage ? (
+        <img
+          src={url}
+          alt={name}
+          className="plant-kenburns absolute inset-0 size-full object-cover"
+          onError={() => setBroken(true)}
+        />
+      ) : (
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{ background: fallbackGradient(name || 'plant') }}
+        >
+          {url && broken ? (
+            <ImageOff className="size-12 text-white/40" />
+          ) : (
+            <Sprout className="size-16 text-white/30" />
           )}
         </div>
       )}
+
+      {/* Scrims: top for floating controls, bottom for the title block. */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/55 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
+
+      {children}
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Hero image with graceful no-image / broken-image fallback.
-// ---------------------------------------------------------------------------
-
-function HeroImage({ url, alt }: { url: string | undefined; alt: string }) {
-  const [broken, setBroken] = useState(false)
-
-  useEffect(() => {
-    setBroken(false)
-  }, [url])
-
-  if (!url || broken) {
-    return (
-      <div className="bg-muted text-muted-foreground flex aspect-[4/3] w-full items-center justify-center rounded-2xl">
-        {url && broken ? (
-          <ImageOff className="size-8 opacity-50" />
-        ) : (
-          <Sprout className="size-9 opacity-50" />
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <div className="bg-muted aspect-[4/3] w-full overflow-hidden rounded-2xl">
-      <img
-        src={url}
-        alt={alt}
-        className="size-full object-cover"
-        onError={() => setBroken(true)}
-      />
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// A quiet labelled inline field (room / location).
-// ---------------------------------------------------------------------------
-
-function QuickField({
+// A round glass control that reads over any photo.
+function GlassButton({
   label,
-  value,
-  placeholder,
-  onCommit,
+  onClick,
+  children,
+  className,
 }: {
   label: string
-  value: string
-  placeholder: string
-  onCommit: (next: string) => void
-}) {
-  const [local, setLocal] = useState(value)
-  useEffect(() => setLocal(value), [value])
+  onClick: () => void
+  children: React.ReactNode
+  className?: string
+}): JSX.Element {
   return (
-    <label className="block space-y-1">
-      <span className="text-muted-foreground text-xs font-medium">{label}</span>
-      <Input
-        value={local}
-        placeholder={placeholder}
-        onChange={(e) => setLocal(e.target.value)}
-        onBlur={() => {
-          if (local !== value) onCommit(local)
-        }}
-        className="h-8 text-sm"
-      />
-    </label>
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className={cn(
+        'inline-grid size-9 cursor-pointer place-items-center rounded-full bg-black/30 text-white backdrop-blur-md transition-colors hover:bg-black/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60',
+        className,
+      )}
+    >
+      {children}
+    </button>
   )
 }
-
-// ---------------------------------------------------------------------------
-// Plant detail — two-pane (left: identity + notes, right: care + ID confirm).
-// ---------------------------------------------------------------------------
 
 export function PlantDetail(props: {
   plant: Plant
@@ -231,46 +120,63 @@ export function PlantDetail(props: {
   onBack: () => void
   onPatch: (patch: Partial<Plant>) => void
   onWater: () => void
+  onSnooze: (untilISO: string) => void
   onGenerateCare: () => void
   regenerating: boolean
   onFavorite: (next: boolean) => void
   onDelete: () => void
-}) {
+  onAddPhoto: (file: File) => Promise<void> | void
+  onSetHero: (path: string) => void
+  addingPhoto?: boolean
+}): JSX.Element {
   const {
     plant,
     mediaUrl,
     onBack,
     onPatch,
     onWater,
+    onSnooze,
     onGenerateCare,
     regenerating,
     onFavorite,
     onDelete,
+    onAddPhoto,
+    onSetHero,
+    addingPhoto,
   } = props
 
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  // Local mirrors for debounced text fields (name, scientific name).
-  const [name, setName] = useState(plant.commonName)
-  const [sci, setSci] = useState(plant.scientificName ?? '')
+  // Always open a plant at the very top. Depending on the host the scroller may
+  // be our own container, the window, or the document — reset all of them before
+  // paint, and again next frame (the host posts chat-state/safe-padding right
+  // after load, which can nudge layout), so navigating in never lands mid-page.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const toTop = () => {
+      scrollRef.current?.scrollTo?.({ top: 0 })
+      if (scrollRef.current) scrollRef.current.scrollTop = 0
+      if (typeof window !== 'undefined') {
+        window.scrollTo(0, 0)
+        const doc = document.scrollingElement as HTMLElement | null
+        if (doc) doc.scrollTop = 0
+        if (document.body) document.body.scrollTop = 0
+      }
+    }
+    toTop()
+    const raf = requestAnimationFrame(toTop)
+    return () => cancelAnimationFrame(raf)
+  }, [plant.id])
+
+  // Notes: debounced save with a quiet "Saved" flash.
   const [notes, setNotes] = useState(plant.notes ?? '')
   const [saved, setSaved] = useState(false)
-
-  // Re-sync local state when the selected plant changes.
-  useEffect(() => {
-    setName(plant.commonName)
-    setSci(plant.scientificName ?? '')
-    setNotes(plant.notes ?? '')
-  }, [plant.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Debounced notes save with a quiet "Saved" flash.
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const flashSaved = useCallback(() => {
-    setSaved(true)
-    if (savedTimer.current) clearTimeout(savedTimer.current)
-    savedTimer.current = setTimeout(() => setSaved(false), 1500)
-  }, [])
+
+  useEffect(() => {
+    setNotes(plant.notes ?? '')
+  }, [plant.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onNotesChange = useCallback(
     (next: string) => {
@@ -278,192 +184,229 @@ export function PlantDetail(props: {
       if (notesTimer.current) clearTimeout(notesTimer.current)
       notesTimer.current = setTimeout(() => {
         onPatch({ notes: next })
-        flashSaved()
+        setSaved(true)
+        if (savedTimer.current) clearTimeout(savedTimer.current)
+        savedTimer.current = setTimeout(() => setSaved(false), 1500)
       }, 600)
     },
-    [onPatch, flashSaved],
+    [onPatch],
   )
 
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (notesTimer.current) clearTimeout(notesTimer.current)
       if (savedTimer.current) clearTimeout(savedTimer.current)
-    }
-  }, [])
+    },
+    [],
+  )
 
   const heroUrl = mediaUrl(plant.heroImageUrl)
   const confirmName = (plant.scientificName ?? plant.commonName ?? '').trim()
+  const idSource = plant.identification?.source
+  // Only nudge for confirmation on machine guesses that haven't been confirmed.
+  const needsConfirm =
+    (idSource === 'chat' || idSource === 'vision') &&
+    !plant.identification?.confirmedAt
 
-  // -------------------------- Left identity pane --------------------------
-  const leftPane = (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="space-y-6 p-5 pb-[calc(var(--chat-safe-padding,0px)+6rem)]">
-        <HeroImage url={heroUrl} alt={plant.commonName} />
+  const confirmId = useCallback(() => {
+    onPatch({
+      identification: {
+        ...plant.identification,
+        confirmedAt: new Date().toISOString(),
+      },
+    })
+  }, [onPatch, plant.identification])
 
-        {/* Editable identity */}
-        <div className="space-y-2">
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onBlur={() => {
-              const next = name.trim()
-              if (next && next !== plant.commonName)
-                onPatch({ commonName: next })
-              else if (!next) setName(plant.commonName)
-            }}
-            placeholder="Common name"
-            className="h-11 border-transparent bg-transparent px-0 text-xl font-semibold tracking-tight shadow-none focus-visible:ring-0"
-          />
-          <Input
-            value={sci}
-            onChange={(e) => setSci(e.target.value)}
-            onBlur={() => {
-              const next = sci.trim()
-              if (next !== (plant.scientificName ?? ''))
-                onPatch({ scientificName: next || undefined })
-            }}
-            placeholder="Scientific name"
-            className="text-muted-foreground h-8 border-transparent bg-transparent px-0 text-sm italic shadow-none focus-visible:ring-0"
-          />
-        </div>
-
-        {/* Location quick fields */}
-        <div className="grid grid-cols-2 gap-3">
-          <QuickField
-            label="Room"
-            value={plant.room ?? ''}
-            placeholder="Living room"
-            onCommit={(v) => onPatch({ room: v.trim() || undefined })}
-          />
-          <QuickField
-            label="Spot"
-            value={plant.location ?? ''}
-            placeholder="South window"
-            onCommit={(v) => onPatch({ location: v.trim() || undefined })}
-          />
-        </div>
-
-        <Separator />
-
-        {/* User notes (Markdown) */}
-        <div className="space-y-2">
-          <div className="flex items-baseline justify-between">
-            <span className="text-muted-foreground text-xs font-medium">
-              Notes
-            </span>
-            <span
-              className={cn(
-                'text-muted-foreground text-xs transition-opacity',
-                saved ? 'opacity-100' : 'opacity-0',
-              )}
-            >
-              Saved
-            </span>
-          </div>
-          <div className="border-input focus-within:ring-ring overflow-hidden rounded-xl border focus-within:ring-2">
-            <MarkdownEditor
-              value={notes}
-              onChange={onNotesChange}
-              placeholder="Where it lives, anything else…"
-              minHeight="140px"
-              className="px-3 py-2 text-sm"
-              hideMarkdownHint
-            />
-          </div>
-        </div>
-      </div>
-    </div>
+  const pickCandidate = useCallback(
+    (c: IdCandidate) => {
+      onPatch({
+        commonName: c.commonName?.trim() || c.name.trim(),
+        scientificName: c.name.trim(),
+        identification: {
+          ...plant.identification,
+          confirmedAt: new Date().toISOString(),
+        },
+      })
+    },
+    [onPatch, plant.identification],
   )
 
-  // -------------------------- Right care pane --------------------------
-  const rightPane = (
-    <div className="min-h-0 flex-1 overflow-y-auto">
-      <div className="space-y-6 p-5 pb-[calc(var(--chat-safe-padding,0px)+6rem)]">
-        <CarePanel
-          plant={plant}
-          onRegenerate={onGenerateCare}
-          regenerating={regenerating}
-        />
-
-        {confirmName && (
-          <>
-            <Separator />
-            <IdConfirmStrip name={confirmName} />
-          </>
-        )}
-      </div>
-    </div>
-  )
+  // Per-block entrance stagger.
+  let block = 0
+  const rise = () => ({
+    className: 'animate-plant-rise',
+    style: { animationDelay: `${Math.min(block++, 6) * 60}ms` },
+  })
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      {/* Top bar: back, water, favorite, overflow */}
-      <div className="border-border flex shrink-0 items-center gap-2 border-b px-4 py-2.5">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={onBack}
-          className="text-muted-foreground hover:text-foreground -ml-1 cursor-pointer"
-        >
-          <ArrowLeft className="mr-1.5 size-4" />
-          Back
-        </Button>
-
-        <div className="min-w-0 flex-1 truncate text-center text-sm font-medium">
-          {plant.commonName}
-        </div>
-
-        <WaterButton plant={plant} onWater={onWater} size="sm" />
-
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onFavorite(!plant.isFavorite)}
-          aria-label={
-            plant.isFavorite ? 'Remove from favorites' : 'Add to favorites'
-          }
-          className="cursor-pointer"
-        >
-          <Star
-            className={cn(
-              'size-4',
-              plant.isFavorite
-                ? 'fill-primary text-primary'
-                : 'text-muted-foreground',
-            )}
-          />
-        </Button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="More actions"
-              className="text-muted-foreground hover:text-foreground cursor-pointer"
+    <main className="animate-plant-view-in bg-background relative flex h-full min-h-0 flex-col">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
+        <Hero url={heroUrl} name={plant.commonName}>
+          {/* Floating controls */}
+          <div className="absolute left-3 top-3 z-10">
+            <GlassButton label="Back" onClick={onBack}>
+              <ArrowLeft className="size-[18px]" />
+            </GlassButton>
+          </div>
+          <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+            <GlassButton
+              label={
+                plant.isFavorite ? 'Remove from favorites' : 'Add to favorites'
+              }
+              onClick={() => onFavorite(!plant.isFavorite)}
             >
-              <MoreVertical className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              variant="destructive"
-              onSelect={() => setConfirmDelete(true)}
-              className="cursor-pointer"
-            >
-              <Trash2 className="mr-2 size-4" />
-              Delete plant
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+              <Heart
+                className={cn(
+                  'size-[18px]',
+                  plant.isFavorite && 'fill-rose-400 text-rose-400',
+                )}
+              />
+            </GlassButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="More actions"
+                  className="inline-grid size-9 cursor-pointer place-items-center rounded-full bg-black/30 text-white backdrop-blur-md transition-colors hover:bg-black/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+                >
+                  <MoreVertical className="size-[18px]" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  variant="destructive"
+                  onSelect={() => setConfirmDelete(true)}
+                  className="cursor-pointer"
+                >
+                  <Trash2 className="mr-2 size-4" />
+                  Delete plant
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
-      {/* Two-pane body — stable flex split (each pane scrolls independently) */}
-      <div className="flex min-h-0 flex-1">
-        <div className="border-border flex min-h-0 basis-[55%] flex-col border-r">
-          {leftPane}
+          {/* Title block over the scrim */}
+          <div className="absolute inset-x-0 bottom-0 z-10 px-4 pb-4">
+            <div className="mx-auto w-full max-w-[640px]">
+              <InlineInput
+                value={plant.commonName}
+                placeholder="Name your plant"
+                ariaLabel="Plant name"
+                onCommit={(v) => onPatch({ commonName: v })}
+                className="plant-serif text-[28px] font-semibold leading-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.55)] placeholder:text-white/45 focus:bg-black/25 focus-visible:ring-white/60 sm:text-[32px]"
+              />
+              <InlineInput
+                value={plant.scientificName ?? ''}
+                placeholder="Add a scientific name"
+                ariaLabel="Scientific name"
+                allowEmpty
+                onCommit={(v) => onPatch({ scientificName: v || undefined })}
+                className="mt-0.5 text-[13px] italic text-white/75 drop-shadow-[0_1px_8px_rgba(0,0,0,0.5)] placeholder:text-white/40 focus:bg-black/25 focus-visible:ring-white/60"
+              />
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <EditableChip
+                  variant="hero"
+                  icon={<MapPin />}
+                  value={plant.room ?? ''}
+                  placeholder="Add a room"
+                  ariaLabel="Room"
+                  onCommit={(v) => onPatch({ room: v || undefined })}
+                />
+                <EditableChip
+                  variant="hero"
+                  icon={<Sun />}
+                  value={plant.location ?? ''}
+                  placeholder="Add a spot"
+                  ariaLabel="Spot"
+                  onCommit={(v) => onPatch({ location: v || undefined })}
+                />
+              </div>
+            </div>
+          </div>
+        </Hero>
+
+        {/* Content column */}
+        <div className="mx-auto w-full max-w-[640px] space-y-5 px-4 pb-[calc(var(--chat-safe-padding,0px)+5rem)] pt-5">
+          <div {...rise()}>
+            <WaterStatus
+              plant={plant}
+              onWater={onWater}
+              onSnooze={onSnooze}
+              onSetInterval={(days) => onPatch({ waterIntervalDays: days })}
+              onGenerateCare={onGenerateCare}
+              generating={regenerating}
+            />
+          </div>
+
+          <div {...rise()}>
+            <PlantJournal
+              plant={plant}
+              mediaUrl={mediaUrl}
+              onAddPhoto={onAddPhoto}
+              onSetHero={onSetHero}
+              busy={addingPhoto}
+            />
+          </div>
+
+          {needsConfirm && confirmName && (
+            <div {...rise()}>
+              <IdConfirm
+                name={confirmName}
+                confirmed={false}
+                candidates={plant.identification?.candidates}
+                onConfirm={confirmId}
+                onPickCandidate={pickCandidate}
+              />
+            </div>
+          )}
+
+          <div {...rise()}>
+            <CareView
+              plant={plant}
+              onRegenerate={onGenerateCare}
+              generating={regenerating}
+            />
+          </div>
+
+          {/* Notes — quiet journal, not a boxed form field */}
+          <div {...rise()}>
+            <div className="mb-1.5 flex items-baseline justify-between px-1">
+              <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-[0.12em]">
+                Notes
+              </span>
+              <span
+                className={cn(
+                  'text-muted-foreground text-[11px] transition-opacity',
+                  saved ? 'opacity-100' : 'opacity-0',
+                )}
+              >
+                Saved
+              </span>
+            </div>
+            <div className="bg-muted/30 focus-within:bg-muted/45 rounded-xl px-3 py-1 transition-colors">
+              <MarkdownEditor
+                value={notes}
+                onChange={onNotesChange}
+                placeholder="Where it came from, how it's doing, anything to remember…"
+                minHeight="120px"
+                className="text-sm"
+                hideMarkdownHint
+              />
+            </div>
+          </div>
+
+          {/* Confirmed plants keep a quiet reference-photo disclosure */}
+          {!needsConfirm && confirmName && (
+            <div {...rise()}>
+              <IdConfirm
+                name={confirmName}
+                confirmed
+                onConfirm={confirmId}
+                onPickCandidate={pickCandidate}
+              />
+            </div>
+          )}
         </div>
-        <div className="flex min-h-0 basis-[45%] flex-col">{rightPane}</div>
       </div>
 
       {/* Delete confirmation */}
@@ -496,6 +439,6 @@ export function PlantDetail(props: {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </main>
   )
 }

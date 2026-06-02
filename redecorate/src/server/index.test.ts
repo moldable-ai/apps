@@ -1,12 +1,16 @@
 import { getAppDataDir } from '@moldable-ai/storage'
-import { app } from './app'
+import { STYLE_FROM_IMAGE_SCHEMA, app } from './app'
 import { resolveStaticFilePath } from './static'
+import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { promisify } from 'node:util'
 import { describe, expect, it } from 'vitest'
+
+const execFileAsync = promisify(execFile)
 
 type RpcResponse<T> =
   | { ok: true; result: T }
@@ -22,7 +26,7 @@ type DesignResponse = {
   status?: 'generating' | 'ready' | 'failed'
   folderId?: string | null
   pendingIterations?: Array<{ requestId?: string }>
-  iterations: Array<{ kind: string }>
+  iterations: Array<{ kind: string; mimeType?: string; imagePath?: string }>
 }
 
 async function createTempPng(): Promise<{ dir: string; imagePath: string }> {
@@ -35,6 +39,20 @@ async function createTempPng(): Promise<{ dir: string; imagePath: string }> {
       'base64',
     ),
   )
+  return { dir, imagePath }
+}
+
+async function createTempAvif(): Promise<{ dir: string; imagePath: string }> {
+  const { dir, imagePath: pngPath } = await createTempPng()
+  const imagePath = path.join(dir, 'room.avif')
+  await execFileAsync('/usr/bin/sips', [
+    '-s',
+    'format',
+    'avif',
+    pngPath,
+    '--out',
+    imagePath,
+  ])
   return { dir, imagePath }
 }
 
@@ -60,6 +78,16 @@ describe('resolveStaticFilePath', () => {
 })
 
 describe('Redecorate RPC', () => {
+  it('keeps style structured output schema strict', () => {
+    const properties = STYLE_FROM_IMAGE_SCHEMA.properties as Record<
+      string,
+      unknown
+    >
+
+    expect(STYLE_FROM_IMAGE_SCHEMA.additionalProperties).toBe(false)
+    expect(STYLE_FROM_IMAGE_SCHEMA.required).toEqual(Object.keys(properties))
+  })
+
   it('imports a local source photo into a folder as an upload iteration', async () => {
     const workspaceId = `test-${randomUUID()}`
     const { dir, imagePath } = await createTempPng()
@@ -173,6 +201,173 @@ describe('Redecorate RPC', () => {
       expect(existsSync(path.join(getAppDataDir(workspaceId), 'assets'))).toBe(
         false,
       )
+    } finally {
+      await cleanup(workspaceId, dir)
+    }
+  })
+
+  it('converts AVIF source image paths into PNG upload iterations', async () => {
+    const workspaceId = `test-${randomUUID()}`
+    const { dir, imagePath } = await createTempAvif()
+
+    try {
+      const response = await app.request(
+        `/api/designs/import-paths?workspace=${workspaceId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paths: [imagePath],
+            mode: 'separate',
+          }),
+        },
+      )
+
+      expect(response.status).toBe(200)
+      const designs = (await response.json()) as DesignResponse[]
+      expect(designs).toHaveLength(1)
+      expect(designs[0]?.iterations[0]?.kind).toBe('upload')
+      expect(designs[0]?.iterations[0]?.mimeType).toBe('image/png')
+      expect(designs[0]?.iterations[0]?.imagePath).toMatch(/\.png$/)
+      expect(existsSync(designs[0]?.iterations[0]?.imagePath ?? '')).toBe(true)
+    } finally {
+      await cleanup(workspaceId, dir)
+    }
+  })
+
+  it('converts AVIF local RPC source images into PNG upload iterations', async () => {
+    const workspaceId = `test-${randomUUID()}`
+    const { dir, imagePath } = await createTempAvif()
+
+    try {
+      const response = await app.request(
+        `/api/moldable/rpc?workspace=${workspaceId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            method: 'redecorate.images.import',
+            params: {
+              imagePath,
+              title: 'AVIF source',
+            },
+          }),
+        },
+      )
+
+      expect(response.status).toBe(200)
+      const rpc = (await response.json()) as RpcResponse<DesignResponse>
+      expect(rpc.ok).toBe(true)
+      if (!rpc.ok) throw new Error('Expected import to succeed')
+      expect(rpc.result.iterations).toHaveLength(1)
+      expect(rpc.result.iterations[0]?.kind).toBe('upload')
+      expect(rpc.result.iterations[0]?.mimeType).toBe('image/png')
+      expect(rpc.result.iterations[0]?.imagePath).toMatch(/\.png$/)
+      expect(existsSync(rpc.result.iterations[0]?.imagePath ?? '')).toBe(true)
+    } finally {
+      await cleanup(workspaceId, dir)
+    }
+  })
+
+  it('rejects unsupported source image paths with supported formats', async () => {
+    const workspaceId = `test-${randomUUID()}`
+    const dir = await mkdtemp(path.join(tmpdir(), 'redecorate-test-'))
+    const imagePath = path.join(dir, 'room.txt')
+    await writeFile(imagePath, Buffer.from('not-an-image'))
+
+    try {
+      const response = await app.request(
+        `/api/designs/import-paths?workspace=${workspaceId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paths: [imagePath],
+            mode: 'separate',
+          }),
+        },
+      )
+
+      expect(response.status).toBe(400)
+      const body = (await response.json()) as { error?: string }
+      expect(body.error).toContain('room.txt')
+      expect(body.error).toContain('PNG, JPEG, WEBP, AVIF')
+
+      const designsResponse = await app.request(
+        `/api/designs?workspace=${workspaceId}`,
+      )
+      const designs = (await designsResponse.json()) as DesignResponse[]
+      expect(designs).toHaveLength(0)
+      expect(existsSync(path.join(getAppDataDir(workspaceId), 'assets'))).toBe(
+        false,
+      )
+    } finally {
+      await cleanup(workspaceId, dir)
+    }
+  })
+
+  it('rejects unsupported local RPC source images with supported formats', async () => {
+    const workspaceId = `test-${randomUUID()}`
+    const dir = await mkdtemp(path.join(tmpdir(), 'redecorate-test-'))
+    const imagePath = path.join(dir, 'room.txt')
+    await writeFile(imagePath, Buffer.from('not-an-image'))
+
+    try {
+      const response = await app.request(
+        `/api/moldable/rpc?workspace=${workspaceId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            method: 'redecorate.images.import',
+            params: {
+              imagePath,
+              title: 'AVIF source',
+            },
+          }),
+        },
+      )
+
+      expect(response.status).toBe(200)
+      const rpc = (await response.json()) as RpcResponse<DesignResponse>
+      expect(rpc.ok).toBe(false)
+      if (rpc.ok) throw new Error('Expected import to be rejected')
+      expect(rpc.error?.message).toContain('room.txt')
+      expect(rpc.error?.message).toContain('PNG, JPEG, WEBP, AVIF')
+
+      const designsResponse = await app.request(
+        `/api/designs?workspace=${workspaceId}`,
+      )
+      const designs = (await designsResponse.json()) as DesignResponse[]
+      expect(designs).toHaveLength(0)
+      expect(existsSync(path.join(getAppDataDir(workspaceId), 'assets'))).toBe(
+        false,
+      )
+    } finally {
+      await cleanup(workspaceId, dir)
+    }
+  })
+
+  it('rejects unsupported style inspiration paths with supported formats', async () => {
+    const workspaceId = `test-${randomUUID()}`
+    const dir = await mkdtemp(path.join(tmpdir(), 'redecorate-test-'))
+    const imagePath = path.join(dir, 'style.txt')
+    await writeFile(imagePath, Buffer.from('not-an-image'))
+
+    try {
+      const response = await app.request(
+        `/api/styles/describe-path?workspace=${workspaceId}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: imagePath }),
+        },
+      )
+
+      expect(response.status).toBe(400)
+      const body = (await response.json()) as { error?: string }
+      expect(body.error).toContain('style.txt')
+      expect(body.error).toContain('PNG, JPEG, WEBP, AVIF')
     } finally {
       await cleanup(workspaceId, dir)
     }

@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
-  ChevronDown,
   Copy,
   Download,
   Eraser,
@@ -131,17 +130,40 @@ type ThumbnailItem =
       isSelected: boolean
     }
 
-function HeaderTooltip({
+function ToolBtn({
   label,
+  onClick,
+  disabled,
+  destructive,
+  active,
   children,
 }: {
   label: string
+  onClick: () => void
+  disabled?: boolean
+  destructive?: boolean
+  active?: boolean
   children: ReactNode
 }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="inline-flex">{children}</span>
+        <button
+          type="button"
+          aria-label={label}
+          disabled={disabled}
+          onClick={onClick}
+          className={cn(
+            'inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
+            destructive
+              ? 'text-muted-foreground hover:bg-destructive/10 hover:text-destructive'
+              : active
+                ? 'text-foreground hover:bg-muted'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+          )}
+        >
+          {children}
+        </button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>
     </Tooltip>
@@ -210,6 +232,20 @@ const GALLERY_ALBUM_PREVIEW_LIMIT = 8
 const GALLERY_ALBUM_PREVIEW_SIZE = 72
 const GALLERY_ALBUM_PREVIEW_GAP = 8
 const GALLERY_ALBUM_PREVIEW_MAX_COLUMNS = 3
+const SUPPORTED_IMPORT_IMAGE_MIME_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+  'image/tiff',
+  'image/gif',
+  'image/bmp',
+  'image/jp2',
+  'image/jpx',
+])
 
 function aspectLabel(id: AspectRatioId) {
   return ASPECT_RATIOS.find((ratio) => ratio.id === id) ?? ASPECT_RATIOS[0]
@@ -299,7 +335,13 @@ function extensionFromMime(mimeType: string): string {
 }
 
 function hasSupportedImageExtension(name: string): boolean {
-  return /\.(png|jpe?g|webp|gif|svg|heic|heif)$/i.test(name)
+  return /\.(png|jpe?g|webp|avif|heic|heif|tiff?|gif|bmp|jp2|j2k|jpf|jpx)$/i.test(
+    name,
+  )
+}
+
+function hasSupportedImageMimeType(mimeType: string): boolean {
+  return SUPPORTED_IMPORT_IMAGE_MIME_TYPES.has(mimeType.toLowerCase())
 }
 
 async function downloadImage(iteration: ImageIteration) {
@@ -466,7 +508,8 @@ type MoldableFileDropMessage =
 function imageFilesFromList(fileList: FileList): File[] {
   return Array.from(fileList).filter(
     (file) =>
-      file.type.startsWith('image/') || hasSupportedImageExtension(file.name),
+      hasSupportedImageMimeType(file.type) ||
+      hasSupportedImageExtension(file.name),
   )
 }
 
@@ -571,22 +614,21 @@ function AspectRatioMenu({
 
   return (
     <div className="relative">
-      <HeaderTooltip label="Aspect ratio">
-        <button
-          type="button"
-          aria-label="Aspect ratio"
-          className="border-border bg-background hover:bg-muted flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-2 text-xs font-medium shadow-sm transition-colors disabled:cursor-default disabled:opacity-60"
-          disabled={busy}
-          onClick={() => setOpen((next) => !next)}
-        >
-          <PanelTop className="text-muted-foreground size-3.5" />
-          <span>Aspect</span>
-          <span className="text-muted-foreground font-mono">
-            {current.ratio}
-          </span>
-          <ChevronDown className="text-muted-foreground size-3.5" />
-        </button>
-      </HeaderTooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Aspect ratio · ${current.ratio}`}
+            className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-8 cursor-pointer items-center gap-1 rounded-full px-2.5 text-xs font-medium transition-colors disabled:cursor-default disabled:opacity-40"
+            disabled={busy}
+            onClick={() => setOpen((next) => !next)}
+          >
+            <PanelTop className="size-4" />
+            <span className="font-mono text-[11px]">{current.ratio}</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">Aspect ratio</TooltipContent>
+      </Tooltip>
 
       {open ? (
         <div className="border-border bg-popover text-popover-foreground absolute right-0 top-9 z-20 w-56 rounded-lg border p-2 shadow-lg">
@@ -1890,20 +1932,16 @@ export function App() {
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <header className="border-border/70 flex h-12 shrink-0 items-center justify-between border-b px-4">
-          <HeaderTooltip label="Close image">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="cursor-pointer"
-              aria-label="Close image"
+        <header className="relative z-10 flex h-14 shrink-0 items-center justify-between gap-3 px-3 sm:px-4">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <ToolBtn
+              label="Close image"
               onClick={() => closeSelectedThread('pop')}
             >
-              <X className="size-3.5" />
-            </Button>
-          </HeaderTooltip>
-          <div className="flex items-center gap-2">
+              <X className="size-4" />
+            </ToolBtn>
+          </div>
+          <div className="border-border/60 bg-card/60 flex items-center gap-0.5 rounded-full border p-1 backdrop-blur">
             <AspectRatioMenu
               value={displayedAspectRatio}
               busy={busy}
@@ -1934,127 +1972,93 @@ export function App() {
                 })
               }}
             />
-            <div className="flex shrink-0 items-center gap-1.5">
-              <HeaderTooltip
-                label={
-                  removeBgStatusQuery.data?.available
-                    ? 'Remove background'
-                    : 'Add remove.bg key'
+            <ToolBtn
+              label={
+                removeBgStatusQuery.data?.available
+                  ? 'Remove background'
+                  : 'Add remove.bg key'
+              }
+              disabled={!selectedIteration || removeBackground.isPending}
+              onClick={handleRemoveBackground}
+            >
+              {removeBackground.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Eraser className="size-4" />
+              )}
+            </ToolBtn>
+            <ToolBtn
+              label="Remix image"
+              disabled={!selectedIteration}
+              onClick={() => remixIteration(selectedIteration)}
+            >
+              <Shuffle className="size-4" />
+            </ToolBtn>
+            <ToolBtn
+              label="Copy prompt"
+              disabled={!canCopyPrompt}
+              onClick={() => void handleCopyPrompt()}
+            >
+              {isPromptCopied ? (
+                <Check className="size-4" />
+              ) : (
+                <Copy className="size-4" />
+              )}
+            </ToolBtn>
+            <ToolBtn
+              label="Download image"
+              disabled={
+                !selectedIteration ||
+                downloadingIterationId === selectedIteration.id
+              }
+              onClick={async () => {
+                if (!selectedIteration) return
+                setError(null)
+                setDownloadingIterationId(selectedIteration.id)
+                try {
+                  await downloadImage(selectedIteration)
+                } catch (downloadError) {
+                  setError(
+                    downloadError instanceof Error
+                      ? downloadError.message
+                      : 'Failed to download image',
+                  )
+                } finally {
+                  setDownloadingIterationId(null)
                 }
-              >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="cursor-pointer"
-                  aria-label="Remove background"
-                  disabled={!selectedIteration || removeBackground.isPending}
-                  onClick={handleRemoveBackground}
-                >
-                  {removeBackground.isPending ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Eraser className="size-3.5" />
-                  )}
-                </Button>
-              </HeaderTooltip>
-              <HeaderTooltip label="Remix image">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="cursor-pointer"
-                  aria-label="Remix image"
-                  disabled={!selectedIteration}
-                  onClick={() => remixIteration(selectedIteration)}
-                >
-                  <Shuffle className="size-3.5" />
-                </Button>
-              </HeaderTooltip>
-              <HeaderTooltip label="Copy prompt">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="cursor-pointer"
-                  aria-label="Copy prompt"
-                  disabled={!canCopyPrompt}
-                  onClick={() => void handleCopyPrompt()}
-                >
-                  {isPromptCopied ? (
-                    <Check className="size-3.5" />
-                  ) : (
-                    <Copy className="size-3.5" />
-                  )}
-                </Button>
-              </HeaderTooltip>
-              <HeaderTooltip label="Download image">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="cursor-pointer"
-                  disabled={
-                    !selectedIteration ||
-                    downloadingIterationId === selectedIteration.id
-                  }
-                  aria-label="Download image"
-                  onClick={async () => {
-                    if (!selectedIteration) return
-                    setError(null)
-                    setDownloadingIterationId(selectedIteration.id)
-                    try {
-                      await downloadImage(selectedIteration)
-                    } catch (downloadError) {
-                      setError(
-                        downloadError instanceof Error
-                          ? downloadError.message
-                          : 'Failed to download image',
-                      )
-                    } finally {
-                      setDownloadingIterationId(null)
-                    }
-                  }}
-                >
-                  {selectedIteration &&
-                  downloadingIterationId === selectedIteration.id ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Download className="size-3.5" />
-                  )}
-                </Button>
-              </HeaderTooltip>
-              <HeaderTooltip
-                label={
-                  canDeleteSelectedIteration
-                    ? 'Delete image'
-                    : 'Finish pending work before deleting'
-                }
-              >
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  className="text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer"
-                  disabled={
-                    !canDeleteSelectedIteration || deleteIteration.isPending
-                  }
-                  aria-label="Delete image"
-                  onClick={() => {
-                    if (!selectedIteration) return
-                    setError(null)
-                    setDeleteDescendants(false)
-                    setPendingDeleteIterationId(selectedIteration.id)
-                  }}
-                >
-                  {deleteIteration.isPending ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="size-3.5" />
-                  )}
-                </Button>
-              </HeaderTooltip>
-            </div>
+              }}
+            >
+              {selectedIteration &&
+              downloadingIterationId === selectedIteration.id ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Download className="size-4" />
+              )}
+            </ToolBtn>
+            <span className="bg-border/60 mx-0.5 h-5 w-px" />
+            <ToolBtn
+              label={
+                canDeleteSelectedIteration
+                  ? 'Delete image'
+                  : 'Finish pending work before deleting'
+              }
+              destructive
+              disabled={
+                !canDeleteSelectedIteration || deleteIteration.isPending
+              }
+              onClick={() => {
+                if (!selectedIteration) return
+                setError(null)
+                setDeleteDescendants(false)
+                setPendingDeleteIterationId(selectedIteration.id)
+              }}
+            >
+              {deleteIteration.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Trash2 className="size-4" />
+              )}
+            </ToolBtn>
           </div>
         </header>
 

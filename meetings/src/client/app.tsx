@@ -1614,6 +1614,10 @@ export default function MeetingsPage() {
       if (cancelled) return
 
       if (!recovered) {
+        const closedMeeting = finishActiveRecordingSession(recoverableMeeting)
+        if (closedMeeting) {
+          updateMeeting(closedMeeting)
+        }
         audioStreamingEnabledRef.current = false
         activeRecordingSessionRef.current = null
         activeMeetingIdRef.current = null
@@ -1637,6 +1641,7 @@ export default function MeetingsPage() {
   }, [
     clearMeeting,
     deepgram,
+    finishActiveRecordingSession,
     openActiveMeetingDetail,
     meeting,
     meetings,
@@ -1645,6 +1650,7 @@ export default function MeetingsPage() {
     startRecordingBackgroundTask,
     systemAudio,
     updateActiveMeeting,
+    updateMeeting,
   ])
 
   const loadCalendarEvents = useCallback(

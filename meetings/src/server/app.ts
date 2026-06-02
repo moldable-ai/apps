@@ -7,6 +7,7 @@ import {
 import {
   appendMeetingAudioChunk,
   appendMeetingAudioSourceChunk,
+  closeStaleOpenRecordingSessions,
   deleteCustomTemplate,
   deleteMeeting,
   finalizeMeetingAudio,
@@ -429,7 +430,10 @@ app.get('/api/moldable/today', async (c) => {
 
   try {
     const workspaceId = getWorkspaceFromRequest(c.req.raw)
-    const meetings = await loadMeetings(workspaceId)
+    const meetings = await closeStaleOpenRecordingSessions(
+      await loadMeetings(workspaceId),
+      workspaceId,
+    )
 
     const now = Date.now()
     const DAY_MS = 24 * 60 * 60 * 1000

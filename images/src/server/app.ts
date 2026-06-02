@@ -6,6 +6,16 @@ import {
   safePath,
   writeJson,
 } from '@moldable-ai/storage'
+import {
+  UnsupportedSourceImageError,
+  isSupportedSourceImageMimeType,
+  isSupportedSourceImageName,
+  normalizeLocalSourceImage,
+  normalizeUploadedSourceImage,
+  sourceFileExtensionForMime,
+  sourceFileExtensionForName,
+  supportedSourceImageError,
+} from './image-conversion'
 import { imageRequest } from './moldable'
 import { Hono } from 'hono'
 import { spawn } from 'node:child_process'
@@ -1136,19 +1146,30 @@ async function saveUploadedAsset({
   width?: number
   height?: number
 }> {
-  const buffer = Buffer.from(await file.arrayBuffer())
-  const mimeType = resolveImageMimeType(buffer, file.type, file.name)
+  const normalized = await normalizeUploadedSourceImage({
+    workspaceId,
+    originalName: file.name,
+    mimeType: file.type,
+    buffer: Buffer.from(await file.arrayBuffer()),
+  })
+  const mimeType = resolveImageMimeType(
+    normalized.buffer,
+    normalized.mimeType,
+    normalized.originalName,
+  )
   if (!mimeType) {
     throw new Error(`${file.name || 'File'} is not a supported image.`)
   }
 
-  const dimensions = detectImageDimensions(buffer, mimeType)
+  const dimensions = detectImageDimensions(normalized.buffer, mimeType)
   const extension =
-    fileExtensionForMime(mimeType) ?? fileExtensionForName(file.name) ?? 'img'
+    sourceFileExtensionForMime(mimeType) ??
+    sourceFileExtensionForName(normalized.originalName) ??
+    normalized.extension
   const fileName = `${iterationId}.${extension}`
   const path = assetPath(workspaceId, threadId, fileName)
   await ensureDir(safePath(dataDir(workspaceId), 'assets', threadId))
-  await writeFile(path, buffer)
+  await writeFile(path, normalized.buffer)
 
   return {
     fileName,
@@ -1182,26 +1203,33 @@ async function saveLocalImageAsset({
   }
 
   const originalName = basename(sourcePath)
-  const expectedMimeType = imageMimeTypeForName(originalName)
-  if (!expectedMimeType) {
-    throw new Error(`${originalName || 'File'} is not a supported image.`)
+  if (!isSupportedSourceImageName(originalName)) {
+    throw supportedSourceImageError(originalName)
   }
 
-  const buffer = await readFile(sourcePath)
-  const mimeType = resolveImageMimeType(buffer, expectedMimeType, originalName)
+  const normalized = await normalizeLocalSourceImage({
+    workspaceId,
+    sourcePath,
+    originalName,
+  })
+  const mimeType = resolveImageMimeType(
+    normalized.buffer,
+    normalized.mimeType,
+    normalized.originalName,
+  )
   if (!mimeType) {
     throw new Error(`${originalName || 'File'} is not a supported image.`)
   }
 
-  const dimensions = detectImageDimensions(buffer, mimeType)
+  const dimensions = detectImageDimensions(normalized.buffer, mimeType)
   const extension =
-    fileExtensionForMime(mimeType) ??
-    fileExtensionForName(originalName) ??
-    'img'
+    sourceFileExtensionForMime(mimeType) ??
+    sourceFileExtensionForName(normalized.originalName) ??
+    normalized.extension
   const fileName = `${iterationId}.${extension}`
   const path = assetPath(workspaceId, threadId, fileName)
   await ensureDir(safePath(dataDir(workspaceId), 'assets', threadId))
-  await writeFile(path, buffer)
+  await writeFile(path, normalized.buffer)
 
   return {
     fileName,
@@ -1209,7 +1237,7 @@ async function saveLocalImageAsset({
     size: dimensions ? `${dimensions.width}x${dimensions.height}` : 'unknown',
     width: dimensions?.width,
     height: dimensions?.height,
-    originalName,
+    originalName: normalized.originalName,
   }
 }
 
@@ -2692,7 +2720,8 @@ app.post('/api/images/import', async (c) => {
       .filter(
         (file) =>
           file.size > 0 &&
-          (file.type.startsWith('image/') || imageMimeTypeForName(file.name)),
+          (isSupportedSourceImageMimeType(file.type) ||
+            isSupportedSourceImageName(file.name)),
       )
 
     if (files.length === 0) {
@@ -2715,6 +2744,9 @@ app.post('/api/images/import', async (c) => {
     if (error instanceof z.ZodError) {
       return c.json({ error: 'Invalid import options.' }, 400)
     }
+    if (error instanceof UnsupportedSourceImageError) {
+      return c.json({ error: error.message }, 400)
+    }
     return c.json(errorResponse(error, 'Failed to import images'), 500)
   }
 })
@@ -2724,7 +2756,7 @@ app.post('/api/images/import-paths', async (c) => {
     const workspaceId = getWorkspaceId(c.req.raw)
     const payload = importPathsSchema.parse(await c.req.json())
     const imagePaths = payload.paths.filter((path) =>
-      imageMimeTypeForName(path),
+      isSupportedSourceImageName(path),
     )
 
     if (imagePaths.length === 0) {
@@ -2742,6 +2774,9 @@ app.post('/api/images/import-paths', async (c) => {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return c.json({ error: 'Invalid import options.' }, 400)
+    }
+    if (error instanceof UnsupportedSourceImageError) {
+      return c.json({ error: error.message }, 400)
     }
     return c.json(errorResponse(error, 'Failed to import images'), 500)
   }

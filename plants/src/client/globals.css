@@ -11,7 +11,9 @@
 
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-serif: 'Georgia', 'Iowan Old Style', 'Times New Roman', serif;
+  --font-serif:
+    'New York', 'Iowan Old Style', 'Palatino', 'Georgia', 'Times New Roman',
+    serif;
 }
 
 @layer base {
@@ -19,12 +21,15 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground overflow-hidden;
   }
+  /* Definite height (not min-height) so each view's own overflow-y-auto bounds
+     and scrolls internally — otherwise the whole document scrolls and the
+     position carries across navigation (a detail opens mid-page). */
   html,
   body,
   #root {
-    min-height: 100%;
+    height: 100%;
   }
 }
 
@@ -75,11 +80,224 @@
   animation: plant-fade-in 0.3s ease-out both;
 }
 
+/* ---- Detail "portrait" view ---------------------------------------------- */
+
+@layer components {
+  /* Serif display for plant names — editorial, premium, a touch tighter. */
+  .plant-serif {
+    font-family: var(--font-serif);
+    letter-spacing: -0.018em;
+    font-feature-settings: 'liga' 1;
+  }
+
+  .plant-tnum {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Whole-detail entrance: a soft rise + settle. */
+@keyframes plant-view-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.994);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+.animate-plant-view-in {
+  animation: plant-view-in 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Sectioned content rises in with a per-block delay (set inline). */
+@keyframes plant-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+.animate-plant-rise {
+  animation: plant-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Hero photo: a very slow Ken-Burns drift so a static portrait feels alive. */
+@keyframes plant-kenburns {
+  0% {
+    transform: scale(1.04) translate3d(0, 0, 0);
+  }
+  100% {
+    transform: scale(1.12) translate3d(0, -1.6%, 0);
+  }
+}
+.plant-kenburns {
+  animation: plant-kenburns 24s ease-in-out infinite alternate;
+  transform-origin: 50% 40%;
+  will-change: transform;
+}
+
+/* AI "growing your care plan" surface — a calm green/teal aurora that drifts,
+   with a light sweep. Signals living, thinking generation. */
+.plant-aurora {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      58% 55% at 20% 24%,
+      oklch(0.74 0.14 150 / 0.5),
+      transparent 70%
+    ),
+    radial-gradient(
+      55% 50% at 82% 22%,
+      oklch(0.8 0.12 192 / 0.42),
+      transparent 72%
+    ),
+    radial-gradient(
+      66% 60% at 60% 92%,
+      oklch(0.82 0.14 120 / 0.46),
+      transparent 72%
+    ),
+    radial-gradient(
+      50% 48% at 36% 70%,
+      oklch(0.72 0.12 165 / 0.32),
+      transparent 70%
+    ),
+    color-mix(in oklab, var(--muted) 80%, var(--background));
+  background-size:
+    190% 190%,
+    170% 170%,
+    210% 210%,
+    180% 180%,
+    100% 100%;
+  background-position:
+    0% 0%,
+    100% 0%,
+    50% 100%,
+    30% 60%,
+    0 0;
+  animation: plant-aurora 12s ease-in-out infinite;
+}
+.plant-aurora::after {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  pointer-events: none;
+  background: linear-gradient(
+    115deg,
+    transparent 44%,
+    color-mix(in oklab, white 26%, transparent) 50%,
+    transparent 56%
+  );
+  transform: translateX(-60%);
+  animation: plant-sweep 3.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes plant-aurora {
+  0% {
+    background-position:
+      0% 0%,
+      100% 0%,
+      50% 100%,
+      30% 60%,
+      0 0;
+  }
+  50% {
+    background-position:
+      55% 45%,
+      45% 55%,
+      30% 40%,
+      70% 35%,
+      0 0;
+  }
+  100% {
+    background-position:
+      0% 0%,
+      100% 0%,
+      50% 100%,
+      30% 60%,
+      0 0;
+  }
+}
+
+@keyframes plant-sweep {
+  0% {
+    transform: translateX(-65%);
+  }
+  100% {
+    transform: translateX(65%);
+  }
+}
+
+/* Watering: the cycle ring eases as progress changes; an overdue ring breathes. */
+.plant-ring-track {
+  transition: stroke-dashoffset 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes plant-breathe {
+  0%,
+  100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.plant-breathe {
+  animation: plant-breathe 2.4s ease-in-out infinite;
+}
+
+/* The satisfying "watered!" splash — a ring blooms out from the drop and fades. */
+@keyframes plant-splash {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+.plant-splash {
+  animation: plant-splash 0.62s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes plant-drop-bounce {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  30% {
+    transform: translateY(-22%) scale(0.92);
+  }
+  60% {
+    transform: translateY(8%) scale(1.06);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+.plant-drop-bounce {
+  animation: plant-drop-bounce 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-plant-card-in,
   .animate-plant-chrome-in,
-  .animate-plant-fade-in {
+  .animate-plant-fade-in,
+  .animate-plant-view-in,
+  .animate-plant-rise,
+  .plant-kenburns,
+  .plant-aurora,
+  .plant-aurora::after,
+  .plant-breathe,
+  .plant-splash,
+  .plant-drop-bounce {
     animation: none;
+  }
+  .plant-ring-track {
+    transition: none;
   }
 }
 

@@ -8,6 +8,11 @@ export {
   WorkspaceProvider,
   useWorkspace,
 } from '../../node_modules/@moldable-ai/ui/dist/lib/workspace.js'
+export { installMoldableFrameLifecycle } from '../../node_modules/@moldable-ai/ui/dist/lib/frame-lifecycle.js'
+export {
+  AppErrorBoundary,
+  type AppErrorSource,
+} from '../../node_modules/@moldable-ai/ui/dist/components/app-error-boundary.js'
 export {
   isInMoldable,
   popMoldableNavigation,

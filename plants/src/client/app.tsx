@@ -28,9 +28,12 @@ import {
   Input,
   cn,
   isInMoldable,
+  popMoldableNavigation,
+  pushMoldableNavigation,
   resetMoldableNavigation,
   sendToMoldable,
   useMoldableCommands,
+  useMoldableNavigationPop,
   useWorkspace,
 } from '@moldable-ai/ui'
 import type { MediaResult, Plant } from '../lib/types'
@@ -45,6 +48,7 @@ import { usePlantMedia } from './use-plant-media'
 import {
   type PlantCreateInput,
   resolveMediaUrl,
+  useAddPlantPhoto,
   useCreatePlant,
   useDeletePlant,
   useFavoritePlant,
@@ -156,25 +160,10 @@ function folderSubtitle(plants: Plant[]): string {
 }
 
 // ---------------------------------------------------------------------------
-// Desktop chat integration for the explicit Add Plant dialog fallback. Gallery
-// drops use the app's direct vision endpoint so the user does not have to move
-// through chat.
+// Chat context: both the Add-plant dialog and gallery drops identify plants
+// in-app via the vision endpoint (no chat handoff). We still give the desktop
+// chat context about the selected plant so the assistant can help and diagnose.
 // ---------------------------------------------------------------------------
-
-function buildIdentifyPrompt(
-  absPath: string | undefined,
-  relPath: string,
-): string {
-  const fileRef = absPath ? absPath : relPath
-  return [
-    `Identify the plant in the image I just added to Plants (file: ${fileRef}).`,
-    `Then call the Plants app RPC plants.identifyAndCreate with the common name,`,
-    `scientific name, your confidence (0-1), up to 3 candidate names, and`,
-    `heroImagePath '${relPath}'. The app will then auto-generate the care schedule.`,
-    `When done, refresh the home view by calling the Moldable app API with`,
-    `targetAppId 'today' and method 'today.refresh'.`,
-  ].join(' ')
-}
 
 function buildChatInstructions(selected: Plant | null): string {
   const lines = [
@@ -208,6 +197,7 @@ export default function PlantsPage(): JSX.Element {
   const identifyPlantFromImage = useIdentifyPlantFromImage()
   const favoritePlant = useFavoritePlant()
   const deletePlant = useDeletePlant()
+  const addPhoto = useAddPlantPhoto()
   const { uploadFile, importPaths, uploading } = usePlantMedia()
 
   const [folder, setFolder] = useState<FolderKey | null>(null)
@@ -368,9 +358,11 @@ export default function PlantsPage(): JSX.Element {
     [selectedId, livePlants],
   )
 
-  // If the selected plant disappears (deleted), drop back to the gallery.
+  // If the selected plant disappears (deleted elsewhere), drop back to the
+  // gallery and keep the desktop nav stack in sync.
   useEffect(() => {
     if (selectedId && !livePlants.some((p) => p.id === selectedId)) {
+      popMoldableNavigation()
       setSelectedId(null)
     }
   }, [selectedId, livePlants])
@@ -386,21 +378,6 @@ export default function PlantsPage(): JSX.Element {
       sendToMoldable({ type: 'moldable:set-chat-instructions', text: '' })
     }
   }, [selectedPlant])
-
-  // --- Chat identify flow ---
-  const sendToChatIdentify = useCallback(
-    (args: { absPath?: string; relPath: string }) => {
-      sendToMoldable({
-        type: 'moldable:set-chat-instructions',
-        text: buildChatInstructions(selectedPlant),
-      })
-      sendToMoldable({
-        type: 'moldable:set-chat-input',
-        text: buildIdentifyPrompt(args.absPath, args.relPath),
-      })
-    },
-    [selectedPlant],
-  )
 
   // --- Mutations wired for the detail pane ---
   const patchTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
@@ -444,6 +421,41 @@ export default function PlantsPage(): JSX.Element {
     [waterPlant],
   )
 
+  // "Still moist" skip — push the next reminder without logging a watering.
+  const handleSnooze = useCallback(
+    (id: string, untilISO: string) => {
+      void updatePlant
+        .mutateAsync({ id, snoozeUntil: untilISO })
+        .catch(() => undefined)
+    },
+    [updatePlant],
+  )
+
+  // Growth journal: upload a photo then append it (it becomes the new hero).
+  const handleAddPhoto = useCallback(
+    async (id: string, file: File) => {
+      setDropError(null)
+      try {
+        const media = await uploadFile(file)
+        await addPhoto.mutateAsync({ id, path: media.path })
+      } catch (error) {
+        setDropError(
+          error instanceof Error ? error.message : "Couldn't add that photo.",
+        )
+      }
+    },
+    [addPhoto, uploadFile],
+  )
+
+  const handleSetHero = useCallback(
+    (id: string, path: string) => {
+      void updatePlant
+        .mutateAsync({ id, heroImageUrl: path })
+        .catch(() => undefined)
+    },
+    [updatePlant],
+  )
+
   const waterAllNow = useCallback(() => {
     for (const p of waterNow) handleWater(p.id)
   }, [waterNow, handleWater])
@@ -473,6 +485,7 @@ export default function PlantsPage(): JSX.Element {
 
   const handleDelete = useCallback(
     (id: string) => {
+      popMoldableNavigation()
       setSelectedId(null)
       void deletePlant.mutateAsync(id).catch(() => undefined)
     },
@@ -495,6 +508,10 @@ export default function PlantsPage(): JSX.Element {
         identification: { source: 'manual' },
       }
       const created = await createPlant.mutateAsync(body)
+      pushMoldableNavigation({
+        id: `plant:${created.id}`,
+        title: created.commonName || 'Plant',
+      })
       setSelectedId(created.id)
     },
     [createPlant],
@@ -531,7 +548,13 @@ export default function PlantsPage(): JSX.Element {
           )
         }
       }
-      if (lastCreated) setSelectedId(lastCreated.id)
+      if (lastCreated) {
+        pushMoldableNavigation({
+          id: `plant:${lastCreated.id}`,
+          title: lastCreated.commonName || 'Plant',
+        })
+        setSelectedId(lastCreated.id)
+      }
       if (errors.length > 0) {
         setDropError(
           mediaList.length === errors.length
@@ -582,6 +605,7 @@ export default function PlantsPage(): JSX.Element {
 
   const onWindowDrop = useCallback(
     (event: DragEvent) => {
+      if (addOpen) return // the Add-plant dialog owns its own drop zone
       event.preventDefault()
       dragDepth.current = 0
       setDragging(false)
@@ -611,7 +635,7 @@ export default function PlantsPage(): JSX.Element {
       else if (raw.trim())
         setDropError('Use PNG, JPEG, WebP, or GIF plant photos.')
     },
-    [handleDroppedImages, handleDroppedPaths],
+    [handleDroppedImages, handleDroppedPaths, addOpen],
   )
 
   function hasDropPayload(event: DragEvent): boolean {
@@ -627,6 +651,13 @@ export default function PlantsPage(): JSX.Element {
     const handleMessage = (event: MessageEvent<MoldableFileDropMessage>) => {
       const data = event.data
       if (!data || typeof data !== 'object') return
+
+      // The Add-plant dialog owns drag & drop while it's open; stay out of its way.
+      if (addOpen) {
+        dragDepth.current = 0
+        setDragging(false)
+        return
+      }
 
       if (data.type === 'moldable:file-drag-over') {
         setDragging(true)
@@ -652,7 +683,15 @@ export default function PlantsPage(): JSX.Element {
 
     window.addEventListener('message', handleMessage)
     return () => window.removeEventListener('message', handleMessage)
-  }, [handleDroppedPaths])
+  }, [handleDroppedPaths, addOpen])
+
+  // While the Add-plant dialog is open it owns drag & drop — clear any
+  // window-level drag overlay so it can't hijack drops meant for the dialog.
+  useEffect(() => {
+    if (!addOpen) return
+    dragDepth.current = 0
+    setDragging(false)
+  }, [addOpen])
 
   // --- Navigation helpers ---
   const openFolder = useCallback((key: FolderKey) => {
@@ -664,6 +703,27 @@ export default function PlantsPage(): JSX.Element {
     setFolder(null)
     setSelectedId(null)
   }, [])
+
+  // Opening a plant pushes a desktop nav entry so the host's back button (and
+  // our hero back chip) both return to the gallery. Close paths pop it to keep
+  // the desktop header in sync.
+  const openPlant = useCallback((p: Plant) => {
+    pushMoldableNavigation({
+      id: `plant:${p.id}`,
+      title: p.commonName || 'Plant',
+    })
+    setSelectedId(p.id)
+  }, [])
+
+  const closePlant = useCallback(() => {
+    popMoldableNavigation()
+    setSelectedId(null)
+  }, [])
+
+  // Desktop header back button — it has already popped its own stack.
+  useMoldableNavigationPop(() => {
+    setSelectedId((cur) => (cur ? null : cur))
+  })
 
   // --- Desktop command-menu handlers (Cmd+K). Safe no-op if not in Moldable. ---
   useMoldableCommands({
@@ -694,17 +754,20 @@ export default function PlantsPage(): JSX.Element {
     <main
       className="bg-background text-foreground flex h-full min-h-0 overflow-hidden"
       onDragEnter={(e) => {
+        if (addOpen) return
         if (!hasDropPayload(e)) return
         e.preventDefault()
         dragDepth.current += 1
         setDragging(true)
       }}
       onDragOver={(e) => {
+        if (addOpen) return
         if (!hasDropPayload(e)) return
         e.preventDefault()
         e.dataTransfer.dropEffect = 'copy'
       }}
       onDragLeave={(e) => {
+        if (addOpen) return
         if (!hasDropPayload(e)) return
         e.preventDefault()
         dragDepth.current = Math.max(0, dragDepth.current - 1)
@@ -714,16 +777,14 @@ export default function PlantsPage(): JSX.Element {
     >
       <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">
         {showDetail ? (
-          <div
-            key={selectedPlant.id}
-            className="animate-plant-fade-in flex min-h-0 flex-1 flex-col"
-          >
+          <div key={selectedPlant.id} className="flex min-h-0 flex-1 flex-col">
             <PlantDetail
               plant={selectedPlant}
               mediaUrl={mediaUrl}
-              onBack={() => setSelectedId(null)}
+              onBack={closePlant}
               onPatch={(patch) => handlePatch(selectedPlant.id, patch)}
               onWater={() => handleWater(selectedPlant.id)}
+              onSnooze={(until) => handleSnooze(selectedPlant.id, until)}
               onGenerateCare={() => handleGenerateCare(selectedPlant.id)}
               regenerating={
                 generateCare.isPending &&
@@ -731,6 +792,9 @@ export default function PlantsPage(): JSX.Element {
               }
               onFavorite={(next) => handleFavorite(selectedPlant.id, next)}
               onDelete={() => handleDelete(selectedPlant.id)}
+              onAddPhoto={(file) => handleAddPhoto(selectedPlant.id, file)}
+              onSetHero={(path) => handleSetHero(selectedPlant.id, path)}
+              addingPhoto={uploading || addPhoto.isPending}
             />
           </div>
         ) : (
@@ -800,7 +864,7 @@ export default function PlantsPage(): JSX.Element {
                   key="search"
                   plants={searchResults}
                   mediaUrl={mediaUrl}
-                  onOpen={(p) => setSelectedId(p.id)}
+                  onOpen={openPlant}
                   onWater={(p) => handleWater(p.id)}
                   onToggleFavorite={handleToggleFavorite}
                   emptyAction={() => setAddOpen(true)}
@@ -814,7 +878,7 @@ export default function PlantsPage(): JSX.Element {
                   key={folderKeyId(folder)}
                   plants={openPlants}
                   mediaUrl={mediaUrl}
-                  onOpen={(p) => setSelectedId(p.id)}
+                  onOpen={openPlant}
                   onWater={(p) => handleWater(p.id)}
                   onToggleFavorite={handleToggleFavorite}
                   emptyAction={() => setAddOpen(true)}
@@ -899,7 +963,11 @@ export default function PlantsPage(): JSX.Element {
         onClose={() => setAddOpen(false)}
         uploadFile={uploadFile}
         createManual={createManual}
-        sendToChatIdentify={sendToChatIdentify}
+        importPaths={importPaths}
+        onIdentifyPhoto={async (media) => {
+          const plant = await createFromMedia(media)
+          openPlant(plant)
+        }}
       />
     </main>
   )

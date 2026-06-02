@@ -1,7 +1,10 @@
 {
   "name": "Code",
-  "version": "0.1.6",
-  "aliases": ["editor", "ide"],
+  "version": "0.1.7",
+  "aliases": [
+    "editor",
+    "ide"
+  ],
   "visibility": "public",
   "description": "A lightweight, VS Code-like IDE for exploring and editing local codebases with integrated AI context and browser preview.",
   "runtime": "vite_hono",
@@ -12,7 +15,7 @@
   "category": "developer-tools",
   "tags": [],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.13",
+    "@moldable-ai/ui": "^0.2.17",
     "@moldable-ai/storage": "^0.1.5"
   },
   "appApi": {
@@ -96,7 +99,9 @@
                   "type": "boolean"
                 }
               },
-              "required": ["path"]
+              "required": [
+                "path"
+              ]
             }
           },
           {
@@ -115,7 +120,9 @@
                   "maximum": 100000
                 }
               },
-              "required": ["path"]
+              "required": [
+                "path"
+              ]
             }
           }
         ]
@@ -124,7 +131,9 @@
   },
   "env": [],
   "routeName": "code-editor",
-  "screenshots": ["public/screenshots/1.png"],
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
   "tagline": "A VS Code-style IDE with live preview, built in",
   "upstream": {
     "repo": "moldable-ai/apps",

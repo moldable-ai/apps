@@ -114,4 +114,47 @@ export async function imageRequest<T>(
   return parsed
 }
 
+export async function generateJson<T>(body: {
+  workspaceId?: string
+  purpose: string
+  system?: string
+  prompt?: string
+  imagePaths?: string[]
+  schema: Record<string, unknown>
+  schemaName?: string
+  schemaDescription?: string
+  maxOutputTokens?: number
+  timeoutMs?: number
+}): Promise<T> {
+  const aiServerUrl = process.env.MOLDABLE_AI_SERVER_URL
+  const appId = process.env.MOLDABLE_APP_ID
+  const appToken = process.env.MOLDABLE_APP_TOKEN
+
+  if (!aiServerUrl || !appId || !appToken) {
+    throw new Error('Moldable AI server environment is not configured')
+  }
+
+  const res = await fetch(`${aiServerUrl}/api/llm/generate-json`, {
+    method: 'POST',
+    signal: AbortSignal.timeout(body.timeoutMs ?? 45_000),
+    headers: {
+      'Content-Type': 'application/json',
+      'x-moldable-app-id': appId,
+      'x-moldable-app-token': appToken,
+    },
+    body: JSON.stringify({ appId, ...body }),
+  })
+
+  const json = (await res.json().catch(() => ({}))) as {
+    json?: T
+    error?: string
+  }
+  if (!res.ok) {
+    throw new Error(
+      json.error || `generate-json failed with status ${res.status}`,
+    )
+  }
+  return json.json as T
+}
+
 export { WORKSPACE_HEADER }

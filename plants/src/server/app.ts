@@ -256,6 +256,7 @@ const plantUpdateParamsSchema = z.object({
   care: careSchema.optional(),
   waterIntervalDays: intervalDaysSchema.optional(),
   lastWateredAt: z.string().datetime().optional(),
+  snoozeUntil: z.string().datetime().optional(),
   identification: identificationSchema.optional(),
   isFavorite: z.boolean().optional(),
   isDeleted: z.boolean().optional(),
@@ -268,6 +269,11 @@ const plantWaterParamsSchema = z.object({
 
 const plantWaterBodySchema = z.object({
   at: z.string().datetime().optional(),
+})
+
+const plantAddPhotoBodySchema = z.object({
+  path: z.string().min(1),
+  caption: z.string().optional(),
 })
 
 const plantFavoriteParamsSchema = z.object({
@@ -340,6 +346,14 @@ function applyCareDefaults(plant: Plant): void {
     plant.care?.water?.intervalDays
   ) {
     plant.waterIntervalDays = plant.care.water.intervalDays
+  }
+}
+
+// Start the growth journal with the plant's first photo, so the timeline isn't
+// empty on day one.
+function seedJournal(plant: Plant, now: string): void {
+  if (plant.heroImageUrl && !(plant.photos && plant.photos.length > 0)) {
+    plant.photos = [{ path: plant.heroImageUrl, addedAt: now }]
   }
 }
 
@@ -694,6 +708,27 @@ app.post('/api/plants/:id/generate-care', async (c) => {
   return c.json(plant)
 })
 
+app.post('/api/plants/:id/photos', async (c) => {
+  try {
+    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const body = plantAddPhotoBodySchema.parse(await c.req.json())
+    const plant = await addPlantPhoto(
+      c.req.param('id'),
+      body.path,
+      workspaceId,
+      body.caption,
+    )
+    if (!plant) return c.json({ error: 'Plant not found' }, 404)
+    return c.json(plant)
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: 'Invalid photo', detail: error.flatten() }, 400)
+    }
+    console.error('Failed to add plant photo:', error)
+    return c.json({ error: 'Failed to add photo' }, 500)
+  }
+})
+
 // ---------------------------------------------------------------------------
 // Shared mutation helpers (used by REST + RPC)
 // ---------------------------------------------------------------------------
@@ -733,6 +768,7 @@ async function createPlant(
     if (care) plant.care = care
   }
   applyCareDefaults(plant)
+  seedJournal(plant, now)
 
   return mutatePlants(workspaceId, (plants) => {
     plants.unshift(plant)
@@ -763,7 +799,9 @@ async function identifyAndCreatePlant(
       source: options?.source ?? 'chat',
       confidence: params.confidence,
       candidates: params.candidates,
-      confirmedAt: now,
+      // Auto-confirm only user-asserted IDs (chat/manual). A machine vision
+      // guess stays unconfirmed so the detail view asks the user to verify.
+      confirmedAt: options?.source === 'vision' ? undefined : now,
     },
     isFavorite: false,
     isDeleted: false,
@@ -774,6 +812,7 @@ async function identifyAndCreatePlant(
   const care = await generateCareProfile(plant, workspaceId)
   if (care) plant.care = care
   applyCareDefaults(plant)
+  seedJournal(plant, now)
 
   return mutatePlants(workspaceId, (plants) => {
     plants.unshift(plant)
@@ -815,6 +854,7 @@ async function updatePlant(
       ...('lastWateredAt' in params
         ? { lastWateredAt: params.lastWateredAt }
         : {}),
+      ...('snoozeUntil' in params ? { snoozeUntil: params.snoozeUntil } : {}),
       ...('identification' in params
         ? { identification: params.identification }
         : {}),
@@ -861,7 +901,40 @@ async function waterPlant(
       ...existing,
       lastWateredAt: wateredAt,
       waterHistory: history,
+      snoozeUntil: undefined, // a real watering resets any "still moist" skip
       updatedAt: new Date().toISOString(),
+    }
+    return plants[index]!
+  })
+}
+
+/**
+ * Append a photo to the plant's growth journal and make it the current hero, so
+ * the portrait always shows the latest look. The path is a workspace-relative
+ * assets path produced by the media upload route.
+ */
+async function addPlantPhoto(
+  id: string,
+  sourcePath: string,
+  workspaceId?: string,
+  caption?: string,
+): Promise<Plant | null> {
+  const path = await normalizeHeroImagePath(sourcePath, workspaceId)
+  if (!path) return null
+  return mutatePlants(workspaceId, (plants) => {
+    const index = plants.findIndex((p) => p.id === id)
+    if (index === -1) return null
+    const existing = plants[index]!
+    const now = new Date().toISOString()
+    const photos = [
+      ...(existing.photos ?? []),
+      { path, addedAt: now, ...(caption?.trim() ? { caption } : {}) },
+    ]
+    plants[index] = {
+      ...existing,
+      photos,
+      heroImageUrl: path, // newest photo becomes the portrait
+      updatedAt: now,
     }
     return plants[index]!
   })

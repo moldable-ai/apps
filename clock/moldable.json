@@ -1,7 +1,12 @@
 {
   "name": "Clock",
-  "version": "0.1.3",
-  "aliases": ["alarms", "timer", "stopwatch", "world clock"],
+  "version": "0.1.4",
+  "aliases": [
+    "alarms",
+    "timer",
+    "stopwatch",
+    "world clock"
+  ],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Alarms, multiple timers, a stopwatch, and world clocks — all local.",
@@ -11,9 +16,16 @@
   "icon": "⏰",
   "iconPath": "public/icon.png",
   "category": "utilities",
-  "tags": ["clock", "alarm", "timer", "stopwatch", "world clock", "time"],
+  "tags": [
+    "clock",
+    "alarm",
+    "timer",
+    "stopwatch",
+    "world clock",
+    "time"
+  ],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.13",
+    "@moldable-ai/ui": "^0.2.17",
     "@moldable-ai/storage": "^0.1.5"
   },
   "appApi": {
@@ -33,7 +45,12 @@
               "properties": {
                 "state": {
                   "type": "string",
-                  "enum": ["running", "paused", "idle", "finished"]
+                  "enum": [
+                    "running",
+                    "paused",
+                    "idle",
+                    "finished"
+                  ]
                 }
               }
             }
@@ -56,7 +73,9 @@
                   "type": "boolean"
                 }
               },
-              "required": ["durationMs"]
+              "required": [
+                "durationMs"
+              ]
             }
           },
           {
@@ -70,7 +89,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -84,7 +105,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -98,7 +121,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -112,7 +137,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           }
         ]
@@ -170,7 +197,9 @@
                   }
                 }
               },
-              "required": ["time"]
+              "required": [
+                "time"
+              ]
             }
           },
           {
@@ -201,7 +230,9 @@
                   }
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -215,7 +246,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           }
         ]

@@ -4,6 +4,15 @@ import { Button } from '@moldable-ai/ui'
 
 type ErrorSource = 'react' | 'window' | 'promise'
 
+interface MoldableClientErrorMessage {
+  type: 'moldable:app-client-error'
+  appName: string
+  source: ErrorSource
+  message: string
+  stack?: string
+  componentStack?: string | null
+}
+
 interface ErrorBoundaryProps {
   appName: string
   children: ReactNode
@@ -46,6 +55,26 @@ function formatError(
   return parts.join('\n\n')
 }
 
+function reportClientErrorToMoldable(
+  appName: string,
+  error: Error,
+  source: ErrorSource,
+  componentStack: string | null,
+): void {
+  if (window.parent === window) return
+
+  const message: MoldableClientErrorMessage = {
+    type: 'moldable:app-client-error',
+    appName,
+    source,
+    message: `${error.name}: ${error.message}`,
+    stack: error.stack,
+    componentStack,
+  }
+
+  window.parent.postMessage(message, '*')
+}
+
 export class ErrorBoundary extends Component<
   ErrorBoundaryProps,
   ErrorBoundaryState
@@ -76,6 +105,12 @@ export class ErrorBoundary extends Component<
   componentDidCatch(error: Error, info: ErrorInfo): void {
     console.error(`${this.props.appName} UI crashed:`, error, info)
     this.setState({ componentStack: info.componentStack ?? null })
+    reportClientErrorToMoldable(
+      this.props.appName,
+      error,
+      'react',
+      info.componentStack ?? null,
+    )
   }
 
   private handleWindowError = (event: ErrorEvent): void => {
@@ -83,12 +118,14 @@ export class ErrorBoundary extends Component<
       event.error instanceof Error ? event.error : new Error(event.message)
     console.error(`${this.props.appName} uncaught frontend error:`, error)
     this.setState({ error, source: 'window', componentStack: null })
+    reportClientErrorToMoldable(this.props.appName, error, 'window', null)
   }
 
   private handleUnhandledRejection = (event: PromiseRejectionEvent): void => {
     const error = toError(event.reason)
     console.error(`${this.props.appName} unhandled promise rejection:`, error)
     this.setState({ error, source: 'promise', componentStack: null })
+    reportClientErrorToMoldable(this.props.appName, error, 'promise', null)
   }
 
   private reload = (): void => {

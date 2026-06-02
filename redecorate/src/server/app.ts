@@ -11,14 +11,24 @@ import {
   PROMPT_TEMPLATES,
   STARTER_FOLDERS,
   STYLE_PRESETS,
+  STYLE_SUBTYPES,
 } from '../shared/catalog'
-import { imageRequest } from './moldable'
+import {
+  UnsupportedSourceImageError,
+  imageMimeTypeForName,
+  isSupportedSourceImageMimeType,
+  isSupportedSourceImageName,
+  normalizeLocalSourceImage,
+  normalizeUploadedSourceImage,
+  supportedSourceImageError,
+} from './image-conversion'
+import { generateJson, imageRequest } from './moldable'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { readFile, rm, writeFile } from 'node:fs/promises'
+import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { basename, extname, isAbsolute } from 'node:path'
 import { z } from 'zod'
 
@@ -864,55 +874,6 @@ function titleFromFileName(name: string): string {
   return baseName || 'Imported image'
 }
 
-function fileExtensionForMime(mimeType: string): string | null {
-  switch (mimeType.toLowerCase()) {
-    case 'image/png':
-      return 'png'
-    case 'image/jpeg':
-    case 'image/jpg':
-      return 'jpg'
-    case 'image/webp':
-      return 'webp'
-    case 'image/gif':
-      return 'gif'
-    case 'image/svg+xml':
-      return 'svg'
-    case 'image/heic':
-      return 'heic'
-    case 'image/heif':
-      return 'heif'
-    default:
-      return null
-  }
-}
-
-function fileExtensionForName(name: string): string | null {
-  const extension = extname(name).replace(/^\./, '').toLowerCase()
-  return /^[a-z0-9]{1,8}$/.test(extension) ? extension : null
-}
-
-function imageMimeTypeForName(name: string): string | null {
-  switch (fileExtensionForName(name)) {
-    case 'png':
-      return 'image/png'
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg'
-    case 'webp':
-      return 'image/webp'
-    case 'gif':
-      return 'image/gif'
-    case 'svg':
-      return 'image/svg+xml'
-    case 'heic':
-      return 'image/heic'
-    case 'heif':
-      return 'image/heif'
-    default:
-      return null
-  }
-}
-
 function isUploadFile(value: FormDataEntryValue): value is File {
   return (
     typeof value === 'object' &&
@@ -1055,22 +1016,22 @@ async function saveUploadedAsset({
   height?: number
 }> {
   const mimeType = file.type || 'application/octet-stream'
-  if (!mimeType.startsWith('image/')) {
-    throw new Error(`${file.name || 'File'} is not an image.`)
-  }
-
   const buffer = Buffer.from(await file.arrayBuffer())
-  const dimensions = detectImageDimensions(buffer, mimeType)
-  const extension =
-    fileExtensionForMime(mimeType) ?? fileExtensionForName(file.name) ?? 'img'
-  const fileName = `${iterationId}.${extension}`
+  const source = await normalizeUploadedSourceImage({
+    workspaceId,
+    originalName: file.name || 'File',
+    mimeType,
+    buffer,
+  })
+  const dimensions = detectImageDimensions(source.buffer, source.mimeType)
+  const fileName = `${iterationId}.${source.extension}`
   const path = assetPath(workspaceId, threadId, fileName)
   await ensureDir(safePath(dataDir(workspaceId), 'assets', threadId))
-  await writeFile(path, buffer)
+  await writeFile(path, source.buffer)
 
   return {
     fileName,
-    mimeType,
+    mimeType: source.mimeType,
     size: dimensions ? `${dimensions.width}x${dimensions.height}` : 'unknown',
     width: dimensions?.width,
     height: dimensions?.height,
@@ -1100,29 +1061,20 @@ async function saveLocalImageAsset({
   }
 
   const originalName = basename(sourcePath)
-  const mimeType = imageMimeTypeForName(originalName)
-  if (!mimeType) {
-    throw new Error(`${originalName || 'File'} is not a supported image.`)
-  }
-
-  const buffer = await readFile(sourcePath)
-  const dimensions = detectImageDimensions(buffer, mimeType)
-  const extension =
-    fileExtensionForMime(mimeType) ??
-    fileExtensionForName(originalName) ??
-    'img'
-  const fileName = `${iterationId}.${extension}`
+  const source = await normalizeLocalSourceImage({ workspaceId, sourcePath })
+  const dimensions = detectImageDimensions(source.buffer, source.mimeType)
+  const fileName = `${iterationId}.${source.extension}`
   const path = assetPath(workspaceId, threadId, fileName)
   await ensureDir(safePath(dataDir(workspaceId), 'assets', threadId))
-  await writeFile(path, buffer)
+  await writeFile(path, source.buffer)
 
   return {
     fileName,
-    mimeType,
+    mimeType: source.mimeType,
     size: dimensions ? `${dimensions.width}x${dimensions.height}` : 'unknown',
     width: dimensions?.width,
     height: dimensions?.height,
-    originalName,
+    originalName: source.originalName || originalName,
   }
 }
 
@@ -1171,6 +1123,66 @@ async function removeIterationAssets(
         force: true,
       }),
     ),
+  )
+}
+
+const IMAGE_TITLE_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    title: {
+      type: 'string',
+      description:
+        'A super-concise 2-5 word Title Case name for the space in the photo (e.g. "Sunny White Kitchen", "Backyard Patio", "Floor Plan"). No quotes, no trailing punctuation.',
+    },
+  },
+  required: ['title'],
+}
+
+// Best-effort concise title for an imported photo. Falls back to null (caller
+// keeps the filename-based title) when the model is unavailable.
+async function titleFromImagePath(
+  workspaceId: string | undefined,
+  imagePath: string,
+): Promise<string | null> {
+  try {
+    const result = await generateJson<{ title: string }>({
+      workspaceId,
+      purpose: 'redecorate.title-from-image',
+      system:
+        'You write ultra-concise, friendly titles for photos of rooms and outdoor spaces in a home-redesign app.',
+      prompt:
+        'Give a 2-5 word Title Case title naming the space shown (the room or area). No quotes or punctuation.',
+      imagePaths: [imagePath],
+      schema: IMAGE_TITLE_SCHEMA,
+      schemaName: 'image_title',
+      maxOutputTokens: 60,
+      timeoutMs: 30_000,
+    })
+    const title = (result?.title ?? '').replace(/["']/g, '').trim()
+    return title ? title.slice(0, 60) : null
+  } catch {
+    return null
+  }
+}
+
+// Replace filename-based titles with AI-generated ones where possible.
+async function titleImportedThreads(
+  workspaceId: string | undefined,
+  threads: ImageThread[],
+): Promise<void> {
+  await Promise.all(
+    threads.map(async (thread) => {
+      const cover =
+        thread.iterations.find((it) => it.id === thread.coverIterationId) ??
+        thread.iterations[0]
+      if (!cover) return
+      const title = await titleFromImagePath(
+        workspaceId,
+        assetPath(workspaceId, thread.id, cover.fileName),
+      )
+      if (title) thread.title = title
+    }),
   )
 }
 
@@ -1261,6 +1273,7 @@ async function importImages(
   if (folderId) {
     for (const thread of importedThreads) thread.folderId = folderId
   }
+  await titleImportedThreads(workspaceId, importedThreads)
   const threads = await loadThreads(workspaceId)
   await saveThreads(workspaceId, [...importedThreads, ...threads])
   return importedThreads
@@ -1352,6 +1365,7 @@ async function importImagePaths(
   if (folderId) {
     for (const thread of importedThreads) thread.folderId = folderId
   }
+  await titleImportedThreads(workspaceId, importedThreads)
   const threads = await loadThreads(workspaceId)
   await saveThreads(workspaceId, [...importedThreads, ...threads])
   return importedThreads
@@ -2839,6 +2853,309 @@ async function assertFolderExists(
   }
 }
 
+// ─── Custom styles (user-created, incl. from an inspiration image) ────────────
+
+type CustomStyle = {
+  id: string
+  name: string
+  blurb: string
+  prompt: string
+  applies: SpaceKind
+  accent: string
+  tags: string[]
+  subtypes?: string[]
+  thumbnailExt?: string
+  createdAt: string
+}
+
+const SUBTYPE_KEYS = STYLE_SUBTYPES.map((s) => s.key)
+const SUBTYPE_KEY_SET = new Set(SUBTYPE_KEYS)
+
+const CUSTOM_STYLES_FILE = 'custom-styles.json'
+const STYLE_PANEL_STATE_FILE = 'style-panel-state.json'
+
+type StylePanelEntry = { room: string | null; query: string }
+
+const stylePanelStateSchema = z.object({
+  contextKey: z.string().trim().min(1).max(200),
+  room: z.string().trim().min(1).nullable().optional(),
+  query: z.string().max(200).optional(),
+})
+
+const createStyleSchema = z.object({
+  id: z.string().trim().min(1).optional(),
+  name: z.string().trim().min(1).max(60),
+  blurb: z.string().trim().max(160).optional(),
+  prompt: z.string().trim().min(1),
+  applies: z.enum(['interior', 'exterior', 'both']).optional(),
+  accent: z
+    .string()
+    .trim()
+    .regex(/^#?[0-9a-fA-F]{6}$/)
+    .optional(),
+  tags: z.array(z.string().trim().min(1)).max(8).optional(),
+  subtypes: z.array(z.string().trim().min(1)).max(12).optional(),
+})
+
+const describeStylePathSchema = z.object({
+  path: z.string().trim().min(1),
+})
+
+function customStylesPath(workspaceId?: string): string {
+  return safePath(dataDir(workspaceId), CUSTOM_STYLES_FILE)
+}
+
+function styleAssetsDir(workspaceId?: string): string {
+  return safePath(dataDir(workspaceId), 'style-assets')
+}
+
+async function loadCustomStyles(workspaceId?: string): Promise<CustomStyle[]> {
+  await ensureDir(dataDir(workspaceId))
+  const raw = await readJson<CustomStyle[]>(customStylesPath(workspaceId), [])
+  return Array.isArray(raw) ? raw : []
+}
+
+async function saveCustomStyles(
+  workspaceId: string | undefined,
+  styles: CustomStyle[],
+): Promise<void> {
+  await ensureDir(dataDir(workspaceId))
+  await writeJson(customStylesPath(workspaceId), styles)
+}
+
+function normalizeAccent(accent?: string): string {
+  if (!accent) return '#8A8D91'
+  return accent.startsWith('#') ? accent : `#${accent}`
+}
+
+function styleThumbnailUrl(
+  style: CustomStyle,
+  workspaceId?: string,
+): string | undefined {
+  if (!style.thumbnailExt) return undefined
+  const base = `/api/styles/assets/${encodeURIComponent(style.id)}`
+  return workspaceId
+    ? `${base}?workspace=${encodeURIComponent(workspaceId)}`
+    : base
+}
+
+const CUSTOM_INTERIOR_SUBTYPES = [
+  'living-room',
+  'kitchen',
+  'bedroom',
+  'bathroom',
+  'home-office',
+  'dining-room',
+  'entryway',
+]
+const CUSTOM_EXTERIOR_SUBTYPES = [
+  'facade',
+  'backyard',
+  'patio-deck',
+  'garden',
+  'front-yard',
+]
+
+function subtypesForApplies(applies: SpaceKind): string[] {
+  if (applies === 'exterior') return CUSTOM_EXTERIOR_SUBTYPES
+  if (applies === 'both') {
+    return [...CUSTOM_INTERIOR_SUBTYPES, ...CUSTOM_EXTERIOR_SUBTYPES]
+  }
+  return CUSTOM_INTERIOR_SUBTYPES
+}
+
+function serializeCustomStyle(style: CustomStyle, workspaceId?: string) {
+  return {
+    id: style.id,
+    name: style.name,
+    blurb: style.blurb,
+    prompt: style.prompt,
+    applies: style.applies,
+    accent: style.accent,
+    tags: style.tags,
+    subtypes:
+      style.subtypes && style.subtypes.length
+        ? style.subtypes
+        : subtypesForApplies(style.applies),
+    category: 'custom',
+    thumbnail: styleThumbnailUrl(style, workspaceId),
+  }
+}
+
+async function catalogFor(workspaceId?: string) {
+  const [built, custom] = await Promise.all([
+    presetsWithThumbnails(),
+    loadCustomStyles(workspaceId),
+  ])
+  const customSerialized = custom
+    .slice()
+    .reverse()
+    .map((style) => serializeCustomStyle(style, workspaceId))
+  const categories =
+    custom.length > 0
+      ? [
+          {
+            key: 'custom',
+            label: 'My styles',
+            emoji: '⭐',
+            description: 'Styles you created',
+          },
+          ...PRESET_CATEGORIES,
+        ]
+      : PRESET_CATEGORIES
+  return {
+    categories,
+    presets: [...customSerialized, ...built],
+    templates: PROMPT_TEMPLATES,
+  }
+}
+
+async function saveStyleAsset(
+  workspaceId: string | undefined,
+  styleId: string,
+  file: File,
+): Promise<string> {
+  const mimeType = file.type || 'application/octet-stream'
+  const source = await normalizeUploadedSourceImage({
+    workspaceId,
+    originalName: file.name || 'Style reference',
+    mimeType,
+    buffer: Buffer.from(await file.arrayBuffer()),
+  })
+  await ensureDir(styleAssetsDir(workspaceId))
+  const path = safePath(
+    styleAssetsDir(workspaceId),
+    `${styleId}.${source.extension}`,
+  )
+  await writeFile(path, source.buffer)
+  return source.extension
+}
+
+async function saveStyleAssetFromPath(
+  workspaceId: string | undefined,
+  styleId: string,
+  sourcePath: string,
+): Promise<string> {
+  const source = await normalizeLocalSourceImage({
+    workspaceId,
+    sourcePath,
+    originalName: basename(sourcePath),
+  })
+  await ensureDir(styleAssetsDir(workspaceId))
+  const path = safePath(
+    styleAssetsDir(workspaceId),
+    `${styleId}.${source.extension}`,
+  )
+  await writeFile(path, source.buffer)
+  return source.extension
+}
+
+async function findStyleAsset(
+  workspaceId: string | undefined,
+  styleId: string,
+): Promise<{ path: string; ext: string } | null> {
+  try {
+    const entries = await readdir(styleAssetsDir(workspaceId))
+    const match = entries.find((name) => name.startsWith(`${styleId}.`))
+    if (!match) return null
+    return {
+      path: safePath(styleAssetsDir(workspaceId), match),
+      ext: match.slice(match.lastIndexOf('.') + 1),
+    }
+  } catch {
+    return null
+  }
+}
+
+export const STYLE_FROM_IMAGE_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    name: { type: 'string', description: 'Short style name, 1-3 words.' },
+    blurb: {
+      type: ['string', 'null'],
+      description: 'One-line description of the look (max ~90 chars).',
+    },
+    prompt: {
+      type: 'string',
+      description:
+        "A vivid image-generation instruction that restyles a photo of a user's room/space into THIS look while preserving the existing room geometry, windows, and architecture. 1-3 sentences describing materials, palette, furniture, lighting, mood.",
+    },
+    applies: {
+      type: ['string', 'null'],
+      enum: ['interior', 'exterior', 'both', null],
+    },
+    accent: {
+      type: ['string', 'null'],
+      description: 'A hex color (e.g. #C9A66B) capturing the look.',
+    },
+    tags: { type: ['array', 'null'], items: { type: 'string' } },
+    subtypes: {
+      type: ['array', 'null'],
+      items: { type: 'string', enum: SUBTYPE_KEYS },
+      description:
+        'Which room/area subtypes this style suits. Pick every applicable one (1-6). Interior aesthetics that work in any room should include the common interior rooms; a specific room makeover picks that room; outdoor looks pick outdoor areas.',
+    },
+  },
+  required: [
+    'name',
+    'blurb',
+    'prompt',
+    'applies',
+    'accent',
+    'tags',
+    'subtypes',
+  ],
+}
+
+async function describeStyleFromImage(
+  workspaceId: string | undefined,
+  imagePath: string,
+): Promise<{
+  name: string
+  blurb: string
+  prompt: string
+  applies: SpaceKind
+  accent: string
+  tags: string[]
+  subtypes: string[]
+}> {
+  const result = await generateJson<{
+    name: string
+    blurb: string | null
+    prompt: string
+    applies: SpaceKind | null
+    accent: string | null
+    tags: string[] | null
+    subtypes: string[] | null
+  }>({
+    workspaceId,
+    purpose: 'redecorate.style-from-image',
+    system:
+      'You are a senior interior and exterior design expert. The user gives you an inspiration image. Define a reusable STYLE PRESET that recreates this look when applied to a DIFFERENT photo of their own space. Capture materials, color palette, furniture/finishes, lighting, and mood. The prompt must instruct an image model to restyle the user’s space into this look while preserving its existing geometry, windows, and architecture.',
+    prompt:
+      'Analyze this inspiration image and produce a style preset: a name, one-line blurb, an image-generation prompt, whether it suits interior/exterior/both, an accent hex color, a few tags, and the room/area subtypes it suits.',
+    imagePaths: [imagePath],
+    schema: STYLE_FROM_IMAGE_SCHEMA,
+    schemaName: 'style_preset',
+    maxOutputTokens: 700,
+    timeoutMs: 60_000,
+  })
+  const applies = result.applies ?? 'both'
+  const subtypes = (
+    Array.isArray(result.subtypes) ? result.subtypes : []
+  ).filter((k) => SUBTYPE_KEY_SET.has(k))
+  return {
+    name: (result.name || 'Custom style').slice(0, 60),
+    blurb: (result.blurb || '').slice(0, 160),
+    prompt: result.prompt,
+    applies,
+    accent: normalizeAccent(result.accent ?? undefined),
+    tags: Array.isArray(result.tags) ? result.tags.slice(0, 6) : [],
+    subtypes: subtypes.length ? subtypes : subtypesForApplies(applies),
+  }
+}
+
 function errorResponse(error: unknown, fallback: string) {
   return {
     error: error instanceof Error ? error.message : fallback,
@@ -2948,10 +3265,18 @@ app.post('/api/designs/import', async (c) => {
     const files = form
       .getAll('files')
       .filter(isUploadFile)
-      .filter((file) => file.size > 0 && file.type.startsWith('image/'))
+      .filter((file) => file.size > 0)
 
     if (files.length === 0) {
       return c.json({ error: 'No image files were provided.' }, 400)
+    }
+    const unsupported = files.find(
+      (file) =>
+        !isSupportedSourceImageMimeType(file.type || '') &&
+        !isSupportedSourceImageName(file.name),
+    )
+    if (unsupported) {
+      throw supportedSourceImageError(unsupported.name)
     }
 
     const modeRaw = form.get('mode')
@@ -2973,6 +3298,9 @@ app.post('/api/designs/import', async (c) => {
     if (error instanceof z.ZodError) {
       return c.json({ error: 'Invalid import options.' }, 400)
     }
+    if (error instanceof UnsupportedSourceImageError) {
+      return c.json({ error: error.message }, 400)
+    }
     return c.json(errorResponse(error, 'Failed to import photos'), 500)
   }
 })
@@ -2981,18 +3309,21 @@ app.post('/api/designs/import-paths', async (c) => {
   try {
     const workspaceId = getWorkspaceId(c.req.raw)
     const payload = importPathsSchema.parse(await c.req.json())
-    const imagePaths = payload.paths.filter((path) =>
-      imageMimeTypeForName(path),
-    )
 
-    if (imagePaths.length === 0) {
+    if (payload.paths.length === 0) {
       return c.json({ error: 'No image files were provided.' }, 400)
+    }
+    const unsupported = payload.paths.find(
+      (imagePath) => !isSupportedSourceImageName(imagePath),
+    )
+    if (unsupported) {
+      throw supportedSourceImageError(basename(unsupported))
     }
 
     const imported = await importImagePaths(
       workspaceId,
-      imagePaths,
-      payload.mode ?? (imagePaths.length > 1 ? 'group' : 'separate'),
+      payload.paths,
+      payload.mode ?? (payload.paths.length > 1 ? 'group' : 'separate'),
       payload.folderId ?? null,
     )
     return c.json(
@@ -3001,6 +3332,9 @@ app.post('/api/designs/import-paths', async (c) => {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return c.json({ error: 'Invalid import options.' }, 400)
+    }
+    if (error instanceof UnsupportedSourceImageError) {
+      return c.json({ error: error.message }, 400)
     }
     return c.json(errorResponse(error, 'Failed to import photos'), 500)
   }
@@ -3093,12 +3427,172 @@ app.post('/api/remove-bg', async (c) => {
   }
 })
 
-app.get('/api/presets', (c) => {
-  return c.json({
-    categories: PRESET_CATEGORIES,
-    presets: STYLE_PRESETS,
-    templates: PROMPT_TEMPLATES,
-  })
+// Auto-detect example renders dropped into public/styles/<presetId>.<ext>.
+// Cached briefly so listing presets stays cheap; new files appear within ~5s.
+const THUMB_EXTENSIONS = ['webp', 'jpg', 'jpeg', 'png', 'avif']
+let thumbnailCache: { at: number; map: Record<string, string> } | null = null
+
+async function styleThumbnails(): Promise<Record<string, string>> {
+  if (thumbnailCache && Date.now() - thumbnailCache.at < 5_000) {
+    return thumbnailCache.map
+  }
+  const map: Record<string, string> = {}
+  try {
+    const dir = safePath(process.cwd(), 'public', 'styles')
+    const entries = await readdir(dir)
+    for (const name of entries) {
+      const dot = name.lastIndexOf('.')
+      if (dot <= 0) continue
+      const id = name.slice(0, dot)
+      const ext = name.slice(dot + 1).toLowerCase()
+      if (THUMB_EXTENSIONS.includes(ext) && !map[id]) {
+        map[id] = `/styles/${encodeURIComponent(name)}`
+      }
+    }
+  } catch {
+    // No styles directory yet — every preset falls back to its accent gradient.
+  }
+  thumbnailCache = { at: Date.now(), map }
+  return map
+}
+
+async function presetsWithThumbnails() {
+  const thumbs = await styleThumbnails()
+  if (Object.keys(thumbs).length === 0) return STYLE_PRESETS
+  return STYLE_PRESETS.map((preset) =>
+    thumbs[preset.id] ? { ...preset, thumbnail: thumbs[preset.id] } : preset,
+  )
+}
+
+app.get('/api/presets', async (c) => {
+  try {
+    const workspaceId = getWorkspaceId(c.req.raw)
+    return c.json(await catalogFor(workspaceId))
+  } catch (error) {
+    return c.json(errorResponse(error, 'Failed to load styles'), 500)
+  }
+})
+
+app.post('/api/styles/describe', async (c) => {
+  const workspaceId = getWorkspaceId(c.req.raw)
+  try {
+    const form = await c.req.raw.formData()
+    const file = form.get('file')
+    if (!file || !isUploadFile(file) || file.size === 0) {
+      return c.json({ error: 'Upload an image to describe.' }, 400)
+    }
+    const id = randomUUID()
+    const ext = await saveStyleAsset(workspaceId, id, file)
+    const asset = safePath(styleAssetsDir(workspaceId), `${id}.${ext}`)
+    const draft = await describeStyleFromImage(workspaceId, asset)
+    return c.json({
+      id,
+      thumbnail: `/api/styles/assets/${id}?workspace=${encodeURIComponent(workspaceId ?? '')}`,
+      draft,
+    })
+  } catch (error) {
+    if (error instanceof UnsupportedSourceImageError) {
+      return c.json({ error: error.message }, 400)
+    }
+    return c.json(
+      errorResponse(error, 'Could not read a style from that image.'),
+      500,
+    )
+  }
+})
+
+app.post('/api/styles/describe-path', async (c) => {
+  const workspaceId = getWorkspaceId(c.req.raw)
+  try {
+    const params = describeStylePathSchema.parse(await c.req.json())
+    const id = randomUUID()
+    const ext = await saveStyleAssetFromPath(workspaceId, id, params.path)
+    const asset = safePath(styleAssetsDir(workspaceId), `${id}.${ext}`)
+    const draft = await describeStyleFromImage(workspaceId, asset)
+    return c.json({
+      id,
+      thumbnail: `/api/styles/assets/${id}?workspace=${encodeURIComponent(workspaceId ?? '')}`,
+      draft,
+    })
+  } catch (error) {
+    if (error instanceof UnsupportedSourceImageError) {
+      return c.json({ error: error.message }, 400)
+    }
+    return c.json(
+      errorResponse(error, 'Could not read a style from that image.'),
+      500,
+    )
+  }
+})
+
+app.post('/api/styles', async (c) => {
+  const workspaceId = getWorkspaceId(c.req.raw)
+  try {
+    const params = createStyleSchema.parse(await c.req.json())
+    const styles = await loadCustomStyles(workspaceId)
+    const id = params.id?.trim() || randomUUID()
+    const assetFromDescribe = params.id
+      ? await findStyleAsset(workspaceId, id)
+      : null
+    const applies = params.applies ?? 'both'
+    const subtypes = (params.subtypes ?? []).filter((k) =>
+      SUBTYPE_KEY_SET.has(k),
+    )
+    const style: CustomStyle = {
+      id,
+      name: params.name,
+      blurb: params.blurb ?? '',
+      prompt: params.prompt,
+      applies,
+      accent: normalizeAccent(params.accent),
+      tags: params.tags ?? [],
+      subtypes: subtypes.length ? subtypes : subtypesForApplies(applies),
+      thumbnailExt: assetFromDescribe?.ext,
+      createdAt: new Date().toISOString(),
+    }
+    const next = [...styles.filter((s) => s.id !== id), style]
+    await saveCustomStyles(workspaceId, next)
+    return c.json(serializeCustomStyle(style, workspaceId))
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: 'Invalid style.' }, 400)
+    }
+    return c.json(errorResponse(error, 'Failed to save style'), 500)
+  }
+})
+
+app.delete('/api/styles/:id', async (c) => {
+  const workspaceId = getWorkspaceId(c.req.raw)
+  try {
+    const id = c.req.param('id')
+    const styles = await loadCustomStyles(workspaceId)
+    const next = styles.filter((s) => s.id !== id)
+    if (next.length === styles.length) {
+      return c.json({ error: 'Style not found' }, 404)
+    }
+    await saveCustomStyles(workspaceId, next)
+    const asset = await findStyleAsset(workspaceId, id)
+    if (asset) await rm(asset.path, { force: true })
+    return c.json({ deleted: true, id })
+  } catch (error) {
+    return c.json(errorResponse(error, 'Failed to delete style'), 500)
+  }
+})
+
+app.get('/api/styles/assets/:id', async (c) => {
+  try {
+    const workspaceId = getWorkspaceId(c.req.raw)
+    const id = c.req.param('id')
+    const asset = await findStyleAsset(workspaceId, id)
+    if (!asset) return c.text('Not found', 404)
+    const bytes = await readFile(asset.path)
+    const mimeType = imageMimeTypeForName(`x.${asset.ext}`) ?? 'image/png'
+    return new Response(bytes, {
+      headers: { 'Cache-Control': 'no-store', 'Content-Type': mimeType },
+    })
+  } catch {
+    return c.text('Not found', 404)
+  }
 })
 
 app.get('/api/folders', async (c) => {
@@ -3252,6 +3746,49 @@ app.patch('/api/designs/:id', async (c) => {
     return c.json(serializeThread(thread, workspaceId))
   } catch (error) {
     return c.json(errorResponse(error, 'Failed to update design'), 500)
+  }
+})
+
+app.get('/api/style-panel-state', async (c) => {
+  try {
+    const workspaceId = getWorkspaceId(c.req.raw)
+    await ensureDir(dataDir(workspaceId))
+    const map = await readJson<Record<string, StylePanelEntry>>(
+      safePath(dataDir(workspaceId), STYLE_PANEL_STATE_FILE),
+      {},
+    )
+    return c.json(map)
+  } catch (error) {
+    return c.json(errorResponse(error, 'Failed to load panel state'), 500)
+  }
+})
+
+app.post('/api/style-panel-state', async (c) => {
+  try {
+    const workspaceId = getWorkspaceId(c.req.raw)
+    const params = stylePanelStateSchema.parse(await c.req.json())
+    await ensureDir(dataDir(workspaceId))
+    const path = safePath(dataDir(workspaceId), STYLE_PANEL_STATE_FILE)
+    const map = await readJson<Record<string, StylePanelEntry>>(path, {})
+    const room = params.room ?? null
+    const query = (params.query ?? '').trim()
+    if (!room && !query) {
+      delete map[params.contextKey]
+    } else {
+      map[params.contextKey] = { room, query }
+    }
+    // Keep the file bounded — drop the oldest entries beyond a cap.
+    const keys = Object.keys(map)
+    if (keys.length > 200) {
+      for (const key of keys.slice(0, keys.length - 200)) delete map[key]
+    }
+    await writeJson(path, map)
+    return c.json({ ok: true })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: 'Invalid panel state.' }, 400)
+    }
+    return c.json(errorResponse(error, 'Failed to save panel state'), 500)
   }
 })
 
@@ -3761,14 +4298,58 @@ app.post('/api/moldable/rpc', async (c) => {
     }
 
     if (body.method === 'redecorate.presets.list') {
+      return c.json({ ok: true, result: await catalogFor(workspaceId) })
+    }
+
+    if (body.method === 'redecorate.styles.list') {
+      const styles = await loadCustomStyles(workspaceId)
       return c.json({
         ok: true,
-        result: {
-          categories: PRESET_CATEGORIES,
-          presets: STYLE_PRESETS,
-          templates: PROMPT_TEMPLATES,
-        },
+        result: styles.map((style) => serializeCustomStyle(style, workspaceId)),
       })
+    }
+
+    if (body.method === 'redecorate.styles.create') {
+      const params = createStyleSchema.parse(body.params)
+      const styles = await loadCustomStyles(workspaceId)
+      const id = params.id?.trim() || randomUUID()
+      const asset = params.id ? await findStyleAsset(workspaceId, id) : null
+      const createApplies = params.applies ?? 'both'
+      const createSubtypes = (params.subtypes ?? []).filter((k) =>
+        SUBTYPE_KEY_SET.has(k),
+      )
+      const style: CustomStyle = {
+        id,
+        name: params.name,
+        blurb: params.blurb ?? '',
+        prompt: params.prompt,
+        applies: createApplies,
+        accent: normalizeAccent(params.accent),
+        tags: params.tags ?? [],
+        subtypes: createSubtypes.length
+          ? createSubtypes
+          : subtypesForApplies(createApplies),
+        thumbnailExt: asset?.ext,
+        createdAt: new Date().toISOString(),
+      }
+      await saveCustomStyles(workspaceId, [
+        ...styles.filter((s) => s.id !== id),
+        style,
+      ])
+      return c.json({
+        ok: true,
+        result: serializeCustomStyle(style, workspaceId),
+      })
+    }
+
+    if (body.method === 'redecorate.styles.delete') {
+      const params = getParamsSchema.parse(body.params)
+      const styles = await loadCustomStyles(workspaceId)
+      const next = styles.filter((s) => s.id !== params.id)
+      await saveCustomStyles(workspaceId, next)
+      const asset = await findStyleAsset(workspaceId, params.id)
+      if (asset) await rm(asset.path, { force: true })
+      return c.json({ ok: true, result: { deleted: true, id: params.id } })
     }
 
     console.warn(

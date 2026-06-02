@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
   Check,
-  ChevronDown,
   Copy,
   Download,
   Heart,
@@ -10,16 +9,16 @@ import {
   Layers,
   Loader2,
   MoreVertical,
+  Paintbrush,
   PanelTop,
   Plus,
   RotateCcw,
-  Sparkles,
   Trash2,
   Upload,
   Wand2,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, DragEvent, ReactNode } from 'react'
+import type { DragEvent, ReactNode } from 'react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -130,6 +129,40 @@ const ASPECT_PREVIEW_CLASS: Record<AspectRatioId, string> = {
   widescreen: 'aspect-[16/9]',
 }
 
+const SUPPORTED_SOURCE_IMAGE_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'image/avif',
+  'image/heic',
+  'image/heif',
+  'image/tiff',
+  'image/gif',
+  'image/bmp',
+  'image/jp2',
+  'image/jpx',
+])
+const SUPPORTED_SOURCE_IMAGE_EXTENSIONS = new Set([
+  'png',
+  'jpg',
+  'jpeg',
+  'webp',
+  'avif',
+  'heic',
+  'heif',
+  'tif',
+  'tiff',
+  'gif',
+  'bmp',
+  'jp2',
+  'j2k',
+  'jpf',
+  'jpx',
+])
+const SUPPORTED_SOURCE_IMAGE_LABEL =
+  'PNG, JPEG, WEBP, AVIF, HEIC, HEIF, TIFF, GIF, BMP, or JPEG 2000'
+
 function aspectLabel(id: AspectRatioId) {
   return ASPECT_RATIOS.find((ratio) => ratio.id === id) ?? ASPECT_RATIOS[0]
 }
@@ -207,16 +240,67 @@ async function downloadIteration(iteration: Iteration) {
   })
 }
 
-function imageFilesFromList(fileList: FileList): File[] {
-  return Array.from(fileList).filter((file) => file.type.startsWith('image/'))
+function extensionForName(name: string): string {
+  const match = /\.([a-z0-9]+)$/i.exec(name)
+  return match?.[1]?.toLowerCase() ?? ''
 }
 
-function imagePathsFromList(paths: string[]): string[] {
-  return paths.filter((path) => /\.(png|jpe?g|webp|gif|heic|heif)$/i.test(path))
+function sourceImageImportError(rejectedNames: string[]): string {
+  const shownNames = rejectedNames.slice(0, 3).join(', ')
+  const suffix =
+    rejectedNames.length > 3 ? `, and ${rejectedNames.length - 3} more` : ''
+  const subject = shownNames ? `${shownNames}${suffix}` : 'That file'
+  return `${subject} cannot be imported. Redecorate supports ${SUPPORTED_SOURCE_IMAGE_LABEL} images for remix sources.`
+}
+
+function imageFilesFromList(fileList: FileList): {
+  files: File[]
+  rejectedNames: string[]
+} {
+  const files: File[] = []
+  const rejectedNames: string[] = []
+  for (const file of Array.from(fileList)) {
+    const extension = extensionForName(file.name)
+    if (
+      SUPPORTED_SOURCE_IMAGE_TYPES.has(file.type.toLowerCase()) ||
+      SUPPORTED_SOURCE_IMAGE_EXTENSIONS.has(extension)
+    ) {
+      files.push(file)
+    } else {
+      rejectedNames.push(file.name || 'File')
+    }
+  }
+  return { files, rejectedNames }
+}
+
+function imagePathsFromList(paths: string[]): {
+  paths: string[]
+  rejectedNames: string[]
+} {
+  const supportedPaths: string[] = []
+  const rejectedNames: string[] = []
+  for (const imagePath of paths) {
+    if (SUPPORTED_SOURCE_IMAGE_EXTENSIONS.has(extensionForName(imagePath))) {
+      supportedPaths.push(imagePath)
+    } else {
+      rejectedNames.push(imagePath.split(/[\\/]/).pop() || imagePath)
+    }
+  }
+  return { paths: supportedPaths, rejectedNames }
 }
 
 function hasFileDrag(event: DragEvent): boolean {
   return Array.from(event.dataTransfer.types).includes('Files')
+}
+
+function isTextEntryTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  return Boolean(
+    target.isContentEditable ||
+      target.closest(
+        'input, textarea, select, [contenteditable="true"], [role="textbox"]',
+      ),
+  )
 }
 
 function baseIterationFor(design: Design): Iteration | null {
@@ -245,20 +329,28 @@ function Shimmer({
 }) {
   return (
     <div
+      role="img"
       className={cn(
-        'image-generation-loading relative overflow-hidden rounded-xl',
+        'rd-render relative overflow-hidden rounded-2xl',
         ASPECT_PREVIEW_CLASS[aspectRatio],
         className,
       )}
       aria-label={label ?? 'Rendering'}
     >
+      <div className="rd-render-sweep" />
       {label ? (
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 p-4">
-          <p className="text-muted-foreground text-sm font-medium">{label}</p>
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
+          <span className="bg-background/55 text-foreground/90 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium shadow-sm backdrop-blur-md">
+            <Loader2 className="text-primary size-4 animate-spin" />
+            {label}
+            <span className="rd-render-dots ml-0.5 inline-flex items-center gap-1">
+              <i />
+              <i />
+              <i />
+            </span>
+          </span>
         </div>
       ) : null}
-      <div className="image-generation-dots absolute inset-0" />
-      <div className="image-generation-sheen absolute inset-0" />
     </div>
   )
 }
@@ -378,44 +470,101 @@ function MoveMenu({
 
 // ─── Folder & design cards ───────────────────────────────────────────────────
 
-function CoverMosaic({ covers, tone }: { covers: string[]; tone: string }) {
+// Rich, deterministic gradients so even photo-less folders look like a
+// considered swatch — keyed by name so a folder always gets the same backdrop.
+const FOLDER_GRADIENTS: [string, string][] = [
+  ['oklch(0.63 0.09 48)', 'oklch(0.40 0.07 36)'], // terracotta / clay
+  ['oklch(0.60 0.06 150)', 'oklch(0.39 0.05 158)'], // sage
+  ['oklch(0.58 0.07 245)', 'oklch(0.37 0.06 255)'], // slate blue
+  ['oklch(0.65 0.08 85)', 'oklch(0.44 0.06 72)'], // ochre
+  ['oklch(0.58 0.06 330)', 'oklch(0.38 0.05 330)'], // mauve
+  ['oklch(0.60 0.05 200)', 'oklch(0.39 0.05 212)'], // teal
+  ['oklch(0.61 0.08 25)', 'oklch(0.40 0.06 18)'], // rust
+  ['oklch(0.57 0.05 115)', 'oklch(0.38 0.05 125)'], // olive
+]
+
+function gradientCss(seed: string): string {
+  let hash = 0
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
+  }
+  const [from, to] = FOLDER_GRADIENTS[hash % FOLDER_GRADIENTS.length]
+  return `linear-gradient(150deg, ${from} 0%, ${to} 100%)`
+}
+
+/** A full-bleed, image-forward tile — a photo mosaic, or a tonal gradient with
+ *  a big glyph when there are no renders yet. Ken-Burns zoom on hover. */
+function CoverTile({
+  covers,
+  emoji,
+  seed,
+}: {
+  covers: string[]
+  emoji: string
+  seed: string
+}) {
+  const cells = covers.slice(0, 4)
+  const single = cells.length <= 1
   if (covers.length === 0) {
     return (
       <div
-        className="flex size-full items-center justify-center"
-        style={{ background: `linear-gradient(135deg, ${tone}22, ${tone}05)` }}
+        className="absolute inset-0 flex items-center justify-center transition-transform duration-[600ms] ease-out group-hover:scale-[1.05]"
+        style={{ background: gradientCss(seed) }}
       >
-        <ImagePlus className="text-foreground/25 size-7" />
+        <span className="select-none text-5xl opacity-95 drop-shadow-[0_2px_8px_rgba(0,0,0,0.35)]">
+          {emoji}
+        </span>
       </div>
     )
   }
-  if (covers.length === 1) {
-    return (
-      <img
-        src={covers[0]}
-        alt=""
-        draggable="false"
-        className="size-full object-cover"
-      />
-    )
-  }
-  const shown = covers.slice(0, covers.length >= 4 ? 4 : 2)
   return (
-    <div
-      className={cn(
-        'grid size-full gap-0.5',
-        shown.length >= 4 ? 'grid-cols-2 grid-rows-2' : 'grid-cols-2',
-      )}
-    >
-      {shown.map((cover, index) => (
-        <img
-          key={index}
-          src={cover}
-          alt=""
-          draggable="false"
-          className="size-full object-cover"
-        />
-      ))}
+    <div className="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-0.5 transition-transform duration-[600ms] ease-out group-hover:scale-[1.05]">
+      {Array.from({ length: single ? 1 : 4 }).map((_, i) => {
+        const url = cells[i]
+        const span = single ? 'col-span-2 row-span-2' : ''
+        return url ? (
+          <img
+            key={i}
+            src={url}
+            alt=""
+            loading="lazy"
+            draggable="false"
+            className={cn('size-full object-cover', span)}
+          />
+        ) : (
+          <div
+            key={i}
+            className={cn('size-full', span)}
+            style={{ background: gradientCss(`${seed}-${i}`) }}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+function CoverScrim({
+  emoji,
+  title,
+  subtitle,
+}: {
+  emoji?: string
+  title: string
+  subtitle: string
+}) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent px-3.5 pb-3.5 pt-16">
+      <div className="flex items-center gap-1.5">
+        {emoji ? (
+          <span className="text-base leading-none drop-shadow">{emoji}</span>
+        ) : null}
+        <h3 className="rd-serif truncate text-[17px] font-semibold leading-tight text-white drop-shadow-sm">
+          {title}
+        </h3>
+      </div>
+      <p className="rd-mono mt-0.5 text-[11px] font-medium text-white/85">
+        {subtitle}
+      </p>
     </div>
   )
 }
@@ -429,30 +578,25 @@ function FolderCard({
   index: number
   onOpen: () => void
 }) {
+  const hasCovers = folder.covers.length > 0
   return (
     <button
       type="button"
       onClick={onOpen}
+      aria-label={`Open ${folder.name}`}
       style={{ animationDelay: `${Math.min(index, 16) * 32}ms` }}
-      className="animate-rd-card-in focus-visible:ring-ring group relative block w-full cursor-pointer overflow-hidden rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2"
+      className="animate-rd-card-in bg-muted focus-visible:ring-primary/60 group relative block aspect-[4/5] w-full cursor-pointer overflow-hidden rounded-2xl text-left shadow-sm ring-1 ring-black/5 transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/25 focus-visible:outline-none focus-visible:ring-2"
     >
-      <div className="bg-muted ring-border/35 relative aspect-[4/3] w-full overflow-hidden rounded-2xl shadow-sm ring-1 transition-all duration-300 ease-out group-hover:-translate-y-1 group-hover:shadow-xl">
-        <CoverMosaic covers={folder.covers} tone={folder.tone} />
-        <div className="from-background/90 via-background/30 pointer-events-none absolute inset-x-0 bottom-0 flex items-end bg-gradient-to-t to-transparent p-3.5 pt-12">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="text-base leading-none">{folder.emoji}</span>
-              <h3 className="rd-serif text-foreground truncate text-lg font-semibold leading-tight drop-shadow-sm">
-                {folder.name}
-              </h3>
-            </div>
-            <p className="text-foreground/70 rd-mono mt-0.5 text-[11px]">
-              {folder.designCount}{' '}
-              {folder.designCount === 1 ? 'design' : 'designs'}
-            </p>
-          </div>
-        </div>
-      </div>
+      <CoverTile
+        covers={folder.covers}
+        emoji={folder.emoji}
+        seed={folder.name}
+      />
+      <CoverScrim
+        emoji={hasCovers ? folder.emoji : undefined}
+        title={folder.name}
+        subtitle={`${folder.designCount} ${folder.designCount === 1 ? 'design' : 'designs'}`}
+      />
     </button>
   )
 }
@@ -496,7 +640,7 @@ function DesignCard({
         style={{ animationDelay: `${Math.min(index, 16) * 28}ms` }}
         className="focus-visible:ring-ring relative block w-full cursor-pointer overflow-hidden rounded-2xl text-left focus-visible:outline-none focus-visible:ring-2 disabled:cursor-default"
       >
-        <div className="bg-muted ring-border/35 relative aspect-square w-full overflow-hidden rounded-2xl shadow-sm ring-1 transition-all duration-300 ease-out group-hover:-translate-y-1 group-hover:shadow-xl">
+        <div className="bg-muted relative aspect-square w-full overflow-hidden rounded-2xl shadow-sm ring-1 ring-black/5 transition-[transform,box-shadow] duration-300 ease-out group-hover:-translate-y-1 group-hover:shadow-2xl group-hover:shadow-black/25">
           {generating && !cover ? (
             <Shimmer
               aspectRatio={pendingAspect}
@@ -508,7 +652,7 @@ function DesignCard({
               src={cover.imageUrl}
               alt={design.title}
               draggable="false"
-              className="size-full object-cover"
+              className="size-full object-cover transition-transform duration-[600ms] ease-out group-hover:scale-[1.05]"
             />
           ) : failed ? (
             <div className="bg-muted/50 flex size-full flex-col justify-between p-3">
@@ -542,8 +686,8 @@ function DesignCard({
           ) : null}
 
           {design.title.trim() && cover ? (
-            <span className="from-background/85 via-background/25 pointer-events-none absolute inset-x-0 bottom-0 flex min-h-14 items-end bg-gradient-to-t to-transparent p-3">
-              <span className="text-foreground line-clamp-2 text-sm font-semibold leading-5 drop-shadow-sm">
+            <span className="pointer-events-none absolute inset-x-0 bottom-0 flex min-h-16 items-end bg-gradient-to-t from-black/80 via-black/20 to-transparent p-3 pt-12">
+              <span className="line-clamp-2 text-sm font-semibold leading-5 text-white drop-shadow-sm">
                 {design.title}
               </span>
             </span>
@@ -708,13 +852,12 @@ function AspectMenu({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="Aspect ratio"
+          aria-label={`Aspect ratio · ${current.ratio}`}
           disabled={busy}
-          className="border-border bg-background hover:bg-muted flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-2 text-xs font-medium shadow-sm transition-colors disabled:opacity-60"
+          className="text-muted-foreground hover:bg-muted hover:text-foreground inline-flex h-8 cursor-pointer items-center gap-1 rounded-full px-2.5 text-xs font-medium transition-colors disabled:cursor-default disabled:opacity-40"
         >
-          <PanelTop className="text-muted-foreground size-3.5" />
-          <span className="rd-mono">{current.ratio}</span>
-          <ChevronDown className="text-muted-foreground size-3.5" />
+          <PanelTop className="size-4" />
+          <span className="rd-mono text-[11px]">{current.ratio}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -750,42 +893,91 @@ function AspectMenu({
   )
 }
 
-// ─── Header tooltip button ───────────────────────────────────────────────────
+// ─── Unified toolbar icon button ─────────────────────────────────────────────
 
-function IconAction({
+function ToolBtn({
   label,
   onClick,
   disabled,
   destructive,
+  active,
   children,
 }: {
   label: string
   onClick: () => void
   disabled?: boolean
   destructive?: boolean
+  active?: boolean
   children: ReactNode
 }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
+        <button
           type="button"
-          variant="ghost"
-          size="icon-xs"
           aria-label={label}
           disabled={disabled}
           onClick={onClick}
           className={cn(
-            'cursor-pointer',
-            destructive &&
-              'text-destructive hover:bg-destructive/10 hover:text-destructive',
+            'inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
+            destructive
+              ? 'text-muted-foreground hover:bg-destructive/10 hover:text-destructive'
+              : active
+                ? 'text-foreground hover:bg-muted'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
           )}
         >
           {children}
-        </Button>
+        </button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>
     </Tooltip>
+  )
+}
+
+// ─── Shared top nav bar (same position across gallery / collection / viewer) ──
+
+function ViewHeader({
+  onBack,
+  backLabel = 'Back',
+  emoji,
+  title,
+  subtitle,
+  actions,
+}: {
+  onBack?: () => void
+  backLabel?: string
+  emoji?: string
+  title?: string
+  subtitle?: string
+  actions?: ReactNode
+}) {
+  return (
+    <header className="relative z-10 flex h-14 shrink-0 items-center justify-between gap-3 px-3 sm:px-4">
+      <div className="flex min-w-0 items-center gap-1.5">
+        {onBack ? (
+          <ToolBtn label={backLabel} onClick={onBack}>
+            <ArrowLeft className="size-4" />
+          </ToolBtn>
+        ) : null}
+        {emoji ? (
+          <span className="ml-0.5 text-lg leading-none">{emoji}</span>
+        ) : null}
+        {title ? (
+          <h1 className="rd-serif text-foreground truncate text-lg font-semibold">
+            {title}
+          </h1>
+        ) : null}
+        {subtitle ? (
+          <span className="text-muted-foreground rd-mono ml-1.5 shrink-0 text-[12px]">
+            {subtitle}
+          </span>
+        ) : null}
+      </div>
+      {actions ? (
+        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+      ) : null}
+    </header>
   )
 }
 
@@ -825,6 +1017,8 @@ export function App() {
   )
   const [showOriginal, setShowOriginal] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [designTitleDraft, setDesignTitleDraft] = useState('')
+  const skipNextTitleSaveRef = useRef(false)
   const selectedCoverRef = useRef<{
     designId: string
     coverIterationId: string | null
@@ -848,10 +1042,22 @@ export function App() {
     refetchInterval: 4_000,
   })
   const presetsQuery = useQuery({
-    queryKey: ['presets'],
+    queryKey: ['presets', workspaceId],
     queryFn: async () => {
       const response = await fetchWithWorkspace('/api/presets')
       return parseJson<Catalog>(response, 'Failed to load styles')
+    },
+    staleTime: 30_000,
+  })
+  // Remembered style-library filters/search per image set, persisted to the workspace.
+  const panelStateQuery = useQuery({
+    queryKey: ['style-panel-state', workspaceId],
+    queryFn: async () => {
+      const response = await fetchWithWorkspace('/api/style-panel-state')
+      return parseJson<Record<string, { room: string | null; query: string }>>(
+        response,
+        'Failed to load panel state',
+      )
     },
     staleTime: Infinity,
   })
@@ -875,6 +1081,10 @@ export function App() {
         : null,
     [collectionId, folders],
   )
+
+  useEffect(() => {
+    setDesignTitleDraft(selectedDesign?.title ?? '')
+  }, [selectedDesign?.id, selectedDesign?.title])
 
   const collectionDesigns = useMemo(() => {
     if (collectionId === ALL_DESIGNS) return activeDesigns
@@ -1099,6 +1309,35 @@ export function App() {
       ),
   })
 
+  const saveDesignTitle = useCallback(
+    (design: Design, nextTitle: string) => {
+      if (skipNextTitleSaveRef.current) {
+        skipNextTitleSaveRef.current = false
+        return
+      }
+
+      const trimmed = nextTitle.trim()
+      const currentTitle = design.title.trim()
+      if (!trimmed) {
+        setDesignTitleDraft(design.title ?? '')
+        return
+      }
+      if (trimmed === currentTitle) {
+        setDesignTitleDraft(trimmed)
+        return
+      }
+
+      setDesignTitleDraft(trimmed)
+      patchDesign.mutate(
+        { id: design.id, patch: { title: trimmed } },
+        {
+          onError: () => setDesignTitleDraft(design.title ?? ''),
+        },
+      )
+    },
+    [patchDesign],
+  )
+
   const generateMutation = useMutation({
     mutationFn: (params: {
       prompt: string
@@ -1209,9 +1448,34 @@ export function App() {
     },
     [importMutation, targetFolderId],
   )
+  const importFileList = useCallback(
+    (fileList: FileList) => {
+      const { files, rejectedNames } = imageFilesFromList(fileList)
+      if (rejectedNames.length > 0) {
+        setError(sourceImageImportError(rejectedNames))
+      }
+      importFiles(files)
+    },
+    [importFiles],
+  )
+  const importPathList = useCallback(
+    (rawPaths: string[]) => {
+      const { paths, rejectedNames } = imagePathsFromList(rawPaths)
+      if (rejectedNames.length > 0) {
+        setError(sourceImageImportError(rejectedNames))
+      }
+      importPaths(paths)
+    },
+    [importPaths],
+  )
 
   useEffect(() => {
     const handler = (event: MessageEvent<ImportMessage>) => {
+      if (styleOpen) {
+        dragDepth.current = 0
+        setIsDragging(false)
+        return
+      }
       const data = event.data
       if (!data || typeof data !== 'object') return
       if (data.type === 'moldable:file-drag-over') {
@@ -1222,44 +1486,69 @@ export function App() {
       } else if (data.type === 'moldable:file-drop') {
         dragDepth.current = 0
         setIsDragging(false)
-        importPaths(imagePathsFromList(data.paths ?? []))
+        importPathList(data.paths ?? [])
       }
     }
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
-  }, [importPaths])
+  }, [importPathList, styleOpen])
 
-  const onDragEnter = useCallback((event: DragEvent<HTMLElement>) => {
-    if (!hasFileDrag(event)) return
-    event.preventDefault()
-    dragDepth.current += 1
-    setIsDragging(true)
-  }, [])
-  const onDragOver = useCallback((event: DragEvent<HTMLElement>) => {
-    if (!hasFileDrag(event)) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'copy'
-  }, [])
-  const onDragLeave = useCallback((event: DragEvent<HTMLElement>) => {
-    if (!hasFileDrag(event)) return
-    event.preventDefault()
-    dragDepth.current = Math.max(0, dragDepth.current - 1)
-    if (dragDepth.current === 0) setIsDragging(false)
-  }, [])
+  useEffect(() => {
+    if (!styleOpen) return
+    dragDepth.current = 0
+    setIsDragging(false)
+  }, [styleOpen])
+
+  const onDragEnter = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      if (styleOpen) return
+      if (event.defaultPrevented) return
+      if (!hasFileDrag(event)) return
+      event.preventDefault()
+      dragDepth.current += 1
+      setIsDragging(true)
+    },
+    [styleOpen],
+  )
+  const onDragOver = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      if (styleOpen) return
+      if (event.defaultPrevented) return
+      if (!hasFileDrag(event)) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'copy'
+    },
+    [styleOpen],
+  )
+  const onDragLeave = useCallback(
+    (event: DragEvent<HTMLElement>) => {
+      if (styleOpen) return
+      if (event.defaultPrevented) return
+      if (!hasFileDrag(event)) return
+      event.preventDefault()
+      dragDepth.current = Math.max(0, dragDepth.current - 1)
+      if (dragDepth.current === 0) setIsDragging(false)
+    },
+    [styleOpen],
+  )
   const onDrop = useCallback(
     (event: DragEvent<HTMLElement>) => {
+      if (styleOpen) return
+      if (event.defaultPrevented) return
       if (!hasFileDrag(event)) return
       event.preventDefault()
       dragDepth.current = 0
       setIsDragging(false)
-      importFiles(imageFilesFromList(event.dataTransfer.files))
+      importFileList(event.dataTransfer.files)
     },
-    [importFiles],
+    [importFileList, styleOpen],
   )
 
   // ── Style / remix application ──
   const applyPreset = useCallback(
-    (preset: StylePreset) => {
+    (preset: StylePreset, promptOverride?: string) => {
+      const stylePrompt = (promptOverride ?? preset.prompt).trim()
+      if (!stylePrompt) return
       setStyleOpen(false)
       if (selectedDesign) {
         const base = baseIterationFor(selectedDesign)
@@ -1267,7 +1556,7 @@ export function App() {
           method: 'redecorate.designs.remix',
           id: selectedDesign.id,
           baseIterationId: base?.id,
-          prompt: preset.prompt,
+          prompt: stylePrompt,
         })
       } else {
         const space =
@@ -1277,7 +1566,7 @@ export function App() {
               ? 'exterior'
               : 'space'
         generateMutation.mutate({
-          prompt: `A photorealistic ${space} render. ${preset.prompt}`,
+          prompt: `A photorealistic ${space} render. ${stylePrompt}`,
           folderId: targetFolderId,
           presetId: preset.id,
         })
@@ -1290,6 +1579,121 @@ export function App() {
       selectedDesign,
       targetFolderId,
     ],
+  )
+
+  // Custom styles — create manually, from an inspiration image, or delete.
+  const describeStyleImage = useCallback(
+    async (file: File) => {
+      const form = new FormData()
+      form.set('file', file, file.name)
+      const response = await fetchWithWorkspace('/api/styles/describe', {
+        method: 'POST',
+        body: form,
+      })
+      return parseJson<{
+        id: string
+        thumbnail: string
+        draft: {
+          name: string
+          blurb: string
+          prompt: string
+          applies: SpaceKind
+          accent: string
+          tags: string[]
+          subtypes: string[]
+        }
+      }>(response, 'Could not read a style from that image.')
+    },
+    [fetchWithWorkspace],
+  )
+
+  const describeStyleImagePath = useCallback(
+    async (path: string) => {
+      const response = await fetchWithWorkspace('/api/styles/describe-path', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+      return parseJson<{
+        id: string
+        thumbnail: string
+        draft: {
+          name: string
+          blurb: string
+          prompt: string
+          applies: SpaceKind
+          accent: string
+          tags: string[]
+          subtypes: string[]
+        }
+      }>(response, 'Could not read a style from that image.')
+    },
+    [fetchWithWorkspace],
+  )
+
+  const createStyle = useCallback(
+    async (input: {
+      id?: string
+      name: string
+      blurb?: string
+      prompt: string
+      applies?: SpaceKind
+      accent?: string
+      tags?: string[]
+      subtypes?: string[]
+    }) => {
+      const response = await fetchWithWorkspace('/api/styles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+      await parseJson(response, 'Failed to save style')
+      void queryClient.invalidateQueries({ queryKey: ['presets', workspaceId] })
+    },
+    [fetchWithWorkspace, queryClient, workspaceId],
+  )
+
+  const deleteStyle = useCallback(
+    async (id: string) => {
+      const response = await fetchWithWorkspace(`/api/styles/${id}`, {
+        method: 'DELETE',
+      })
+      await parseJson(response, 'Failed to delete style')
+      void queryClient.invalidateQueries({ queryKey: ['presets', workspaceId] })
+    },
+    [fetchWithWorkspace, queryClient, workspaceId],
+  )
+
+  // Persist style-panel filters/search: optimistic cache update + debounced write.
+  const panelSavePending = useRef<
+    Record<string, { room: string | null; query: string }>
+  >({})
+  const panelSaveTimer = useRef<number | null>(null)
+  const savePanelState = useCallback(
+    (key: string, state: { room: string | null; query: string }) => {
+      queryClient.setQueryData<
+        Record<string, { room: string | null; query: string }>
+      >(['style-panel-state', workspaceId], (prev) => {
+        const next = { ...(prev ?? {}) }
+        if (!state.room && !state.query.trim()) delete next[key]
+        else next[key] = state
+        return next
+      })
+      panelSavePending.current[key] = state
+      if (panelSaveTimer.current) window.clearTimeout(panelSaveTimer.current)
+      panelSaveTimer.current = window.setTimeout(() => {
+        const pending = panelSavePending.current
+        panelSavePending.current = {}
+        for (const [contextKey, value] of Object.entries(pending)) {
+          void fetchWithWorkspace('/api/style-panel-state', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contextKey, ...value }),
+          }).catch(() => {})
+        }
+      }, 500)
+    },
+    [fetchWithWorkspace, queryClient, workspaceId],
   )
 
   const applyTemplate = useCallback(
@@ -1333,6 +1737,135 @@ export function App() {
     setRemixOpen(false)
   }, [editMutation, remixPrompt, selectedDesign, selectedIteration])
 
+  // Keyboard shortcuts for the design viewer.
+  useEffect(() => {
+    if (!selectedDesign) return
+    const design = selectedDesign
+    const iterations = design.iterations
+    const overlayOpen =
+      styleOpen || remixOpen || Boolean(pendingDeleteDesign) || newFolderOpen
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (isTextEntryTarget(event.target)) return
+      if (overlayOpen) return
+
+      const current = selectedIteration
+      const index = current
+        ? iterations.findIndex((it) => it.id === current.id)
+        : -1
+
+      switch (event.key) {
+        case 'ArrowRight':
+        case 'ArrowDown': {
+          if (iterations.length < 2) return
+          event.preventDefault()
+          setShowOriginal(false)
+          const next =
+            index < 0 ? 0 : Math.min(iterations.length - 1, index + 1)
+          setSelectedIterationId(iterations[next].id)
+          break
+        }
+        case 'ArrowLeft':
+        case 'ArrowUp': {
+          if (iterations.length < 2) return
+          event.preventDefault()
+          setShowOriginal(false)
+          const prev = index <= 0 ? 0 : index - 1
+          setSelectedIterationId(iterations[prev].id)
+          break
+        }
+        case 'Escape':
+          event.preventDefault()
+          closeDesign()
+          break
+        case 'r':
+        case 'R':
+          if (designPending) return
+          event.preventDefault()
+          setStyleOpen(true)
+          break
+        case 'm':
+        case 'M':
+          if (designPending || !selectedIteration) return
+          event.preventDefault()
+          setRemixPrompt('')
+          setRemixOpen(true)
+          break
+        case 'f':
+        case 'F':
+          event.preventDefault()
+          patchDesign.mutate({
+            id: design.id,
+            patch: { favorite: !design.favorite },
+          })
+          break
+        case 'd':
+        case 'D': {
+          if (!selectedIteration) return
+          event.preventDefault()
+          const target = selectedIteration
+          void downloadIteration(target).catch((downloadError) =>
+            setError(
+              downloadError instanceof Error
+                ? downloadError.message
+                : 'Failed to download',
+            ),
+          )
+          break
+        }
+        case 'c':
+        case 'C':
+          if (!selectedIteration?.prompt) return
+          event.preventDefault()
+          void copyText(selectedIteration.prompt).then(() => {
+            setCopied(true)
+            window.setTimeout(() => setCopied(false), 1500)
+          })
+          break
+        case 'Backspace':
+        case 'Delete':
+          event.preventDefault()
+          setPendingDeleteDesign(design)
+          break
+        case ' ':
+          if (
+            baseIteration &&
+            selectedIteration &&
+            baseIteration.id !== selectedIteration.id
+          ) {
+            event.preventDefault()
+            if (!event.repeat) setShowOriginal(true)
+          }
+          break
+        default:
+          break
+      }
+    }
+
+    function onKeyUp(event: KeyboardEvent) {
+      if (event.key === ' ') setShowOriginal(false)
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [
+    selectedDesign,
+    selectedIteration,
+    baseIteration,
+    designPending,
+    styleOpen,
+    remixOpen,
+    pendingDeleteDesign,
+    newFolderOpen,
+    patchDesign,
+    closeDesign,
+  ])
+
   const dropOverlay = isDragging ? (
     <div className="bg-background/72 pointer-events-none absolute inset-0 z-40 flex items-center justify-center backdrop-blur-sm">
       <div className="border-border/70 bg-background/95 text-foreground rounded-2xl border px-6 py-5 text-center shadow-xl">
@@ -1351,14 +1884,14 @@ export function App() {
     <input
       ref={fileInputRef}
       type="file"
-      accept="image/*"
+      accept="image/png,image/jpeg,image/webp,image/avif,image/heic,image/heif,image/tiff,image/gif,image/bmp,image/jp2,.png,.jpg,.jpeg,.webp,.avif,.heic,.heif,.tif,.tiff,.gif,.bmp,.jp2,.j2k,.jpf,.jpx"
       multiple
       className="hidden"
       onChange={(event) => {
         const files = event.target.files
-          ? imageFilesFromList(event.target.files)
-          : []
-        importFiles(files)
+        if (files) {
+          importFileList(files)
+        }
         event.target.value = ''
       }}
     />
@@ -1372,13 +1905,23 @@ export function App() {
       space={collectionSpace}
       busy={editMutation.isPending || generateMutation.isPending}
       applyLabel={selectedDesign ? 'Redesign' : 'Create'}
-      subtitle={
+      contextKey={
         selectedDesign
-          ? 'Applied to your original photo so the room keeps its bones.'
-          : 'Pick a style to generate a fresh render in this folder.'
+          ? `design:${selectedDesign.id}`
+          : collectionId
+            ? `collection:${collectionId}`
+            : 'gallery'
       }
+      contextImage={selectedDesign ? selectedIteration?.imageUrl : null}
+      contextTitle={selectedDesign ? selectedDesign.title : null}
+      panelState={panelStateQuery.data}
+      onSavePanelState={savePanelState}
       onApplyPreset={applyPreset}
       onApplyTemplate={applyTemplate}
+      onDescribeImage={describeStyleImage}
+      onDescribeImagePath={describeStyleImagePath}
+      onCreateStyle={createStyle}
+      onDeleteStyle={deleteStyle}
     />
   )
 
@@ -1415,187 +1958,198 @@ export function App() {
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        <header className="border-border/70 flex h-12 shrink-0 items-center justify-between gap-2 border-b px-3 sm:px-4">
-          <div className="flex min-w-0 items-center gap-1.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              aria-label="Back"
-              className="cursor-pointer"
-              onClick={closeDesign}
-            >
+        <header className="relative z-10 flex h-14 shrink-0 items-center justify-between gap-3 px-3 sm:px-4">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <ToolBtn label="Back (Esc)" onClick={closeDesign}>
               <ArrowLeft className="size-4" />
-            </Button>
-            <h1 className="rd-serif text-foreground truncate text-base font-semibold">
-              {design.title || 'Untitled design'}
-            </h1>
-          </div>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <Button
-              type="button"
-              size="sm"
-              className="cursor-pointer gap-1.5 rounded-full px-3.5 text-[12.5px]"
-              disabled={designPending}
-              onClick={() => setStyleOpen(true)}
-            >
-              <Sparkles className="size-3.5" />
-              Redesign
-            </Button>
-            <IconAction
-              label="Quick remix"
-              disabled={designPending || !selectedIteration}
-              onClick={() => {
-                setRemixPrompt('')
-                setRemixOpen(true)
-              }}
-            >
-              <Wand2 className="size-3.5" />
-            </IconAction>
-            <IconAction
-              label={design.favorite ? 'Remove favorite' : 'Favorite'}
-              onClick={() =>
-                patchDesign.mutate({
-                  id: design.id,
-                  patch: { favorite: !design.favorite },
-                })
-              }
-            >
-              <Heart
-                className={cn(
-                  'size-3.5',
-                  design.favorite && 'fill-rose-500 text-rose-500',
-                )}
-              />
-            </IconAction>
-            <AspectMenu
-              value={displayIteration?.aspectRatio ?? design.aspectRatio}
-              busy={designPending}
-              onChange={(aspectRatio) =>
-                simpleRpc.mutate({
-                  method: 'redecorate.designs.setAspectRatio',
-                  params: {
-                    id: design.id,
-                    baseIterationId: displayIteration?.id,
-                    aspectRatio,
-                  },
-                })
-              }
-            />
-            <IconAction
-              label="Copy prompt"
-              disabled={!selectedIteration?.prompt}
-              onClick={async () => {
-                if (!selectedIteration?.prompt) return
-                await copyText(selectedIteration.prompt)
-                setCopied(true)
-                window.setTimeout(() => setCopied(false), 1500)
-              }}
-            >
-              {copied ? (
-                <Check className="size-3.5" />
-              ) : (
-                <Copy className="size-3.5" />
-              )}
-            </IconAction>
-            <IconAction
-              label="Download"
-              disabled={!displayIteration}
-              onClick={async () => {
-                if (!displayIteration) return
-                try {
-                  await downloadIteration(displayIteration)
-                } catch (downloadError) {
-                  setError(
-                    downloadError instanceof Error
-                      ? downloadError.message
-                      : 'Failed to download',
-                  )
+            </ToolBtn>
+            <Input
+              value={designTitleDraft}
+              onChange={(event) => setDesignTitleDraft(event.target.value)}
+              onBlur={() => saveDesignTitle(design, designTitleDraft)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  event.currentTarget.blur()
+                } else if (event.key === 'Escape') {
+                  event.preventDefault()
+                  skipNextTitleSaveRef.current = true
+                  setDesignTitleDraft(design.title ?? '')
+                  event.currentTarget.blur()
                 }
               }}
+              aria-label="Design title"
+              placeholder="Untitled design"
+              className="rd-serif text-foreground h-auto w-full min-w-0 truncate border-none !bg-transparent px-0 py-0 text-lg font-semibold shadow-none outline-none focus-visible:!bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 md:text-lg"
+            />
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              disabled={designPending}
+              onClick={() => setStyleOpen(true)}
+              title="Redesign (R)"
+              className="bg-primary text-primary-foreground inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-full px-4 text-[13px] font-medium shadow-sm transition-opacity hover:opacity-90 disabled:cursor-default disabled:opacity-50"
             >
-              <Download className="size-3.5" />
-            </IconAction>
-            <IconAction
-              label="Delete design"
-              destructive
-              onClick={() => setPendingDeleteDesign(design)}
-            >
-              <Trash2 className="size-3.5" />
-            </IconAction>
+              <Paintbrush className="size-4" />
+              Redesign
+            </button>
+            <div className="border-border/60 bg-card/60 flex items-center gap-0.5 rounded-full border p-1 backdrop-blur">
+              <AspectMenu
+                value={displayIteration?.aspectRatio ?? design.aspectRatio}
+                busy={designPending}
+                onChange={(aspectRatio) =>
+                  simpleRpc.mutate({
+                    method: 'redecorate.designs.setAspectRatio',
+                    params: {
+                      id: design.id,
+                      baseIterationId: displayIteration?.id,
+                      aspectRatio,
+                    },
+                  })
+                }
+              />
+              <ToolBtn
+                label="Quick remix (M)"
+                disabled={designPending || !selectedIteration}
+                onClick={() => {
+                  setRemixPrompt('')
+                  setRemixOpen(true)
+                }}
+              >
+                <Wand2 className="size-4" />
+              </ToolBtn>
+              <ToolBtn
+                label="Copy prompt (C)"
+                disabled={!selectedIteration?.prompt}
+                onClick={async () => {
+                  if (!selectedIteration?.prompt) return
+                  await copyText(selectedIteration.prompt)
+                  setCopied(true)
+                  window.setTimeout(() => setCopied(false), 1500)
+                }}
+              >
+                {copied ? (
+                  <Check className="size-4" />
+                ) : (
+                  <Copy className="size-4" />
+                )}
+              </ToolBtn>
+              <ToolBtn
+                label="Download (D)"
+                disabled={!displayIteration}
+                onClick={async () => {
+                  if (!displayIteration) return
+                  try {
+                    await downloadIteration(displayIteration)
+                  } catch (downloadError) {
+                    setError(
+                      downloadError instanceof Error
+                        ? downloadError.message
+                        : 'Failed to download',
+                    )
+                  }
+                }}
+              >
+                <Download className="size-4" />
+              </ToolBtn>
+              <ToolBtn
+                label={design.favorite ? 'Remove favorite (F)' : 'Favorite (F)'}
+                active={design.favorite}
+                onClick={() =>
+                  patchDesign.mutate({
+                    id: design.id,
+                    patch: { favorite: !design.favorite },
+                  })
+                }
+              >
+                <Heart
+                  className={cn(
+                    'size-4',
+                    design.favorite && 'fill-rose-500 text-rose-500',
+                  )}
+                />
+              </ToolBtn>
+              <span className="bg-border/60 mx-0.5 h-5 w-px" />
+              <ToolBtn
+                label="Delete design (⌫)"
+                destructive
+                onClick={() => setPendingDeleteDesign(design)}
+              >
+                <Trash2 className="size-4" />
+              </ToolBtn>
+            </div>
           </div>
         </header>
 
-        <section className="relative min-h-0 flex-1 overflow-auto px-6 py-6 pb-[calc(var(--chat-safe-padding,0px)+1rem)]">
-          <div className="mx-auto flex min-h-full max-w-5xl flex-col items-center justify-center gap-4">
-            {isRendering ? (
-              <Shimmer
-                aspectRatio={shimmerAspect}
-                className="w-full max-w-3xl"
-                label="Rendering your redesign"
-              />
-            ) : isFailed ? (
-              <div className="border-border/60 bg-muted/20 mx-auto flex max-w-md flex-col items-center rounded-2xl border border-dashed px-6 py-12 text-center">
-                <div className="bg-destructive/10 text-destructive mb-3 flex size-11 items-center justify-center rounded-full">
-                  <RotateCcw className="size-5" />
-                </div>
-                <p className="rd-serif text-foreground text-lg">
-                  This render didn’t finish
-                </p>
-                <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
-                  {design.errorMessage ??
-                    'Something interrupted the render. Try again.'}
-                </p>
-                <Button
-                  type="button"
-                  className="mt-4 cursor-pointer gap-1.5 rounded-full"
-                  disabled={simpleRpc.isPending}
-                  onClick={() =>
-                    simpleRpc.mutate({
-                      method: 'redecorate.designs.retry',
-                      params: { id: design.id },
-                    })
-                  }
-                >
-                  <RotateCcw className="size-4" />
-                  Retry render
-                </Button>
+        <section className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-5 pb-2 sm:px-8">
+          {isRendering ? (
+            <Shimmer
+              aspectRatio={shimmerAspect}
+              className="max-h-full w-auto max-w-full"
+              label="Rendering your redesign"
+            />
+          ) : isFailed ? (
+            <div className="border-border/60 bg-muted/20 flex max-w-md flex-col items-center rounded-2xl border border-dashed px-6 py-12 text-center">
+              <div className="bg-destructive/10 text-destructive mb-3 flex size-11 items-center justify-center rounded-full">
+                <RotateCcw className="size-5" />
               </div>
-            ) : displayIteration ? (
-              <div className="relative w-full">
-                <ZoomableImage
-                  src={displayIteration.imageUrl}
-                  alt={design.title}
-                  imageClassName="mx-auto max-h-[calc(100vh-var(--chat-safe-padding,0px)-13rem)] max-w-full rounded-xl object-contain shadow-lg"
-                />
-                {showOriginal ? (
-                  <span className="bg-foreground text-background absolute left-1/2 top-3 -translate-x-1/2 rounded-full px-2.5 py-1 text-[11px] font-semibold shadow-md">
-                    Original photo
-                  </span>
-                ) : null}
-              </div>
-            ) : null}
-
-            {canCompare ? (
-              <button
+              <p className="rd-serif text-foreground text-lg">
+                This render didn’t finish
+              </p>
+              <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
+                {design.errorMessage ??
+                  'Something interrupted the render. Try again.'}
+              </p>
+              <Button
                 type="button"
-                onMouseDown={() => setShowOriginal(true)}
-                onMouseUp={() => setShowOriginal(false)}
-                onMouseLeave={() => setShowOriginal(false)}
-                onTouchStart={() => setShowOriginal(true)}
-                onTouchEnd={() => setShowOriginal(false)}
-                className="border-border/70 bg-background/90 text-muted-foreground hover:text-foreground inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[12px] font-medium shadow-sm transition-colors"
+                className="mt-4 cursor-pointer gap-1.5 rounded-full"
+                disabled={simpleRpc.isPending}
+                onClick={() =>
+                  simpleRpc.mutate({
+                    method: 'redecorate.designs.retry',
+                    params: { id: design.id },
+                  })
+                }
               >
-                <Layers className="size-3.5" />
-                Hold to see the original
-              </button>
-            ) : null}
-          </div>
+                <RotateCcw className="size-4" />
+                Retry render
+              </Button>
+            </div>
+          ) : displayIteration ? (
+            <div className="relative flex max-h-full max-w-full items-center justify-center">
+              <ZoomableImage
+                src={displayIteration.imageUrl}
+                alt={design.title}
+                imageClassName="max-h-[calc(100dvh-var(--chat-safe-padding,0px)-12rem)] max-w-full rounded-2xl object-contain shadow-2xl shadow-black/40"
+              />
+              {showOriginal ? (
+                <span className="bg-foreground text-background absolute left-1/2 top-3 -translate-x-1/2 rounded-full px-2.5 py-1 text-[11px] font-semibold shadow-md">
+                  Original photo
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
+          {canCompare ? (
+            <button
+              type="button"
+              onMouseDown={() => setShowOriginal(true)}
+              onMouseUp={() => setShowOriginal(false)}
+              onMouseLeave={() => setShowOriginal(false)}
+              onTouchStart={() => setShowOriginal(true)}
+              onTouchEnd={() => setShowOriginal(false)}
+              className="bg-background/80 text-muted-foreground hover:text-foreground absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[12px] font-medium shadow-sm backdrop-blur transition-colors"
+            >
+              <Layers className="size-3.5" />
+              Hold to see the original
+            </button>
+          ) : null}
         </section>
 
-        {/* Render strip */}
-        <div className="border-border/60 bg-background/80 shrink-0 border-t px-4 py-3 backdrop-blur">
-          <div className="rd-no-scrollbar mx-auto flex max-w-5xl items-center gap-2.5 overflow-x-auto">
+        {/* Render strip — chromeless, centered */}
+        <div className="shrink-0 px-4 pb-[calc(var(--chat-safe-padding,0px)+0.75rem)] pt-1">
+          <div className="rd-no-scrollbar mx-auto flex w-fit max-w-full items-center gap-2 overflow-x-auto">
             {design.iterations.map((iteration) => {
               const isOriginal = iteration.kind === 'upload'
               const isSelected = iteration.id === selectedIteration?.id
@@ -1608,10 +2162,8 @@ export function App() {
                     setSelectedIterationId(iteration.id)
                   }}
                   className={cn(
-                    'group/thumb relative size-16 shrink-0 cursor-pointer overflow-hidden rounded-lg ring-1 transition-all',
-                    isSelected
-                      ? 'ring-foreground ring-2'
-                      : 'ring-border/55 hover:ring-foreground/40',
+                    'relative size-16 shrink-0 cursor-pointer overflow-hidden rounded-xl transition-[opacity,transform] duration-200',
+                    isSelected ? 'opacity-100' : 'opacity-45 hover:opacity-90',
                   )}
                 >
                   <img
@@ -1629,7 +2181,7 @@ export function App() {
               )
             })}
             {pendingCount(design) > 0 ? (
-              <div className="ring-border/55 relative size-16 shrink-0 overflow-hidden rounded-lg ring-1">
+              <div className="relative size-16 shrink-0 overflow-hidden rounded-xl">
                 <Shimmer className="size-full rounded-none" label={null} />
               </div>
             ) : null}
@@ -1637,7 +2189,7 @@ export function App() {
               type="button"
               disabled={designPending}
               onClick={() => setStyleOpen(true)}
-              className="border-border/70 text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-16 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed transition-colors disabled:opacity-50"
+              className="border-border/60 text-muted-foreground hover:border-foreground/40 hover:text-foreground flex size-16 shrink-0 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed transition-colors disabled:opacity-50"
             >
               <Plus className="size-4" />
               <span className="text-[9px] font-medium">Style</span>
@@ -1741,123 +2293,101 @@ export function App() {
         onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
-        <div className="rd-no-scrollbar min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto w-full max-w-5xl px-6 pb-[calc(var(--chat-safe-padding,0px)+5rem)] pt-9">
+        <ViewHeader
+          onBack={closeCollection}
+          backLabel="Gallery"
+          emoji={emoji}
+          title={title}
+          subtitle={`${collectionDesigns.length} ${collectionDesigns.length === 1 ? 'design' : 'designs'}`}
+          actions={
+            <>
+              {openFolder ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-destructive h-9 cursor-pointer gap-1.5 rounded-full px-3 text-[12.5px]"
+                  onClick={() => setPendingDeleteFolder(openFolder)}
+                >
+                  <Trash2 className="size-3.5" />
+                  Delete
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-9 cursor-pointer gap-1.5 rounded-full px-3.5 text-[12.5px]"
+                onClick={() => setStyleOpen(true)}
+              >
+                <Paintbrush className="size-3.5" />
+                Browse styles
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-9 cursor-pointer gap-1.5 rounded-full px-3.5 text-[12.5px]"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importMutation.isPending}
+              >
+                {importMutation.isPending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <ImagePlus className="size-3.5" />
+                )}
+                Add a photo
+              </Button>
+            </>
+          }
+        />
+
+        <div className="rd-no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(var(--chat-safe-padding,0px)+4rem)] pt-1 sm:px-5">
+          {collectionDesigns.length === 0 ? (
             <button
               type="button"
-              onClick={closeCollection}
-              className="text-muted-foreground hover:text-foreground -ml-1.5 mb-3 inline-flex h-7 cursor-pointer items-center gap-1 rounded-md px-1.5 text-xs transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+              className="border-border/60 hover:border-foreground/30 hover:bg-muted/20 mt-6 flex w-full cursor-pointer flex-col items-center rounded-2xl border border-dashed px-6 py-16 text-center transition-colors"
             >
-              <ArrowLeft className="size-3.5" />
-              Gallery
+              <div className="bg-muted/50 mb-3 flex size-12 items-center justify-center rounded-full">
+                <Upload className="text-muted-foreground size-5" />
+              </div>
+              <p className="rd-serif text-foreground text-lg">
+                Drop a photo of your space
+              </p>
+              <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
+                A room, exterior, backyard, or floorplan — then tap a style to
+                reimagine it. Or browse styles to start from scratch.
+              </p>
             </button>
-
-            <section className="mb-7 flex items-end justify-between gap-4">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-2xl leading-none">{emoji}</span>
-                  <h1 className="rd-serif text-foreground text-3xl font-semibold tracking-tight">
-                    {title}
-                  </h1>
-                </div>
-                {openFolder?.blurb ? (
-                  <p className="text-muted-foreground mt-2 max-w-xl text-sm leading-6">
-                    {openFolder.blurb}
-                  </p>
-                ) : (
-                  <p className="text-muted-foreground mt-2 text-sm">
-                    {collectionDesigns.length}{' '}
-                    {collectionDesigns.length === 1 ? 'design' : 'designs'}
-                  </p>
-                )}
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {openFolder ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-muted-foreground hover:text-destructive cursor-pointer gap-1.5 rounded-full px-3 text-[12px]"
-                    onClick={() => setPendingDeleteFolder(openFolder)}
-                  >
-                    <Trash2 className="size-3.5" />
-                    Delete
-                  </Button>
-                ) : null}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="cursor-pointer gap-1.5 rounded-full px-3.5 text-[12px]"
-                  onClick={() => setStyleOpen(true)}
-                >
-                  <Sparkles className="size-3.5" />
-                  Browse styles
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="cursor-pointer gap-1.5 rounded-full px-3.5 text-[12px]"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={importMutation.isPending}
-                >
-                  {importMutation.isPending ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <ImagePlus className="size-3.5" />
-                  )}
-                  Add a photo
-                </Button>
-              </div>
-            </section>
-
-            {collectionDesigns.length === 0 ? (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="border-border/60 hover:border-foreground/30 hover:bg-muted/20 flex w-full cursor-pointer flex-col items-center rounded-2xl border border-dashed px-6 py-16 text-center transition-colors"
-              >
-                <div className="bg-muted/50 mb-3 flex size-12 items-center justify-center rounded-full">
-                  <Upload className="text-muted-foreground size-5" />
-                </div>
-                <p className="rd-serif text-foreground text-lg">
-                  Drop a photo of your space
-                </p>
-                <p className="text-muted-foreground mx-auto mt-1 max-w-sm text-sm">
-                  A room, exterior, backyard, or floorplan — then tap a style to
-                  reimagine it. Or browse styles to start from scratch.
-                </p>
-              </button>
-            ) : (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-                {collectionDesigns.map((design, index) => (
-                  <DesignCard
-                    key={design.id}
-                    design={design}
-                    index={index}
-                    folders={folders}
-                    onOpen={() => openDesign(design)}
-                    onMove={(folderId) =>
-                      patchDesign.mutate({ id: design.id, patch: { folderId } })
-                    }
-                    onFavorite={() =>
-                      patchDesign.mutate({
-                        id: design.id,
-                        patch: { favorite: !design.favorite },
-                      })
-                    }
-                    onDelete={() => setPendingDeleteDesign(design)}
-                    onRetry={() =>
-                      simpleRpc.mutate({
-                        method: 'redecorate.designs.retry',
-                        params: { id: design.id },
-                      })
-                    }
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+              {collectionDesigns.map((design, index) => (
+                <DesignCard
+                  key={design.id}
+                  design={design}
+                  index={index}
+                  folders={folders}
+                  onOpen={() => openDesign(design)}
+                  onMove={(folderId) =>
+                    patchDesign.mutate({ id: design.id, patch: { folderId } })
+                  }
+                  onFavorite={() =>
+                    patchDesign.mutate({
+                      id: design.id,
+                      patch: { favorite: !design.favorite },
+                    })
+                  }
+                  onDelete={() => setPendingDeleteDesign(design)}
+                  onRetry={() =>
+                    simpleRpc.mutate({
+                      method: 'redecorate.designs.retry',
+                      params: { id: design.id },
+                    })
+                  }
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {dropOverlay}
@@ -1900,6 +2430,15 @@ export function App() {
   // GALLERY (folders)
   // ════════════════════════════════════════════════════════════════════════
   const favoriteCount = activeDesigns.filter((design) => design.favorite).length
+  const coverUrls = (list: Design[]) =>
+    list
+      .map((design) => design.latestImageUrl)
+      .filter((url): url is string => Boolean(url))
+      .slice(0, 4)
+  const allCovers = coverUrls(activeDesigns)
+  const favoriteCovers = coverUrls(
+    activeDesigns.filter((design) => design.favorite),
+  )
   const loading = designsQuery.isLoading || foldersQuery.isLoading
 
   return (
@@ -1910,104 +2449,95 @@ export function App() {
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      <div className="rd-no-scrollbar min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-5xl px-6 pb-[calc(var(--chat-safe-padding,0px)+5rem)] pt-10">
-          <section className="mb-8 flex items-end justify-between gap-4">
-            <div className="min-w-0">
-              <h1 className="rd-serif text-foreground text-3xl font-semibold tracking-tight">
-                Reimagine your space
-              </h1>
-              <p className="text-muted-foreground mt-2 max-w-xl text-sm leading-6">
-                Tap a folder to explore designs, drop a photo of any room or
-                yard, then restyle it from 140+ curated looks.
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="cursor-pointer gap-1.5 rounded-full px-3.5 text-[12px]"
-                onClick={() => setStyleOpen(true)}
-              >
-                <Sparkles className="size-3.5" />
-                Browse styles
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="cursor-pointer gap-1.5 rounded-full px-3.5 text-[12px]"
-                onClick={() => setNewFolderOpen(true)}
-              >
-                <Plus className="size-3.5" />
-                New folder
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                className="cursor-pointer gap-1.5 rounded-full px-3.5 text-[12px]"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={importMutation.isPending}
-              >
-                {importMutation.isPending ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <ImagePlus className="size-3.5" />
-                )}
-                Add a photo
-              </Button>
-            </div>
-          </section>
+      <ViewHeader
+        actions={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 cursor-pointer gap-1.5 rounded-full px-3.5 text-[12.5px]"
+              onClick={() => setStyleOpen(true)}
+            >
+              <Paintbrush className="size-3.5" />
+              Browse styles
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 cursor-pointer gap-1.5 rounded-full px-3.5 text-[12.5px]"
+              onClick={() => setNewFolderOpen(true)}
+            >
+              <Plus className="size-3.5" />
+              New folder
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-9 cursor-pointer gap-1.5 rounded-full px-3.5 text-[12.5px]"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importMutation.isPending}
+            >
+              {importMutation.isPending ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <ImagePlus className="size-3.5" />
+              )}
+              Add a photo
+            </Button>
+          </>
+        }
+      />
 
-          {loading ? (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {[0, 1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className="bg-muted/30 aspect-[4/3] animate-pulse rounded-2xl"
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              <SmartCard
-                emoji="🗂️"
-                title="All designs"
-                count={activeDesigns.length}
-                tone="#6E8CA0"
-                onOpen={() => openCollection(ALL_DESIGNS, 'All designs')}
+      <div className="rd-no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(var(--chat-safe-padding,0px)+4rem)] pt-1 sm:px-5">
+        {loading ? (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="bg-muted/30 aspect-[4/5] animate-pulse rounded-2xl"
               />
-              {favoriteCount > 0 ? (
-                <SmartCard
-                  emoji="❤️"
-                  title="Favorites"
-                  count={favoriteCount}
-                  tone="#C77B5C"
-                  onOpen={() => openCollection(FAVORITES, 'Favorites')}
-                />
-              ) : null}
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            <SmartCard
+              emoji="🗂️"
+              title="All designs"
+              count={activeDesigns.length}
+              covers={allCovers}
+              onOpen={() => openCollection(ALL_DESIGNS, 'All designs')}
+            />
+            {favoriteCount > 0 ? (
+              <SmartCard
+                emoji="❤️"
+                title="Favorites"
+                count={favoriteCount}
+                covers={favoriteCovers}
+                onOpen={() => openCollection(FAVORITES, 'Favorites')}
+              />
+            ) : null}
 
-              {folders.map((folder, index) => (
-                <FolderCard
-                  key={folder.id}
-                  folder={folder}
-                  index={index}
-                  onOpen={() => openCollection(folder.id, folder.name)}
-                />
-              ))}
+            {folders.map((folder, index) => (
+              <FolderCard
+                key={folder.id}
+                folder={folder}
+                index={index}
+                onOpen={() => openCollection(folder.id, folder.name)}
+              />
+            ))}
 
-              <button
-                type="button"
-                onClick={() => setNewFolderOpen(true)}
-                className="border-border/60 text-muted-foreground hover:border-foreground/30 hover:bg-muted/20 hover:text-foreground flex aspect-[4/3] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed transition-colors"
-              >
-                <Plus className="size-5" />
-                <span className="text-[12.5px] font-medium">New folder</span>
-              </button>
-            </div>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={() => setNewFolderOpen(true)}
+              className="border-border/60 text-muted-foreground hover:border-foreground/30 hover:bg-muted/20 hover:text-foreground flex aspect-[4/5] cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border border-dashed transition-colors"
+            >
+              <Plus className="size-5" />
+              <span className="text-[12.5px] font-medium">New folder</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {dropOverlay}
@@ -2030,31 +2560,29 @@ function SmartCard({
   emoji,
   title,
   count,
-  tone,
+  covers,
   onOpen,
 }: {
   emoji: string
   title: string
   count: number
-  tone: string
+  covers: string[]
   onOpen: () => void
 }) {
+  const hasCovers = covers.length > 0
   return (
     <button
       type="button"
       onClick={onOpen}
-      style={{ ['--card-tone']: tone } as CSSProperties}
-      className="rd-card-tone animate-rd-card-in border-border/45 group relative flex aspect-[4/3] cursor-pointer flex-col justify-between overflow-hidden rounded-2xl border p-4 text-left shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+      aria-label={`Open ${title}`}
+      className="animate-rd-card-in bg-muted focus-visible:ring-primary/60 group relative block aspect-[4/5] w-full cursor-pointer overflow-hidden rounded-2xl text-left shadow-sm ring-1 ring-black/5 transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-1 hover:shadow-2xl hover:shadow-black/25 focus-visible:outline-none focus-visible:ring-2"
     >
-      <span className="text-2xl leading-none">{emoji}</span>
-      <div>
-        <h3 className="rd-serif text-foreground text-lg font-semibold leading-tight">
-          {title}
-        </h3>
-        <p className="text-muted-foreground rd-mono mt-0.5 text-[11px]">
-          {count} {count === 1 ? 'design' : 'designs'}
-        </p>
-      </div>
+      <CoverTile covers={covers} emoji={emoji} seed={title} />
+      <CoverScrim
+        emoji={hasCovers ? emoji : undefined}
+        title={title}
+        subtitle={`${count} ${count === 1 ? 'design' : 'designs'}`}
+      />
     </button>
   )
 }

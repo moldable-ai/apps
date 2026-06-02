@@ -1,0 +1,26 @@
+{"type":"run-start","startedAt":"2026-06-02T17:42:43.635Z","count":1,"model":"gpt-image-2","size":"1200x900","quality":"medium","outputFormat":"webp"}
+{"type":"error","id":"interior-modern","attempt":1,"startedAt":"2026-06-02T17:42:43.635Z","finishedAt":"2026-06-02T17:42:43.875Z","message":"CredentialNotFound: no credential for capability provider\n(thin client daemon attempt failed first: CredentialNotFound: no credential for capability provider)"}
+{"type":"run-start","runId":"b5f1430d-3eb1-4920-a5e2-6df2513cc26b","startedAt":"2026-06-02T17:45:50.682Z","count":1,"model":"gpt-image-2","size":"1200x900","quality":"medium","outputFormat":"webp"}
+{"type":"error","id":"interior-modern","attempt":1,"startedAt":"2026-06-02T17:45:50.683Z","finishedAt":"2026-06-02T17:45:51.201Z","message":"Invalid size '1200x900'. Width and height must both be divisible by 16."}
+{"type":"run-start","runId":"35815dab-6c76-4c0a-b194-92dfb414b718","startedAt":"2026-06-02T17:46:12.983Z","count":1,"model":"gpt-image-2","size":"1024x768","quality":"medium","outputFormat":"webp"}
+{"type":"success","id":"interior-modern","attempt":1,"startedAt":"2026-06-02T17:46:12.984Z","finishedAt":"2026-06-02T17:47:08.678Z","file":"interior-modern.webp"}
+{"type":"run-finish","startedAt":"2026-06-02T17:46:12.983Z","finishedAt":"2026-06-02T17:47:08.678Z","count":1}
+{"type":"run-start","runId":"8005afc9-81b9-4e31-adcd-391e0af384a1","startedAt":"2026-06-02T17:47:31.732Z","count":5,"model":"gpt-image-2","size":"1024x768","quality":"medium","outputFormat":"webp"}
+{"type":"success","id":"interior-contemporary","attempt":1,"startedAt":"2026-06-02T17:47:31.734Z","finishedAt":"2026-06-02T17:48:10.281Z","file":"interior-contemporary.webp"}
+{"type":"success","id":"interior-mid-century-modern","attempt":1,"startedAt":"2026-06-02T17:48:25.289Z","finishedAt":"2026-06-02T17:49:41.113Z","file":"interior-mid-century-modern.webp"}
+{"type":"success","id":"interior-scandinavian","attempt":1,"startedAt":"2026-06-02T17:49:56.116Z","finishedAt":"2026-06-02T17:50:51.393Z","file":"interior-scandinavian.webp"}
+{"type":"success","id":"interior-japandi","attempt":1,"startedAt":"2026-06-02T17:51:06.394Z","finishedAt":"2026-06-02T17:52:05.331Z","file":"interior-japandi.webp"}
+{"type":"success","id":"interior-minimalist","attempt":1,"startedAt":"2026-06-02T17:52:20.335Z","finishedAt":"2026-06-02T17:53:14.195Z","file":"interior-minimalist.webp"}
+{"type":"run-finish","startedAt":"2026-06-02T17:47:31.732Z","finishedAt":"2026-06-02T17:53:14.195Z","count":5}
+{"type":"run-start","runId":"ed6e02e0-7430-4fbd-910e-01e210b5227b","startedAt":"2026-06-02T17:55:53.611Z","count":10,"model":"gpt-image-2","size":"1024x768","quality":"medium","outputFormat":"webp"}
+{"type":"success","id":"interior-warm-minimalism","attempt":1,"startedAt":"2026-06-02T17:55:53.612Z","finishedAt":"2026-06-02T17:56:44.846Z","file":"interior-warm-minimalism.webp"}
+{"type":"success","id":"interior-industrial","attempt":1,"startedAt":"2026-06-02T17:56:59.848Z","finishedAt":"2026-06-02T17:57:58.201Z","file":"interior-industrial.webp"}
+{"type":"success","id":"interior-bohemian","attempt":1,"startedAt":"2026-06-02T17:58:13.204Z","finishedAt":"2026-06-02T17:59:11.789Z","file":"interior-bohemian.webp"}
+{"type":"success","id":"interior-coastal-hamptons","attempt":1,"startedAt":"2026-06-02T17:59:26.792Z","finishedAt":"2026-06-02T18:00:27.766Z","file":"interior-coastal-hamptons.webp"}
+{"type":"success","id":"interior-modern-farmhouse","attempt":1,"startedAt":"2026-06-02T18:00:42.768Z","finishedAt":"2026-06-02T18:01:21.067Z","file":"interior-modern-farmhouse.webp"}
+{"type":"success","id":"interior-farmhouse","attempt":1,"startedAt":"2026-06-02T18:01:36.070Z","finishedAt":"2026-06-02T18:02:17.694Z","file":"interior-farmhouse.webp"}
+{"type":"success","id":"interior-transitional","attempt":1,"startedAt":"2026-06-02T18:02:32.697Z","finishedAt":"2026-06-02T18:03:35.276Z","file":"interior-transitional.webp"}
+{"type":"success","id":"interior-traditional","attempt":1,"startedAt":"2026-06-02T18:03:50.287Z","finishedAt":"2026-06-02T18:05:14.533Z","file":"interior-traditional.webp"}
+{"type":"success","id":"interior-art-deco","attempt":1,"startedAt":"2026-06-02T18:05:29.534Z","finishedAt":"2026-06-02T18:06:26.191Z","file":"interior-art-deco.webp"}
+{"type":"success","id":"interior-hollywood-regency","attempt":1,"startedAt":"2026-06-02T18:06:41.192Z","finishedAt":"2026-06-02T18:07:35.813Z","file":"interior-hollywood-regency.webp"}
+{"type":"run-finish","startedAt":"2026-06-02T17:55:53.611Z","finishedAt":"2026-06-02T18:07:35.814Z","count":10}

@@ -1,7 +1,10 @@
 {
   "name": "Notes",
-  "version": "0.1.7",
-  "aliases": ["notepad", "writing"],
+  "version": "0.1.8",
+  "aliases": [
+    "notepad",
+    "writing"
+  ],
   "visibility": "public",
   "description": "A Google Keep-style note taking app with pinning and markdown support",
   "runtime": "vite_hono",
@@ -11,10 +14,15 @@
   "icon": "📝",
   "iconPath": "public/icon.png",
   "category": "productivity",
-  "tags": ["notes", "markdown", "writing", "keep"],
+  "tags": [
+    "notes",
+    "markdown",
+    "writing",
+    "keep"
+  ],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.13",
-    "@moldable-ai/editor": "^0.1.12",
+    "@moldable-ai/ui": "^0.2.17",
+    "@moldable-ai/editor": "^0.1.16",
     "@moldable-ai/storage": "^0.1.5"
   },
   "appApi": {
@@ -93,7 +101,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -162,7 +172,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -176,7 +188,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           }
         ]
@@ -215,6 +229,8 @@
   },
   "modified": false,
   "routeName": "notes",
-  "screenshots": ["public/screenshots/1.png"],
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
   "tagline": "A Google Keep-style notebook with markdown and pinning"
 }

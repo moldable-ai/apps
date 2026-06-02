@@ -1,7 +1,9 @@
 @import 'tailwindcss';
 @import '@moldable-ai/ui/styles';
+@import '@moldable-ai/editor/styles';
 @source './**/*.{js,jsx,ts,tsx}';
 @source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/editor/dist/**/*.{js,jsx,ts,tsx}';
 
 @theme {
   --font-sans: Inter, system-ui, -apple-system, sans-serif;
@@ -70,61 +72,96 @@
       );
   }
 
-  /* Generation shimmer */
-  .image-generation-loading {
+  /* AI render / generating state — a drifting "aurora" of color clouds with a
+     slow light sweep. Calm, premium, and clearly "thinking". */
+  .rd-render {
+    position: relative;
+    isolation: isolate;
     background:
       radial-gradient(
-        circle at 18% 16%,
-        color-mix(in oklab, var(--primary) 14%, transparent),
-        transparent 28%
+        58% 55% at 18% 22%,
+        oklch(0.62 0.15 290 / 0.5),
+        transparent 70%
       ),
       radial-gradient(
-        circle at 84% 78%,
-        color-mix(in oklab, var(--foreground) 9%, transparent),
-        transparent 30%
+        56% 52% at 84% 24%,
+        oklch(0.68 0.13 200 / 0.42),
+        transparent 72%
       ),
-      color-mix(in oklab, var(--muted) 82%, var(--background));
+      radial-gradient(
+        66% 60% at 60% 92%,
+        oklch(0.72 0.14 40 / 0.46),
+        transparent 72%
+      ),
+      radial-gradient(
+        50% 48% at 38% 70%,
+        oklch(0.66 0.12 150 / 0.32),
+        transparent 70%
+      ),
+      color-mix(in oklab, var(--muted) 78%, var(--background));
+    background-size:
+      190% 190%,
+      170% 170%,
+      210% 210%,
+      180% 180%,
+      100% 100%;
+    background-position:
+      0% 0%,
+      100% 0%,
+      50% 100%,
+      30% 60%,
+      0 0;
+    animation: rd-aurora 12s ease-in-out infinite;
   }
 
-  .image-generation-loading::after {
+  /* soft inner vignette to keep edges premium */
+  .rd-render::after {
     content: '';
     position: absolute;
     inset: 0;
-    border: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent);
     border-radius: inherit;
+    background: radial-gradient(
+      120% 120% at 50% 50%,
+      transparent 52%,
+      color-mix(in oklab, var(--background) 50%, transparent)
+    );
     pointer-events: none;
   }
 
-  .image-generation-dots {
-    background-image: radial-gradient(
-      circle,
-      color-mix(in oklab, var(--foreground) 24%, transparent) 1px,
-      transparent 1.5px
+  .rd-render-sweep {
+    position: absolute;
+    inset: -40%;
+    pointer-events: none;
+    background: linear-gradient(
+      115deg,
+      transparent 42%,
+      color-mix(in oklab, var(--foreground) 8%, transparent) 47%,
+      color-mix(in oklab, var(--foreground) 22%, transparent) 50%,
+      color-mix(in oklab, var(--foreground) 8%, transparent) 53%,
+      transparent 58%
     );
-    background-size: 18px 18px;
-    mask-image: linear-gradient(
-      135deg,
-      transparent 0%,
-      black 28%,
-      black 74%,
-      transparent 100%
-    );
-    opacity: 0.34;
-    animation: image-dots-drift 4.8s linear infinite;
+    transform: translateX(-60%);
+    animation: rd-sweep 3.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   }
 
-  .image-generation-sheen {
-    background: linear-gradient(
-      118deg,
-      transparent 0%,
-      transparent 30%,
-      color-mix(in oklab, var(--background) 70%, transparent) 46%,
-      color-mix(in oklab, var(--foreground) 9%, transparent) 52%,
-      transparent 68%,
-      transparent 100%
-    );
-    transform: translateX(-72%);
-    animation: image-sheen-sweep 2.7s ease-in-out infinite;
+  .rd-render-pulse {
+    animation: rd-pulse 1.9s ease-in-out infinite;
+  }
+
+  .rd-render-dots i {
+    display: inline-block;
+    width: 4px;
+    height: 4px;
+    border-radius: 9999px;
+    background: currentColor;
+    opacity: 0.4;
+    animation: rd-dot 1.2s ease-in-out infinite;
+  }
+  .rd-render-dots i:nth-child(2) {
+    animation-delay: 0.16s;
+  }
+  .rd-render-dots i:nth-child(3) {
+    animation-delay: 0.32s;
   }
 
   [data-slot='dialog-overlay'] {
@@ -208,29 +245,63 @@
   }
 }
 
-@keyframes image-dots-drift {
-  from {
-    background-position: 0 0;
+@keyframes rd-aurora {
+  0% {
+    background-position:
+      0% 0%,
+      100% 0%,
+      50% 100%,
+      30% 60%,
+      0 0;
   }
-  to {
-    background-position: 36px 54px;
+  50% {
+    background-position:
+      55% 45%,
+      45% 55%,
+      30% 40%,
+      70% 35%,
+      0 0;
+  }
+  100% {
+    background-position:
+      0% 0%,
+      100% 0%,
+      50% 100%,
+      30% 60%,
+      0 0;
   }
 }
 
-@keyframes image-sheen-sweep {
+@keyframes rd-sweep {
   0% {
-    transform: translateX(-72%);
-    opacity: 0;
-  }
-  20% {
-    opacity: 0.75;
-  }
-  58% {
-    opacity: 0.55;
+    transform: translateX(-65%);
   }
   100% {
-    transform: translateX(72%);
-    opacity: 0;
+    transform: translateX(65%);
+  }
+}
+
+@keyframes rd-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.14) rotate(8deg);
+  }
+}
+
+@keyframes rd-dot {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-3px);
+    opacity: 1;
   }
 }
 
@@ -238,7 +309,11 @@
   .animate-rd-view-in,
   .animate-rd-view-back,
   .animate-rd-card-in,
-  .animate-rd-chrome-in {
+  .animate-rd-chrome-in,
+  .rd-render,
+  .rd-render-sweep,
+  .rd-render-pulse,
+  .rd-render-dots i {
     animation: none;
   }
 }

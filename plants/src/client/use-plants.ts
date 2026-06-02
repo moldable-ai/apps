@@ -197,6 +197,7 @@ export function useWaterPlant() {
               ? {
                   ...p,
                   lastWateredAt: when,
+                  snoozeUntil: undefined,
                   waterHistory: [...(p.waterHistory ?? []), { at: when }].slice(
                     -50,
                   ),
@@ -229,6 +230,30 @@ export function useGenerateCare() {
       return readPlantOrThrow(res, 'generate care')
     },
     onSuccess: invalidate,
+  })
+}
+
+/** POST /api/plants/:id/photos — append a journal photo (becomes the hero). */
+export function useAddPlantPhoto() {
+  const { workspaceId, fetchWithWorkspace } = useWorkspace()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, path }: { id: string; path: string }) => {
+      const res = await fetchWithWorkspace(`/api/plants/${id}/photos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+      return readPlantOrThrow(res, 'add photo')
+    },
+    onSuccess: (plant) => {
+      queryClient.setQueryData<Plant[]>([QUERY_ROOT, workspaceId], (current) =>
+        (current ?? []).map((p) => (p.id === plant.id ? plant : p)),
+      )
+      void queryClient.invalidateQueries({
+        queryKey: [QUERY_ROOT, workspaceId],
+      })
+    },
   })
 }
 
