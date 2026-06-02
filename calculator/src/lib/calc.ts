@@ -41,16 +41,17 @@ const FUNCTIONS = new Set([
   'ceil',
 ])
 
-// Operator precedence and associativity. `u-` / `u+` are unary; `!` is postfix
+// Operator precedence and associativity. `u-` / `u+` are unary and bind less
+// tightly than exponentiation so `-2^2` is parsed as `-(2^2)`; `!` is postfix
 // factorial; `%` here is the binary modulo/percent operator handled at eval time.
 const OPERATORS: Record<
   string,
   { prec: number; assoc: 'left' | 'right'; args: 1 | 2; postfix?: boolean }
 > = {
-  'u-': { prec: 5, assoc: 'right', args: 1 },
-  'u+': { prec: 5, assoc: 'right', args: 1 },
   '!': { prec: 6, assoc: 'left', args: 1, postfix: true },
-  '^': { prec: 4, assoc: 'right', args: 2 },
+  '^': { prec: 5, assoc: 'right', args: 2 },
+  'u-': { prec: 4, assoc: 'right', args: 1 },
+  'u+': { prec: 4, assoc: 'right', args: 1 },
   '*': { prec: 3, assoc: 'left', args: 2 },
   '/': { prec: 3, assoc: 'left', args: 2 },
   '%': { prec: 3, assoc: 'left', args: 2 },
@@ -85,7 +86,12 @@ function tokenize(input: string): Token[] {
     // Number: digits, decimal point, scientific notation (1e3, 1.5E-2).
     if (isDigit(ch) || (ch === '.' && isDigit(src[i + 1] ?? ''))) {
       let num = ''
+      let hasDecimal = false
       while (i < src.length && (isDigit(src[i]) || src[i] === '.')) {
+        if (src[i] === '.') {
+          if (hasDecimal) throw new CalcError('Malformed number')
+          hasDecimal = true
+        }
         num += src[i++]
       }
       if (src[i] === 'e' || src[i] === 'E') {
@@ -94,10 +100,14 @@ function tokenize(input: string): Token[] {
         const afterSign = src[i + 2]
         if (
           isDigit(next ?? '') ||
-          ((next === '+' || next === '-') && isDigit(afterSign ?? ''))
+          ((next === '+' || next === '-' || next === '−') &&
+            isDigit(afterSign ?? ''))
         ) {
           num += src[i++]
-          if (src[i] === '+' || src[i] === '-') num += src[i++]
+          if (src[i] === '+' || src[i] === '-' || src[i] === '−') {
+            num += src[i] === '−' ? '-' : src[i]
+            i++
+          }
           while (i < src.length && isDigit(src[i])) num += src[i++]
         }
       }
@@ -177,17 +187,32 @@ function applyFunction(name: string, x: number, mode: AngleMode): number {
   const toRad = (deg: number) => (mode === 'deg' ? (deg * Math.PI) / 180 : deg)
   const fromRad = (rad: number) =>
     mode === 'deg' ? (rad * 180) / Math.PI : rad
+  const requireUnitInterval = () => {
+    if (x < -1 || x > 1) {
+      throw new CalcError(`${name} needs a value from -1 to 1`)
+    }
+  }
+  const requirePositive = () => {
+    if (x <= 0) throw new CalcError(`${name} needs a positive number`)
+  }
 
   switch (name) {
     case 'sin':
       return Math.sin(toRad(x))
     case 'cos':
       return Math.cos(toRad(x))
-    case 'tan':
-      return Math.tan(toRad(x))
+    case 'tan': {
+      const angle = toRad(x)
+      if (Math.abs(Math.cos(angle)) < 1e-12) {
+        throw new CalcError('Result is undefined')
+      }
+      return Math.tan(angle)
+    }
     case 'asin':
+      requireUnitInterval()
       return fromRad(Math.asin(x))
     case 'acos':
+      requireUnitInterval()
       return fromRad(Math.acos(x))
     case 'atan':
       return fromRad(Math.atan(x))
@@ -198,12 +223,16 @@ function applyFunction(name: string, x: number, mode: AngleMode): number {
     case 'tanh':
       return Math.tanh(x)
     case 'ln':
+      requirePositive()
       return Math.log(x)
     case 'log':
+      requirePositive()
       return Math.log10(x)
     case 'log2':
+      requirePositive()
       return Math.log2(x)
     case 'sqrt':
+      if (x < 0) throw new CalcError('sqrt needs a non-negative number')
       return Math.sqrt(x)
     case 'cbrt':
       return Math.cbrt(x)
@@ -256,6 +285,11 @@ function toRpn(tokens: Token[]): Token[] {
       if (o1.postfix) {
         // Postfix operator (factorial) applies immediately.
         output.push({ type: 'operator', value: op })
+      } else if (op === 'u-' || op === 'u+') {
+        // Prefix unary operators apply to the next operand. Push them without
+        // popping prior binary operators so `2^-2` becomes `2 ^ (-2)`, while
+        // exponentiation can still bind before a leading unary in `-2^2`.
+        stack.push({ type: 'operator', value: op })
       } else {
         while (stack.length) {
           const top = stack[stack.length - 1]
@@ -306,7 +340,9 @@ function evalRpn(rpn: Token[], mode: AngleMode): number {
 
   for (const token of rpn) {
     if (token.type === 'number') {
-      stack.push(Number(token.value))
+      const value = Number(token.value)
+      if (Number.isNaN(value)) throw new CalcError('Malformed number')
+      stack.push(value)
       continue
     }
 
@@ -351,6 +387,7 @@ function evalRpn(rpn: Token[], mode: AngleMode): number {
           stack.push(a / b)
           break
         case '%':
+          if (b === 0) throw new CalcError('Modulo by zero')
           stack.push(a % b)
           break
         case '^':

@@ -109,33 +109,35 @@ export function useFolders() {
     mutationFn: async ({
       bookId,
       folderId,
+      inFolder = true,
     }: {
       bookId: string
       folderId: string | null
+      inFolder?: boolean
     }) => {
       const res = await fetchWithWorkspace('/api/folders/move', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bookId, folderId }),
+        body: JSON.stringify({ bookId, folderId, inFolder }),
       })
-      if (!res.ok) throw new Error('Failed to move book')
+      if (!res.ok) throw new Error('Failed to update book folders')
       return (await res.json()) as FoldersResponse
     },
-    onMutate: async ({ bookId, folderId }) => {
+    onMutate: async ({ bookId, folderId, inFolder = true }) => {
       await queryClient.cancelQueries({ queryKey })
       const previous = queryClient.getQueryData<FoldersResponse>(queryKey)
       if (previous) {
         const next: FoldersResponse = {
           folders: previous.folders.map((folder) => {
             const had = folder.bookIds.includes(bookId)
-            const willHave = folder.id === folderId
-            if (had === willHave) return folder
-            return {
-              ...folder,
-              bookIds: willHave
-                ? [...folder.bookIds.filter((id) => id !== bookId), bookId]
-                : folder.bookIds.filter((id) => id !== bookId),
-            }
+            const shouldUpdate =
+              folderId === null ? had : folder.id === folderId
+            if (!shouldUpdate) return folder
+            const bookIds =
+              folderId === null || !inFolder
+                ? folder.bookIds.filter((id) => id !== bookId)
+                : [...folder.bookIds.filter((id) => id !== bookId), bookId]
+            return { ...folder, bookIds }
           }),
         }
         queryClient.setQueryData(queryKey, next)
@@ -160,7 +162,7 @@ export function useFolders() {
     deleteFolder: (id: string) => deleteFolderMutation.mutateAsync(id),
     reorderFolders: (folderIds: string[]) =>
       reorderFoldersMutation.mutateAsync(folderIds),
-    moveBook: (bookId: string, folderId: string | null) =>
-      moveBookMutation.mutateAsync({ bookId, folderId }),
+    moveBook: (bookId: string, folderId: string | null, inFolder = true) =>
+      moveBookMutation.mutateAsync({ bookId, folderId, inFolder }),
   }
 }

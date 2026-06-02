@@ -72,6 +72,10 @@ function settingsPath(dataDir: string) {
   return safePath(dataDir, 'reader-settings.json')
 }
 
+function installedStorePath(dataDir: string) {
+  return safePath(dataDir, 'store', 'installed.json')
+}
+
 function seedMarkerPath(dataDir: string) {
   return safePath(dataDir, '.seeded.json')
 }
@@ -152,6 +156,41 @@ async function listBookIds(dataDir: string): Promise<string[]> {
   }
 }
 
+async function removeStoreInstalledMarker(
+  dataDir: string,
+  source: string | null,
+): Promise<void> {
+  if (!source) return
+  const installed = await readJson<Array<number | string>>(
+    installedStorePath(dataDir),
+    [],
+  )
+  if (!Array.isArray(installed) || installed.length === 0) return
+
+  const gutenberg = source.match(/^gutenberg-(\d+)\.epub$/)
+  const openLibrary = source.match(/^open-library-(.+)\.epub$/)
+  const staleKeys = new Set<string>()
+  let staleNumber: number | null = null
+
+  if (gutenberg) {
+    const id = Number(gutenberg[1])
+    staleNumber = id
+    staleKeys.add(`gutenberg:${id}`)
+  } else if (openLibrary) {
+    staleKeys.add(`open-library:${openLibrary[1]}`)
+  } else {
+    return
+  }
+
+  const next = installed.filter((id) => {
+    if (typeof id === 'number') return id !== staleNumber
+    return !staleKeys.has(id)
+  })
+  if (next.length !== installed.length) {
+    await writeJson(installedStorePath(dataDir), next)
+  }
+}
+
 // ─── Books ───────────────────────────────────────────────────────────
 
 export async function getBookMeta(
@@ -174,18 +213,25 @@ export async function setProgress(
   patch: Partial<ReadingProgress>,
 ): Promise<ReadingProgress> {
   const meta = await getBookMeta(dataDir, bookId)
+  if (!meta) throw new Error('Book not found')
   const existing = await getProgress(dataDir, bookId)
-  const chapterCount = meta?.chapters.length ?? 1
+  const chapterCount = meta.chapters.length
   const chapterIndex = Math.min(
     Math.max(0, patch.chapterIndex ?? existing?.chapterIndex ?? 0),
     Math.max(0, chapterCount - 1),
   )
+  const rawReaderMode = patch.readerMode ?? existing?.readerMode
+  const readerMode =
+    rawReaderMode === 'speed' || rawReaderMode === 'standard'
+      ? rawReaderMode
+      : 'standard'
   const next: ReadingProgress = {
     bookId,
     chapterIndex,
     blockIndex: Math.max(0, patch.blockIndex ?? existing?.blockIndex ?? 0),
     wordIndex: Math.max(0, patch.wordIndex ?? existing?.wordIndex ?? 0),
     percent: Math.min(1, Math.max(0, patch.percent ?? existing?.percent ?? 0)),
+    readerMode,
     updatedAt: new Date().toISOString(),
   }
   await mkdir(bookDir(dataDir, bookId), { recursive: true })
@@ -229,6 +275,18 @@ export async function listBooks(dataDir: string): Promise<BookSummary[]> {
   return summaries
 }
 
+export async function findBookBySource(
+  dataDir: string,
+  source: string,
+): Promise<BookMeta | null> {
+  const ids = await listBookIds(dataDir)
+  for (const id of ids) {
+    const meta = await getBookMeta(dataDir, id)
+    if (meta?.source === source) return meta
+  }
+  return null
+}
+
 export async function getChapter(
   dataDir: string,
   bookId: string,
@@ -240,16 +298,18 @@ export async function getChapter(
     null,
   )
   if (!stored) return null
-  const html = stored.html
-    .split(RES_PLACEHOLDER)
-    .join(`/api/books/${encodeURIComponent(bookId)}/resource/`)
-  // Append workspace query so chapter <img> subresources resolve correctly.
-  const withQuery = assetQuery
-    ? html.replace(
-        /(\/api\/books\/[^"']+?\/resource\/[^"')\s]+)/g,
-        (match) => `${match}${match.includes('?') ? '&' : '?'}${assetQuery}`,
-      )
-    : html
+  const resourcePrefix = `/api/books/${encodeURIComponent(bookId)}/resource/`
+  const withQuery = stored.html.replace(
+    /__RES__\/([^"'<>\n\r]+)/g,
+    (_match, rawPath: string) => {
+      const resourcePath = rawPath
+        .split('/')
+        .map((part) => encodeURIComponent(part))
+        .join('/')
+      const query = assetQuery ? `?${assetQuery}` : ''
+      return `${resourcePrefix}${resourcePath}${query}`
+    },
+  )
   return {
     bookId,
     index: stored.index,
@@ -418,6 +478,8 @@ export async function deleteBook(
   dataDir: string,
   bookId: string,
 ): Promise<void> {
+  const meta = await getBookMeta(dataDir, bookId)
+  await removeStoreInstalledMarker(dataDir, meta?.source ?? null)
   await rm(bookDir(dataDir, bookId), { recursive: true, force: true })
   // Drop the book from any folder it lived in.
   const folders = await readFolders(dataDir)
@@ -601,19 +663,37 @@ export async function moveBook(
   dataDir: string,
   bookId: string,
   folderId: string | null,
+  inFolder = true,
 ): Promise<Folder[]> {
+  const meta = await getBookMeta(dataDir, bookId)
+  if (!meta) throw new Error('Book not found')
   const folders = await readFolders(dataDir)
+  if (folderId !== null && !folders.some((folder) => folder.id === folderId)) {
+    throw new Error('Folder not found')
+  }
+
   const now = new Date().toISOString()
+  let changed = false
+
   for (const folder of folders) {
     const had = folder.bookIds.includes(bookId)
-    const willHave = folder.id === folderId
-    if (had === willHave) continue
-    folder.bookIds = willHave
-      ? [...folder.bookIds.filter((id) => id !== bookId), bookId]
-      : folder.bookIds.filter((id) => id !== bookId)
+    const shouldUpdate = folderId === null ? had : folder.id === folderId
+    if (!shouldUpdate) continue
+
+    const nextBookIds =
+      folderId === null || !inFolder
+        ? folder.bookIds.filter((id) => id !== bookId)
+        : [...folder.bookIds.filter((id) => id !== bookId), bookId]
+
+    if (nextBookIds.length === folder.bookIds.length && had === inFolder)
+      continue
+
+    folder.bookIds = nextBookIds
     folder.updatedAt = now
+    changed = true
   }
-  await writeFolders(dataDir, folders)
+
+  if (changed) await writeFolders(dataDir, folders)
   return sortFolders(folders)
 }
 

@@ -5,6 +5,7 @@ import {
   safePath,
   writeJson,
 } from '@moldable-ai/storage'
+import { isOneShotAlarmExpired, nextAlarmOccurrenceAfter } from '@/lib/alarms'
 import { formatRelative, zoneDeltaLabel, zoneOffsetLabel } from '@/lib/format'
 import { zoneToLabel } from '@/lib/timezones'
 import {
@@ -43,8 +44,23 @@ function worldClocksPath(workspaceId?: string) {
   return safePath(getAppDataDir(workspaceId), 'world-clocks.json')
 }
 
-function readAlarms(workspaceId?: string) {
-  return readJson<Alarm[]>(alarmsPath(workspaceId), [])
+async function readAlarms(workspaceId?: string) {
+  const alarms = await readJson<Alarm[]>(alarmsPath(workspaceId), [])
+  const now = new Date()
+  let changed = false
+  const settled = alarms.map((alarm) => {
+    if (
+      alarm.enabled &&
+      alarm.repeat.length === 0 &&
+      isOneShotAlarmExpired(alarm, now, 5 * 60_000)
+    ) {
+      changed = true
+      return { ...alarm, enabled: false }
+    }
+    return alarm
+  })
+  if (changed) await writeAlarms(settled, workspaceId)
+  return settled
 }
 
 function writeAlarms(alarms: Alarm[], workspaceId?: string) {
@@ -152,27 +168,20 @@ function normalizeRepeat(repeat: unknown): Weekday[] {
   if (!Array.isArray(repeat)) return []
   const days = new Set<Weekday>()
   for (const value of repeat) {
-    if (typeof value === 'number' && value >= 0 && value <= 6) {
+    if (
+      typeof value === 'number' &&
+      Number.isInteger(value) &&
+      value >= 0 &&
+      value <= 6
+    ) {
       days.add(value as Weekday)
     }
   }
   return [...days].sort((a, b) => a - b)
 }
 
-/** Next time an alarm will fire, scanning the coming week. */
 function nextAlarmFire(alarm: Alarm, from: Date): Date | null {
-  const [hours, minutes] = alarm.time.split(':').map(Number)
-  if (hours === undefined || minutes === undefined) return null
-
-  for (let offset = 0; offset <= 7; offset += 1) {
-    const candidate = new Date(from)
-    candidate.setDate(candidate.getDate() + offset)
-    candidate.setHours(hours, minutes, 0, 0)
-    if (candidate.getTime() <= from.getTime()) continue
-    if (alarm.repeat.length === 0) return candidate
-    if (alarm.repeat.includes(candidate.getDay() as Weekday)) return candidate
-  }
-  return null
+  return nextAlarmOccurrenceAfter(alarm, from)
 }
 
 function nextAlarm(alarms: Alarm[], now: Date) {
@@ -442,7 +451,9 @@ app.post('/api/stopwatch/:action', async (c) => {
         }
       : state
   } else if (action === 'lap') {
-    next = { ...state, laps: [...state.laps, elapsedStopwatch(state, now)] }
+    next = state.running
+      ? { ...state, laps: [...state.laps, elapsedStopwatch(state, now)] }
+      : state
   } else if (action === 'reset') {
     next = { ...DEFAULT_STOPWATCH }
   } else {

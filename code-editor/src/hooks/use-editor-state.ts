@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { sendToMoldable, useWorkspace } from '@moldable-ai/ui'
 import { getFileName, getLanguageFromPath } from '@/lib/file-utils'
 import { modelManager } from '@/lib/monaco-model-manager'
@@ -31,9 +31,33 @@ export function useEditorState(
 
   const activeFile = openFiles.find((f) => f.path === activeFilePath) ?? null
   const isRestoringTabs = useRef(false)
+  const projectGeneration = useRef(0)
+  const openingFilePaths = useRef(new Set<string>())
+
+  const openFilePaths = useMemo(() => openFiles.map((f) => f.path), [openFiles])
+  const openFilePathsKey = openFilePaths.join('\0')
+  const onTabsChange = options?.onTabsChange
 
   // Track AGENTS.md content for the current project
   const [agentsMdContent, setAgentsMdContent] = useState<string | null>(null)
+
+  // Reset editor state whenever the project changes.
+  useEffect(() => {
+    const openingPaths = openingFilePaths.current
+    projectGeneration.current += 1
+    openingPaths.clear()
+    isRestoringTabs.current = false
+    modelManager.disposeAll()
+    setOpenFiles([])
+    setActiveFilePath(null)
+
+    return () => {
+      projectGeneration.current += 1
+      openingPaths.clear()
+      isRestoringTabs.current = false
+      modelManager.disposeAll()
+    }
+  }, [rootPath])
 
   // Fetch AGENTS.md when project root changes
   useEffect(() => {
@@ -43,19 +67,44 @@ export function useEditorState(
     }
 
     const agentsMdPath = `${rootPath}/AGENTS.md`
+    const generation = projectGeneration.current
+    const controller = new AbortController()
 
-    fetchWithWorkspace(`/api/read?path=${encodeURIComponent(agentsMdPath)}`)
+    fetchWithWorkspace(`/api/read?path=${encodeURIComponent(agentsMdPath)}`, {
+      signal: controller.signal,
+    })
       .then(async (res) => {
+        if (
+          controller.signal.aborted ||
+          generation !== projectGeneration.current
+        ) {
+          return
+        }
+
         if (res.ok) {
           const { content } = await res.json()
+          if (
+            controller.signal.aborted ||
+            generation !== projectGeneration.current
+          ) {
+            return
+          }
           setAgentsMdContent(content)
         } else {
           setAgentsMdContent(null)
         }
       })
       .catch(() => {
+        if (
+          controller.signal.aborted ||
+          generation !== projectGeneration.current
+        ) {
+          return
+        }
         setAgentsMdContent(null)
       })
+
+    return () => controller.abort()
   }, [rootPath, fetchWithWorkspace])
 
   // Send chat instructions to Moldable based on current context
@@ -116,30 +165,20 @@ Do NOT edit the Code Editor app itself unless explicitly asked.${agentsMdSection
     }
   }, [rootPath, activeFile, agentsMdContent])
 
-  // Clean up all models when project changes
-  useEffect(() => {
-    return () => {
-      modelManager.disposeAll()
-    }
-  }, [rootPath])
-
   // Notify parent when tabs change (debounced to avoid excessive saves)
   useEffect(() => {
     // Skip if we're in the middle of restoring tabs or no callback provided
-    if (isRestoringTabs.current || !options?.onTabsChange) return
+    if (isRestoringTabs.current || !onTabsChange) return
 
     // Skip initial empty state
-    if (openFiles.length === 0 && activeFilePath === null) return
+    if (openFilePaths.length === 0 && activeFilePath === null) return
 
     const timeoutId = setTimeout(() => {
-      options.onTabsChange?.(
-        openFiles.map((f) => f.path),
-        activeFilePath,
-      )
+      onTabsChange(openFilePaths, activeFilePath)
     }, 500) // Debounce 500ms to avoid excessive API calls
 
     return () => clearTimeout(timeoutId)
-  }, [openFiles, activeFilePath, options])
+  }, [openFilePaths, openFilePathsKey, activeFilePath, onTabsChange])
 
   // Check if a file has unsaved changes
   // First check the model manager (has accurate state), fall back to React state
@@ -166,29 +205,48 @@ Do NOT edit the Code Editor app itself unless explicitly asked.${agentsMdSection
         return
       }
 
-      // Fetch file content
-      const res = await fetchWithWorkspace(
-        `/api/read?path=${encodeURIComponent(path)}`,
-      )
-      if (!res.ok) {
-        console.error('Failed to read file:', path)
+      if (openingFilePaths.current.has(path)) {
+        setActiveFilePath(path)
         return
       }
 
-      const { content } = await res.json()
-      const name = getFileName(path)
-      const language = getLanguageFromPath(path)
+      const generation = projectGeneration.current
+      openingFilePaths.current.add(path)
 
-      const newFile: OpenFile = {
-        path,
-        name,
-        language,
-        content,
-        originalContent: content,
+      // Fetch file content
+      try {
+        const res = await fetchWithWorkspace(
+          `/api/read?path=${encodeURIComponent(path)}`,
+        )
+        if (!res.ok) {
+          console.error('Failed to read file:', path)
+          return
+        }
+
+        if (generation !== projectGeneration.current) return
+
+        const { content } = await res.json()
+        if (generation !== projectGeneration.current) return
+
+        const name = getFileName(path)
+        const language = getLanguageFromPath(path)
+
+        const newFile: OpenFile = {
+          path,
+          name,
+          language,
+          content,
+          originalContent: content,
+        }
+
+        setOpenFiles((prev) => {
+          if (prev.some((f) => f.path === path)) return prev
+          return [...prev, newFile]
+        })
+        setActiveFilePath(path)
+      } finally {
+        openingFilePaths.current.delete(path)
       }
-
-      setOpenFiles((prev) => [...prev, newFile])
-      setActiveFilePath(path)
     },
     [openFiles, fetchWithWorkspace],
   )
@@ -242,14 +300,21 @@ Do NOT edit the Code Editor app itself unless explicitly asked.${agentsMdSection
           return
         }
 
-        // Mark as saved in model manager
-        modelManager.markAsSaved(path)
+        // Only clear dirty state if no newer edits arrived while saving.
+        const modelMarkedClean = modelManager.markAsSaved(path, content)
 
         // Update original content to mark as clean in React state too
         setOpenFiles((prev) =>
-          prev.map((f) =>
-            f.path === path ? { ...f, content, originalContent: content } : f,
-          ),
+          prev.map((f) => {
+            if (f.path !== path) return f
+            if (!modelManager.hasModel(path) && f.content === content) {
+              return { ...f, originalContent: content }
+            }
+            if (modelMarkedClean) {
+              return { ...f, originalContent: content }
+            }
+            return f
+          }),
         )
       } finally {
         setIsSaving(false)
@@ -273,6 +338,74 @@ Do NOT edit the Code Editor app itself unless explicitly asked.${agentsMdSection
     setActiveFilePath(null)
   }, [])
 
+  const closePath = useCallback(
+    (targetPath: string) => {
+      const childPrefix = `${targetPath}/`
+      modelManager.getOpenPaths().forEach((path) => {
+        if (path === targetPath || path.startsWith(childPrefix)) {
+          modelManager.disposeModel(path)
+        }
+      })
+
+      setOpenFiles((prev) =>
+        prev.filter(
+          (file) =>
+            file.path !== targetPath && !file.path.startsWith(childPrefix),
+        ),
+      )
+      setActiveFilePath((prev) => {
+        if (!prev || (prev !== targetPath && !prev.startsWith(childPrefix))) {
+          return prev
+        }
+
+        const remaining = openFiles.filter(
+          (file) =>
+            file.path !== targetPath && !file.path.startsWith(childPrefix),
+        )
+        return remaining.length > 0
+          ? remaining[remaining.length - 1].path
+          : null
+      })
+    },
+    [openFiles],
+  )
+
+  const renameOpenPath = useCallback(
+    (oldPath: string, newPath: string, isDirectory: boolean) => {
+      const childPrefix = `${oldPath}/`
+      const translatePath = (candidate: string) => {
+        if (candidate === oldPath) return newPath
+        if (isDirectory && candidate.startsWith(childPrefix)) {
+          return `${newPath}/${candidate.slice(childPrefix.length)}`
+        }
+        return candidate
+      }
+
+      setOpenFiles((prev) =>
+        prev.map((file) => {
+          const nextPath = translatePath(file.path)
+
+          if (nextPath === file.path) return file
+          const language = getLanguageFromPath(nextPath)
+          modelManager.renameModel(file.path, nextPath, language)
+
+          return {
+            ...file,
+            path: nextPath,
+            name: getFileName(nextPath),
+            language,
+          }
+        }),
+      )
+
+      setActiveFilePath((prev) => {
+        if (!prev) return prev
+        return translatePath(prev)
+      })
+    },
+    [],
+  )
+
   // Get current open file paths (for saving tab state)
   const getOpenFilePaths = useCallback(() => {
     return openFiles.map((f) => f.path)
@@ -283,6 +416,7 @@ Do NOT edit the Code Editor app itself unless explicitly asked.${agentsMdSection
     async (filePaths: string[], activeFile: string | null) => {
       // Set flag to prevent onTabsChange from firing during restore
       isRestoringTabs.current = true
+      const generation = projectGeneration.current
 
       // Close existing files first (and dispose models)
       modelManager.disposeAll()
@@ -291,10 +425,16 @@ Do NOT edit the Code Editor app itself unless explicitly asked.${agentsMdSection
 
       // Deduplicate file paths to prevent duplicate tabs
       const uniqueFilePaths = [...new Set(filePaths)]
+      const restoredPaths: string[] = []
 
       // Open each file
       for (const path of uniqueFilePaths) {
         try {
+          if (generation !== projectGeneration.current) {
+            isRestoringTabs.current = false
+            return
+          }
+
           const res = await fetchWithWorkspace(
             `/api/read?path=${encodeURIComponent(path)}`,
           )
@@ -307,6 +447,11 @@ Do NOT edit the Code Editor app itself unless explicitly asked.${agentsMdSection
           }
 
           const { content } = await res.json()
+          if (generation !== projectGeneration.current) {
+            isRestoringTabs.current = false
+            return
+          }
+
           const name = getFileName(path)
           const language = getLanguageFromPath(path)
 
@@ -325,21 +470,24 @@ Do NOT edit the Code Editor app itself unless explicitly asked.${agentsMdSection
             }
             return [...prev, newFile]
           })
+          restoredPaths.push(path)
         } catch {
           console.warn('Failed to restore file:', path)
         }
       }
 
       // Set active file (default to first file if saved active doesn't exist)
-      if (activeFile && uniqueFilePaths.includes(activeFile)) {
+      if (activeFile && restoredPaths.includes(activeFile)) {
         setActiveFilePath(activeFile)
-      } else if (uniqueFilePaths.length > 0) {
-        setActiveFilePath(uniqueFilePaths[0])
+      } else if (restoredPaths.length > 0) {
+        setActiveFilePath(restoredPaths[0])
       }
 
       // Clear the flag after a short delay to allow state to settle
       setTimeout(() => {
-        isRestoringTabs.current = false
+        if (generation === projectGeneration.current) {
+          isRestoringTabs.current = false
+        }
       }, 100)
     },
     [fetchWithWorkspace],
@@ -358,6 +506,8 @@ Do NOT edit the Code Editor app itself unless explicitly asked.${agentsMdSection
     saveActiveFile,
     setActiveFilePath,
     closeAllFiles,
+    closePath,
+    renameOpenPath,
     getOpenFilePaths,
     restoreTabs,
   }

@@ -9,6 +9,7 @@
     "start": "NODE_ENV=production tsx src/server/index.ts",
     "lint": "eslint . --max-warnings 0",
     "check-types": "tsc --noEmit",
+    "test": "tsx src/calculator.test.ts",
     "clean": "rm -rf dist .vite"
   },
   "dependencies": {

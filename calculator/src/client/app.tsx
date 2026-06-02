@@ -33,6 +33,7 @@ import {
   type Key,
   SCIENTIFIC_KEYS,
   balanceParens,
+  reciprocal,
   toggleSign,
 } from './lib/keypad'
 import { evaluate, formatResult } from '@/lib/calc'
@@ -164,6 +165,11 @@ function CalculatorPane({ seed }: { seed: CalcSeed }) {
         setExpr((prev) => toggleSign(prev))
         return
       }
+      if (key.action === 'reciprocal') {
+        setJustEvaluated(false)
+        setExpr((prev) => reciprocal(prev))
+        return
+      }
       if (key.action === 'equals') {
         doEquals()
         return
@@ -235,28 +241,32 @@ function CalculatorPane({ seed }: { seed: CalcSeed }) {
       : ' '
 
   return (
-    <div className="mx-auto flex w-full max-w-md flex-col gap-4">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-md flex-col">
       {/* Display */}
-      <div className="border-border bg-card rounded-2xl border p-5">
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setScientific((s) => !s)}
-            className={cn(
-              'text-muted-foreground hover:text-foreground flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors',
-              scientific && 'text-foreground',
-            )}
-          >
-            <Sigma className="size-3.5" />
-            Scientific
-          </button>
-          {scientific && (
+      <div className="bg-background z-10 shrink-0 pb-4">
+        <div className="border-border bg-card rounded-2xl border p-5 shadow-sm">
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setScientific((s) => !s)}
+              className={cn(
+                'text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium transition-colors',
+                scientific && 'text-foreground',
+              )}
+            >
+              <Sigma className="size-3.5" />
+              Scientific
+            </button>
             <ToggleGroup
               type="single"
               size="sm"
               value={angleMode}
               onValueChange={(v) => v && setAngleMode(v as AngleMode)}
-              className="bg-muted rounded-md p-0.5"
+              aria-hidden={!scientific}
+              className={cn(
+                'bg-muted rounded-md p-0.5',
+                !scientific && 'pointer-events-none invisible',
+              )}
             >
               <ToggleGroupItem value="deg" className="px-2.5 text-xs">
                 DEG
@@ -265,37 +275,44 @@ function CalculatorPane({ seed }: { seed: CalcSeed }) {
                 RAD
               </ToggleGroupItem>
             </ToggleGroup>
-          )}
-        </div>
-
-        <div className="mt-3 text-right">
-          <div className="text-muted-foreground h-5 truncate font-mono text-sm">
-            {error ? (
-              <span className="text-destructive">{error}</span>
-            ) : (
-              subText
-            )}
           </div>
-          <div className="text-foreground mt-1 truncate font-mono text-4xl font-semibold tabular-nums tracking-tight">
-            {bigText}
+
+          <div className="mt-3 text-right">
+            <div className="text-muted-foreground h-5 truncate font-mono text-sm">
+              {error ? (
+                <span className="text-destructive">{error}</span>
+              ) : (
+                subText
+              )}
+            </div>
+            <div className="text-foreground mt-1 truncate font-mono text-4xl font-semibold tabular-nums tracking-tight">
+              {bigText}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Scientific keypad */}
-      {scientific && (
-        <div className="grid grid-cols-4 gap-2">
-          {SCIENTIFIC_KEYS.map((key) => (
-            <KeypadButton key={key.label} k={key} onPress={handleKey} science />
+      <div className="scrollbar-none min-h-0 flex-1 overflow-y-auto pb-[calc(var(--chat-safe-padding,0px)+1rem)]">
+        {/* Scientific keypad */}
+        {scientific && (
+          <div className="grid grid-cols-4 gap-2">
+            {SCIENTIFIC_KEYS.map((key) => (
+              <KeypadButton
+                key={key.label}
+                k={key}
+                onPress={handleKey}
+                science
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Basic keypad */}
+        <div className={cn('grid grid-cols-4 gap-2', scientific && 'mt-4')}>
+          {BASIC_KEYS.map((key) => (
+            <KeypadButton key={key.label} k={key} onPress={handleKey} />
           ))}
         </div>
-      )}
-
-      {/* Basic keypad */}
-      <div className="grid grid-cols-4 gap-2">
-        {BASIC_KEYS.map((key) => (
-          <KeypadButton key={key.label} k={key} onPress={handleKey} />
-        ))}
       </div>
     </div>
   )
@@ -322,7 +339,7 @@ function KeypadButton({
       }
       onClick={() => onPress(k)}
       className={cn(
-        'calc-key h-14 select-none text-lg font-medium',
+        'calc-key h-14 cursor-pointer select-none text-lg font-medium',
         science && 'h-11 text-sm',
         isEquals && 'bg-primary text-primary-foreground',
         isOp && 'text-primary font-semibold',
@@ -430,7 +447,7 @@ function ConvertPane() {
             type="button"
             onClick={() => setCategoryId(cat.id)}
             className={cn(
-              'rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
+              'cursor-pointer rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
               cat.id === categoryId
                 ? 'border-primary bg-primary text-primary-foreground'
                 : 'border-border bg-card text-muted-foreground hover:text-foreground',
@@ -470,7 +487,7 @@ function ConvertPane() {
             variant="ghost"
             size="icon"
             onClick={swap}
-            className="text-muted-foreground hover:text-foreground rounded-full"
+            className="text-muted-foreground hover:text-foreground cursor-pointer rounded-full"
             aria-label="Swap units"
           >
             <ArrowRightLeft className="size-4" />
@@ -515,6 +532,7 @@ function ConvertPane() {
           variant="secondary"
           onClick={save}
           disabled={computed === null}
+          className="cursor-pointer disabled:cursor-default"
         >
           Save to history
         </Button>
@@ -575,7 +593,7 @@ function relativeTime(iso: string): string {
   return new Date(then).toLocaleDateString()
 }
 
-function HistoryPane({ onReuse }: { onReuse: (expr: string) => void }) {
+function HistoryPane({ onReuse }: { onReuse: (entry: HistoryEntry) => void }) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
@@ -633,7 +651,7 @@ function HistoryPane({ onReuse }: { onReuse: (expr: string) => void }) {
           onClick={() => clearAll.mutate()}
           disabled={!entries.length}
           aria-label="Clear all history"
-          className="text-muted-foreground hover:text-destructive"
+          className="text-muted-foreground hover:text-destructive cursor-pointer disabled:cursor-default"
         >
           <Trash2 className="size-4" />
         </Button>
@@ -656,8 +674,8 @@ function HistoryPane({ onReuse }: { onReuse: (expr: string) => void }) {
               >
                 <button
                   type="button"
-                  onClick={() => onReuse(entry.expression)}
-                  className="min-w-0 flex-1 text-left"
+                  onClick={() => onReuse(entry)}
+                  className="min-w-0 flex-1 cursor-pointer text-left"
                   title="Reuse in calculator"
                 >
                   <div className="text-muted-foreground truncate font-mono text-xs">
@@ -674,7 +692,7 @@ function HistoryPane({ onReuse }: { onReuse: (expr: string) => void }) {
                   <button
                     type="button"
                     onClick={() => deleteOne.mutate(entry.id)}
-                    className="text-muted-foreground hover:text-destructive opacity-0 transition-opacity group-hover:opacity-100"
+                    className="text-muted-foreground hover:text-destructive cursor-pointer opacity-0 transition-opacity group-hover:opacity-100"
                     aria-label="Delete entry"
                   >
                     <Delete className="size-3.5" />
@@ -705,9 +723,13 @@ export function App() {
   const nonce = useRef(0)
 
   // Re-using a past calculation drops it into the keypad and closes the panel.
-  const reuse = useCallback((expr: string) => {
+  const reuse = useCallback((entry: HistoryEntry) => {
     nonce.current += 1
-    setSeed({ expr, nonce: nonce.current })
+    setSeed({
+      expr:
+        entry.kind === 'calc' ? entry.expression : String(entry.resultValue),
+      nonce: nonce.current,
+    })
     setTab('calc')
     setHistoryOpen(false)
   }, [])
@@ -736,7 +758,7 @@ export function App() {
                     onClick={() => setTab(t.id)}
                     aria-current={active ? 'page' : undefined}
                     className={cn(
-                      'relative px-4 py-3.5 text-sm font-medium transition-colors',
+                      'relative cursor-pointer px-4 py-3.5 text-sm font-medium transition-colors',
                       active
                         ? 'text-foreground'
                         : 'text-muted-foreground hover:text-foreground',
@@ -756,7 +778,7 @@ export function App() {
             <button
               type="button"
               onClick={() => setHistoryOpen(true)}
-              className="text-muted-foreground hover:text-foreground hover:bg-muted/60 my-auto ml-auto flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors"
+              className="text-muted-foreground hover:text-foreground hover:bg-muted/60 my-auto ml-auto flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors"
             >
               <HistoryIcon className="size-4" />
               History
@@ -767,11 +789,17 @@ export function App() {
         {/* Pad the bottom by the host chat dock's safe-area inset (same pattern
             as Piano/Mail) so the keypad and Save button are never hidden behind
             the chat. Falls back to 0px outside Moldable. */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(var(--chat-safe-padding,0px)+1rem)] pt-4">
-          <TabsContent value="calc" className="mt-0">
+        <div className="min-h-0 flex-1 overflow-hidden px-4 pt-4">
+          <TabsContent
+            value="calc"
+            className="mt-0 h-full min-h-0 overflow-hidden"
+          >
             <CalculatorPane seed={seed} />
           </TabsContent>
-          <TabsContent value="convert" className="mt-0">
+          <TabsContent
+            value="convert"
+            className="mt-0 h-full min-h-0 overflow-y-auto pb-[calc(var(--chat-safe-padding,0px)+1rem)]"
+          >
             <ConvertPane />
           </TabsContent>
         </div>

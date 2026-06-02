@@ -2,11 +2,13 @@ import { getWorkspaceFromRequest } from '@moldable-ai/storage'
 import type { ForecastDay, WeatherData, WeatherLocation } from '../lib/types'
 import { weatherEmoji } from '../lib/wmo'
 import {
+  InvalidWeatherInputError,
   WeatherError,
   type WeatherQuery,
   clearLocationPreference,
   getLocationPreference,
   getWeatherData,
+  isLocation,
   searchLocations,
   setLocationPreference,
 } from './weather'
@@ -29,12 +31,7 @@ function normalizeQuery(input: {
   const query: WeatherQuery = {}
   const lat = Number(input.lat)
   const lon = Number(input.lon)
-  if (
-    input.lat !== undefined &&
-    input.lon !== undefined &&
-    !Number.isNaN(lat) &&
-    !Number.isNaN(lon)
-  ) {
+  if (input.lat !== undefined || input.lon !== undefined) {
     query.latitude = lat
     query.longitude = lon
   }
@@ -60,6 +57,10 @@ function errorMessage(err: unknown): string {
   return 'Weather lookup failed'
 }
 
+function errorStatus(err: unknown): 400 | 502 {
+  return err instanceof InvalidWeatherInputError ? 400 : 502
+}
+
 function workspaceFromContext(c: Context): string | undefined {
   return getWorkspaceFromRequest(c.req.raw)
 }
@@ -69,9 +70,8 @@ function normalizeLocation(
 ): WeatherLocation | null {
   const latitude = Number(input.latitude)
   const longitude = Number(input.longitude)
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
 
-  return {
+  const location: WeatherLocation = {
     latitude,
     longitude,
     name: typeof input.name === 'string' ? input.name : undefined,
@@ -79,6 +79,7 @@ function normalizeLocation(
     country: typeof input.country === 'string' ? input.country : undefined,
     timezone: typeof input.timezone === 'string' ? input.timezone : undefined,
   }
+  return isLocation(location) ? location : null
 }
 
 /**
@@ -92,10 +93,16 @@ function notableReason(data: WeatherData, today: ForecastDay): string | null {
   if (precip >= 50 || (data.current.code >= 51 && precip >= 30)) {
     return `${data.current.label} · ${precip}% chance`
   }
-  if (data.unit === 'fahrenheit' && today.high >= 95) {
+  if (
+    (data.unit === 'fahrenheit' && today.high >= 95) ||
+    (data.unit === 'celsius' && today.high >= 35)
+  ) {
     return 'Heat — stay hydrated'
   }
-  if (data.unit === 'fahrenheit' && today.low <= 32) {
+  if (
+    (data.unit === 'fahrenheit' && today.low <= 32) ||
+    (data.unit === 'celsius' && today.low <= 0)
+  ) {
     return 'Freezing — bundle up'
   }
   return null
@@ -243,6 +250,15 @@ app.post('/api/moldable/rpc', async (c) => {
       404,
     )
   } catch (error) {
+    if (error instanceof InvalidWeatherInputError) {
+      return c.json(
+        {
+          ok: false,
+          error: { code: 'invalid_params', message: errorMessage(error) },
+        },
+        400,
+      )
+    }
     return c.json(
       {
         ok: false,
@@ -260,7 +276,7 @@ app.get('/api/weather', async (c) => {
     const data: WeatherData = await getWeatherData(queryFromContext(c))
     return c.json(data)
   } catch (error) {
-    return c.json({ error: errorMessage(error) }, 502)
+    return c.json({ error: errorMessage(error) }, errorStatus(error))
   }
 })
 
@@ -286,15 +302,20 @@ app.get('/api/location', async (c) => {
 })
 
 app.post('/api/location', async (c) => {
+  let body: Record<string, unknown>
   try {
-    const body = (await c.req.json()) as Record<string, unknown>
+    body = (await c.req.json()) as Record<string, unknown>
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400)
+  }
+
+  try {
     const location = normalizeLocation(body)
     if (!location) return c.json({ error: 'Invalid location' }, 400)
-
     const saved = await setLocationPreference(workspaceFromContext(c), location)
     return c.json({ mode: 'custom', location: saved })
   } catch (error) {
-    return c.json({ error: errorMessage(error) }, 502)
+    return c.json({ error: errorMessage(error) }, errorStatus(error))
   }
 })
 
@@ -317,7 +338,7 @@ app.get('/api/conditions', async (c) => {
       updatedAt: data.updatedAt,
     })
   } catch (error) {
-    return c.json({ error: errorMessage(error) }, 502)
+    return c.json({ error: errorMessage(error) }, errorStatus(error))
   }
 })
 
@@ -332,7 +353,7 @@ app.get('/api/forecast', async (c) => {
       updatedAt: data.updatedAt,
     })
   } catch (error) {
-    return c.json({ error: errorMessage(error) }, 502)
+    return c.json({ error: errorMessage(error) }, errorStatus(error))
   }
 })
 

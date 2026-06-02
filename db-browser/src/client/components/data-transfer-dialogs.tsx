@@ -1,5 +1,5 @@
 import { Download, Loader2, Upload } from 'lucide-react'
-import { type FormEvent, useMemo, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Button,
   Dialog,
@@ -139,6 +139,8 @@ export function ImportRowsDialog({
     selectedTable?.schema || selectedSchema || schemas[0]?.name || ''
   const [schema, setSchema] = useState(initialSchema)
   const [table, setTable] = useState(selectedTable?.table ?? '')
+  const schemaEditedRef = useRef(false)
+  const tableEditedRef = useRef(false)
   const [format, setFormat] = useState<ExportFormat>('csv')
   const [sourceContent, setSourceContent] = useState('')
   const [filename, setFilename] = useState('')
@@ -159,6 +161,31 @@ export function ImportRowsDialog({
     () => previewSourceRows(sourceContent, format, columns),
     [columns, format, sourceContent],
   )
+
+  useEffect(() => {
+    const nextSchema =
+      selectedTable?.schema || selectedSchema || schemas[0]?.name || ''
+
+    if (!schemaEditedRef.current && nextSchema && nextSchema !== schema) {
+      setSchema(nextSchema)
+    }
+
+    const effectiveSchema =
+      !schemaEditedRef.current && nextSchema ? nextSchema : schema
+    const nextTable =
+      selectedTable?.schema === effectiveSchema ? selectedTable.table : ''
+    const tableExists = schemas
+      .find((entry) => entry.name === effectiveSchema)
+      ?.tables.some((entry) => entry.name === table)
+
+    if (!tableEditedRef.current) {
+      if (nextTable && nextTable !== table) {
+        setTable(nextTable)
+      } else if (!nextTable && table && !tableExists) {
+        setTable('')
+      }
+    }
+  }, [schema, schemas, selectedSchema, selectedTable, table])
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -200,6 +227,8 @@ export function ImportRowsDialog({
               <Select
                 value={schema}
                 onValueChange={(value) => {
+                  schemaEditedRef.current = true
+                  tableEditedRef.current = false
                   setSchema(value)
                   setTable('')
                 }}
@@ -217,7 +246,13 @@ export function ImportRowsDialog({
               </Select>
             </DialogField>
             <DialogField label="Table">
-              <Select value={table} onValueChange={setTable}>
+              <Select
+                value={table}
+                onValueChange={(value) => {
+                  tableEditedRef.current = true
+                  setTable(value)
+                }}
+              >
                 <SelectTrigger className="h-8">
                   <SelectValue placeholder="Choose table" />
                 </SelectTrigger>

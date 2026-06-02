@@ -7,7 +7,7 @@ import {
   Timer as TimerIcon,
   Trash2,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Button,
   Dialog,
@@ -20,7 +20,6 @@ import {
   useWorkspace,
 } from '@moldable-ai/ui'
 import { type Fetcher, getJson, sendJson } from '../lib/api'
-import { playChime } from '../lib/sound'
 import { formatDuration } from '@/lib/format'
 import type { TimerView } from '@/lib/types'
 import { useNow } from '../hooks/use-now'
@@ -46,7 +45,6 @@ export function TimersPane({ openAddSignal }: { openAddSignal: number }) {
   const queryClient = useQueryClient()
   const now = useNow(250)
   const [customOpen, setCustomOpen] = useState(false)
-  const chimedRef = useRef<Set<string>>(new Set())
 
   const { data, isLoading } = useQuery({
     queryKey: ['timers', workspaceId],
@@ -98,26 +96,6 @@ export function TimersPane({ openAddSignal }: { openAddSignal: number }) {
       return { ...t, liveRemainingMs, liveState }
     })
   }, [data, now])
-
-  const finishedKey = timers
-    .filter((t) => t.liveState === 'finished')
-    .map((t) => t.id)
-    .join(',')
-
-  useEffect(() => {
-    const finishedIds = new Set(finishedKey ? finishedKey.split(',') : [])
-    let shouldChime = false
-    for (const id of finishedIds) {
-      if (!chimedRef.current.has(id)) {
-        chimedRef.current.add(id)
-        shouldChime = true
-      }
-    }
-    for (const id of [...chimedRef.current]) {
-      if (!finishedIds.has(id)) chimedRef.current.delete(id)
-    }
-    if (shouldChime) playChime(4)
-  }, [finishedKey])
 
   return (
     <div className="flex h-full min-h-0 flex-col">

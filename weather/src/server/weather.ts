@@ -34,6 +34,8 @@ const FETCH_TIMEOUT_MS = 8000
 
 export class WeatherError extends Error {}
 
+export class InvalidWeatherInputError extends WeatherError {}
+
 class UpstreamWeatherError extends WeatherError {
   constructor(
     public readonly status: number,
@@ -107,10 +109,32 @@ function locationPreferencePath(workspaceId?: string): string {
   return safePath(getAppDataDir(workspaceId), 'location-preference.json')
 }
 
-function isLocation(value: unknown): value is WeatherLocation {
+function isValidLatitude(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= -90 &&
+    value <= 90
+  )
+}
+
+function isValidLongitude(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= -180 &&
+    value <= 180
+  )
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+export function isLocation(value: unknown): value is WeatherLocation {
   if (!value || typeof value !== 'object') return false
   const loc = value as Record<string, unknown>
-  return typeof loc.latitude === 'number' && typeof loc.longitude === 'number'
+  return isValidLatitude(loc.latitude) && isValidLongitude(loc.longitude)
 }
 
 async function readStoredGeoCache(
@@ -149,7 +173,8 @@ export async function setLocationPreference(
   workspaceId: string | undefined,
   location: WeatherLocation,
 ): Promise<WeatherLocation> {
-  if (!isLocation(location)) throw new WeatherError('Invalid location')
+  if (!isLocation(location))
+    throw new InvalidWeatherInputError('Invalid location')
 
   const normalized: WeatherLocation = {
     latitude: location.latitude,
@@ -159,7 +184,6 @@ export async function setLocationPreference(
     country: location.country,
     timezone: location.timezone,
   }
-  locationPreferenceByWorkspace.set(workspaceKey(workspaceId), normalized)
   await writeJson<StoredLocationPreference>(
     locationPreferencePath(workspaceId),
     {
@@ -168,14 +192,14 @@ export async function setLocationPreference(
       updatedAt: new Date().toISOString(),
     },
   )
-  wxCache = null
+  locationPreferenceByWorkspace.set(workspaceKey(workspaceId), normalized)
+  invalidateWeatherCache(workspaceId)
   return normalized
 }
 
 export async function clearLocationPreference(
   workspaceId?: string,
 ): Promise<void> {
-  locationPreferenceByWorkspace.set(workspaceKey(workspaceId), null)
   await writeJson<StoredLocationPreference>(
     locationPreferencePath(workspaceId),
     {
@@ -184,7 +208,8 @@ export async function clearLocationPreference(
       updatedAt: new Date().toISOString(),
     },
   )
-  wxCache = null
+  locationPreferenceByWorkspace.set(workspaceKey(workspaceId), null)
+  invalidateWeatherCache(workspaceId)
 }
 
 async function writeStoredGeoCache(
@@ -228,18 +253,20 @@ async function fetchLocationFromIpapi(): Promise<WeatherLocation> {
     timezone?: string
   }>('https://ipapi.co/json/')
 
-  if (typeof geo.latitude !== 'number' || typeof geo.longitude !== 'number') {
-    throw new WeatherError('Could not determine your location')
-  }
-
-  return {
-    latitude: geo.latitude,
-    longitude: geo.longitude,
+  const location: WeatherLocation = {
+    latitude: geo.latitude ?? Number.NaN,
+    longitude: geo.longitude ?? Number.NaN,
     name: geo.city,
     region: geo.region,
     country: geo.country_name,
     timezone: geo.timezone,
   }
+
+  if (!isLocation(location)) {
+    throw new WeatherError('Could not determine your location')
+  }
+
+  return location
 }
 
 async function fetchLocationFromIpWhoIs(): Promise<WeatherLocation> {
@@ -257,18 +284,20 @@ async function fetchLocationFromIpWhoIs(): Promise<WeatherLocation> {
   if (geo.success === false) {
     throw new WeatherError(geo.message || 'Fallback geolocation failed')
   }
-  if (typeof geo.latitude !== 'number' || typeof geo.longitude !== 'number') {
-    throw new WeatherError('Could not determine your location')
-  }
-
-  return {
-    latitude: geo.latitude,
-    longitude: geo.longitude,
+  const location: WeatherLocation = {
+    latitude: geo.latitude ?? Number.NaN,
+    longitude: geo.longitude ?? Number.NaN,
     name: geo.city,
     region: geo.region,
     country: geo.country,
     timezone: geo.timezone?.id,
   }
+
+  if (!isLocation(location)) {
+    throw new WeatherError('Could not determine your location')
+  }
+
+  return location
 }
 
 async function fetchLocationFromFreeIpApi(): Promise<WeatherLocation> {
@@ -281,18 +310,20 @@ async function fetchLocationFromFreeIpApi(): Promise<WeatherLocation> {
     timeZone?: string
   }>('https://freeipapi.com/api/json/')
 
-  if (typeof geo.latitude !== 'number' || typeof geo.longitude !== 'number') {
-    throw new WeatherError('Could not determine your location')
-  }
-
-  return {
-    latitude: geo.latitude,
-    longitude: geo.longitude,
+  const location: WeatherLocation = {
+    latitude: geo.latitude ?? Number.NaN,
+    longitude: geo.longitude ?? Number.NaN,
     name: geo.cityName,
     region: geo.regionName,
     country: geo.countryName,
     timezone: geo.timeZone,
   }
+
+  if (!isLocation(location)) {
+    throw new WeatherError('Could not determine your location')
+  }
+
+  return location
 }
 
 async function fetchFreshLocation(): Promise<WeatherLocation> {
@@ -364,6 +395,7 @@ async function resolveLocation(workspaceId?: string): Promise<WeatherLocation> {
 // ---- Open-Meteo forecast ----------------------------------------------------
 
 interface OpenMeteoResponse {
+  utc_offset_seconds?: number
   current?: {
     time?: string
     temperature_2m?: number
@@ -377,6 +409,7 @@ interface OpenMeteoResponse {
     time?: string[]
     temperature_2m?: number[]
     weather_code?: number[]
+    is_day?: number[]
   }
   daily?: {
     time?: string[]
@@ -424,8 +457,8 @@ export async function searchLocations(
   return (res.results ?? [])
     .filter(
       (item) =>
-        typeof item.latitude === 'number' &&
-        typeof item.longitude === 'number' &&
+        isValidLatitude(item.latitude) &&
+        isValidLongitude(item.longitude) &&
         typeof item.name === 'string',
     )
     .map((item) => {
@@ -454,7 +487,7 @@ function buildUrl(loc: WeatherLocation, unit: Unit): string {
     longitude: String(loc.longitude),
     current:
       'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,is_day,wind_speed_10m',
-    hourly: 'temperature_2m,weather_code',
+    hourly: 'temperature_2m,weather_code,is_day',
     daily:
       'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max',
     temperature_unit: unit,
@@ -467,20 +500,25 @@ function buildUrl(loc: WeatherLocation, unit: Unit): string {
 
 function parseCurrent(res: OpenMeteoResponse): CurrentConditions {
   const cur = res.current
-  if (!cur || typeof cur.temperature_2m !== 'number') {
+  if (!cur || !isFiniteNumber(cur.temperature_2m)) {
     throw new WeatherError('No current conditions available')
   }
-  const code = cur.weather_code ?? 0
+  const code = isFiniteNumber(cur.weather_code) ? cur.weather_code : 0
+  const apparentTemperature = isFiniteNumber(cur.apparent_temperature)
+    ? cur.apparent_temperature
+    : cur.temperature_2m
   return {
     temperature: Math.round(cur.temperature_2m),
-    apparentTemperature: Math.round(
-      cur.apparent_temperature ?? cur.temperature_2m,
-    ),
+    apparentTemperature: Math.round(apparentTemperature),
     code,
     label: weatherLabel(code),
     isDay: cur.is_day !== 0,
-    humidity: Math.round(cur.relative_humidity_2m ?? 0),
-    windSpeed: Math.round(cur.wind_speed_10m ?? 0),
+    humidity: Math.round(
+      isFiniteNumber(cur.relative_humidity_2m) ? cur.relative_humidity_2m : 0,
+    ),
+    windSpeed: Math.round(
+      isFiniteNumber(cur.wind_speed_10m) ? cur.wind_speed_10m : 0,
+    ),
     time: cur.time ?? new Date().toISOString(),
   }
 }
@@ -489,20 +527,34 @@ function parseHourly(res: OpenMeteoResponse): ForecastHour[] {
   const h = res.hourly
   if (!h?.time || !h.temperature_2m || !h.weather_code) return []
   const now = Date.now()
+  const utcOffsetSeconds =
+    typeof res.utc_offset_seconds === 'number' ? res.utc_offset_seconds : null
   const out: ForecastHour[] = []
   for (let i = 0; i < h.time.length; i++) {
-    const t = new Date(h.time[i]).getTime()
+    const t = parseOpenMeteoLocalTime(h.time[i], utcOffsetSeconds)
+    if (!Number.isFinite(t)) continue
     if (t < now) continue // only future hours
-    const code = h.weather_code[i] ?? 0
+    const temperature = h.temperature_2m[i]
+    if (!isFiniteNumber(temperature)) continue
+    const code = isFiniteNumber(h.weather_code[i]) ? h.weather_code[i] : 0
     out.push({
       time: h.time[i],
-      temperature: Math.round(h.temperature_2m[i]),
+      temperature: Math.round(temperature),
       code,
       label: weatherLabel(code),
+      isDay: typeof h.is_day?.[i] === 'number' ? h.is_day[i] !== 0 : undefined,
     })
     if (out.length >= 12) break // next 12 hours is plenty for a strip
   }
   return out
+}
+
+function parseOpenMeteoLocalTime(
+  value: string,
+  utcOffsetSeconds: number | null,
+): number {
+  if (utcOffsetSeconds === null) return new Date(value).getTime()
+  return Date.parse(`${value}Z`) - utcOffsetSeconds * 1000
 }
 
 function parseDaily(res: OpenMeteoResponse): ForecastDay[] {
@@ -515,19 +567,28 @@ function parseDaily(res: OpenMeteoResponse): ForecastDay[] {
   ) {
     return []
   }
-  return d.time.map((date, i) => {
-    const code = d.weather_code![i] ?? 0
-    return {
-      date,
+  const out: ForecastDay[] = []
+  for (let i = 0; i < d.time.length; i++) {
+    const high = d.temperature_2m_max[i]
+    const low = d.temperature_2m_min[i]
+    if (!isFiniteNumber(high) || !isFiniteNumber(low)) continue
+
+    const code = isFiniteNumber(d.weather_code[i]) ? d.weather_code[i] : 0
+    const precipitationProbability = isFiniteNumber(
+      d.precipitation_probability_max?.[i],
+    )
+      ? d.precipitation_probability_max[i]
+      : 0
+    out.push({
+      date: d.time[i],
       code,
       label: weatherLabel(code),
-      high: Math.round(d.temperature_2m_max![i]),
-      low: Math.round(d.temperature_2m_min![i]),
-      precipitationProbability: Math.round(
-        d.precipitation_probability_max?.[i] ?? 0,
-      ),
-    }
-  })
+      high: Math.round(high),
+      low: Math.round(low),
+      precipitationProbability: Math.round(precipitationProbability),
+    })
+  }
+  return out
 }
 
 // ---- Desktop preferences ----------------------------------------------------
@@ -563,13 +624,37 @@ async function resolveDefaultUnit(workspaceId?: string): Promise<Unit> {
 
 // ---- Public surface ---------------------------------------------------------
 
-let wxCache: { key: string; value: WeatherData; at: number } | null = null
+const wxCacheByKey = new Map<string, { value: WeatherData; at: number }>()
 
 export interface WeatherQuery {
   latitude?: number
   longitude?: number
   unit?: Unit
   workspaceId?: string
+}
+
+function weatherCacheKey(
+  workspaceId: string | undefined,
+  location: WeatherLocation,
+  unit: Unit,
+): string {
+  return [
+    workspaceKey(workspaceId),
+    unit,
+    location.latitude.toFixed(5),
+    location.longitude.toFixed(5),
+    location.name ?? '',
+    location.region ?? '',
+    location.country ?? '',
+    location.timezone ?? '',
+  ].join('|')
+}
+
+function invalidateWeatherCache(workspaceId: string | undefined): void {
+  const prefix = `${workspaceKey(workspaceId)}|`
+  for (const key of wxCacheByKey.keys()) {
+    if (key.startsWith(prefix)) wxCacheByKey.delete(key)
+  }
 }
 
 /**
@@ -587,9 +672,14 @@ export async function getWeatherData(
       ? { latitude: query.latitude, longitude: query.longitude }
       : (preferredLocation ?? (await resolveLocation(query.workspaceId)))
 
-  const key = `${location.latitude.toFixed(2)},${location.longitude.toFixed(2)},${unit}`
-  if (wxCache && wxCache.key === key && Date.now() - wxCache.at < WX_TTL_MS) {
-    return wxCache.value
+  if (!isLocation(location)) {
+    throw new InvalidWeatherInputError('Invalid coordinates')
+  }
+
+  const key = weatherCacheKey(query.workspaceId, location, unit)
+  const cached = wxCacheByKey.get(key)
+  if (cached && Date.now() - cached.at < WX_TTL_MS) {
+    return cached.value
   }
 
   const res = await fetchJson<OpenMeteoResponse>(buildUrl(location, unit))
@@ -601,6 +691,6 @@ export async function getWeatherData(
     daily: parseDaily(res),
     updatedAt: new Date().toISOString(),
   }
-  wxCache = { key, value, at: Date.now() }
+  wxCacheByKey.set(key, { value, at: Date.now() })
   return value
 }

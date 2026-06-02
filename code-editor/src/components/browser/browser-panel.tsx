@@ -34,6 +34,11 @@ export function BrowserPanel({
     sendToMoldable({ type: 'moldable:open-url', url })
   }, [url])
 
+  useEffect(() => {
+    setUrl(defaultUrl)
+    setInputUrl(defaultUrl)
+  }, [defaultUrl])
+
   const handleIframeLoad = useCallback(() => {
     // Ignore load events from empty src
     if (iframeRef.current?.src && iframeRef.current.src !== 'about:blank') {

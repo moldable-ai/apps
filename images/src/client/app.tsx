@@ -298,6 +298,10 @@ function extensionFromMime(mimeType: string): string {
   }
 }
 
+function hasSupportedImageExtension(name: string): boolean {
+  return /\.(png|jpe?g|webp|gif|svg|heic|heif)$/i.test(name)
+}
+
 async function downloadImage(iteration: ImageIteration) {
   const response = await fetch(iteration.imageUrl)
   if (!response.ok) {
@@ -460,13 +464,14 @@ type MoldableFileDropMessage =
     }
 
 function imageFilesFromList(fileList: FileList): File[] {
-  return Array.from(fileList).filter((file) => file.type.startsWith('image/'))
+  return Array.from(fileList).filter(
+    (file) =>
+      file.type.startsWith('image/') || hasSupportedImageExtension(file.name),
+  )
 }
 
 function imagePathsFromList(paths: string[]): string[] {
-  return paths.filter((path) =>
-    /\.(png|jpe?g|webp|gif|svg|heic|heif)$/i.test(path),
-  )
+  return paths.filter(hasSupportedImageExtension)
 }
 
 function hasFileDrag(event: DragEvent): boolean {
@@ -547,7 +552,7 @@ function StackCountBadge({
 }
 
 function remixInstructionsForIteration(threadId: string, iterationId: string) {
-  return `Images app is open to image thread ${threadId}, with image iteration ${iterationId} selected. Drive this app only through app RPC methods. When the user wants a new image based on this selected image, call images.generateFromReference with { id: "${threadId}", baseIterationId: "${iterationId}", prompt, aspectRatio? }; this adds a distinct new root image inside the current thread. When the user explicitly wants to edit/remix this image as a child of the selected image, call images.edit with { id: "${threadId}", baseIterationId: "${iterationId}", prompt, aspectRatio? }. To remove the selected image background, call images.removeBackground with { id: "${threadId}", iterationId: "${iterationId}" }. To delete this selected image, call images.deleteIteration with { id: "${threadId}", iterationId: ["${iterationId}"] }; include descendant iteration IDs from images.get only if the user asks to delete children too. To save a chat-generated image into this thread, call images.importGenerated with { id: "${threadId}", imagePath, prompt? }. To cancel stuck pending work, call images.cancel with { id: "${threadId}" }. To change the thread ratio, call images.setAspectRatio with { id: "${threadId}", aspectRatio }. Use images.get to inspect iteration history.`
+  return `Images app is open to image thread ${threadId}, with image iteration ${iterationId} selected. Drive this app only through app RPC methods. When the user wants a new image based on this selected image, call images.generateFromReference with { id: "${threadId}", baseIterationId: "${iterationId}", prompt, aspectRatio? }; this adds a distinct new root image inside the current thread. When the user explicitly wants to edit/remix this image as a child of the selected image, call images.edit with { id: "${threadId}", baseIterationId: "${iterationId}", prompt, aspectRatio? }. To remove the selected image background, call images.removeBackground with { id: "${threadId}", iterationId: "${iterationId}" }. To delete this selected image, call images.deleteIteration with { id: "${threadId}", iterationId: ["${iterationId}"] }; include descendant iteration IDs from images.get only if the user asks to delete children too. To save a chat-generated image into this thread, call images.importGenerated with { id: "${threadId}", imagePath, prompt? }. To cancel stuck pending work, call images.cancel with { id: "${threadId}" }. To change the selected image ratio, call images.setAspectRatio with { id: "${threadId}", baseIterationId: "${iterationId}", aspectRatio }. Use images.get to inspect iteration history.`
 }
 
 function AspectRatioMenu({
@@ -821,7 +826,7 @@ export function App() {
   })
 
   const removeBgStatusQuery = useQuery({
-    queryKey: ['remove-bg-status', workspaceId],
+    queryKey: ['remove-bg-status'],
     queryFn: async () => {
       const response = await fetchWithWorkspace('/api/remove-bg/status')
       return parseResponse<RemoveBgStatus>(
@@ -1021,19 +1026,19 @@ export function App() {
   }, [selectedIteration, selectedThread])
 
   const setAspectRatio = useMutation({
-    mutationFn: async ({
-      threadId,
-      aspectRatio,
-    }: {
+    mutationFn: async (variables: {
       threadId: string
       aspectRatio: AspectRatioId
+      baseIterationId?: string
+      workspaceId: string | undefined
     }) => {
+      const { threadId, aspectRatio, baseIterationId } = variables
       const response = await fetchWithWorkspace('/api/moldable/rpc', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           method: 'images.setAspectRatio',
-          params: { id: threadId, aspectRatio },
+          params: { id: threadId, aspectRatio, baseIterationId },
         }),
       })
       const rpc = await parseResponse<RpcResponse<ImageThread>>(
@@ -1045,16 +1050,21 @@ export function App() {
       }
       return rpc.result
     },
-    onSuccess: (thread) => {
+    onSuccess: (thread, variables) => {
       setError(null)
       queryClient.setQueryData<ImageThread[]>(
-        ['images', workspaceId],
+        ['images', variables.workspaceId],
         (current) => upsertThread(current, thread),
       )
-      setSelectedIterationId(selectedIterationIdForThread(thread))
-      void queryClient.invalidateQueries({ queryKey: ['images', workspaceId] })
+      if (workspaceId === variables.workspaceId) {
+        setSelectedIterationId(selectedIterationIdForThread(thread))
+      }
+      void queryClient.invalidateQueries({
+        queryKey: ['images', variables.workspaceId],
+      })
     },
-    onError: (mutationError) => {
+    onError: (mutationError, variables) => {
+      if (workspaceId !== variables.workspaceId) return
       setError(
         mutationError instanceof Error
           ? mutationError.message
@@ -1064,7 +1074,12 @@ export function App() {
   })
 
   const retryGeneration = useMutation({
-    mutationFn: async (threadId: string) => {
+    mutationFn: async ({
+      threadId,
+    }: {
+      threadId: string
+      workspaceId: string | undefined
+    }) => {
       const response = await fetchWithWorkspace('/api/moldable/rpc', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1084,11 +1099,14 @@ export function App() {
       }
       return rpc.result
     },
-    onSuccess: () => {
+    onSuccess: (_thread, variables) => {
       setError(null)
-      void queryClient.invalidateQueries({ queryKey: ['images', workspaceId] })
+      void queryClient.invalidateQueries({
+        queryKey: ['images', variables.workspaceId],
+      })
     },
-    onError: (mutationError) => {
+    onError: (mutationError, variables) => {
+      if (workspaceId !== variables.workspaceId) return
       setError(
         mutationError instanceof Error
           ? mutationError.message
@@ -1104,6 +1122,7 @@ export function App() {
     }: {
       threadId: string
       iterationIds: string[]
+      workspaceId: string | undefined
     }) => {
       const response = await fetchWithWorkspace('/api/moldable/rpc', {
         method: 'POST',
@@ -1124,35 +1143,44 @@ export function App() {
     },
     onSuccess: (result, variables) => {
       setError(null)
-      setPendingDeleteIterationId(null)
-      setDeleteDescendants(false)
-      closeThumbnailFlyout()
+      if (workspaceId === variables.workspaceId) {
+        setPendingDeleteIterationId(null)
+        setDeleteDescendants(false)
+        closeThumbnailFlyout()
+      }
 
       if (result.deletedThread) {
         queryClient.setQueryData<ImageThread[]>(
-          ['images', workspaceId],
+          ['images', variables.workspaceId],
           (current) =>
             (current ?? []).filter(
               (thread) => thread.id !== variables.threadId,
             ),
         )
-        closeSelectedThread('pop')
+        if (workspaceId === variables.workspaceId) {
+          closeSelectedThread('pop')
+        }
       } else if (result.thread) {
         const updatedThread = result.thread
         queryClient.setQueryData<ImageThread[]>(
-          ['images', workspaceId],
+          ['images', variables.workspaceId],
           (current) => upsertThread(current, updatedThread),
         )
-        openThread(
-          updatedThread,
-          selectedIterationIdForThread(updatedThread),
-          'none',
-        )
+        if (workspaceId === variables.workspaceId) {
+          openThread(
+            updatedThread,
+            selectedIterationIdForThread(updatedThread),
+            'none',
+          )
+        }
       }
 
-      void queryClient.invalidateQueries({ queryKey: ['images', workspaceId] })
+      void queryClient.invalidateQueries({
+        queryKey: ['images', variables.workspaceId],
+      })
     },
-    onError: (mutationError) => {
+    onError: (mutationError, variables) => {
+      if (workspaceId !== variables.workspaceId) return
       setError(
         mutationError instanceof Error
           ? mutationError.message
@@ -1162,13 +1190,12 @@ export function App() {
   })
 
   const removeBackground = useMutation({
-    mutationFn: async ({
-      threadId,
-      iterationId,
-    }: {
+    mutationFn: async (variables: {
       threadId: string
       iterationId?: string
+      workspaceId: string | undefined
     }) => {
+      const { threadId, iterationId } = variables
       const response = await fetchWithWorkspace('/api/remove-bg', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1176,16 +1203,21 @@ export function App() {
       })
       return parseResponse<ImageThread>(response, 'Failed to remove background')
     },
-    onSuccess: (thread) => {
+    onSuccess: (thread, variables) => {
       setError(null)
       queryClient.setQueryData<ImageThread[]>(
-        ['images', workspaceId],
+        ['images', variables.workspaceId],
         (current) => upsertThread(current, thread),
       )
-      setSelectedIterationId(selectedIterationIdForThread(thread))
-      void queryClient.invalidateQueries({ queryKey: ['images', workspaceId] })
+      if (workspaceId === variables.workspaceId) {
+        setSelectedIterationId(selectedIterationIdForThread(thread))
+      }
+      void queryClient.invalidateQueries({
+        queryKey: ['images', variables.workspaceId],
+      })
     },
-    onError: (mutationError) => {
+    onError: (mutationError, variables) => {
+      if (workspaceId !== variables.workspaceId) return
       setError(
         mutationError instanceof Error
           ? mutationError.message
@@ -1195,7 +1227,14 @@ export function App() {
   })
 
   const saveRemoveBgKey = useMutation({
-    mutationFn: async (apiKey: string) => {
+    mutationFn: async ({
+      apiKey,
+    }: {
+      apiKey: string
+      workspaceId: string | undefined
+      threadId?: string
+      iterationId?: string
+    }) => {
       const response = await fetchWithWorkspace('/api/remove-bg/key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1206,21 +1245,29 @@ export function App() {
         'Failed to save remove.bg key',
       )
     },
-    onSuccess: () => {
-      setRemoveBgApiKey('')
-      setRemoveBgKeyError(null)
-      setRemoveBgKeyDialogOpen(false)
+    onSuccess: (_status, variables) => {
+      if (workspaceId === variables.workspaceId) {
+        setRemoveBgApiKey('')
+        setRemoveBgKeyError(null)
+        setRemoveBgKeyDialogOpen(false)
+      }
       void queryClient.invalidateQueries({
-        queryKey: ['remove-bg-status', workspaceId],
+        queryKey: ['remove-bg-status'],
       })
-      if (selectedThread && selectedIteration) {
+      if (
+        workspaceId === variables.workspaceId &&
+        variables.threadId &&
+        variables.iterationId
+      ) {
         removeBackground.mutate({
-          threadId: selectedThread.id,
-          iterationId: selectedIteration.id,
+          threadId: variables.threadId,
+          iterationId: variables.iterationId,
+          workspaceId: variables.workspaceId,
         })
       }
     },
-    onError: (mutationError) => {
+    onError: (mutationError, variables) => {
+      if (workspaceId !== variables.workspaceId) return
       setRemoveBgKeyError(
         mutationError instanceof Error
           ? mutationError.message
@@ -1230,13 +1277,12 @@ export function App() {
   })
 
   const importImages = useMutation({
-    mutationFn: async ({
-      files,
-      mode,
-    }: {
+    mutationFn: async (variables: {
       files: File[]
       mode: ImportMode
+      workspaceId: string | undefined
     }) => {
+      const { files, mode } = variables
       const formData = new FormData()
       formData.set('mode', mode)
       for (const file of files) {
@@ -1249,17 +1295,22 @@ export function App() {
       })
       return parseResponse<ImageThread[]>(response, 'Failed to import images')
     },
-    onSuccess: (imported) => {
+    onSuccess: (imported, variables) => {
       setError(null)
-      setPendingImportFiles([])
-      setPendingImportPaths([])
+      if (workspaceId === variables.workspaceId) {
+        setPendingImportFiles([])
+        setPendingImportPaths([])
+      }
       queryClient.setQueryData<ImageThread[]>(
-        ['images', workspaceId],
+        ['images', variables.workspaceId],
         (current) => [...imported, ...(current ?? [])],
       )
-      void queryClient.invalidateQueries({ queryKey: ['images', workspaceId] })
+      void queryClient.invalidateQueries({
+        queryKey: ['images', variables.workspaceId],
+      })
     },
-    onError: (mutationError) => {
+    onError: (mutationError, variables) => {
+      if (workspaceId !== variables.workspaceId) return
       setError(
         mutationError instanceof Error
           ? mutationError.message
@@ -1269,13 +1320,12 @@ export function App() {
   })
 
   const importImagePaths = useMutation({
-    mutationFn: async ({
-      paths,
-      mode,
-    }: {
+    mutationFn: async (variables: {
       paths: string[]
       mode: ImportMode
+      workspaceId: string | undefined
     }) => {
+      const { paths, mode } = variables
       const response = await fetchWithWorkspace('/api/images/import-paths', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1283,17 +1333,22 @@ export function App() {
       })
       return parseResponse<ImageThread[]>(response, 'Failed to import images')
     },
-    onSuccess: (imported) => {
+    onSuccess: (imported, variables) => {
       setError(null)
-      setPendingImportFiles([])
-      setPendingImportPaths([])
+      if (workspaceId === variables.workspaceId) {
+        setPendingImportFiles([])
+        setPendingImportPaths([])
+      }
       queryClient.setQueryData<ImageThread[]>(
-        ['images', workspaceId],
+        ['images', variables.workspaceId],
         (current) => [...imported, ...(current ?? [])],
       )
-      void queryClient.invalidateQueries({ queryKey: ['images', workspaceId] })
+      void queryClient.invalidateQueries({
+        queryKey: ['images', variables.workspaceId],
+      })
     },
-    onError: (mutationError) => {
+    onError: (mutationError, variables) => {
+      if (workspaceId !== variables.workspaceId) return
       setError(
         mutationError instanceof Error
           ? mutationError.message
@@ -1307,9 +1362,9 @@ export function App() {
       if (files.length === 0) return
       setError(null)
       setPendingImportPaths([])
-      importImages.mutate({ files, mode })
+      importImages.mutate({ files, mode, workspaceId })
     },
-    [importImages],
+    [importImages, workspaceId],
   )
 
   const importDroppedPaths = useCallback(
@@ -1317,9 +1372,9 @@ export function App() {
       if (paths.length === 0) return
       setError(null)
       setPendingImportFiles([])
-      importImagePaths.mutate({ paths, mode })
+      importImagePaths.mutate({ paths, mode, workspaceId })
     },
-    [importImagePaths],
+    [importImagePaths, workspaceId],
   )
 
   useEffect(() => {
@@ -1574,6 +1629,7 @@ export function App() {
       removeBackground.mutate({
         threadId: activeThreadId,
         iterationId: selectedIteration.id,
+        workspaceId,
       })
     }
 
@@ -1583,7 +1639,12 @@ export function App() {
         setRemoveBgKeyError('Enter a remove.bg API key.')
         return
       }
-      saveRemoveBgKey.mutate(apiKey)
+      saveRemoveBgKey.mutate({
+        apiKey,
+        workspaceId,
+        threadId: selectedThread?.id,
+        iterationId: selectedIteration?.id,
+      })
     }
 
     const hoveredThumbnail = thumbnailStack.find(
@@ -1733,6 +1794,7 @@ export function App() {
                 deleteIteration.mutate({
                   threadId: selectedThread.id,
                   iterationIds: pendingDeleteIterationIds,
+                  workspaceId,
                 })
               }}
             >
@@ -1867,6 +1929,8 @@ export function App() {
                 setAspectRatio.mutate({
                   threadId: selectedThread.id,
                   aspectRatio,
+                  baseIterationId: selectedIteration?.id,
+                  workspaceId,
                 })
               }}
             />
@@ -2574,7 +2638,10 @@ export function App() {
                       disabled={retryGeneration.isPending}
                       onClick={() => {
                         openThread(thread, null)
-                        retryGeneration.mutate(thread.id)
+                        retryGeneration.mutate({
+                          threadId: thread.id,
+                          workspaceId,
+                        })
                       }}
                     >
                       {retryGeneration.isPending ? (
@@ -2686,7 +2753,10 @@ export function App() {
                       failedDialogThread.status === 'generating'
                     }
                     onClick={() =>
-                      retryGeneration.mutate(failedDialogThread.id)
+                      retryGeneration.mutate({
+                        threadId: failedDialogThread.id,
+                        workspaceId,
+                      })
                     }
                   >
                     {retryGeneration.isPending ||

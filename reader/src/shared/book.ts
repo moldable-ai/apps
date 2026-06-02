@@ -1,4 +1,5 @@
 export type EbookFormat = 'epub' | 'txt'
+export type ReadingMode = 'standard' | 'speed'
 
 export interface ChapterRef {
   /** Stable order index, 0-based */
@@ -42,6 +43,8 @@ export interface ReadingProgress {
   wordIndex: number
   /** Overall reading completion, 0..1 */
   percent: number
+  /** Last reader UX used for this book. Missing values are treated as standard. */
+  readerMode?: ReadingMode
   updatedAt: string
 }
 

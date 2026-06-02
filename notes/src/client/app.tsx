@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertCircle,
   Archive,
   ArchiveRestore,
   Hash,
@@ -47,6 +48,23 @@ import { EmptyState } from '../components/empty-state'
 import { Masonry } from 'masonic'
 
 type ViewType = 'all' | 'archive' | 'trash' | `label:${string}`
+type NotePatch = Partial<
+  Pick<
+    Note,
+    | 'title'
+    | 'content'
+    | 'labels'
+    | 'isPinned'
+    | 'isArchived'
+    | 'isDeleted'
+    | 'color'
+  >
+>
+type NotesMutation =
+  | { type: 'create'; note: Note }
+  | { type: 'patch'; id: string; patch: NotePatch }
+  | { type: 'delete'; id: string }
+  | { type: 'deleteMany'; ids: string[] }
 
 // Move toCapitalCase outside component to avoid recreation
 const toCapitalCase = (str: string) => {
@@ -106,27 +124,60 @@ export default function NotesPage() {
     return Array.from(labels).sort()
   }, [notes])
 
-  const saveNotesMutation = useMutation({
-    mutationFn: async (updatedNotes: Note[]) => {
-      const res = await fetchWithWorkspace('/api/notes', {
-        method: 'POST',
-        body: JSON.stringify(updatedNotes),
-      })
-      if (!res.ok) throw new Error('Failed to save')
+  const { mutate: mutateNotes, mutateAsync: mutateNotesAsync } = useMutation({
+    mutationFn: async (mutation: NotesMutation) => {
+      if (mutation.type === 'create') {
+        const res = await fetchWithWorkspace('/api/notes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(mutation.note),
+        })
+        if (!res.ok) throw new Error('Failed to create note')
+        return
+      }
+
+      if (mutation.type === 'patch') {
+        const res = await fetchWithWorkspace(`/api/notes/${mutation.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(mutation.patch),
+        })
+        if (!res.ok) throw new Error('Failed to update note')
+        return
+      }
+
+      if (mutation.type === 'delete') {
+        const res = await fetchWithWorkspace(`/api/notes/${mutation.id}`, {
+          method: 'DELETE',
+        })
+        if (!res.ok) throw new Error('Failed to delete note')
+        return
+      }
+
+      await Promise.all(
+        mutation.ids.map(async (id) => {
+          const res = await fetchWithWorkspace(`/api/notes/${id}`, {
+            method: 'DELETE',
+          })
+          if (!res.ok) throw new Error('Failed to delete note')
+        }),
+      )
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notes', workspaceId] })
     },
   })
 
-  const handleSaveNote = (noteUpdate: Partial<Note>) => {
+  const handleSaveNote = async (noteUpdate: NotePatch) => {
     const now = new Date().toISOString()
-    let updatedNotes: Note[]
+    let mutation: NotesMutation
 
     if (editingNote) {
-      updatedNotes = notes.map((n) =>
-        n.id === editingNote.id ? { ...n, ...noteUpdate, updatedAt: now } : n,
-      )
+      mutation = {
+        type: 'patch',
+        id: editingNote.id,
+        patch: noteUpdate,
+      }
     } else {
       const newNote: Note = {
         id: crypto.randomUUID(),
@@ -139,64 +190,71 @@ export default function NotesPage() {
         createdAt: now,
         updatedAt: now,
       }
-      updatedNotes = [newNote, ...notes]
+      mutation = { type: 'create', note: newNote }
     }
 
-    saveNotesMutation.mutate(updatedNotes)
+    await mutateNotesAsync(mutation)
     closeEditor('pop')
   }
 
   const handleMoveToTrash = useCallback(
     (id: string) => {
-      saveNotesMutation.mutate(
-        notes.map((n) =>
-          n.id === id ? { ...n, isDeleted: true, isPinned: false } : n,
-        ),
-      )
+      mutateNotes({
+        type: 'patch',
+        id,
+        patch: { isDeleted: true, isPinned: false },
+      })
     },
-    [notes, saveNotesMutation],
+    [mutateNotes],
   )
 
   const handleRestoreFromTrash = useCallback(
     (id: string) => {
-      saveNotesMutation.mutate(
-        notes.map((n) => (n.id === id ? { ...n, isDeleted: false } : n)),
-      )
+      mutateNotes({ type: 'patch', id, patch: { isDeleted: false } })
     },
-    [notes, saveNotesMutation],
+    [mutateNotes],
   )
 
   const handlePermanentDelete = useCallback(
     (id: string) => {
-      saveNotesMutation.mutate(notes.filter((n) => n.id !== id))
+      mutateNotes({ type: 'delete', id })
     },
-    [notes, saveNotesMutation],
+    [mutateNotes],
   )
 
   const handleEmptyTrash = useCallback(() => {
-    saveNotesMutation.mutate(notes.filter((n) => !n.isDeleted))
-  }, [notes, saveNotesMutation])
+    mutateNotes({
+      type: 'deleteMany',
+      ids: notes.filter((n) => n.isDeleted).map((note) => note.id),
+    })
+  }, [notes, mutateNotes])
 
   const togglePin = useCallback(
     (id: string) => {
-      saveNotesMutation.mutate(
-        notes.map((n) => (n.id === id ? { ...n, isPinned: !n.isPinned } : n)),
-      )
+      const note = notes.find((item) => item.id === id)
+      if (!note) return
+
+      mutateNotes({
+        type: 'patch',
+        id,
+        patch: { isPinned: !note.isPinned },
+      })
     },
-    [notes, saveNotesMutation],
+    [notes, mutateNotes],
   )
 
   const toggleArchive = useCallback(
     (id: string) => {
-      saveNotesMutation.mutate(
-        notes.map((n) =>
-          n.id === id
-            ? { ...n, isArchived: !n.isArchived, isPinned: false }
-            : n,
-        ),
-      )
+      const note = notes.find((item) => item.id === id)
+      if (!note) return
+
+      mutateNotes({
+        type: 'patch',
+        id,
+        patch: { isArchived: !note.isArchived, isPinned: false },
+      })
     },
-    [notes, saveNotesMutation],
+    [notes, mutateNotes],
   )
 
   const handleEditNote = useCallback((note: Note) => {
@@ -227,7 +285,9 @@ export default function NotesPage() {
         const label = currentView.split('label:')[1]
         result = result.filter(
           (n) =>
-            !n.isDeleted && n.labels?.some((l) => toCapitalCase(l) === label),
+            !n.isArchived &&
+            !n.isDeleted &&
+            n.labels?.some((l) => toCapitalCase(l) === label),
         )
       }
     } else {
@@ -954,16 +1014,20 @@ function NoteEditor({
 }: {
   initialNote?: Note
   allLabels?: string[]
-  onSave: (note: Partial<Note>) => void
+  onSave: (note: NotePatch) => void | Promise<void>
   onCancel: () => void
 }) {
   const [title, setTitle] = useState(initialNote?.title ?? '')
   const [content, setContent] = useState(initialNote?.content ?? '')
   const [isPinned, setIsPinned] = useState(initialNote?.isPinned ?? false)
-  const [labels, setLabels] = useState<string[]>(initialNote?.labels ?? [])
+  const [labels, setLabels] = useState<string[]>(() => [
+    ...(initialNote?.labels ?? []),
+  ])
   const [newLabel, setNewLabel] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [isSaving, setIsSaving] = useState(false)
   const editorRef = useRef<HTMLDivElement>(null)
 
   const suggestions = useMemo(() => {
@@ -985,6 +1049,7 @@ function NoteEditor({
     const label = labelName.trim().toLowerCase()
     if (label && !labels.includes(label)) {
       setLabels([...labels, label])
+      setSaveError(null)
     }
     setNewLabel('')
     setShowSuggestions(false)
@@ -1019,6 +1084,7 @@ function NoteEditor({
 
   const removeLabel = (label: string) => {
     setLabels(labels.filter((l) => l !== label))
+    setSaveError(null)
   }
 
   useEffect(() => {
@@ -1031,18 +1097,33 @@ function NoteEditor({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [onCancel])
 
-  const handleAutoSave = () => {
+  const handleAutoSave = async () => {
+    if (isSaving) return
+
     const hasChanges =
       title !== (initialNote?.title ?? '') ||
       content !== (initialNote?.content ?? '') ||
       isPinned !== (initialNote?.isPinned ?? false) ||
-      JSON.stringify(labels.sort()) !==
+      JSON.stringify([...labels].sort()) !==
         JSON.stringify([...(initialNote?.labels ?? [])].sort())
 
-    if (!hasChanges || (!title.trim() && !content.trim())) {
+    if (!hasChanges || (!initialNote && !title.trim() && !content.trim())) {
       onCancel()
     } else {
-      onSave({ title, content, isPinned, labels })
+      setIsSaving(true)
+      setSaveError(null)
+      try {
+        await onSave({ title, content, isPinned, labels })
+      } catch (error) {
+        console.error('Failed to save note:', error)
+        setSaveError(
+          error instanceof Error
+            ? error.message
+            : 'Could not save this note right now.',
+        )
+      } finally {
+        setIsSaving(false)
+      }
     }
   }
 
@@ -1062,14 +1143,20 @@ function NoteEditor({
             className="flex-1 bg-transparent px-2 py-1 text-xl font-bold outline-none"
             placeholder="Title"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value)
+              setSaveError(null)
+            }}
           />
           <div className="flex items-center gap-1">
             <Button
               variant="ghost"
               size="icon"
               className="size-9"
-              onClick={() => setIsPinned(!isPinned)}
+              onClick={() => {
+                setIsPinned(!isPinned)
+                setSaveError(null)
+              }}
             >
               {isPinned ? (
                 <PinOff className="size-5" />
@@ -1092,7 +1179,10 @@ function NoteEditor({
           <div className="min-h-0 flex-1 overflow-hidden p-4">
             <MarkdownEditor
               value={content}
-              onChange={setContent}
+              onChange={(value) => {
+                setContent(value)
+                setSaveError(null)
+              }}
               placeholder="Take a note..."
               hideMarkdownHint
               minHeight="100%"
@@ -1107,7 +1197,7 @@ function NoteEditor({
 
           <div className="shrink-0 border-t p-4">
             <div className="mb-3 flex flex-wrap gap-2">
-              {labels.sort().map((label) => (
+              {[...labels].sort().map((label) => (
                 <span
                   key={label}
                   className="bg-primary/10 text-primary group flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
@@ -1132,6 +1222,7 @@ function NoteEditor({
                 onChange={(e) => {
                   setNewLabel(e.target.value)
                   setShowSuggestions(true)
+                  setSaveError(null)
                 }}
                 onKeyDown={onInputKeyDown}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
@@ -1161,11 +1252,31 @@ function NoteEditor({
         </div>
 
         <div className="bg-muted/20 flex justify-end gap-2 border-t p-3">
+          {saveError && (
+            <div
+              className="text-muted-foreground mr-auto flex min-w-0 items-center gap-2 pr-3 text-sm"
+              role="status"
+              aria-live="polite"
+            >
+              <AlertCircle className="text-destructive size-4 shrink-0" />
+              <span className="truncate">{saveError}</span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-7 shrink-0 cursor-pointer"
+                onClick={handleAutoSave}
+                disabled={isSaving}
+              >
+                Retry
+              </Button>
+            </div>
+          )}
           <Button variant="ghost" onClick={onCancel}>
             Cancel
           </Button>
-          <Button onClick={handleAutoSave}>
-            {initialNote ? 'Save Changes' : 'Add Note'}
+          <Button onClick={handleAutoSave} disabled={isSaving}>
+            {isSaving ? 'Saving...' : initialNote ? 'Save Changes' : 'Add Note'}
           </Button>
         </div>
       </div>

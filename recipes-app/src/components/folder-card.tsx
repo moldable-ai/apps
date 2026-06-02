@@ -8,7 +8,7 @@ import { useRecipeMedia } from '@/client/use-recipe-media'
 
 interface FolderCardProps {
   folder: Folder
-  recipes: Recipe[]
+  recipeById: ReadonlyMap<string, Recipe>
   index?: number
   onOpen: () => void
   onDelete: () => void
@@ -16,16 +16,15 @@ interface FolderCardProps {
 
 export function FolderCard({
   folder,
-  recipes,
+  recipeById,
   index = 0,
   onOpen,
   onDelete,
 }: FolderCardProps) {
   const { resolveMediaUrl } = useRecipeMedia()
-  const byId = new Map(recipes.map((r) => [r.id, r]))
   const contained = folder.recipeIds
-    .map((id) => byId.get(id))
-    .filter((r): r is Recipe => Boolean(r) && !r!.isDeleted)
+    .map((id) => recipeById.get(id))
+    .filter((recipe): recipe is Recipe => Boolean(recipe))
   const previews = contained.slice(0, 4)
   const count = contained.length
   const style = {

@@ -116,6 +116,24 @@ export default function RecipesPage() {
     [liveRecipes],
   )
 
+  useEffect(() => {
+    if (!selectedRecipe) return
+    const latest = recipeById.get(selectedRecipe.id)
+    if (latest) {
+      if (latest !== selectedRecipe) setSelectedRecipe(latest)
+      return
+    }
+    popMoldableNavigation()
+    setSelectedRecipe(null)
+  }, [recipeById, selectedRecipe])
+
+  useEffect(() => {
+    if (!openFolderId) return
+    if (folders.some((folder) => folder.id === openFolderId)) return
+    popMoldableNavigation()
+    setOpenFolderId(null)
+  }, [folders, openFolderId])
+
   const matchesQuery = useMemo(() => {
     const q = deferredQuery.trim().toLowerCase()
     return (recipe: Recipe) => {
@@ -444,7 +462,7 @@ export default function RecipesPage() {
                   <FolderCard
                     key={folder.id}
                     folder={folder}
-                    recipes={liveRecipes}
+                    recipeById={recipeById}
                     index={i}
                     onOpen={() => enterFolder(folder.id)}
                     onDelete={() => setPendingDeleteFolderId(folder.id)}

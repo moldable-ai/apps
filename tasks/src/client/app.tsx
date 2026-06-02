@@ -58,13 +58,22 @@ type DeleteTarget =
   | { type: 'project'; project: Project }
   | { type: 'task'; task: Task }
 
+const VIEW_MODE_STORAGE_KEY = 'tasks:view-mode'
+
+function readStoredViewMode(): ViewMode {
+  if (typeof window === 'undefined') return 'list'
+
+  const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY)
+  return stored === 'kanban' || stored === 'list' ? stored : 'list'
+}
+
 export function App() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     null,
   )
-  const [viewMode, setViewMode] = useState<ViewMode>('list')
+  const [viewMode, setViewMode] = useState<ViewMode>(readStoredViewMode)
   const [activeTab, setActiveTab] = useState<'tasks' | 'readme'>('tasks')
   const [filters, setFilters] = useState<TaskFiltersState>(emptyTaskFilters)
   const [activeEditor, setActiveEditor] = useState<EditorState | null>(null)
@@ -145,6 +154,10 @@ export function App() {
   useEffect(() => {
     resetMoldableNavigation()
   }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode)
+  }, [viewMode])
 
   useMoldableNavigationPop(() => {
     if (activeEditor) {

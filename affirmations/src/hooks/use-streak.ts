@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getDayKey } from '@/lib/affirmations'
 
-interface StreakState {
+export interface StreakState {
   /** Number of consecutive days the app has been opened, including today. */
   count: number
   /** The day key of the most recent visit. */
@@ -22,7 +22,8 @@ function readStreak(workspaceId: string): StreakState | null {
     if (
       parsed &&
       typeof parsed === 'object' &&
-      typeof (parsed as StreakState).count === 'number' &&
+      Number.isInteger((parsed as StreakState).count) &&
+      (parsed as StreakState).count > 0 &&
       typeof (parsed as StreakState).lastVisit === 'string'
     ) {
       return parsed as StreakState
@@ -33,35 +34,40 @@ function readStreak(workspaceId: string): StreakState | null {
   }
 }
 
-function yesterdayKey(): string {
-  const date = new Date()
+function previousDayKey(dayKey: string): string {
+  const [year, month, day] = dayKey.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
   date.setDate(date.getDate() - 1)
   return getDayKey(date)
+}
+
+export function calculateStreakCount(
+  previous: StreakState | null,
+  dayKey: string,
+): number {
+  if (!previous) return 1
+  if (previous.lastVisit === dayKey) return previous.count
+  if (previous.lastVisit === previousDayKey(dayKey)) return previous.count + 1
+  return 1
 }
 
 /**
  * Tracks a lightweight daily-visit streak in localStorage. Opening the app on
  * consecutive days increments the count; a skipped day resets it to 1.
  */
-export function useStreak(workspaceId: string | undefined): number {
+export function useStreak(
+  workspaceId: string | undefined,
+  dayKey: string = getDayKey(),
+): number {
   const [count, setCount] = useState(0)
 
   useEffect(() => {
     if (!workspaceId) return
 
-    const today = getDayKey()
+    const today = dayKey
     const previous = readStreak(workspaceId)
 
-    let nextCount: number
-    if (!previous) {
-      nextCount = 1
-    } else if (previous.lastVisit === today) {
-      nextCount = previous.count
-    } else if (previous.lastVisit === yesterdayKey()) {
-      nextCount = previous.count + 1
-    } else {
-      nextCount = 1
-    }
+    const nextCount = calculateStreakCount(previous, today)
 
     setCount(nextCount)
 
@@ -75,7 +81,7 @@ export function useStreak(workspaceId: string | undefined): number {
         // localStorage unavailable — streak is best-effort only.
       }
     }
-  }, [workspaceId])
+  }, [dayKey, workspaceId])
 
   return count
 }

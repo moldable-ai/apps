@@ -766,6 +766,8 @@ export function App() {
       )
     },
     onSuccess: (result, variables) => {
+      if (variables.connectionId !== activeConnectionId) return
+
       setQueryResult(result)
       setResultMode('query')
       void queryClient.invalidateQueries({
@@ -1016,6 +1018,7 @@ export function App() {
     changeSidebarMode('sql')
     setResultMode('query')
     setQueryResult(null)
+    runQueryMutation.reset()
   }
 
   function closeSqlTab(tabId: string) {
@@ -1054,6 +1057,7 @@ export function App() {
     setResultMode('query')
     setQueryResult(null)
     setSelectedRowIndex(null)
+    runQueryMutation.reset()
   }
 
   function reorderSqlTabs(nextTabs: SqlEditorTab[]) {
@@ -1164,10 +1168,68 @@ export function App() {
     )
   }
 
+  function flushActiveWorkspaceSnapshots() {
+    if (!activeConnectionId) return
+
+    if (
+      loadedSqlWorkspaceConnectionId === activeConnectionId &&
+      sqlTabs.length > 0
+    ) {
+      const tabsSnapshot = sqlTabs
+      const activeTabIdSnapshot = activeSqlTabId
+      void apiJson<SqlWorkspaceResponse>(
+        fetchWithWorkspace,
+        `/api/connections/${activeConnectionId}/sql-workspace`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tabs: tabsSnapshot,
+            activeTabId: activeTabIdSnapshot,
+          }),
+        },
+      ).catch((error: unknown) => {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Failed to save SQL workspace'
+        setActivityLog((current) => [
+          buildActivity('SQL workspace save failed', message),
+          ...current,
+        ])
+      })
+    }
+
+    if (loadedDashboardConnectionId === activeConnectionId) {
+      const dashboardsSnapshot = dashboards
+      const activeDashboardIdSnapshot = activeDashboardId
+      void apiJson<DashboardWorkspaceResponse>(
+        fetchWithWorkspace,
+        `/api/connections/${activeConnectionId}/dashboards`,
+        {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dashboards: dashboardsSnapshot,
+            activeDashboardId: activeDashboardIdSnapshot,
+          }),
+        },
+      ).catch((error: unknown) => {
+        const message =
+          error instanceof Error ? error.message : 'Failed to save dashboards'
+        setActivityLog((current) => [
+          buildActivity('Dashboard save failed', message),
+          ...current,
+        ])
+      })
+    }
+  }
+
   function openConnection(connectionId: string) {
     const connection = connections.find((entry) => entry.id === connectionId)
     if (!connection) return
 
+    flushActiveWorkspaceSnapshots()
     persistActiveConnectionId(connection.id)
     setActiveConnectionId(connection.id)
     setSelectedSchema('')
@@ -1175,6 +1237,7 @@ export function App() {
     setPreviewOffset(0)
     setResultMode('query')
     setQueryResult(null)
+    runQueryMutation.reset()
     setSqlTabs([])
     setActiveSqlTabId(null)
     setLoadedSqlWorkspaceConnectionId(null)
@@ -1217,6 +1280,7 @@ export function App() {
     setPreviewOffset(0)
     setResultMode('preview')
     setResultsPanelOpen(true)
+    runQueryMutation.reset()
     updateActiveSql(nextSql)
     appendActivity(`Previewing ${schema}.${table}`)
   }
@@ -1651,11 +1715,17 @@ export function App() {
                   rows={currentRows}
                   queryResult={resultMode === 'query' ? queryResult : null}
                   selectedRowIndex={selectedRowIndex}
-                  queryError={runQueryMutation.error}
+                  queryError={
+                    resultMode === 'query' ? runQueryMutation.error : null
+                  }
                   previewError={
                     resultMode === 'preview' ? previewQuery.error : null
                   }
-                  errorSql={runQueryMutation.variables?.statement ?? sql}
+                  errorSql={
+                    resultMode === 'query'
+                      ? (runQueryMutation.variables?.statement ?? sql)
+                      : sql
+                  }
                   editorHeight={sqlEditorHeight}
                   resultLoading={
                     runQueryMutation.isPending ||

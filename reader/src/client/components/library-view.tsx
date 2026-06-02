@@ -1,7 +1,6 @@
 import {
   BookOpen,
   ChevronLeft,
-  FolderPlus,
   Import,
   Plus,
   Search,
@@ -103,10 +102,14 @@ export function LibraryView(props: LibraryViewProps) {
     }
   }, [folders, activeFolderId])
 
-  const folderIdByBook = useMemo(() => {
-    const map = new Map<string, string>()
+  const folderIdsByBook = useMemo(() => {
+    const map = new Map<string, string[]>()
     for (const folder of folders) {
-      for (const bookId of folder.bookIds) map.set(bookId, folder.id)
+      for (const bookId of folder.bookIds) {
+        const current = map.get(bookId) ?? []
+        current.push(folder.id)
+        map.set(bookId, current)
+      }
     }
     return map
   }, [folders])
@@ -286,17 +289,6 @@ export function LibraryView(props: LibraryViewProps) {
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            aria-label="New folder"
-            className="size-8 cursor-pointer"
-            onClick={() => setNewFolderOpen(true)}
-          >
-            <FolderPlus className="size-4" />
-          </Button>
-
-          <Button
-            type="button"
-            variant="ghost"
             size="sm"
             className="cursor-pointer gap-1.5"
             onClick={() => setStoreOpen(true)}
@@ -307,8 +299,9 @@ export function LibraryView(props: LibraryViewProps) {
 
           <Button
             type="button"
+            variant="ghost"
             size="sm"
-            className="cursor-pointer"
+            className="cursor-pointer gap-1.5"
             onClick={openFilePicker}
             disabled={isImporting}
           >
@@ -390,10 +383,13 @@ export function LibraryView(props: LibraryViewProps) {
                       : null
                   }
                   folders={folders}
-                  currentFolderId={folderIdByBook.get(book.id) ?? null}
+                  currentFolderIds={folderIdsByBook.get(book.id) ?? []}
                   onOpen={() => props.onOpenBook(book.id)}
-                  onMoveTo={(folderId) => {
-                    void moveBook(book.id, folderId).catch(() => {})
+                  onToggleFolder={(folderId, inFolder) => {
+                    void moveBook(book.id, folderId, inFolder).catch(() => {})
+                  }}
+                  onClearFolders={() => {
+                    void moveBook(book.id, null).catch(() => {})
                   }}
                   onCreateFolder={() => setNewFolderOpen(true)}
                   onDelete={() => setPendingDelete(book)}
@@ -422,7 +418,7 @@ export function LibraryView(props: LibraryViewProps) {
 
       <AlertDialog
         open={pendingDelete !== null}
-        onOpenChange={(open) => {
+        onOpenChange={(open: boolean) => {
           if (!open) setPendingDelete(null)
         }}
       >

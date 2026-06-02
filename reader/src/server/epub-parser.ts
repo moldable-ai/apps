@@ -57,7 +57,7 @@ function extFromPath(path: string): string {
 
 /** Resolve an href relative to a base directory into a clean root-relative path. */
 function resolveRelative(baseDir: string, href: string): string {
-  let target = href.split('#')[0] ?? href
+  let target = href.split(/[?#]/)[0] ?? href
   try {
     target = decodeURIComponent(target)
   } catch {
@@ -156,6 +156,12 @@ function escapeHtml(text: string): string {
 
 function collapseInlineWhitespace(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
+}
+
+function readableDocumentHtml(rawHtml: string): string {
+  const bodyMatch = rawHtml.match(/<body\b[^>]*>([\s\S]*?)<\/body>/i)
+  if (bodyMatch) return bodyMatch[1] ?? ''
+  return rawHtml.replace(/<head\b[^>]*>[\s\S]*?<\/head>/gi, ' ')
 }
 
 // ---------------------------------------------------------------------------
@@ -432,7 +438,8 @@ function sanitizeChapterHtml(
   chapterDir: string,
   addResource: (path: string) => boolean,
 ): string {
-  return sanitizeHtml(rawHtml, {
+  const readableHtml = readableDocumentHtml(rawHtml)
+  return sanitizeHtml(readableHtml, {
     allowedTags: [
       'p',
       'h1',

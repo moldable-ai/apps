@@ -4,6 +4,7 @@ export type ConcreteReaderTheme = 'paper' | 'sepia' | 'slate' | 'dark' | 'night'
 export type ReaderTheme = ConcreteReaderTheme | 'system'
 export type ReaderFont = 'serif' | 'sans' | 'mono' | 'dyslexic'
 export type ReaderLayout = 'paginated' | 'scroll'
+export type ReadingTimeScope = 'chapter' | 'book'
 
 export interface ReaderSettings {
   font: ReaderFont
@@ -23,6 +24,12 @@ export interface ReaderSettings {
   chunkSize: number
   /** Add a small pause on sentence-ending punctuation in speed reading */
   punctuationPause: boolean
+  /** Show a Kindle-style reading-time estimate in the reader footer */
+  showReadingTime: boolean
+  /** Whether the estimate is for the current chapter or whole book */
+  readingTimeScope: ReadingTimeScope
+  /** User's normal reading pace, used for time-left estimates */
+  readingPaceWpm: number
 }
 
 export interface ReaderSettingsResponse {
@@ -40,6 +47,9 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   wpm: 350,
   chunkSize: 1,
   punctuationPause: true,
+  showReadingTime: true,
+  readingTimeScope: 'chapter',
+  readingPaceWpm: 240,
 }
 
 export const READER_FONT_STACKS: Record<ReaderFont, string> = {
@@ -136,6 +146,7 @@ export const READER_LINE_HEIGHT = { min: 1.3, max: 2.2, step: 0.05 }
 export const READER_CONTENT_WIDTH = { min: 480, max: 900, step: 20 }
 export const READER_WPM = { min: 100, max: 1200, step: 25 }
 export const READER_CHUNK = { min: 1, max: 4, step: 1 }
+export const READER_READING_PACE_WPM = { min: 100, max: 600, step: 10 }
 
 function clampNumber(
   value: unknown,
@@ -168,10 +179,15 @@ export function normalizeReaderSettings(
     raw.layout === 'scroll' || raw.layout === 'paginated'
       ? raw.layout
       : base.layout
+  const readingTimeScope: ReadingTimeScope =
+    raw.readingTimeScope === 'book' || raw.readingTimeScope === 'chapter'
+      ? raw.readingTimeScope
+      : base.readingTimeScope
   return {
     font,
     theme,
     layout,
+    readingTimeScope,
     fontSize: Math.round(
       clampNumber(
         raw.fontSize,
@@ -210,6 +226,18 @@ export function normalizeReaderSettings(
       typeof raw.punctuationPause === 'boolean'
         ? raw.punctuationPause
         : base.punctuationPause,
+    showReadingTime:
+      typeof raw.showReadingTime === 'boolean'
+        ? raw.showReadingTime
+        : base.showReadingTime,
+    readingPaceWpm: Math.round(
+      clampNumber(
+        raw.readingPaceWpm,
+        READER_READING_PACE_WPM.min,
+        READER_READING_PACE_WPM.max,
+        base.readingPaceWpm,
+      ),
+    ),
   }
 }
 

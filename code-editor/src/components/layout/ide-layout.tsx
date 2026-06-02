@@ -72,12 +72,13 @@ export function IDELayout({
   onPreviewUrlChange,
   onTabsChange,
 }: IDELayoutProps) {
-  const { fetchWithWorkspace } = useWorkspace()
+  const { fetchWithWorkspace, workspaceId } = useWorkspace()
   const queryClient = useQueryClient()
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isBrowserCollapsed, setIsBrowserCollapsed] = useState(false)
   const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null)
-  const hasRestoredTabs = useRef(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const restoredRootPath = useRef<string | null>(null)
   const handledPendingOpenFileNonce = useRef<number | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -91,6 +92,8 @@ export function IDELayout({
     updateFileContent,
     saveActiveFile,
     setActiveFilePath,
+    closePath,
+    renameOpenPath,
     getOpenFilePaths,
     restoreTabs,
   } = useEditorState(rootPath, { onTabsChange })
@@ -113,11 +116,15 @@ export function IDELayout({
     },
     onSuccess: (_data, filePath) => {
       const parentPath = filePath.substring(0, filePath.lastIndexOf('/'))
+      closePath(filePath)
       queryClient.invalidateQueries({ queryKey: ['files', parentPath] })
+      queryClient.invalidateQueries({
+        queryKey: ['all-files', rootPath, workspaceId],
+      })
       setFileToDelete(null)
     },
     onError: (error) => {
-      alert(error.message)
+      setErrorMessage(error.message)
       setFileToDelete(null)
     },
   })
@@ -126,27 +133,45 @@ export function IDELayout({
     setFileToDelete(file)
   }, [])
 
+  const handleFileTreeError = useCallback((message: string) => {
+    setErrorMessage(message)
+  }, [])
+
   const handleConfirmDelete = useCallback(() => {
     if (fileToDelete) {
       deleteMutation.mutate(fileToDelete.path)
     }
   }, [fileToDelete, deleteMutation])
 
+  const handleRenameSuccess = useCallback(
+    (oldPath: string, newPath: string, isDirectory: boolean) => {
+      const parentPath = oldPath.substring(0, oldPath.lastIndexOf('/'))
+      renameOpenPath(oldPath, newPath, isDirectory)
+      queryClient.invalidateQueries({ queryKey: ['files', parentPath] })
+      queryClient.invalidateQueries({
+        queryKey: ['all-files', rootPath, workspaceId],
+      })
+    },
+    [queryClient, renameOpenPath, rootPath, workspaceId],
+  )
+
   // Restore saved tabs when the component mounts with a new project
   useEffect(() => {
     if (
       savedTabs &&
-      !hasRestoredTabs.current &&
+      restoredRootPath.current !== rootPath &&
       savedTabs.openFiles.length > 0
     ) {
-      hasRestoredTabs.current = true
+      restoredRootPath.current = rootPath
       restoreTabs(savedTabs.openFiles, savedTabs.activeFile)
+    } else if (!savedTabs || savedTabs.openFiles.length === 0) {
+      restoredRootPath.current = rootPath
     }
-  }, [savedTabs, restoreTabs])
+  }, [rootPath, savedTabs, restoreTabs])
 
   // Reset the ref when rootPath changes (new project)
   useEffect(() => {
-    hasRestoredTabs.current = false
+    handledPendingOpenFileNonce.current = null
   }, [rootPath])
 
   useEffect(() => {
@@ -283,6 +308,29 @@ export function IDELayout({
         </AlertDialogPortal>
       </AlertDialog>
 
+      <AlertDialog
+        open={!!errorMessage}
+        onOpenChange={(open) => !open && setErrorMessage(null)}
+      >
+        <AlertDialogPortal container={containerRef.current}>
+          <AlertDialogOverlay className="pointer-events-auto z-[1]" />
+          <AlertDialogPrimitive.Content className="bg-card text-card-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 pointer-events-auto fixed left-[50%] top-[50%] z-[2] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Action failed</AlertDialogTitle>
+              <AlertDialogDescription>{errorMessage}</AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="justify-end">
+              <AlertDialogAction
+                onClick={() => setErrorMessage(null)}
+                className="cursor-pointer"
+              >
+                OK
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogPrimitive.Content>
+        </AlertDialogPortal>
+      </AlertDialog>
+
       <div className="bg-background flex h-full w-full flex-col">
         {/* Header */}
         <Header
@@ -326,6 +374,8 @@ export function IDELayout({
                     onFileSelect={openFile}
                     selectedPath={activeFilePath}
                     onDeleteRequest={handleDeleteRequest}
+                    onRenameSuccess={handleRenameSuccess}
+                    onError={handleFileTreeError}
                   />
                 </div>
               </div>

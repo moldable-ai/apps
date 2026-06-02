@@ -16,4 +16,18 @@ describe('resolveStaticFilePath', () => {
       'assets/index-abc123.js',
     )
   })
+
+  it('does not resolve encoded asset traversal outside dist', () => {
+    const filePath = resolveStaticFilePath('/assets/%2e%2e/connections.json')
+
+    expect(path.relative(path.join(process.cwd(), 'dist'), filePath)).toBe(
+      '__not_found__',
+    )
+  })
+
+  it('falls back to the app shell for non-asset routes', () => {
+    expect(resolveStaticFilePath('/connections/abc')).toBe(
+      path.join(process.cwd(), 'dist', 'index.html'),
+    )
+  })
 })

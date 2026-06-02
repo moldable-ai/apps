@@ -9,6 +9,12 @@ interface FileTreeProps {
   onFileSelect: (path: string) => void
   selectedPath?: string | null
   onDeleteRequest: (file: FileItem) => void
+  onRenameSuccess: (
+    oldPath: string,
+    newPath: string,
+    isDirectory: boolean,
+  ) => void
+  onError: (message: string) => void
 }
 
 export function FileTree({
@@ -16,6 +22,8 @@ export function FileTree({
   onFileSelect,
   selectedPath,
   onDeleteRequest,
+  onRenameSuccess,
+  onError,
 }: FileTreeProps) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
 
@@ -63,6 +71,8 @@ export function FileTree({
             onFileSelect={onFileSelect}
             selectedPath={selectedPath}
             onDeleteRequest={onDeleteRequest}
+            onRenameSuccess={onRenameSuccess}
+            onError={onError}
           />
         ))}
       </div>

@@ -213,6 +213,34 @@ function writeModelProviderPreference(
   }
 }
 
+function preferredModelProviderFor(
+  explorationId: string,
+  variants: ModelVariant[],
+  currentProvider: ModelProvider | undefined,
+) {
+  const savedProvider = readModelProviderPreference(explorationId, variants)
+  const savedVariant = variants.find(
+    (variant) => variant.provider === savedProvider,
+  )
+  const currentVariant = variants.find(
+    (variant) => variant.provider === currentProvider,
+  )
+  const readyProvider =
+    (savedVariant?.status === 'ready' ? savedVariant.provider : undefined) ??
+    (currentVariant?.status === 'ready'
+      ? currentVariant.provider
+      : undefined) ??
+    variants.find((variant) => variant.status === 'ready')?.provider
+
+  return (
+    readyProvider ??
+    savedProvider ??
+    currentProvider ??
+    variants[0]?.provider ??
+    null
+  )
+}
+
 function isGenerated(
   exploration: Exploration,
 ): exploration is GeneratedExploration {
@@ -981,10 +1009,11 @@ function SpecimenView({
     }
 
     setActiveModelProvider(
-      readModelProviderPreference(generatedId, modelVariants) ??
-        generatedModelProvider ??
-        modelVariants[0]?.provider ??
-        null,
+      preferredModelProviderFor(
+        generatedId,
+        modelVariants,
+        generatedModelProvider,
+      ),
     )
     setModelMenuOpen(false)
   }, [generatedId, generatedModelProvider, modelVariants])
@@ -995,12 +1024,13 @@ function SpecimenView({
       !modelVariants.some((variant) => variant.provider === activeModelProvider)
     ) {
       setActiveModelProvider(
-        (generatedId
-          ? readModelProviderPreference(generatedId, modelVariants)
-          : null) ??
-          generatedModelProvider ??
-          modelVariants[0]?.provider ??
-          null,
+        generatedId
+          ? preferredModelProviderFor(
+              generatedId,
+              modelVariants,
+              generatedModelProvider,
+            )
+          : (generatedModelProvider ?? modelVariants[0]?.provider ?? null),
       )
     }
   }, [activeModelProvider, generatedId, generatedModelProvider, modelVariants])
@@ -2545,6 +2575,8 @@ export function App() {
   const [prompt, setPrompt] = useState('')
   const [pinnedCategoryId, setPinnedCategoryId] = useState<string | null>(null)
   const [quality, setQuality] = useState<ImageQuality>('medium')
+  const [dialogModelProvider, setDialogModelProvider] =
+    useState<ModelProvider>('fal')
   const [sampleIndex, setSampleIndex] = useState(0)
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null)
   const [retryingBackgroundId, setRetryingBackgroundId] = useState<
@@ -2587,8 +2619,9 @@ export function App() {
   useEffect(() => {
     if (!generateOpen) {
       setQuality(settings.quality)
+      setDialogModelProvider(settings.modelProvider)
     }
-  }, [generateOpen, settings.quality])
+  }, [generateOpen, settings.modelProvider, settings.quality])
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
@@ -2624,6 +2657,7 @@ export function App() {
     mutationFn: async (input: {
       prompt: string
       quality: ImageQuality
+      modelProvider: ModelProvider
       categoryId?: string
     }) => {
       return parseJson<GenerateExplorationResponse>(
@@ -2634,7 +2668,7 @@ export function App() {
             prompt: input.prompt,
             categoryId: input.categoryId,
             quality: input.quality,
-            modelProvider: settings.modelProvider,
+            modelProvider: input.modelProvider,
           }),
         }),
         'Microscope could not start image generation.',
@@ -3131,6 +3165,7 @@ export function App() {
     generateMutation.mutate({
       prompt: trimmed,
       quality,
+      modelProvider: dialogModelProvider,
       categoryId: pinnedCategoryId ?? undefined,
     })
     setPrompt('')
@@ -3142,6 +3177,7 @@ export function App() {
   function openGenerate() {
     setPinnedCategoryId(null)
     setQuality(settings.quality)
+    setDialogModelProvider(settings.modelProvider)
     setGenerateOpen(true)
   }
 
@@ -3149,6 +3185,7 @@ export function App() {
     setPrompt(nextPrompt)
     setPinnedCategoryId(categoryId ?? null)
     setQuality(settings.quality)
+    setDialogModelProvider(settings.modelProvider)
     setGenerateOpen(true)
   }
 
@@ -3280,8 +3317,11 @@ export function App() {
         samples={visibleSamples}
         onSubmit={handleGenerate}
         pending={generateMutation.isPending}
-        modelProvider={settings.modelProvider}
-        onModelProvider={updateModelProvider}
+        modelProvider={dialogModelProvider}
+        onModelProvider={(provider) => {
+          setDialogModelProvider(provider)
+          updateModelProvider(provider)
+        }}
         providerPending={settingsMutation.isPending}
       />
       {view !== 'specimen' ? (

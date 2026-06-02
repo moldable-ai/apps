@@ -27,6 +27,12 @@ interface FileTreeItemProps {
   onFileSelect: (path: string) => void
   selectedPath?: string | null
   onDeleteRequest: (file: FileItem) => void
+  onRenameSuccess: (
+    oldPath: string,
+    newPath: string,
+    isDirectory: boolean,
+  ) => void
+  onError: (message: string) => void
 }
 
 export function FileTreeItem({
@@ -36,6 +42,8 @@ export function FileTreeItem({
   onFileSelect,
   selectedPath,
   onDeleteRequest,
+  onRenameSuccess,
+  onError,
 }: FileTreeItemProps) {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
@@ -92,14 +100,18 @@ export function FileTreeItem({
       }
       return res.json()
     },
-    onSuccess: () => {
+    onSuccess: (data: { newPath: string }) => {
       // Invalidate parent directory to refresh the tree
       const parentPath = file.path.substring(0, file.path.lastIndexOf('/'))
       queryClient.invalidateQueries({ queryKey: ['files', parentPath] })
+      queryClient.invalidateQueries({
+        queryKey: ['all-files', rootPath, workspaceId],
+      })
+      onRenameSuccess(file.path, data.newPath, file.isDirectory)
       setIsRenaming(false)
     },
     onError: (error) => {
-      alert(error.message)
+      onError(error.message)
       setRenameValue(file.name)
       setIsRenaming(false)
     },
@@ -271,6 +283,8 @@ export function FileTreeItem({
               onFileSelect={onFileSelect}
               selectedPath={selectedPath}
               onDeleteRequest={onDeleteRequest}
+              onRenameSuccess={onRenameSuccess}
+              onError={onError}
             />
           ))}
         </div>

@@ -7,7 +7,7 @@ export interface Key {
   // What to append to the expression. Omitted for action keys handled directly.
   append?: string
   kind: 'num' | 'op' | 'fn' | 'action'
-  action?: 'clear' | 'back' | 'equals' | 'sign'
+  action?: 'clear' | 'back' | 'equals' | 'sign' | 'reciprocal'
   // Tailwind col-span for the grid.
   span?: number
 }
@@ -44,7 +44,7 @@ export const BASIC_KEYS: Key[] = [
 export const SCIENTIFIC_KEYS: Key[] = [
   { label: '(', kind: 'fn', append: '(' },
   { label: ')', kind: 'fn', append: ')' },
-  { label: 'x²', kind: 'fn', append: '^2' },
+  { label: 'x²', kind: 'op', append: '^2' },
   { label: 'xʸ', kind: 'op', append: '^' },
 
   { label: '√', kind: 'fn', append: 'sqrt(' },
@@ -57,7 +57,7 @@ export const SCIENTIFIC_KEYS: Key[] = [
   { label: 'π', kind: 'num', append: 'π' },
   { label: 'e', kind: 'num', append: 'e' },
 
-  { label: '1/x', kind: 'fn', append: '1/(' },
+  { label: '1/x', kind: 'action', action: 'reciprocal' },
   { label: 'exp', kind: 'fn', append: 'exp(' },
   { label: 'n!', kind: 'op', append: '!' },
   { label: 'EE', kind: 'num', append: 'e' },
@@ -80,7 +80,7 @@ export function balanceParens(expr: string): string {
 export function toggleSign(expr: string): string {
   if (!expr) return '-'
   // Match the trailing run of digits (no sign — we handle the sign ourselves).
-  const match = expr.match(/(\d*\.?\d+(?:[eE]\d+)?)$/)
+  const match = expr.match(/(\d*\.?\d+(?:[eE][+\-−]?\d+)?)$/)
   if (!match) return `${expr}-`
 
   const num = match[0]
@@ -91,9 +91,14 @@ export function toggleSign(expr: string): string {
   if (head.endsWith('-')) {
     const before = head.slice(0, -1)
     const prevChar = before.slice(-1)
-    if (before === '' || '(+−×÷*/^'.includes(prevChar)) {
+    if (before === '' || '(+-−×÷*/^'.includes(prevChar)) {
       return before + num
     }
   }
   return `${head}-${num}`
+}
+
+export function reciprocal(expr: string): string {
+  if (!expr.trim()) return '1/('
+  return `1/(${expr})`
 }

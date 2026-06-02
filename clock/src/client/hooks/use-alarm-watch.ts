@@ -3,12 +3,11 @@ import { useEffect, useRef, useState } from 'react'
 import { useWorkspace } from '@moldable-ai/ui'
 import { type Fetcher, getJson, sendJson } from '../lib/api'
 import { playChime } from '../lib/sound'
+import { nextAlarmOccurrenceAfter } from '@/lib/alarms'
 import type { Alarm } from '@/lib/types'
 import { useNow } from './use-now'
 
-function pad(value: number) {
-  return String(value).padStart(2, '0')
-}
+const ALARM_CATCH_UP_WINDOW_MS = 5 * 60_000
 
 /**
  * Watches enabled alarms once a second and surfaces any that fire. Lives at the
@@ -21,6 +20,7 @@ export function useAlarmWatch() {
   const queryClient = useQueryClient()
   const now = useNow(1000)
   const firedRef = useRef<Set<string>>(new Set())
+  const lastCheckedRef = useRef(Date.now() - ALARM_CATCH_UP_WINDOW_MS)
   const [ringing, setRinging] = useState<Alarm[]>([])
 
   const { data } = useQuery({
@@ -39,20 +39,22 @@ export function useAlarmWatch() {
   const alarms = data?.alarms
 
   useEffect(() => {
-    if (!alarms?.length) return
+    if (!alarms) return
+    const previousCheck = new Date(lastCheckedRef.current)
     const date = new Date(now)
-    const current = `${pad(date.getHours())}:${pad(date.getMinutes())}`
-    const dayKey = `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
-    const weekday = date.getDay()
+    lastCheckedRef.current = now
+
+    if (alarms.length === 0) return
 
     const newlyRinging: Alarm[] = []
     for (const alarm of alarms) {
-      if (!alarm.enabled || alarm.time !== current) continue
-      if (
-        alarm.repeat.length > 0 &&
-        !alarm.repeat.includes(weekday as Alarm['repeat'][number])
-      )
-        continue
+      if (!alarm.enabled) continue
+      const fireAt = nextAlarmOccurrenceAfter(alarm, previousCheck)
+      if (!fireAt || fireAt.getTime() > now) continue
+      const dayKey = `${fireAt.getFullYear()}-${fireAt.getMonth()}-${fireAt.getDate()}`
+      const current = `${String(fireAt.getHours()).padStart(2, '0')}:${String(
+        fireAt.getMinutes(),
+      ).padStart(2, '0')}`
       const key = `${alarm.id}:${dayKey}:${current}`
       if (firedRef.current.has(key)) continue
       firedRef.current.add(key)

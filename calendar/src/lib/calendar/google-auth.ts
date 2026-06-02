@@ -86,8 +86,23 @@ function generateOAuthState(): string {
   return crypto.randomBytes(32).toString('base64url')
 }
 
+function assertOAuthState(value: string | undefined): string {
+  if (!value || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new Error('OAuth state mismatch - please try authenticating again')
+  }
+  return value
+}
+
 function tokenPath(workspaceId?: string) {
   return safePath(getAppDataDir(workspaceId), 'tokens.json')
+}
+
+function pendingAuthDir() {
+  return safePath(getAppDataDir(), 'pending-auth')
+}
+
+function pkcePathForState(state: string) {
+  return safePath(pendingAuthDir(), `${state}.json`)
 }
 
 export async function getAuthUrl(workspaceId?: string) {
@@ -95,10 +110,10 @@ export async function getAuthUrl(workspaceId?: string) {
   const codeVerifier = generateCodeVerifier()
   const codeChallenge = generateCodeChallenge(codeVerifier)
   const state = generateOAuthState()
-  const dataDir = getAppDataDir()
-  const pkcePath = safePath(dataDir, 'pkce-state.json')
+  const authDir = pendingAuthDir()
+  const pkcePath = pkcePathForState(state)
 
-  await ensureDir(dataDir)
+  await ensureDir(authDir)
   await writeJson(pkcePath, {
     code_verifier: codeVerifier,
     created_at: Date.now(),
@@ -120,9 +135,8 @@ export async function getAuthUrl(workspaceId?: string) {
 }
 
 export async function saveTokens(code: string, state: string | undefined) {
-  // Load the PKCE code verifier from default data dir (stored there by getAuthUrl)
-  const defaultDataDir = getAppDataDir()
-  const pkcePath = safePath(defaultDataDir, 'pkce-state.json')
+  const expectedState = assertOAuthState(state)
+  const pkcePath = pkcePathForState(expectedState)
   const pkceState = await readJson<PKCEState | null>(pkcePath, null)
 
   if (!pkceState) {
@@ -134,7 +148,7 @@ export async function saveTokens(code: string, state: string | undefined) {
     throw new Error('PKCE state expired - please try authenticating again')
   }
 
-  if (!state || state !== pkceState.state) {
+  if (expectedState !== pkceState.state) {
     throw new Error('OAuth state mismatch - please try authenticating again')
   }
 

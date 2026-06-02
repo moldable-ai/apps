@@ -57,6 +57,8 @@ export interface ForecastHour {
   temperature: number
   code: number
   label: string
+  /** Daylight flag for this forecast hour, when available. */
+  isDay?: boolean
 }
 
 /** Full payload returned by `getWeather` — conditions + forecast + location. */

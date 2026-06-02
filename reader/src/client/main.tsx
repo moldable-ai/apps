@@ -3,6 +3,7 @@ import { type Root, createRoot } from 'react-dom/client'
 import { ThemeProvider, WorkspaceProvider } from '@moldable-ai/ui'
 import { ErrorBoundary, type ErrorSource } from './components/error-boundary'
 import './globals.css'
+import './moldable-chat-safe-area'
 import { QueryProvider } from './query-provider'
 
 function toError(value: unknown): Error {

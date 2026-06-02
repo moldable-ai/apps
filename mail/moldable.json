@@ -1,10 +1,7 @@
 {
   "name": "Mail",
-  "version": "0.2.5",
-  "aliases": [
-    "email",
-    "inbox"
-  ],
+  "version": "0.2.6",
+  "aliases": ["email", "inbox"],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Fast Gmail client for triage, search, reading, and sending email",
@@ -12,12 +9,7 @@
   "license": "FSL-1.1-ALv2",
   "icon": "✉️",
   "category": "productivity",
-  "tags": [
-    "email",
-    "gmail",
-    "inbox",
-    "productivity"
-  ],
+  "tags": ["email", "gmail", "inbox", "productivity"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.13",
     "@moldable-ai/storage": "^0.1.5"
@@ -167,9 +159,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -225,11 +215,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "title",
-                "body",
-                "groupId"
-              ]
+              "required": ["title", "body", "groupId"]
             }
           },
           {
@@ -246,9 +232,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -347,9 +331,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "ids"
-              ]
+              "required": ["ids"]
             }
           }
         ]
@@ -359,9 +341,7 @@
   "env": [],
   "routeName": "mail",
   "iconPath": "public/icon.png",
-  "screenshots": [
-    "public/screenshots/1.png"
-  ],
+  "screenshots": ["public/screenshots/1.png"],
   "tagline": "A fast, keyboard-driven Gmail client that triages itself",
   "upstream": {
     "repo": "moldable-ai/apps",

@@ -8,6 +8,7 @@ import {
 } from 'node:http'
 import path from 'node:path'
 import { Readable } from 'node:stream'
+import { pathToFileURL } from 'node:url'
 import {
   type HmrOptions,
   type ViteDevServer,
@@ -88,16 +89,42 @@ function writeWebResponse(response: Response, res: ServerResponse) {
   ).pipe(res)
 }
 
-async function serveStatic(req: IncomingMessage, res: ServerResponse) {
-  const url = requestUrl(req)
-  const requestedPath = decodeURIComponent(url.pathname)
+export function resolveStaticFilePath(pathname: string): string | null {
+  let requestedPath: string
+  try {
+    requestedPath = decodeURIComponent(pathname)
+  } catch {
+    return null
+  }
+
   const hasExtension = path.extname(requestedPath).length > 0
-  const filePath =
+  const targetPath =
     requestedPath.startsWith('/assets/') ||
     requestedPath === '/favicon.ico' ||
     hasExtension
-      ? path.join(distDir, requestedPath)
-      : path.join(distDir, 'index.html')
+      ? requestedPath
+      : '/index.html'
+
+  const relativeTarget = targetPath.replace(/^\/+/, '')
+  const filePath = path.resolve(distDir, relativeTarget)
+  const relativeToDist = path.relative(distDir, filePath)
+
+  if (relativeToDist.startsWith('..') || path.isAbsolute(relativeToDist)) {
+    return null
+  }
+
+  return filePath
+}
+
+async function serveStatic(req: IncomingMessage, res: ServerResponse) {
+  const url = requestUrl(req)
+  const filePath = resolveStaticFilePath(url.pathname)
+
+  if (!filePath) {
+    res.statusCode = 404
+    res.end('Not found')
+    return
+  }
 
   try {
     const content = await fs.readFile(filePath)
@@ -153,7 +180,7 @@ async function handleClientRequest(
   })
 }
 
-async function main() {
+export async function main() {
   let vite: ViteDevServer | null = null
 
   const server = createServer(async (req, res) => {
@@ -180,4 +207,9 @@ async function main() {
   })
 }
 
-void main()
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  void main()
+}

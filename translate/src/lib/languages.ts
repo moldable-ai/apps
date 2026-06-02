@@ -91,7 +91,7 @@ export const LANGUAGE_LIST = Object.values(LANGUAGES)
 
 /** Type guard: is `code` one of our supported languages? */
 export function isLanguage(code: string): code is Language {
-  return code in LANGUAGES
+  return Object.prototype.hasOwnProperty.call(LANGUAGES, code)
 }
 
 /**

@@ -38,11 +38,8 @@ import {
 } from './db'
 import { getDataDir, getWorkspaceId, jsonError } from './moldable'
 import { Hono } from 'hono'
-import { cors } from 'hono/cors'
 
 export const app = new Hono()
-
-app.use('/api/*', cors())
 
 function requiredWorkspaceId(workspaceId?: string) {
   return workspaceId ?? 'personal'
@@ -423,6 +420,7 @@ app.post('/api/moldable/rpc', async (c) => {
           connectionId,
           params.query,
           params.limit,
+          preferences.queryTimeoutMs,
         ),
       })
     }

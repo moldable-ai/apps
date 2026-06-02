@@ -9,12 +9,13 @@ import { isWithinDeepLTextRequestLimit } from '../lib/deepl-limits'
 import { type Language, isLanguage } from '../lib/languages'
 import { translateText } from '../lib/translation-service'
 import type { SourceSelection, TranslationRecord } from '../lib/types'
-import { Hono } from 'hono'
+import { type Context, Hono } from 'hono'
 import { cors } from 'hono/cors'
 import fs from 'node:fs/promises'
 import { z } from 'zod'
 
 const HISTORY_LIMIT = 100
+const historyMutationQueues = new Map<string, Promise<void>>()
 
 const languageCodeSchema = z.string().refine(isLanguage, {
   message: 'Unsupported language code',
@@ -42,6 +43,11 @@ const historyRecordSchema = z.object({
   requestedSource: sourceSelectionSchema,
   sourceLanguage: languageCodeSchema,
   targetLanguage: languageCodeSchema,
+})
+
+const persistedHistoryRecordSchema = historyRecordSchema.extend({
+  id: z.string().min(1),
+  createdAt: z.iso.datetime(),
 })
 
 const rpcRequestSchema = z.object({
@@ -79,17 +85,59 @@ function getRpcWorkspaceId(request: Request): string | undefined {
   )
 }
 
+async function readJsonBody(
+  c: Context,
+): Promise<{ success: true; data: unknown } | { success: false }> {
+  try {
+    return { success: true, data: await c.req.json() }
+  } catch {
+    return { success: false }
+  }
+}
+
+function historyQueueKey(workspaceId?: string): string {
+  return workspaceId ?? '__default__'
+}
+
+function runHistoryMutation<T>(
+  workspaceId: string | undefined,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const key = historyQueueKey(workspaceId)
+  const previous = historyMutationQueues.get(key) ?? Promise.resolve()
+  const next = previous.catch(() => undefined).then(operation)
+
+  const cleanup = next
+    .then(
+      () => undefined,
+      () => undefined,
+    )
+    .finally(() => {
+      if (historyMutationQueues.get(key) === cleanup) {
+        historyMutationQueues.delete(key)
+      }
+    })
+
+  historyMutationQueues.set(key, cleanup)
+  return next
+}
+
 async function loadHistory(workspaceId?: string): Promise<TranslationRecord[]> {
   try {
     const raw = await fs.readFile(getHistoryPath(workspaceId), 'utf-8')
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
-    return (parsed as TranslationRecord[])
-      .filter((record) => record && typeof record.id === 'string')
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      )
+
+    const records: TranslationRecord[] = []
+    for (const record of parsed) {
+      const result = persistedHistoryRecordSchema.safeParse(record)
+      if (result.success) records.push(result.data)
+    }
+
+    return records.sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    )
   } catch {
     return []
   }
@@ -107,14 +155,16 @@ async function addHistoryRecord(
   input: z.infer<typeof historyRecordSchema>,
   workspaceId?: string,
 ): Promise<TranslationRecord> {
-  const record: TranslationRecord = {
-    id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
-    ...input,
-  }
-  const existing = await loadHistory(workspaceId)
-  await saveHistory([record, ...existing], workspaceId)
-  return record
+  return runHistoryMutation(workspaceId, async () => {
+    const record: TranslationRecord = {
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      ...input,
+    }
+    const existing = await loadHistory(workspaceId)
+    await saveHistory([record, ...existing], workspaceId)
+    return record
+  })
 }
 
 async function runTranslation(input: z.infer<typeof translateRequestSchema>) {
@@ -127,7 +177,35 @@ async function runTranslation(input: z.infer<typeof translateRequestSchema>) {
         : input.from) as Language,
     }
   }
+
+  if (input.from !== 'auto' && input.from === input.to) {
+    return {
+      translatedText: input.text,
+      detectedSourceLanguage: input.from,
+    }
+  }
+
   return translateText(input.text, input.from, input.to)
+}
+
+async function saveTranslationToHistory(
+  input: z.infer<typeof translateRequestSchema>,
+  result: Awaited<ReturnType<typeof runTranslation>>,
+  workspaceId?: string,
+): Promise<void> {
+  if (!input.text.trim() || !result.translatedText.trim()) return
+
+  await addHistoryRecord(
+    {
+      sourceText: input.text,
+      translatedText: result.translatedText,
+      requestedSource: input.from,
+      sourceLanguage:
+        input.from === 'auto' ? result.detectedSourceLanguage : input.from,
+      targetLanguage: input.to,
+    },
+    workspaceId,
+  )
 }
 
 function isMissingCredentialError(message: string): boolean {
@@ -201,8 +279,10 @@ app.get('/api/moldable/today', async (c) => {
 
 app.post('/api/translate', async (c) => {
   try {
-    const body = await c.req.json()
-    const parsed = translateRequestSchema.safeParse(body)
+    const body = await readJsonBody(c)
+    if (!body.success) return c.json({ error: 'Invalid JSON' }, 400)
+
+    const parsed = translateRequestSchema.safeParse(body.data)
 
     if (!parsed.success) {
       return c.json(
@@ -237,7 +317,10 @@ app.get('/api/history', async (c) => {
 app.post('/api/history', async (c) => {
   try {
     const workspaceId = getWorkspaceFromRequest(c.req.raw)
-    const parsed = historyRecordSchema.safeParse(await c.req.json())
+    const body = await readJsonBody(c)
+    if (!body.success) return c.json({ error: 'Invalid JSON' }, 400)
+
+    const parsed = historyRecordSchema.safeParse(body.data)
     if (!parsed.success) {
       return c.json(
         { error: `Invalid request: ${parsed.error.issues[0]?.message}` },
@@ -256,11 +339,13 @@ app.delete('/api/history/:id', async (c) => {
   try {
     const workspaceId = getWorkspaceFromRequest(c.req.raw)
     const id = c.req.param('id')
-    const existing = await loadHistory(workspaceId)
-    await saveHistory(
-      existing.filter((record) => record.id !== id),
-      workspaceId,
-    )
+    await runHistoryMutation(workspaceId, async () => {
+      const existing = await loadHistory(workspaceId)
+      await saveHistory(
+        existing.filter((record) => record.id !== id),
+        workspaceId,
+      )
+    })
     return c.json({ success: true })
   } catch (error) {
     console.error('Failed to delete history record:', error)
@@ -271,7 +356,7 @@ app.delete('/api/history/:id', async (c) => {
 app.delete('/api/history', async (c) => {
   try {
     const workspaceId = getWorkspaceFromRequest(c.req.raw)
-    await saveHistory([], workspaceId)
+    await runHistoryMutation(workspaceId, () => saveHistory([], workspaceId))
     return c.json({ success: true })
   } catch (error) {
     console.error('Failed to clear history:', error)
@@ -283,11 +368,26 @@ app.post('/api/moldable/rpc', async (c) => {
   const workspaceId = getRpcWorkspaceId(c.req.raw)
 
   try {
-    const body = rpcRequestSchema.parse(await c.req.json())
+    const rawBody = await readJsonBody(c)
+    if (!rawBody.success) {
+      return c.json(
+        {
+          ok: false,
+          error: {
+            code: 'invalid_params',
+            message: 'Translate received invalid JSON.',
+          },
+        },
+        400,
+      )
+    }
+
+    const body = rpcRequestSchema.parse(rawBody.data)
 
     if (body.method === 'translate.text') {
       const params = translateRequestSchema.parse(body.params)
       const result = await runTranslation(params)
+      await saveTranslationToHistory(params, result, workspaceId)
       return c.json({ ok: true, result })
     }
 

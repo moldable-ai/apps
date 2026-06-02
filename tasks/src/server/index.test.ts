@@ -22,4 +22,10 @@ describe('resolveStaticFilePath', () => {
       path.join(process.cwd(), 'dist', 'index.html'),
     )
   })
+
+  it('does not resolve asset traversal paths outside dist', () => {
+    expect(resolveStaticFilePath('/assets/../../package.json')).toBe(
+      path.join(process.cwd(), 'dist', 'index.html'),
+    )
+  })
 })

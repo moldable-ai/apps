@@ -26,6 +26,7 @@ import {
   deleteCredentialIfExists,
   deleteWorkspaceSecret,
   invokePostgresCapability,
+  updatePostgresCredentialPolicy,
   upsertPostgresCredential,
 } from './aivault'
 import { randomUUID } from 'node:crypto'
@@ -137,6 +138,8 @@ const MAX_DASHBOARDS = 50
 const MAX_DASHBOARD_CHARTS = 80
 const MAX_DASHBOARD_CHART_ROWS = 5_000
 const MAX_QUERY_HISTORY_ITEMS = 200
+const MAX_QUERY_HISTORY_SQL_LENGTH = 250_000
+const MAX_QUERY_HISTORY_TITLE_LENGTH = 120
 const DEFAULT_SQL_EDITOR_HEIGHT = 128
 const MIN_SQL_EDITOR_HEIGHT = 96
 const MAX_SQL_EDITOR_HEIGHT = 520
@@ -629,22 +632,28 @@ function parseQueryHistoryInput(
   const body = value as Record<string, unknown>
   const sql = typeof body.sql === 'string' ? body.sql.trim() : ''
   if (!sql) throw new Error('SQL query is required')
+  if (sql.length > MAX_QUERY_HISTORY_SQL_LENGTH) {
+    throw new Error('Query history SQL is too large')
+  }
 
   const rowCount =
-    typeof body.rowCount === 'number' && Number.isFinite(body.rowCount)
+    typeof body.rowCount === 'number' &&
+    Number.isSafeInteger(body.rowCount) &&
+    body.rowCount >= 0
       ? body.rowCount
       : null
   const executionMs =
     typeof body.executionMs === 'number' && Number.isFinite(body.executionMs)
-      ? body.executionMs
+      ? Math.max(0, Math.round(body.executionMs))
       : null
+  const title =
+    asTrimmedString(body.title) ||
+    sql.split('\n')[0]?.slice(0, 80) ||
+    'SQL query'
 
   return {
     sql,
-    title:
-      asTrimmedString(body.title) ||
-      sql.split('\n')[0]?.slice(0, 80) ||
-      'SQL query',
+    title: title.slice(0, MAX_QUERY_HISTORY_TITLE_LENGTH),
     rowCount,
     executionMs,
   }
@@ -1135,17 +1144,19 @@ function normalizeReadOnlySql(rawSql: string): string {
   const firstKeyword = withoutTrailingSemicolons
     .match(/^[a-z]+/i)?.[0]
     .toLowerCase()
-  const allowedKeywords = new Set([
-    'select',
-    'with',
-    'show',
-    'explain',
-    'values',
-  ])
 
-  if (!firstKeyword || !allowedKeywords.has(firstKeyword)) {
+  if (!firstKeyword || !READ_ONLY_SQL_KEYWORDS.has(firstKeyword)) {
     throw new Error(
       'Read-only mode only allows SELECT, WITH, SHOW, EXPLAIN, and VALUES statements',
+    )
+  }
+
+  if (
+    withStatementKind(withoutTrailingSemicolons) ||
+    explainStatementKind(withoutTrailingSemicolons)
+  ) {
+    throw new Error(
+      'Read-only mode cannot run write or admin statements through WITH or EXPLAIN',
     )
   }
 
@@ -1153,6 +1164,51 @@ function normalizeReadOnlySql(rawSql: string): string {
 }
 
 type SqlExecutionKind = 'read-only' | 'write' | 'admin'
+
+const READ_ONLY_SQL_KEYWORDS = new Set([
+  'select',
+  'with',
+  'show',
+  'explain',
+  'values',
+])
+
+const WRITE_SQL_KEYWORDS = new Set(['insert', 'update', 'delete', 'merge'])
+
+const ADMIN_SQL_KEYWORDS = new Set([
+  'create',
+  'alter',
+  'drop',
+  'truncate',
+  'grant',
+  'revoke',
+  'vacuum',
+  'analyze',
+  'reindex',
+  'refresh',
+  'comment',
+])
+
+const EXPLAIN_OPTION_TOKENS = new Set([
+  'analyze',
+  'verbose',
+  'costs',
+  'settings',
+  'buffers',
+  'wal',
+  'timing',
+  'summary',
+  'format',
+  'generic_plan',
+  'true',
+  'false',
+  'on',
+  'off',
+  'text',
+  'xml',
+  'json',
+  'yaml',
+])
 
 function normalizeSingleSql(rawSql: string): string {
   const trimmed = stripLeadingSqlComments(rawSql).trim()
@@ -1175,39 +1231,130 @@ function firstSqlKeyword(sql: string) {
 }
 
 function sqlTokens(sql: string) {
-  return sql.match(/[a-z_]+/gi)?.map((token) => token.toLowerCase()) ?? []
+  const tokens: string[] = []
+  let index = 0
+  let quote: "'" | '"' | '`' | null = null
+  let dollarQuote: string | null = null
+  let lineComment = false
+  let blockComment = false
+
+  while (index < sql.length) {
+    const char = sql[index]
+    const next = sql[index + 1]
+
+    if (lineComment) {
+      if (char === '\n') lineComment = false
+      index += 1
+      continue
+    }
+
+    if (blockComment) {
+      if (char === '*' && next === '/') {
+        blockComment = false
+        index += 2
+        continue
+      }
+      index += 1
+      continue
+    }
+
+    if (dollarQuote) {
+      if (sql.startsWith(dollarQuote, index)) {
+        index += dollarQuote.length
+        dollarQuote = null
+        continue
+      }
+      index += 1
+      continue
+    }
+
+    if (quote) {
+      if (char === quote) {
+        if (quote === "'" && next === "'") {
+          index += 2
+          continue
+        }
+        quote = null
+      }
+      index += 1
+      continue
+    }
+
+    if (char === '-' && next === '-') {
+      lineComment = true
+      index += 2
+      continue
+    }
+
+    if (char === '/' && next === '*') {
+      blockComment = true
+      index += 2
+      continue
+    }
+
+    if (char === "'" || char === '"' || char === '`') {
+      quote = char
+      index += 1
+      continue
+    }
+
+    if (char === '$') {
+      const match = sql.slice(index).match(/^\$[a-zA-Z_][a-zA-Z0-9_]*\$|^\$\$/)
+      if (match) {
+        dollarQuote = match[0]
+        index += dollarQuote.length
+        continue
+      }
+    }
+
+    if (char && /[a-z_]/i.test(char)) {
+      const token = sql.slice(index).match(/^[a-z_][a-z0-9_]*/i)?.[0]
+      if (token) {
+        tokens.push(token.toLowerCase())
+        index += token.length
+        continue
+      }
+    }
+
+    index += 1
+  }
+
+  return tokens
+}
+
+function withStatementKindFromTokens(
+  tokens: string[],
+): SqlExecutionKind | null {
+  if (tokens[0] !== 'with') return null
+  if (tokens.some((token) => WRITE_SQL_KEYWORDS.has(token))) return 'write'
+  if (tokens.some((token) => ADMIN_SQL_KEYWORDS.has(token))) return 'admin'
+  return null
 }
 
 function withStatementKind(sql: string): SqlExecutionKind | null {
+  return withStatementKindFromTokens(sqlTokens(sql))
+}
+
+function statementKindFromTokens(tokens: string[]): SqlExecutionKind | null {
+  const firstKeyword = tokens[0]
+  if (!firstKeyword) return null
+  if (firstKeyword === 'with') return withStatementKindFromTokens(tokens)
+  if (WRITE_SQL_KEYWORDS.has(firstKeyword)) return 'write'
+  if (ADMIN_SQL_KEYWORDS.has(firstKeyword)) return 'admin'
+  if (READ_ONLY_SQL_KEYWORDS.has(firstKeyword)) return null
+  return 'admin'
+}
+
+function explainStatementKind(sql: string): SqlExecutionKind | null {
   const tokens = sqlTokens(sql)
-  if (tokens[0] !== 'with') return null
-  if (
-    tokens.some(
-      (token) => token === 'insert' || token === 'update' || token === 'delete',
-    )
-  ) {
-    return 'write'
-  }
-  if (
-    tokens.some((token) =>
-      new Set([
-        'create',
-        'alter',
-        'drop',
-        'truncate',
-        'grant',
-        'revoke',
-        'vacuum',
-        'analyze',
-        'reindex',
-        'refresh',
-        'comment',
-      ]).has(token),
-    )
-  ) {
-    return 'admin'
-  }
-  return null
+  if (tokens[0] !== 'explain') return null
+
+  const nestedIndex = tokens
+    .slice(1)
+    .findIndex((token) => !EXPLAIN_OPTION_TOKENS.has(token))
+  if (nestedIndex < 0) return null
+
+  return statementKindFromTokens(tokens.slice(nestedIndex + 1))
 }
 
 function classifySqlExecution(rawSql: string): {
@@ -1222,31 +1369,20 @@ function classifySqlExecution(rawSql: string): {
     return { sql, kind: withKind }
   }
 
-  if (
-    new Set(['select', 'with', 'show', 'explain', 'values']).has(firstKeyword)
-  ) {
+  const explainKind = explainStatementKind(sql)
+  if (explainKind) {
+    return { sql, kind: explainKind }
+  }
+
+  if (READ_ONLY_SQL_KEYWORDS.has(firstKeyword)) {
     return { sql: normalizeReadOnlySql(rawSql), kind: 'read-only' }
   }
 
-  if (new Set(['insert', 'update', 'delete']).has(firstKeyword)) {
+  if (WRITE_SQL_KEYWORDS.has(firstKeyword)) {
     return { sql, kind: 'write' }
   }
 
-  if (
-    new Set([
-      'create',
-      'alter',
-      'drop',
-      'truncate',
-      'grant',
-      'revoke',
-      'vacuum',
-      'analyze',
-      'reindex',
-      'refresh',
-      'comment',
-    ]).has(firstKeyword)
-  ) {
+  if (ADMIN_SQL_KEYWORDS.has(firstKeyword)) {
     return { sql, kind: 'admin' }
   }
 
@@ -2019,6 +2155,8 @@ export async function updateConnection(
     current.database !== input.database ||
     current.user !== input.user ||
     current.ssl !== input.ssl
+  const policyChanged =
+    normalizeConnectionPolicyMode(current.policyMode) !== input.policyMode
 
   const passwordProvided =
     typeof input.password === 'string' && input.password.length > 0
@@ -2040,6 +2178,15 @@ export async function updateConnection(
       port: input.port,
       maxPolicyMode: input.policyMode,
     })
+  } else if (policyChanged) {
+    await updatePostgresCredentialPolicy({
+      workspaceId,
+      credentialId,
+      secretName,
+      host: input.host,
+      port: input.port,
+      maxPolicyMode: input.policyMode,
+    })
   }
 
   const nextConnection: StoredConnection = {
@@ -2054,13 +2201,15 @@ export async function updateConnection(
     environment: input.environment,
     policyMode: input.policyMode,
     credentialId:
-      credentialChanged || passwordProvided
+      credentialChanged || passwordProvided || policyChanged
         ? credentialId
         : current.credentialId,
     secretName:
-      credentialChanged || passwordProvided ? secretName : current.secretName,
+      credentialChanged || passwordProvided || policyChanged
+        ? secretName
+        : current.secretName,
     passwordSecretName:
-      credentialChanged || passwordProvided
+      credentialChanged || passwordProvided || policyChanged
         ? undefined
         : current.passwordSecretName,
     password: undefined,
@@ -2091,7 +2240,7 @@ export async function removeConnection(
   }
 
   if (target.credentialId) {
-    await deleteCredentialIfExists(target.credentialId)
+    await deleteCredentialIfExists(target.credentialId, workspaceId)
   }
 
   if (target.secretName) {
@@ -2148,7 +2297,9 @@ export async function testConnection(
       version: result.version ?? 'Unknown PostgreSQL version',
     }
   } finally {
-    await deleteCredentialIfExists(credentialId).catch(() => undefined)
+    await deleteCredentialIfExists(credentialId, workspaceId).catch(
+      () => undefined,
+    )
     await deleteWorkspaceSecret(workspaceId, secretName).catch(() => undefined)
   }
 }
@@ -2296,6 +2447,7 @@ export async function searchSchema(
   connectionId: string,
   query: unknown,
   limitValue?: unknown,
+  timeoutMs?: number,
 ): Promise<{
   connectionId: string
   matches: Array<{ schema: string; table: string; type: string }>
@@ -2306,7 +2458,12 @@ export async function searchSchema(
   }
 
   const limit = normalizeLimit(limitValue, 25, 100)
-  const schemas = await getExplorer(workspaceId, dataDir, connectionId)
+  const schemas = await getExplorer(
+    workspaceId,
+    dataDir,
+    connectionId,
+    timeoutMs,
+  )
   const matches = schemas.flatMap((schema) =>
     schema.tables
       .filter((table) =>

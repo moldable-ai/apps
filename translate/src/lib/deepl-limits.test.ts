@@ -21,6 +21,23 @@ describe('DeepL text request limits', () => {
     })
   })
 
+  it('uses DeepL target variants for ambiguous UI languages', () => {
+    expect(createDeepLTranslateRequestBody('Hello', 'auto', 'en')).toEqual({
+      text: ['Hello'],
+      target_lang: 'EN-US',
+    })
+
+    expect(createDeepLTranslateRequestBody('Hello', 'auto', 'pt')).toEqual({
+      text: ['Hello'],
+      target_lang: 'PT-PT',
+    })
+
+    expect(createDeepLTranslateRequestBody('Hello', 'auto', 'zh')).toEqual({
+      text: ['Hello'],
+      target_lang: 'ZH-HANS',
+    })
+  })
+
   it('measures the UTF-8 encoded JSON request body', () => {
     expect(getDeepLTranslateRequestBytes('aaaa', 'auto', 'es')).toBe(
       new TextEncoder().encode('{"text":["aaaa"],"target_lang":"ES"}').length,

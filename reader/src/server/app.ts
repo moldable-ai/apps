@@ -300,8 +300,15 @@ app.put('/api/books/:id/progress', async (c) => {
     string,
     unknown
   >
-  const progress = await setProgress(dataDir, c.req.param('id'), patch)
-  return c.json({ progress })
+  try {
+    const progress = await setProgress(dataDir, c.req.param('id'), patch)
+    return c.json({ progress })
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Book not found') {
+      return jsonError(c, error.message, 404)
+    }
+    throw error
+  }
 })
 
 // ─── Book store ──────────────────────────────────────────────────────
@@ -413,12 +420,25 @@ app.post('/api/folders/move', async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as {
     bookId?: string
     folderId?: string | null
+    inFolder?: boolean
   }
   if (!body.bookId) return jsonError(c, 'bookId is required', 400)
-  const folders = await moveBook(
-    getDataDir(c),
-    body.bookId,
-    body.folderId ?? null,
-  )
-  return c.json({ folders })
+  try {
+    const folders = await moveBook(
+      getDataDir(c),
+      body.bookId,
+      body.folderId ?? null,
+      body.inFolder ?? true,
+    )
+    return c.json({ folders })
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.message === 'Book not found' ||
+        error.message === 'Folder not found')
+    ) {
+      return jsonError(c, error.message, 404)
+    }
+    throw error
+  }
 })

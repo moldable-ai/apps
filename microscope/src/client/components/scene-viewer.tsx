@@ -3,6 +3,8 @@ import { OrbitControls, RoundedBox, useGLTF } from '@react-three/drei'
 import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber'
 import { ImageOff, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
 import {
+  Component,
+  type ReactNode,
   Suspense,
   useCallback,
   useEffect,
@@ -42,6 +44,45 @@ type DragState = {
   startY: number
   originX: number
   originY: number
+}
+
+type ModelLoadBoundaryProps = {
+  children: ReactNode
+  fallback: ReactNode
+  resetKey: string
+}
+
+type ModelLoadBoundaryState = {
+  hasError: boolean
+  resetKey: string
+}
+
+class ModelLoadBoundary extends Component<
+  ModelLoadBoundaryProps,
+  ModelLoadBoundaryState
+> {
+  state: ModelLoadBoundaryState = {
+    hasError: false,
+    resetKey: this.props.resetKey,
+  }
+
+  static getDerivedStateFromError(): Partial<ModelLoadBoundaryState> {
+    return { hasError: true }
+  }
+
+  static getDerivedStateFromProps(
+    props: ModelLoadBoundaryProps,
+    state: ModelLoadBoundaryState,
+  ): Partial<ModelLoadBoundaryState> | null {
+    if (props.resetKey !== state.resetKey) {
+      return { hasError: false, resetKey: props.resetKey }
+    }
+    return null
+  }
+
+  render() {
+    return this.state.hasError ? this.props.fallback : this.props.children
+  }
 }
 
 const MIN_IMAGE_SCALE = 1
@@ -1063,28 +1104,39 @@ export function SceneViewer(props: SceneViewerProps) {
   }
 
   return (
-    <Canvas
-      key={sceneKey}
-      camera={{
-        position: props.cameraPosition ?? [0, 0.35, 5.2],
-        fov: props.cameraFov ?? 42,
-        near: 0.02,
-      }}
-      dpr={[1, 2]}
-      gl={{
-        antialias: true,
-        alpha: true,
-        toneMapping: THREE.ACESFilmicToneMapping,
-        toneMappingExposure: clamp(
-          props.lighting?.brightness ?? 1.15,
-          0.8,
-          1.8,
-        ),
-      }}
+    <ModelLoadBoundary
+      resetKey={sceneKey}
+      fallback={
+        imageUrl ? (
+          <ZoomableImage imageUrl={imageUrl} fallbackUrl={fallbackImageUrl} />
+        ) : (
+          <GeneratingAsciiScene />
+        )
+      }
     >
-      <Suspense fallback={null}>
-        <SceneContents {...props} />
-      </Suspense>
-    </Canvas>
+      <Canvas
+        key={sceneKey}
+        camera={{
+          position: props.cameraPosition ?? [0, 0.35, 5.2],
+          fov: props.cameraFov ?? 42,
+          near: 0.02,
+        }}
+        dpr={[1, 2]}
+        gl={{
+          antialias: true,
+          alpha: true,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: clamp(
+            props.lighting?.brightness ?? 1.15,
+            0.8,
+            1.8,
+          ),
+        }}
+      >
+        <Suspense fallback={null}>
+          <SceneContents {...props} />
+        </Suspense>
+      </Canvas>
+    </ModelLoadBoundary>
   )
 }

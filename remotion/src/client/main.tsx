@@ -5,6 +5,7 @@ import { QueryProvider } from '@/lib/query-provider'
 import { ErrorBoundary } from './components/error-boundary'
 import App from './app'
 import './globals.css'
+import './moldable-chat-safe-area'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

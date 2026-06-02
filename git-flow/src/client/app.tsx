@@ -199,6 +199,8 @@ interface HistoryPage {
 }
 
 interface CommitInput {
+  paths: string[]
+  repoPath?: string
   summary: string
   description: string
 }
@@ -471,6 +473,7 @@ export default function GitFlowPage() {
         limit: String(HISTORY_PAGE_SIZE),
         offset: String(offset),
       })
+      if (data?.repoPath) params.set('repoPath', data.repoPath)
       const res = await fetchWithWorkspace(`/api/git?${params.toString()}`)
       if (!res.ok) throw new Error('Failed to fetch history')
       return res.json()
@@ -509,12 +512,15 @@ export default function GitFlowPage() {
   const { data: commitFiles = [], isLoading: loadingCommitFiles } = useQuery<
     CommitFile[]
   >({
-    queryKey: ['git-commit-files', workspaceId, selectedCommit],
+    queryKey: ['git-commit-files', workspaceId, data?.repoPath, selectedCommit],
     queryFn: async () => {
       if (!selectedCommit) return []
-      const res = await fetchWithWorkspace(
-        `/api/git?hash=${encodeURIComponent(selectedCommit)}&files=1`,
-      )
+      const params = new URLSearchParams({
+        hash: selectedCommit,
+        files: '1',
+      })
+      if (data?.repoPath) params.set('repoPath', data.repoPath)
+      const res = await fetchWithWorkspace(`/api/git?${params.toString()}`)
       if (!res.ok) throw new Error('Failed to fetch commit files')
       const json = await res.json()
       return json.files ?? []
@@ -556,6 +562,7 @@ export default function GitFlowPage() {
       queryKey: [
         'git-diff',
         workspaceId,
+        data?.repoPath,
         selectedFile,
         selectedCommit,
         selectedCommitFile,
@@ -564,19 +571,20 @@ export default function GitFlowPage() {
         if (selectedCommit) {
           if (!selectedCommitFile) return null
 
-          const res = await fetchWithWorkspace(
-            `/api/git?hash=${encodeURIComponent(
-              selectedCommit,
-            )}&file=${encodeURIComponent(selectedCommitFile)}`,
-          )
+          const params = new URLSearchParams({
+            hash: selectedCommit,
+            file: selectedCommitFile,
+          })
+          if (data?.repoPath) params.set('repoPath', data.repoPath)
+          const res = await fetchWithWorkspace(`/api/git?${params.toString()}`)
           if (!res.ok) throw new Error('Failed to fetch commit diff')
           return (await res.json()) as FileDiffResponse
         }
 
         if (!selectedFile) return null
-        const res = await fetchWithWorkspace(
-          `/api/git?file=${encodeURIComponent(selectedFile)}`,
-        )
+        const params = new URLSearchParams({ file: selectedFile })
+        if (data?.repoPath) params.set('repoPath', data.repoPath)
+        const res = await fetchWithWorkspace(`/api/git?${params.toString()}`)
         if (!res.ok) throw new Error('Failed to fetch diff')
         return (await res.json()) as FileDiffResponse
       },
@@ -592,10 +600,12 @@ export default function GitFlowPage() {
       image: '1',
       file: selectedDiffPath,
     })
+    if (data?.repoPath) params.set('repoPath', data.repoPath)
     if (selectedCommit) params.set('hash', selectedCommit)
     if (selectedImageStatus) params.set('status', selectedImageStatus)
     return params.toString()
   }, [
+    data?.repoPath,
     selectedCommit,
     selectedDiffIsImage,
     selectedDiffPath,
@@ -610,6 +620,7 @@ export default function GitFlowPage() {
     queryKey: [
       'git-image-preview',
       workspaceId,
+      data?.repoPath,
       selectedDiffPath,
       selectedCommit,
       selectedImageStatus,
@@ -659,13 +670,14 @@ export default function GitFlowPage() {
 
   // Mutation for generating a commit message from selected diffs
   const generateCommitMessageMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (input: { paths: string[]; repoPath?: string }) => {
       const res = await fetchWithWorkspace('/api/git', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'generateCommitMessage',
-          paths: selectedCommitPaths,
+          paths: input.paths,
+          repoPath: input.repoPath,
         }),
       })
       const json = await res.json()
@@ -681,13 +693,14 @@ export default function GitFlowPage() {
 
   // Mutation for reviewing selected changes
   const reviewCodeMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (input: { paths: string[]; repoPath?: string }) => {
       const res = await fetchWithWorkspace('/api/git', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'reviewCode',
-          paths: selectedCommitPaths,
+          paths: input.paths,
+          repoPath: input.repoPath,
         }),
       })
       const json = await res.json()
@@ -714,9 +727,10 @@ export default function GitFlowPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'commit',
-          paths: selectedCommitPaths,
+          paths: input.paths,
           summary: input.summary,
           description: input.description,
+          repoPath: input.repoPath,
         }),
       })
       const json = await res.json()
@@ -743,13 +757,49 @@ export default function GitFlowPage() {
     },
   })
 
+  const commitAndPushMutation = useMutation({
+    mutationFn: async (input: CommitInput) => {
+      const res = await fetchWithWorkspace('/api/git', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'commitAndPush',
+          paths: input.paths,
+          summary: input.summary,
+          description: input.description,
+          repoPath: input.repoPath,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Commit and push failed')
+      return json
+    },
+    onSuccess: () => {
+      setSummary('')
+      setDescription('')
+      setSelectedFiles(new Set())
+      setSelectedActionFiles(new Set())
+      setSelectedFile(null)
+      setSelectedCommit(null)
+      setSelectedCommitFile(null)
+      queryClient.invalidateQueries({ queryKey: ['git-status', workspaceId] })
+      queryClient.invalidateQueries({ queryKey: ['git-history', workspaceId] })
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['git-status', workspaceId] })
+    },
+    onError: (err: Error) => {
+      setError(err.message)
+    },
+  })
+
   // Mutation for Pushing
   const pushMutation = useMutation({
     mutationFn: async () => {
       const res = await fetchWithWorkspace('/api/git', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'push' }),
+        body: JSON.stringify({ action: 'push', repoPath: data?.repoPath }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Push failed')
@@ -771,9 +821,10 @@ export default function GitFlowPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'commitAndOpenPullRequest',
-          paths: selectedCommitPaths,
+          paths: input.paths,
           summary: input.summary,
           description: input.description,
+          repoPath: input.repoPath,
         }),
       })
       const json = await res.json()
@@ -816,7 +867,10 @@ export default function GitFlowPage() {
       const res = await fetchWithWorkspace('/api/git', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'openPullRequest' }),
+        body: JSON.stringify({
+          action: 'openPullRequest',
+          repoPath: data?.repoPath,
+        }),
       })
       const json = await res.json()
       if (!res.ok)
@@ -922,13 +976,57 @@ export default function GitFlowPage() {
     },
   })
 
+  const branchMutation = useMutation({
+    mutationFn: async (branch: string) => {
+      const res = await fetchWithWorkspace('/api/git', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'checkoutBranch',
+          branch,
+          repoPath: data?.repoPath,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to switch branch')
+      return json as GitData
+    },
+    onSuccess: (json) => {
+      queryClient.setQueryData<GitData>(
+        ['git-status', workspaceId],
+        (previous) => ({
+          ...json,
+          recentRepos: previous?.recentRepos ?? [],
+        }),
+      )
+      const changedPaths = json.files?.map((file) => file.path) ?? []
+      const firstFile = changedPaths[0] ?? null
+      setCodeReview(null)
+      setSelectedFile(firstFile)
+      setSelectedCommit(null)
+      setSelectedCommitFile(null)
+      setSelectedFiles(new Set(changedPaths))
+      setSelectedActionFiles(firstFile ? new Set([firstFile]) : new Set())
+      selectionAnchorRef.current = firstFile
+      queryClient.invalidateQueries({ queryKey: ['git-status', workspaceId] })
+      queryClient.invalidateQueries({ queryKey: ['git-history', workspaceId] })
+    },
+    onError: (err: Error) => {
+      setError(err.message)
+    },
+  })
+
   const repositoryControlsDisabled =
+    generateCommitMessageMutation.isPending ||
+    reviewCodeMutation.isPending ||
     commitMutation.isPending ||
+    commitAndPushMutation.isPending ||
     pushMutation.isPending ||
     commitAndOpenPullRequestMutation.isPending ||
     openPullRequestMutation.isPending ||
     undoMutation.isPending ||
-    repoMutation.isPending
+    repoMutation.isPending ||
+    branchMutation.isPending
 
   const discardChangesMutation = useMutation({
     mutationFn: async (paths: string[]) => {
@@ -1418,7 +1516,10 @@ export default function GitFlowPage() {
   )
 
   const prepareCommitInput = async (): Promise<CommitInput | null> => {
-    if (selectedCommitPathCount === 0) {
+    const paths = selectedCommitPaths
+    const repoPath = data?.repoPath
+
+    if (paths.length === 0) {
       setError('Please select at least one changed file to commit.')
       return null
     }
@@ -1433,7 +1534,10 @@ export default function GitFlowPage() {
 
     if (!commitSummary) {
       try {
-        const generated = await generateCommitMessageMutation.mutateAsync()
+        const generated = await generateCommitMessageMutation.mutateAsync({
+          paths,
+          repoPath,
+        })
         commitSummary = generated.summary.trim()
         commitDescription = generated.description?.trim() ?? ''
         setSummary(commitSummary)
@@ -1444,6 +1548,8 @@ export default function GitFlowPage() {
     }
 
     return {
+      paths,
+      repoPath,
       summary: commitSummary,
       description: commitDescription,
     }
@@ -1460,11 +1566,7 @@ export default function GitFlowPage() {
     const input = await prepareCommitInput()
     if (!input) return
 
-    commitMutation.mutate(input, {
-      onSuccess: () => {
-        pushMutation.mutate()
-      },
-    })
+    commitAndPushMutation.mutate(input)
   }
 
   const handleCommitAndOpenPullRequest = async () => {
@@ -1655,6 +1757,13 @@ export default function GitFlowPage() {
     repoMutation.mutate(repoPath)
   }
 
+  const handleBranchChange = (branch: string) => {
+    if (repositoryControlsDisabled || branch === data?.currentBranch) return
+
+    setError(null)
+    branchMutation.mutate(branch)
+  }
+
   const shipRepo = useCallback(
     async (repoPath: string) => {
       setShippingPaths((previous) => new Set(previous).add(repoPath))
@@ -1784,12 +1893,14 @@ export default function GitFlowPage() {
   }, [])
 
   const handleReviewCode = () => {
-    if (selectedCommitPathCount === 0) {
+    const paths = selectedCommitPaths
+
+    if (paths.length === 0) {
       setError('Please select at least one changed file to review.')
       return
     }
     setError(null)
-    reviewCodeMutation.mutate()
+    reviewCodeMutation.mutate({ paths, repoPath: data?.repoPath })
   }
 
   const selectedApp =
@@ -1939,10 +2050,12 @@ export default function GitFlowPage() {
     if (generateCommitMessageMutation.isError) return 'Generation Failed'
     if (reviewCodeMutation.isError) return 'Review Failed'
     if (commitMutation.isError) return 'Commit Failed'
+    if (commitAndPushMutation.isError) return 'Commit Failed'
     if (pushMutation.isError) return 'Push Failed'
     if (commitAndOpenPullRequestMutation.isError) return 'Pull Request Failed'
     if (openPullRequestMutation.isError) return 'Pull Request Failed'
     if (undoMutation.isError) return 'Undo Failed'
+    if (branchMutation.isError) return 'Branch Failed'
     if (repoMutation.isError) return 'Repository Failed'
     return 'Action Failed'
   })()
@@ -2626,7 +2739,7 @@ export default function GitFlowPage() {
           <div className="flex items-center gap-2">
             <Select
               value={data?.currentBranch || undefined}
-              onValueChange={() => {}}
+              onValueChange={handleBranchChange}
               disabled={repositoryControlsDisabled || !data?.repoPath}
             >
               <SelectTrigger
@@ -3249,6 +3362,7 @@ export default function GitFlowPage() {
                         onChange={(e) => setSummary(e.target.value)}
                         disabled={
                           commitMutation.isPending ||
+                          commitAndPushMutation.isPending ||
                           generateCommitMessageMutation.isPending ||
                           reviewCodeMutation.isPending ||
                           commitAndOpenPullRequestMutation.isPending
@@ -3262,6 +3376,7 @@ export default function GitFlowPage() {
                         onChange={(e) => setDescription(e.target.value)}
                         disabled={
                           commitMutation.isPending ||
+                          commitAndPushMutation.isPending ||
                           generateCommitMessageMutation.isPending ||
                           reviewCodeMutation.isPending ||
                           commitAndOpenPullRequestMutation.isPending
@@ -3289,6 +3404,7 @@ export default function GitFlowPage() {
                           disabled={
                             selectedCommitPathCount === 0 ||
                             commitMutation.isPending ||
+                            commitAndPushMutation.isPending ||
                             generateCommitMessageMutation.isPending ||
                             reviewCodeMutation.isPending ||
                             pushMutation.isPending ||
@@ -3320,6 +3436,7 @@ export default function GitFlowPage() {
                             disabled={
                               selectedCommitPathCount === 0 ||
                               commitMutation.isPending ||
+                              commitAndPushMutation.isPending ||
                               generateCommitMessageMutation.isPending ||
                               reviewCodeMutation.isPending ||
                               pushMutation.isPending ||
@@ -3335,6 +3452,11 @@ export default function GitFlowPage() {
                               <>
                                 <RefreshCw className="size-3 animate-spin" />
                                 Committing...
+                              </>
+                            ) : commitAndPushMutation.isPending ? (
+                              <>
+                                <RefreshCw className="size-3 animate-spin" />
+                                Pushing...
                               </>
                             ) : commitAndOpenPullRequestMutation.isPending ? (
                               <>
@@ -3360,6 +3482,7 @@ export default function GitFlowPage() {
                                 disabled={
                                   selectedCommitPathCount === 0 ||
                                   commitMutation.isPending ||
+                                  commitAndPushMutation.isPending ||
                                   generateCommitMessageMutation.isPending ||
                                   reviewCodeMutation.isPending ||
                                   pushMutation.isPending ||

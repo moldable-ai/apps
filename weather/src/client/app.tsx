@@ -17,6 +17,7 @@ import type {
 } from '../lib/types'
 import { weatherEmoji } from '../lib/wmo'
 import { AnimatedNumber } from './components/animated-number'
+import { formatDay, formatHour, readWeatherUrlParams } from './weather-utils'
 import {
   AnimatePresence,
   type Variants,
@@ -50,15 +51,6 @@ const itemVariants: Variants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.35, ease: EASE } },
 }
 
-function formatHour(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: 'numeric' })
-}
-
-function formatDay(iso: string, index: number): string {
-  if (index === 0) return 'Today'
-  return new Date(iso).toLocaleDateString([], { weekday: 'short' })
-}
-
 function formatLocation(location?: WeatherLocation | null): string {
   if (!location) return ''
   return [location.name, location.region, location.country]
@@ -85,21 +77,7 @@ function readUrlParams(): { coords: string; unitOverride: Unit | null } {
   if (typeof window === 'undefined') {
     return { coords: '', unitOverride: null }
   }
-  const p = new URLSearchParams(window.location.search)
-  const lat = p.get('lat')
-  const lon = p.get('lon')
-  const coords =
-    lat && lon && !Number.isNaN(Number(lat)) && !Number.isNaN(Number(lon))
-      ? `&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`
-      : ''
-  const u = (p.get('unit') || '').toLowerCase()
-  const unitOverride: Unit | null =
-    u === 'c' || u === 'celsius'
-      ? 'celsius'
-      : u === 'f' || u === 'fahrenheit'
-        ? 'fahrenheit'
-        : null
-  return { coords, unitOverride }
+  return readWeatherUrlParams(window.location.search)
 }
 
 export function App() {
@@ -492,7 +470,7 @@ export function App() {
                         {formatHour(h.time)}
                       </span>
                       <span className="text-xl" aria-hidden>
-                        {weatherEmoji(h.code, data.current.isDay)}
+                        {weatherEmoji(h.code, h.isDay ?? data.current.isDay)}
                       </span>
                       <span className="text-sm tabular-nums">
                         {h.temperature}°

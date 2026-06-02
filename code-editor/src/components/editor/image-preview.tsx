@@ -17,9 +17,10 @@ interface ImagePreviewProps {
 }
 
 export function ImagePreview({ path }: ImagePreviewProps) {
-  const { workspaceId } = useWorkspace()
+  const { fetchWithWorkspace } = useWorkspace()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [imageSrc, setImageSrc] = useState<string | null>(null)
   const [dimensions, setDimensions] = useState<{
     width: number
     height: number
@@ -28,16 +29,45 @@ export function ImagePreview({ path }: ImagePreviewProps) {
 
   const fileName = getFileName(path)
 
-  // Build image URL with workspace header workaround (use query param since img tags can't set headers)
-  const imageUrl = `/api/image?path=${encodeURIComponent(path)}${workspaceId ? `&workspace=${encodeURIComponent(workspaceId)}` : ''}`
-
   useEffect(() => {
+    let objectUrl: string | null = null
+    let disposed = false
+    const controller = new AbortController()
+
     // Reset state when path changes
     setIsLoading(true)
     setError(null)
     setDimensions(null)
     setZoom(1)
-  }, [path])
+    setImageSrc(null)
+
+    fetchWithWorkspace(`/api/image?path=${encodeURIComponent(path)}`, {
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Failed to load image')
+        return res.blob()
+      })
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob)
+        if (disposed) {
+          URL.revokeObjectURL(objectUrl)
+          return
+        }
+        setImageSrc(objectUrl)
+      })
+      .catch(() => {
+        if (controller.signal.aborted) return
+        setError('Failed to load image')
+        setIsLoading(false)
+      })
+
+    return () => {
+      disposed = true
+      controller.abort()
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [path, fetchWithWorkspace])
 
   const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget
@@ -137,7 +167,7 @@ export function ImagePreview({ path }: ImagePreviewProps) {
           )}
 
           <img
-            src={imageUrl}
+            src={imageSrc ?? undefined}
             alt={fileName}
             onLoad={handleLoad}
             onError={handleError}

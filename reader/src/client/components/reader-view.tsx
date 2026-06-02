@@ -21,6 +21,7 @@ import {
 import type { ChapterRef } from '../../shared/book'
 import {
   READER_FONT_STACKS,
+  READER_READING_PACE_WPM,
   resolveReaderTheme,
   tokenizeWords,
 } from '../../shared/reader-settings'
@@ -35,6 +36,28 @@ import { TypographyPanel } from './typography-panel'
 const PAGE_PADDING_X = 56
 const PAGE_PADDING_Y = 40
 const EMPTY_CHAPTERS: ChapterRef[] = []
+
+function clampReadingPace(wpm: number): number {
+  return Math.round(
+    Math.min(
+      READER_READING_PACE_WPM.max,
+      Math.max(READER_READING_PACE_WPM.min, wpm),
+    ),
+  )
+}
+
+function formatReadingTime(minutes: number, scope: 'chapter' | 'book'): string {
+  const rounded = Math.max(1, Math.ceil(minutes))
+  const hours = Math.floor(rounded / 60)
+  const mins = rounded % 60
+  const time =
+    hours > 0
+      ? mins > 0
+        ? `${hours}h ${mins}m`
+        : `${hours}h`
+      : `${rounded} min`
+  return `${time} left in ${scope}`
+}
 
 function prefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || !window.matchMedia) return false
@@ -137,18 +160,40 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
   const [tocOpen, setTocOpen] = useState(false)
   const [typoOpen, setTypoOpen] = useState(false)
   const [speedOpen, setSpeedOpen] = useState(false)
+  const [speedAutoResume, setSpeedAutoResume] = useState(false)
+  const resumeSpeedWordIndexRef = useRef<number | null>(null)
+  const readingPaceSampleRef = useRef<{
+    absoluteWordIndex: number
+    timestamp: number
+  } | null>(null)
+  const lastReadingPaceSaveRef = useRef(0)
 
   // Initialize from saved progress once the book has loaded.
-  const initializedRef = useRef(false)
+  const initializedBookIdRef = useRef<string | null>(null)
+  const pendingInitialScrollRatioRef = useRef<number | null>(null)
   useEffect(() => {
-    if (initializedRef.current || !book) return
-    initializedRef.current = true
+    if (!book || initializedBookIdRef.current === book.id) return
+    initializedBookIdRef.current = book.id
+    readingPaceSampleRef.current = null
     const startChapter = Math.min(
       Math.max(0, initialProgress?.chapterIndex ?? 0),
       Math.max(0, chapterCount - 1),
     )
+    const blockIndex = Math.max(0, initialProgress?.blockIndex ?? 0)
     setChapterIndex(startChapter)
-    setPageIndex(Math.max(0, initialProgress?.blockIndex ?? 0))
+    setPageIndex(blockIndex)
+    pendingInitialScrollRatioRef.current = Math.min(1, blockIndex / 1000)
+    setSpeedAutoResume(false)
+    if (initialProgress?.readerMode === 'speed') {
+      resumeSpeedWordIndexRef.current = Math.max(
+        0,
+        initialProgress.wordIndex ?? 0,
+      )
+      setSpeedOpen(true)
+    } else {
+      resumeSpeedWordIndexRef.current = null
+      setSpeedOpen(false)
+    }
   }, [book, initialProgress, chapterCount])
 
   const chapterQuery = useChapter(bookId, book ? chapterIndex : null)
@@ -440,12 +485,26 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
 
   // Reset scroll on chapter change.
   useEffect(() => {
-    if (settings.layout === 'scroll') {
-      const el = scrollRef.current
-      if (el) el.scrollTop = 0
+    if (settings.layout !== 'scroll' || !chapter) return
+    const el = scrollRef.current
+    if (!el) return
+
+    const initialRatio = pendingInitialScrollRatioRef.current
+    if (initialRatio === null) {
+      el.scrollTop = 0
       setScrollRatio(0)
+      return
     }
-  }, [chapterIndex, settings.layout])
+
+    pendingInitialScrollRatioRef.current = null
+    const frame = window.requestAnimationFrame(() => {
+      const max = el.scrollHeight - el.clientHeight
+      const next = max > 0 ? Math.min(1, Math.max(0, initialRatio)) : 0
+      el.scrollTop = max * next
+      setScrollRatio(next)
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [chapter, chapterIndex, settings.layout])
 
   // Complete jumps to internal EPUB anchors once the destination chapter has
   // rendered. In paginated mode the anchor's column determines the page.
@@ -513,10 +572,112 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
     return pageIndex / (pageCount - 1)
   }, [settings.layout, scrollRatio, pageIndex, pageCount])
 
+  // For time estimates, a page is considered read once the user advances past
+  // it, so page 2 of 8 means roughly 1/8 of the chapter is behind them.
+  // Book progress uses intraFraction so the last page of a chapter can count
+  // as the end of that chapter for the footer bar.
+  const readingEstimateFraction = useMemo(() => {
+    if (settings.layout === 'scroll') return scrollRatio
+    if (pageCount <= 0) return 0
+    return Math.min(1, Math.max(0, pageIndex / pageCount))
+  }, [settings.layout, scrollRatio, pageIndex, pageCount])
+
+  const wordsBeforeChapter = useMemo(
+    () =>
+      chapters
+        .slice(0, chapterIndex)
+        .reduce((sum, item) => sum + Math.max(0, item.wordCount), 0),
+    [chapters, chapterIndex],
+  )
+
   const overallPercent = useMemo(() => {
-    if (chapterCount === 0) return 0
-    return (chapterIndex + intraFraction) / Math.max(1, chapterCount)
-  }, [chapterIndex, intraFraction, chapterCount])
+    const totalWords = Math.max(0, book?.wordCount ?? 0)
+    if (!chapter || totalWords <= 0) return 0
+    const absoluteWordIndex =
+      wordsBeforeChapter + chapter.wordCount * intraFraction
+    return Math.min(1, Math.max(0, absoluteWordIndex / totalWords))
+  }, [book?.wordCount, chapter, wordsBeforeChapter, intraFraction])
+
+  const readingTimeLabel = useMemo(() => {
+    if (!settings.showReadingTime || !chapter) return null
+    const pace = Math.max(1, settings.readingPaceWpm)
+    const currentChapterRemaining = Math.max(
+      0,
+      chapter.wordCount *
+        (1 - Math.min(1, Math.max(0, readingEstimateFraction))),
+    )
+    const remainingWords =
+      settings.readingTimeScope === 'chapter'
+        ? currentChapterRemaining
+        : currentChapterRemaining +
+          chapters
+            .slice(chapterIndex + 1)
+            .reduce((sum, item) => sum + Math.max(0, item.wordCount), 0)
+
+    if (remainingWords <= 0) return `Done with ${settings.readingTimeScope}`
+    return formatReadingTime(remainingWords / pace, settings.readingTimeScope)
+  }, [
+    settings.showReadingTime,
+    settings.readingPaceWpm,
+    settings.readingTimeScope,
+    chapter,
+    readingEstimateFraction,
+    chapters,
+    chapterIndex,
+  ])
+
+  // --- Learn reading pace from actual reading progress ---
+  useEffect(() => {
+    if (!book || !chapter || speedOpen) return
+
+    const now = Date.now()
+    const absoluteWordIndex =
+      wordsBeforeChapter + chapter.wordCount * readingEstimateFraction
+    const previous = readingPaceSampleRef.current
+
+    if (!previous) {
+      readingPaceSampleRef.current = { absoluteWordIndex, timestamp: now }
+      return
+    }
+
+    const elapsedMs = now - previous.timestamp
+    const deltaWords = absoluteWordIndex - previous.absoluteWordIndex
+
+    // Backtracking, TOC jumps, very fast skips, and long idle/sleep gaps should
+    // reset the baseline rather than pollute the user's learned reading pace.
+    if (deltaWords <= 0 || elapsedMs > 30 * 60 * 1000) {
+      readingPaceSampleRef.current = { absoluteWordIndex, timestamp: now }
+      return
+    }
+    if (elapsedMs < 4_000 || deltaWords < 15 || deltaWords > 2_500) return
+
+    const sampleWpm = deltaWords / (elapsedMs / 60_000)
+    if (sampleWpm < 60 || sampleWpm > 900) {
+      readingPaceSampleRef.current = { absoluteWordIndex, timestamp: now }
+      return
+    }
+
+    const learnedWpm = clampReadingPace(
+      settings.readingPaceWpm * 0.82 + sampleWpm * 0.18,
+    )
+    readingPaceSampleRef.current = { absoluteWordIndex, timestamp: now }
+
+    if (
+      Math.abs(learnedWpm - settings.readingPaceWpm) >= 5 &&
+      now - lastReadingPaceSaveRef.current > 15_000
+    ) {
+      lastReadingPaceSaveRef.current = now
+      update({ readingPaceWpm: learnedWpm })
+    }
+  }, [
+    book,
+    chapter,
+    speedOpen,
+    wordsBeforeChapter,
+    readingEstimateFraction,
+    settings.readingPaceWpm,
+    update,
+  ])
 
   // --- Persist progress (debounced) ---
   useEffect(() => {
@@ -530,6 +691,7 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
         blockIndex,
         wordIndex: approxWordIndex,
         percent: overallPercent,
+        readerMode: speedOpen ? 'speed' : 'standard',
       })
     }, 600)
     return () => window.clearTimeout(id)
@@ -542,6 +704,7 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
     intraFraction,
     overallPercent,
     settings.layout,
+    speedOpen,
     save,
   ])
 
@@ -564,7 +727,8 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         if (speedOpen) {
-          setSpeedOpen(false)
+          // The speed-reader overlay owns Escape so it can persist the exact
+          // word position before returning to the standard reader.
           return
         }
         if (typoOpen) {
@@ -610,6 +774,18 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
   // or the scroll position, so it lines up with what you can see right now.
   const speedStartIndex = useMemo(() => {
     if (speedWords.length === 0) return 0
+    const resumeWordIndex = resumeSpeedWordIndexRef.current
+    if (
+      speedOpen &&
+      resumeWordIndex !== null &&
+      initialProgress?.readerMode === 'speed' &&
+      initialProgress.chapterIndex === chapterIndex
+    ) {
+      return Math.min(
+        Math.max(0, Math.round(resumeWordIndex)),
+        Math.max(0, speedWords.length - 1),
+      )
+    }
     const fraction =
       settings.layout === 'scroll'
         ? scrollRatio
@@ -621,7 +797,111 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
       Math.round(speedWords.length * clamped),
       Math.max(0, speedWords.length - 1),
     )
-  }, [speedWords.length, settings.layout, scrollRatio, pageIndex, pageCount])
+  }, [
+    speedWords.length,
+    speedOpen,
+    initialProgress,
+    chapterIndex,
+    settings.layout,
+    scrollRatio,
+    pageIndex,
+    pageCount,
+  ])
+
+  const remainingWordsAfterCurrentChapter = useMemo(
+    () =>
+      chapters
+        .slice(chapterIndex + 1)
+        .reduce((sum, item) => sum + Math.max(0, item.wordCount), 0),
+    [chapters, chapterIndex],
+  )
+
+  const saveSpeedPosition = useCallback(
+    (wordIndex: number, readerMode: 'speed' | 'standard') => {
+      const wordCount = Math.max(1, speedWords.length)
+      const clampedWordIndex = Math.min(
+        Math.max(0, Math.round(wordIndex)),
+        wordCount,
+      )
+      const speedFraction = Math.min(1, clampedWordIndex / wordCount)
+      const speedBookPercent = Math.min(
+        1,
+        Math.max(
+          0,
+          (wordsBeforeChapter + wordCount * speedFraction) /
+            Math.max(1, book?.wordCount ?? 0),
+        ),
+      )
+      const blockIndex =
+        settings.layout === 'scroll'
+          ? Math.round(speedFraction * 1000)
+          : Math.round(speedFraction * Math.max(0, pageCount - 1))
+
+      if (settings.layout === 'scroll') {
+        setScrollRatio(speedFraction)
+        const scroller = scrollRef.current
+        if (scroller) {
+          const max = scroller.scrollHeight - scroller.clientHeight
+          scroller.scrollTop = max > 0 ? max * speedFraction : 0
+        }
+      } else {
+        setPageIndex(blockIndex)
+      }
+
+      void save({
+        chapterIndex,
+        blockIndex,
+        wordIndex: clampedWordIndex,
+        percent: speedBookPercent,
+        readerMode,
+      })
+    },
+    [
+      speedWords.length,
+      settings.layout,
+      pageCount,
+      save,
+      chapterIndex,
+      wordsBeforeChapter,
+      book?.wordCount,
+    ],
+  )
+
+  const handleOpenSpeedReader = useCallback(() => {
+    resumeSpeedWordIndexRef.current = null
+    setSpeedAutoResume(false)
+    setSpeedOpen(true)
+    void save({ readerMode: 'speed' })
+  }, [save])
+
+  const handleSpeedChapterComplete = useCallback(
+    (wordIndex: number) => {
+      saveSpeedPosition(wordIndex, 'speed')
+      if (chapterIndex >= chapterCount - 1) {
+        setSpeedAutoResume(false)
+        return
+      }
+
+      resumeSpeedWordIndexRef.current = 0
+      setSpeedAutoResume(true)
+      goToChapter(chapterIndex + 1)
+    },
+    [chapterIndex, chapterCount, goToChapter, saveSpeedPosition],
+  )
+
+  const handleCloseSpeedReader = useCallback(
+    (wordIndex?: number) => {
+      resumeSpeedWordIndexRef.current = null
+      setSpeedAutoResume(false)
+      setSpeedOpen(false)
+      if (typeof wordIndex === 'number') {
+        saveSpeedPosition(wordIndex, 'standard')
+      } else {
+        void save({ readerMode: 'standard' })
+      }
+    },
+    [save, saveSpeedPosition],
+  )
 
   // --- Loading / error states ---
   const isLoading = bookQuery.isLoading || (chapterQuery.isLoading && !chapter)
@@ -728,7 +1008,7 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
             <ChromeButton
               label="Speed read"
               theme={theme}
-              onClick={() => setSpeedOpen(true)}
+              onClick={handleOpenSpeedReader}
             >
               <Zap className="size-5" aria-hidden />
             </ChromeButton>
@@ -821,7 +1101,8 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
                   ...columnStyle,
                   maxWidth: `${settings.contentWidth}px`,
                   padding: `${PAGE_PADDING_Y}px ${PAGE_PADDING_X}px`,
-                  paddingBottom: 'calc(var(--chat-safe-padding, 0px) + 4rem)',
+                  paddingBottom:
+                    'calc(var(--reader-control-safe-padding, var(--chat-safe-padding, 0px)) + var(--reader-page-bottom-gutter, 4rem))',
                 }}
                 dangerouslySetInnerHTML={{ __html: chapter?.html ?? '' }}
               />
@@ -831,49 +1112,40 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
 
         {/* Bottom bar */}
         <footer
-          className="flex shrink-0 items-center gap-3 px-4 py-2.5"
+          className="flex shrink-0 items-center px-4 py-2.5"
           style={{
-            borderTop: `1px solid ${theme.muted}22`,
-            paddingBottom: 'calc(var(--chat-safe-padding, 0px) + 0.625rem)',
+            paddingBottom:
+              'calc(var(--reader-control-safe-padding, var(--chat-safe-padding, 0px)) + 0.625rem)',
           }}
         >
-          <ChromeButton
-            label="Previous chapter"
-            theme={theme}
-            onClick={() => goToChapter(chapterIndex - 1)}
-            disabled={chapterIndex === 0}
-            small
-          >
-            <ChevronLeft className="size-4" aria-hidden />
-          </ChromeButton>
-
           <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <div className="flex items-center justify-between text-xs">
-              <span style={{ color: theme.muted }}>
-                Chapter {chapterIndex + 1} of {chapterCount}
+            <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 text-xs">
+              <span className="truncate" style={{ color: theme.muted }}>
+                Book progress
               </span>
-              <span style={{ color: theme.muted }} className="tabular-nums">
-                {settings.layout === 'paginated'
-                  ? `${Math.min(pageIndex + 1, pageCount)} / ${pageCount}`
-                  : `${Math.round(intraFraction * 100)}%`}
+              {readingTimeLabel ? (
+                <span
+                  className="max-w-[42vw] truncate text-center tabular-nums"
+                  style={{ color: theme.muted }}
+                >
+                  {readingTimeLabel}
+                </span>
+              ) : (
+                <span aria-hidden />
+              )}
+              <span
+                style={{ color: theme.muted }}
+                className="truncate text-right tabular-nums"
+              >
+                {Math.round(overallPercent * 100)}%
               </span>
             </div>
             <Progress
-              value={intraFraction * 100}
+              value={overallPercent * 100}
               className="h-1"
               style={{ backgroundColor: `${theme.muted}33` }}
             />
           </div>
-
-          <ChromeButton
-            label="Next chapter"
-            theme={theme}
-            onClick={() => goToChapter(chapterIndex + 1)}
-            disabled={chapterIndex >= chapterCount - 1}
-            small
-          >
-            <ChevronRight className="size-4" aria-hidden />
-          </ChromeButton>
         </footer>
 
         {/* Overlays */}
@@ -895,15 +1167,19 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
         />
         <SpeedReader
           open={speedOpen}
-          onClose={() => setSpeedOpen(false)}
+          onClose={handleCloseSpeedReader}
           title={book.title}
           words={speedWords}
           startIndex={speedStartIndex}
+          wordsBeforeChapter={wordsBeforeChapter}
+          bookWordCount={book.wordCount}
+          remainingWordsAfterChapter={remainingWordsAfterCurrentChapter}
           settings={settings}
           onSettingsChange={update}
-          onProgress={(wordIndex) => {
-            void save({ chapterIndex, wordIndex })
-          }}
+          hasNextChapter={chapterIndex < chapterCount - 1}
+          autoPlayOnSourceChange={speedAutoResume}
+          onChapterComplete={handleSpeedChapterComplete}
+          onProgress={(wordIndex) => saveSpeedPosition(wordIndex, 'speed')}
         />
       </div>
     </TooltipProvider>

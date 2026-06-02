@@ -9,6 +9,7 @@ import {
 } from '@moldable-ai/ui'
 import { useAlarmWatch } from './hooks/use-alarm-watch'
 import { useNow } from './hooks/use-now'
+import { useTimerWatch } from './hooks/use-timer-watch'
 import { AlarmsPane } from './components/alarms'
 import { StopwatchPane } from './components/stopwatch'
 import { TimersPane } from './components/timers'
@@ -45,6 +46,7 @@ export function App() {
   const [addAlarm, setAddAlarm] = useState(0)
   const [addTimer, setAddTimer] = useState(0)
   const { ringing, dismiss } = useAlarmWatch()
+  useTimerWatch()
 
   useEffect(() => {
     window.parent.postMessage(

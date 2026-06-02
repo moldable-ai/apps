@@ -90,11 +90,37 @@ function writeWebResponse(response: Response, res: ServerResponse) {
 
 async function serveStatic(req: IncomingMessage, res: ServerResponse) {
   const url = requestUrl(req)
-  const requestedPath = decodeURIComponent(url.pathname)
-  const filePath =
-    requestedPath.startsWith('/assets/') || requestedPath === '/favicon.ico'
-      ? path.join(distDir, requestedPath)
-      : path.join(distDir, 'index.html')
+  let requestedPath: string
+
+  try {
+    requestedPath = decodeURIComponent(url.pathname)
+  } catch {
+    res.statusCode = 400
+    res.end('Bad request')
+    return
+  }
+
+  const normalizedPath = path.posix.normalize(requestedPath)
+  let filePath = path.join(distDir, 'index.html')
+
+  if (
+    normalizedPath.startsWith('/assets/') ||
+    normalizedPath === '/favicon.ico'
+  ) {
+    const distRoot = path.resolve(distDir)
+    const resolvedPath = path.resolve(distRoot, normalizedPath.slice(1))
+
+    if (
+      resolvedPath !== distRoot &&
+      resolvedPath.startsWith(`${distRoot}${path.sep}`)
+    ) {
+      filePath = resolvedPath
+    } else {
+      res.statusCode = 404
+      res.end('Not found')
+      return
+    }
+  }
 
   try {
     const content = await fs.readFile(filePath)

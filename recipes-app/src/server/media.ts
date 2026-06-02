@@ -102,8 +102,12 @@ export function registerMediaRoutes(app: Hono): void {
       if (!isUploadFile(file)) {
         return c.json({ error: 'An image file is required.' }, 400)
       }
-      const mimeType = file.type || mimeForName(file.name) || ''
-      if (!mimeType.startsWith('image/')) {
+      if (file.type && !file.type.startsWith('image/')) {
+        return c.json({ error: `${file.name || 'File'} is not an image.` }, 400)
+      }
+      const mimeType =
+        file.type && extForMime(file.type) ? file.type : mimeForName(file.name)
+      if (!mimeType) {
         return c.json({ error: `${file.name || 'File'} is not an image.` }, 400)
       }
       const bytes = Buffer.from(await file.arrayBuffer())

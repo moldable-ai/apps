@@ -1,7 +1,7 @@
 'use client'
 
 import { Plus, Settings } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
 import {
   Button,
   isInMoldable,
@@ -20,10 +20,10 @@ import { normalizeGeneratedMarkdown } from '@/lib/markdown'
 import { callMoldableApp } from '@/lib/moldable-apps'
 import { NativePcmMixer } from '@/lib/native-pcm-mixer'
 import { DEFAULT_MEETING_TEMPLATE_ID } from '@/lib/templates'
-import {
-  type EnhancementStatus,
-  MeetingView,
-  type MeetingViewMode,
+import { EmptyState } from '@/components/empty-state'
+import type {
+  EnhancementStatus,
+  MeetingViewMode,
 } from '@/components/meeting-view'
 import {
   type CalendarEvent,
@@ -31,7 +31,8 @@ import {
   MeetingsList,
   upcomingCalendarRange,
 } from '@/components/meetings-list'
-import { EmptyState, RecordingDock, SettingsModal } from '@/components'
+import { RecordingDock } from '@/components/recording-dock'
+import { SettingsModal } from '@/components/settings-modal'
 import {
   type CaptureMode,
   useActiveMeeting,
@@ -50,6 +51,12 @@ import type {
 } from '@/types'
 import { DEFAULT_SETTINGS } from '@/types'
 import { v4 as uuidv4 } from 'uuid'
+
+const MeetingView = lazy(() =>
+  import('@/components/meeting-view').then((module) => ({
+    default: module.MeetingView,
+  })),
+)
 
 function calendarErrorMessage(code: string | undefined, error: unknown) {
   if (code === 'app_access_required' || code === 'app_access_denied') {
@@ -259,6 +266,23 @@ function hostRecordingStatusTone(
   }
 
   return null
+}
+
+function formatNativeCaptureIssue(value: string | null | undefined) {
+  if (!value) return null
+
+  const normalized = value.toLowerCase()
+  if (normalized.includes('restart limit exhausted')) {
+    return 'Native audio helper restart limit exhausted. Still recording available audio.'
+  }
+  if (
+    normalized.includes('sidecar-terminated') ||
+    normalized.includes('terminatedpayload')
+  ) {
+    return 'Native audio helper stopped unexpectedly.'
+  }
+
+  return value
 }
 
 function normalizeParticipant(
@@ -542,6 +566,7 @@ export default function MeetingsPage() {
     events: [],
   })
   const enhancementTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+  const activeMeetingRef = useRef<Meeting | null>(null)
   const activeRecordingSessionRef = useRef<RecordingSession | null>(null)
   const activeMeetingIdRef = useRef<string | null>(null)
   const audioStreamingEnabledRef = useRef(false)
@@ -568,6 +593,7 @@ export default function MeetingsPage() {
   const activeAudioSourceContentTypesRef = useRef<
     Partial<Record<NativeAudioSource, string>>
   >({})
+  const lastRecorderDurationUpdateRef = useRef(0)
   const recordingRecoveryAttemptedRef = useRef(false)
   const nativePcmMixerRef = useRef(new NativePcmMixer())
   const deepgramSendAudioRef = useRef<
@@ -663,6 +689,10 @@ export default function MeetingsPage() {
   } = useActiveMeeting()
 
   useEffect(() => {
+    activeMeetingRef.current = meeting
+  }, [meeting])
+
+  useEffect(() => {
     return () => {
       enhancementTimersRef.current.forEach((timer) => clearTimeout(timer))
       enhancementTimersRef.current = []
@@ -751,12 +781,14 @@ export default function MeetingsPage() {
   )
 
   useEffect(() => {
-    if (!meeting || isMeetingPaused || !activeRecordingSessionRef.current) {
+    if (!meeting?.id || isMeetingPaused || !activeRecordingSessionRef.current) {
       return
     }
 
     const persistLease = () => {
-      const leasedMeeting = updateActiveRecordingSessionLease(meeting)
+      const leasedMeeting = updateActiveRecordingSessionLease(
+        activeMeetingRef.current,
+      )
       if (!leasedMeeting) return
       updateActiveMeeting(leasedMeeting)
       updateMeeting(leasedMeeting)
@@ -770,7 +802,7 @@ export default function MeetingsPage() {
     return () => window.clearInterval(interval)
   }, [
     isMeetingPaused,
-    meeting,
+    meeting?.id,
     updateActiveMeeting,
     updateActiveRecordingSessionLease,
     updateMeeting,
@@ -1051,33 +1083,47 @@ export default function MeetingsPage() {
     onInterim: setCurrentInterim,
     onError: (error) => console.warn('Deepgram transcription issue:', error),
   })
+  const deepgramHeartbeatRef = useRef({
+    diagnostics: deepgram.diagnostics,
+    issue: deepgram.issue,
+    state: deepgram.state,
+  })
 
   useEffect(() => {
     deepgramSendAudioRef.current = deepgram.sendAudio
   }, [deepgram.sendAudio])
 
   useEffect(() => {
+    deepgramHeartbeatRef.current = {
+      diagnostics: deepgram.diagnostics,
+      issue: deepgram.issue,
+      state: deepgram.state,
+    }
+  }, [deepgram.diagnostics, deepgram.issue, deepgram.state])
+
+  useEffect(() => {
     const interval = window.setInterval(() => {
       const taskId = recordingBackgroundTaskIdRef.current
       if (!taskId) return
 
-      const queuedChunks = deepgram.diagnostics.spool.queuedChunks
-      const droppedChunks = deepgram.diagnostics.spool.droppedChunks
-      const replayedChunks = deepgram.diagnostics.spool.replayedChunks
+      const { diagnostics, issue, state } = deepgramHeartbeatRef.current
+      const queuedChunks = diagnostics.spool.queuedChunks
+      const droppedChunks = diagnostics.spool.droppedChunks
+      const replayedChunks = diagnostics.spool.replayedChunks
       const statusLine =
-        deepgram.state === 'connected'
+        state === 'connected'
           ? 'Recording; transcript connected'
-          : deepgram.state === 'connecting'
+          : state === 'connecting'
             ? 'Recording; connecting transcript'
-            : deepgram.state === 'reconnecting'
+            : state === 'reconnecting'
               ? queuedChunks > 0
                 ? `Recording; reconnecting transcript (${queuedChunks} chunks buffered)`
                 : droppedChunks > 0
                   ? `Recording; reconnecting transcript (${droppedChunks} chunks dropped)`
                   : 'Recording; reconnecting transcript'
-              : deepgram.issue?.code === 'deepgram_reconnect_exhausted'
+              : issue?.code === 'deepgram_reconnect_exhausted'
                 ? 'Recording; transcript paused'
-                : deepgram.issue
+                : issue
                   ? 'Recording; transcript unavailable'
                   : 'Recording'
 
@@ -1087,15 +1133,15 @@ export default function MeetingsPage() {
         kind: RECORDING_BACKGROUND_TASK_KIND,
         statusLine,
         transcription: {
-          provider: deepgram.diagnostics.provider,
-          state: deepgram.state,
+          provider: diagnostics.provider,
+          state,
           streamMode: 'mixed',
-          issue: deepgram.issue?.code ?? null,
-          connectionId: deepgram.diagnostics.connectionId,
-          connectionGeneration: deepgram.diagnostics.connectionGeneration,
-          reconnectAttempts: deepgram.diagnostics.reconnectAttempts,
-          maxReconnectAttempts: deepgram.diagnostics.maxReconnectAttempts,
-          sentChunks: deepgram.diagnostics.sentChunks,
+          issue: issue?.code ?? null,
+          connectionId: diagnostics.connectionId,
+          connectionGeneration: diagnostics.connectionGeneration,
+          reconnectAttempts: diagnostics.reconnectAttempts,
+          maxReconnectAttempts: diagnostics.maxReconnectAttempts,
+          sentChunks: diagnostics.sentChunks,
           queuedChunks,
           droppedChunks,
           replayedChunks,
@@ -1104,7 +1150,7 @@ export default function MeetingsPage() {
     }, RECORDING_BACKGROUND_TASK_HEARTBEAT_MS)
 
     return () => window.clearInterval(interval)
-  }, [deepgram.diagnostics, deepgram.issue, deepgram.state])
+  }, [])
 
   // Native audio hook (for Moldable desktop system audio + AudioUnit microphone)
   const systemAudio = useSystemAudio({
@@ -1199,7 +1245,16 @@ export default function MeetingsPage() {
       deepgram.sendAudio(buffer)
     },
     onStateChange: (state) => {
-      updateDuration(activeDurationBaseRef.current + state.duration)
+      const nextDuration = activeDurationBaseRef.current + state.duration
+      if (
+        Math.abs(nextDuration - lastRecorderDurationUpdateRef.current) < 0.09 &&
+        state.isRecording
+      ) {
+        return
+      }
+
+      lastRecorderDurationUpdateRef.current = nextDuration
+      updateDuration(nextDuration)
     },
     keepChunks: false,
     onError: (error) => console.error('Recorder error:', error),
@@ -1282,7 +1337,9 @@ export default function MeetingsPage() {
       nativePcmMixerRef.current.reset()
       void deepgram.connect('webm')
       const started = options.resume
-        ? await audioRecorder.resume(true)
+        ? audioRecorder.state.isPaused
+          ? await audioRecorder.resume(true)
+          : await audioRecorder.start()
         : await audioRecorder.start()
 
       if (!started) {
@@ -2489,12 +2546,13 @@ export default function MeetingsPage() {
     activeHostRecordingStatus?.readinessLine ??
     activeHostRecordingStatus?.statusLine ??
     null
+  const hostReadinessTone = activeHostRecordingStatus
+    ? hostRecordingStatusTone(activeHostRecordingStatus)
+    : null
   const hostReadinessStatus =
-    activeHostRecordingStatus && hostReadinessMessage
+    activeHostRecordingStatus && hostReadinessMessage && hostReadinessTone
       ? {
-          tone:
-            hostRecordingStatusTone(activeHostRecordingStatus) ??
-            ('loading' as const),
+          tone: hostReadinessTone,
           message: hostReadinessMessage,
         }
       : null
@@ -2510,8 +2568,8 @@ export default function MeetingsPage() {
         ? {
             tone: 'danger' as const,
             message:
-              nativeStatus.degradedReason ??
-              nativeStatus.lastCrashReason ??
+              formatNativeCaptureIssue(nativeStatus.degradedReason) ??
+              formatNativeCaptureIssue(nativeStatus.lastCrashReason) ??
               'Native audio capture stopped unexpectedly.',
           }
         : nativeCaptureActive && staleNativeSources.length > 0
@@ -2522,7 +2580,9 @@ export default function MeetingsPage() {
           : nativeCaptureActive && nativeStatus?.degradedReason
             ? {
                 tone: 'warning' as const,
-                message: nativeStatus.degradedReason,
+                message:
+                  formatNativeCaptureIssue(nativeStatus.degradedReason) ??
+                  'Native audio capture is degraded.',
               }
             : deepgram.issue
               ? {
@@ -2553,7 +2613,13 @@ export default function MeetingsPage() {
                       message: deepgramReconnectMessage,
                     }
                   : null)
-  const transcriptionStatus = readinessStatus
+  const transcriptionStatus =
+    isPaused && isRecordingStartPending
+      ? {
+          tone: 'loading' as const,
+          message: 'Resuming recording...',
+        }
+      : readinessStatus
 
   return (
     <div className="bg-background flex h-screen flex-col">
@@ -2600,45 +2666,53 @@ export default function MeetingsPage() {
 
       <div className="min-h-0 flex-1 overflow-hidden">
         {isViewingPastMeeting ? (
-          <MeetingView
-            meeting={selectedMeeting}
-            isActive={false}
-            preferredView={preferredDetailView ?? undefined}
-            enhancement={enhancement}
-            currentInterim={null}
-            currentRecordingSessionId={null}
-            onBack={() => closeSelectedMeeting('pop')}
-            onMoveToTrash={() => {
-              void handleDeleteMeeting(selectedMeeting.id)
-            }}
-            onResumeRecording={() =>
-              void handleResumeExistingMeeting(selectedMeeting)
-            }
-            onUpdateMeeting={(updated) => {
-              setSelectedMeeting(updated)
-              handleUpdateMeeting(updated)
-            }}
-          />
+          <Suspense fallback={null}>
+            <MeetingView
+              meeting={selectedMeeting}
+              isActive={false}
+              preferredView={preferredDetailView ?? undefined}
+              enhancement={enhancement}
+              currentInterim={null}
+              currentRecordingSessionId={null}
+              onBack={() => closeSelectedMeeting('pop')}
+              onMoveToTrash={() => {
+                void handleDeleteMeeting(selectedMeeting.id)
+              }}
+              onResumeRecording={() =>
+                void handleResumeExistingMeeting(selectedMeeting)
+              }
+              onUpdateMeeting={(updated) => {
+                setSelectedMeeting(updated)
+                handleUpdateMeeting(updated)
+              }}
+            />
+          </Suspense>
         ) : hasActiveMeeting ? (
-          <MeetingView
-            meeting={meeting}
-            isActive={isRecording}
-            isPaused={!!isPaused}
-            backDisabled
-            preferredView={preferredDetailView ?? undefined}
-            enhancement={enhancement}
-            currentInterim={currentInterim}
-            currentRecordingSessionId={activeRecordingSessionRef.current?.id}
-            onBack={() => {
-              setSelectedMeeting(null)
-              setPreferredDetailView(null)
-            }}
-            onUpdateMeeting={handleUpdateMeeting}
-            onResumeRecording={isAppendingTranscript ? handleResume : undefined}
-            onPauseRecording={
-              isAppendingTranscript ? handleStopAppendingTranscript : undefined
-            }
-          />
+          <Suspense fallback={null}>
+            <MeetingView
+              meeting={meeting}
+              isActive={isRecording}
+              isPaused={!!isPaused}
+              backDisabled
+              preferredView={preferredDetailView ?? undefined}
+              enhancement={enhancement}
+              currentInterim={currentInterim}
+              currentRecordingSessionId={activeRecordingSessionRef.current?.id}
+              onBack={() => {
+                setSelectedMeeting(null)
+                setPreferredDetailView(null)
+              }}
+              onUpdateMeeting={handleUpdateMeeting}
+              onResumeRecording={
+                isAppendingTranscript ? handleResume : undefined
+              }
+              onPauseRecording={
+                isAppendingTranscript
+                  ? handleStopAppendingTranscript
+                  : undefined
+              }
+            />
+          </Suspense>
         ) : meetings.length > 0 ? (
           <MeetingsList
             meetings={meetings}

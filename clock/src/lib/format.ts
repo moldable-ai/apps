@@ -72,7 +72,7 @@ export function zoneOffsetLabel(
   }
 }
 
-/** Difference in whole hours between a zone and the local zone, e.g. "+3h". */
+/** Difference between a zone and the local zone, e.g. "+3h" or "+5h 30m". */
 export function zoneDeltaLabel(
   timeZone: string,
   at: Date = new Date(),
@@ -83,9 +83,13 @@ export function zoneDeltaLabel(
       at,
     )
     const target = zoneMinutesOffset(timeZone, at)
-    const diff = Math.round((target - local) / 60)
+    const diff = target - local
     if (diff === 0) return 'Same time'
-    return `${diff > 0 ? '+' : ''}${diff}h`
+    const sign = diff > 0 ? '+' : '-'
+    const absolute = Math.abs(diff)
+    const hours = Math.floor(absolute / 60)
+    const minutes = absolute % 60
+    return minutes === 0 ? `${sign}${hours}h` : `${sign}${hours}h ${minutes}m`
   } catch {
     return ''
   }

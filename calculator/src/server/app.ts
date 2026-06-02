@@ -125,6 +125,21 @@ function searchHistory(entries: HistoryEntry[], query: string): HistoryEntry[] {
   )
 }
 
+async function parseJsonBody(c: { req: { json: () => Promise<unknown> } }) {
+  try {
+    return await c.req.json()
+  } catch {
+    return undefined
+  }
+}
+
+function parseLimit(limitRaw: string | undefined): number | undefined {
+  if (limitRaw === undefined) return undefined
+  const limit = Number(limitRaw)
+  if (!Number.isFinite(limit) || limit < 1) return undefined
+  return Math.min(Math.floor(limit), HISTORY_LIMIT)
+}
+
 // Evaluate an expression and (optionally) record it, returning a uniform shape.
 function runEvaluate(expression: string, mode: 'deg' | 'rad') {
   const value = evaluate(expression, mode)
@@ -184,15 +199,16 @@ app.get('/api/history', async (c) => {
   const query = c.req.query('q')
   let entries = await readHistory(workspaceId)
   if (query) entries = searchHistory(entries, query)
-  const limit = limitRaw ? Number(limitRaw) : undefined
-  if (limit && Number.isFinite(limit)) entries = entries.slice(0, limit)
+  const limit = parseLimit(limitRaw)
+  if (limit !== undefined) entries = entries.slice(0, limit)
   return c.json({ entries })
 })
 
 // Record a calculation or conversion the client already computed locally.
 app.post('/api/history', async (c) => {
   const workspaceId = getWorkspaceFromRequest(c.req.raw)
-  const parsed = recordEntrySchema.safeParse(await c.req.json())
+  const body = await parseJsonBody(c)
+  const parsed = recordEntrySchema.safeParse(body)
   if (!parsed.success) {
     return c.json({ error: 'Invalid history entry' }, 400)
   }

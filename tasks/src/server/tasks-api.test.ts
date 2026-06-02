@@ -196,6 +196,93 @@ describe('tasks api', () => {
     expect(createdProject.project.key).toBe('TES')
   })
 
+  it('propagates project label edits to tasks that use those labels', async () => {
+    const createdProject = await json<ProjectResponse>(
+      await request('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'Label Propagation',
+          key: 'LBL',
+          labels: [{ name: 'Frontend', color: '#6366f1' }],
+        }),
+      }),
+    )
+    const label = createdProject.project.labels[0]
+    expect(label).toBeDefined()
+
+    const createdTask = await json<TaskResponse>(
+      await request(`/api/projects/${createdProject.project.id}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Keep labels in sync',
+          labels: [label],
+        }),
+      }),
+    )
+    expect(createdTask.task.labels[0]?.name).toBe('Frontend')
+
+    await json<ProjectResponse>(
+      await request(`/api/projects/${createdProject.project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          labels: [{ id: label?.id, name: 'Backend', color: '#10b981' }],
+        }),
+      }),
+    )
+
+    const projects = await json<ProjectsResponse>(
+      await request('/api/projects'),
+    )
+    expect(projects.projects[0]?.tasks[0]?.labels).toEqual([
+      expect.objectContaining({
+        id: label?.id,
+        name: 'Backend',
+        color: '#10b981',
+      }),
+    ])
+
+    await json<ProjectResponse>(
+      await request(`/api/projects/${createdProject.project.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ labels: [] }),
+      }),
+    )
+
+    const afterDelete = await json<ProjectsResponse>(
+      await request('/api/projects'),
+    )
+    expect(afterDelete.projects[0]?.tasks[0]?.labels).toEqual([])
+  })
+
+  it('does not return every task for an unknown project-scoped search', async () => {
+    await rpc<Project>('projects.create', {
+      name: 'Frontend',
+      key: 'FRO',
+    })
+    await rpc<Task & { key: string }>('tasks.create', {
+      projectKey: 'FRO',
+      title: 'Scoped task',
+    })
+
+    const response = await request('/api/moldable/rpc', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        method: 'tasks.search',
+        params: { projectKey: 'NOPE' },
+      }),
+    })
+    const body = (await response.json()) as RpcResponse<unknown>
+
+    expect(response.status).toBe(404)
+    expect(body.ok).toBe(false)
+    expect(body.error?.code).toBe('project_not_found')
+  })
+
   it('exposes a Moldable app API manifest for chat agents', async () => {
     const manifest = JSON.parse(
       await readFile(path.join(process.cwd(), 'moldable.json'), 'utf8'),

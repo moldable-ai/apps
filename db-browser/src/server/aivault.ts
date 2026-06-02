@@ -185,22 +185,105 @@ export async function deleteWorkspaceSecret(
   await runAivault(['secrets', 'delete', '--id', existingId])
 }
 
-export async function listCredentials(): Promise<AivaultCredentialMeta[]> {
+export async function listCredentials(
+  workspaceId?: string,
+): Promise<AivaultCredentialMeta[]> {
   const output = await runAivaultJson<
     AivaultCredentialMeta[] | { credentials?: AivaultCredentialMeta[] }
-  >(['credential', 'list', '--verbose'])
+  >(['credential', 'list', '--verbose', ...aivaultContextArgs(workspaceId)])
 
   return Array.isArray(output) ? output : (output.credentials ?? [])
 }
 
-export async function deleteCredential(id: string): Promise<void> {
-  await runAivault(['credential', 'delete', id])
+export async function deleteCredential(
+  id: string,
+  workspaceId?: string,
+): Promise<void> {
+  await runAivault([
+    'credential',
+    'delete',
+    id,
+    ...aivaultContextArgs(workspaceId),
+  ])
 }
 
-export async function deleteCredentialIfExists(id: string): Promise<void> {
-  const credentials = await listCredentials()
+export async function deleteCredentialIfExists(
+  id: string,
+  workspaceId?: string,
+): Promise<void> {
+  const credentials = await listCredentials(workspaceId)
   if (!credentials.some((credential) => credential.id === id)) return
-  await deleteCredential(id)
+  await deleteCredential(id, workspaceId)
+}
+
+async function createPostgresCredential({
+  workspaceId,
+  credentialId,
+  secretIdValue,
+  host,
+  port,
+  maxPolicyMode,
+}: {
+  workspaceId: string
+  credentialId: string
+  secretIdValue: string
+  host: string
+  port: number
+  maxPolicyMode?: string
+}) {
+  await deleteCredentialIfExists(credentialId, workspaceId)
+  await runAivault([
+    'credential',
+    'create',
+    credentialId,
+    '--provider',
+    'postgres',
+    '--secret-ref',
+    `vault:secret:${secretIdValue}`,
+    '--auth',
+    'header',
+    '--header-name',
+    'x-aivault-postgres',
+    '--value-template',
+    '{{secret}}',
+    ...aivaultContextArgs(workspaceId),
+    '--host',
+    `${host}:${port}`,
+    '--max-policy-mode',
+    maxPolicyMode ?? 'read-only',
+  ])
+}
+
+export async function updatePostgresCredentialPolicy({
+  workspaceId,
+  credentialId,
+  secretName,
+  host,
+  port,
+  maxPolicyMode,
+}: {
+  workspaceId: string
+  credentialId: string
+  secretName: string
+  host: string
+  port: number
+  maxPolicyMode?: string
+}): Promise<void> {
+  const existing = await findWorkspaceSecret(workspaceId, secretName)
+  const secretIdValue = existing ? secretId(existing) : null
+
+  if (!secretIdValue) {
+    throw new Error('Saved connection secret not found')
+  }
+
+  await createPostgresCredential({
+    workspaceId,
+    credentialId,
+    secretIdValue,
+    host,
+    port,
+    maxPolicyMode,
+  })
 }
 
 export async function upsertPostgresCredential({
@@ -226,27 +309,14 @@ export async function upsertPostgresCredential({
     JSON.stringify({ url: connectionUrl }),
   )
 
-  await deleteCredentialIfExists(credentialId)
-  await runAivault([
-    'credential',
-    'create',
+  await createPostgresCredential({
+    workspaceId,
     credentialId,
-    '--provider',
-    'postgres',
-    '--secret-ref',
-    `vault:secret:${secretIdValue}`,
-    '--auth',
-    'header',
-    '--header-name',
-    'x-aivault-postgres',
-    '--value-template',
-    '{{secret}}',
-    ...aivaultContextArgs(workspaceId),
-    '--host',
-    `${host}:${port}`,
-    '--max-policy-mode',
-    maxPolicyMode ?? 'read-only',
-  ])
+    secretIdValue,
+    host,
+    port,
+    maxPolicyMode,
+  })
 }
 
 export async function invokePostgresCapability<T>(

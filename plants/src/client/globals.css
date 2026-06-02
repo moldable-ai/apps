@@ -1,0 +1,129 @@
+@import 'tailwindcss';
+@import '@moldable-ai/ui/styles';
+@import '@moldable-ai/editor/styles';
+@plugin '@tailwindcss/typography';
+
+@source './**/*.{js,jsx,ts,tsx}';
+@source '../components/**/*.{js,jsx,ts,tsx}';
+@source '../lib/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/editor/dist/**/*.{js,jsx,ts,tsx}';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Georgia', 'Iowan Old Style', 'Times New Roman', serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html,
+  body,
+  #root {
+    min-height: 100%;
+  }
+}
+
+/* ---- Motion -------------------------------------------------------------- */
+/* Tasteful, GPU-friendly entrance animations (Piano-style). Cards stagger in
+   via inline animation-delay; chrome and view transitions share the easing. */
+
+@keyframes plant-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes plant-chrome-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes plant-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-plant-card-in {
+  animation: plant-card-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-plant-chrome-in {
+  animation: plant-chrome-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-plant-fade-in {
+  animation: plant-fade-in 0.3s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-plant-card-in,
+  .animate-plant-chrome-in,
+  .animate-plant-fade-in {
+    animation: none;
+  }
+}
+
+/* Hide scrollbars on horizontal rails while keeping them scrollable. */
+.plant-no-scrollbar {
+  scrollbar-width: none;
+}
+.plant-no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- Notes document editor ---------------------------------------------- */
+/* MarkdownEditor (@moldable-ai/editor) bound to a plant's user notes. Sizes
+   text for comfortable prose and styles Lexical internals only through stable
+   wrapper classes. */
+
+.app-document-editor {
+  @apply text-muted-foreground;
+  caret-color: var(--primary);
+}
+
+.app-document-content {
+  @apply text-muted-foreground pb-20 pt-2 text-[1.0625rem] leading-[1.7];
+}
+
+.app-document-content h1,
+.app-document-content h2,
+.app-document-content h3 {
+  @apply text-foreground mb-2 mt-8 font-semibold leading-snug;
+}
+
+.app-document-content p {
+  @apply my-1;
+}
+
+.app-document-content ul,
+.app-document-content ol {
+  @apply my-2 pl-7;
+}
+
+.app-document-content [data-lexical-text='true'] {
+  letter-spacing: 0;
+}
+
+.app-document-editor [data-lexical-editor='true'] + div {
+  @apply text-muted-foreground/55 pointer-events-none absolute inset-0 flex items-start px-0 py-3 text-[1.0625rem] leading-[1.7];
+}

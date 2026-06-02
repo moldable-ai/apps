@@ -1,0 +1,300 @@
+{
+  "name": "Plants",
+  "version": "0.1.1",
+  "aliases": ["houseplants", "garden"],
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "Keep your house plants alive: identify each plant, get an AI watering schedule and care guide, and water them on time.",
+  "author": "",
+  "license": "FSL-1.1-ALv2",
+  "icon": "🪴",
+  "iconPath": "public/icon.png",
+  "category": "lifestyle",
+  "tags": [],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.13",
+    "@moldable-ai/storage": "^0.1.5"
+  },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "plants.plants",
+        "name": "Plants",
+        "description": "Read and manage the user's house plants, their watering schedules, and AI care profiles in this workspace.",
+        "scopes": [
+          {
+            "id": "plants.list",
+            "name": "List plants",
+            "description": "List plants with optional filters for room, text query, favorites, due-for-water, and deleted state.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "room": {
+                  "type": "string"
+                },
+                "query": {
+                  "type": "string"
+                },
+                "favoriteOnly": {
+                  "type": "boolean"
+                },
+                "dueOnly": {
+                  "type": "boolean",
+                  "description": "Only plants that are due or overdue for water."
+                },
+                "includeDeleted": {
+                  "type": "boolean"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200
+                }
+              }
+            }
+          },
+          {
+            "id": "plants.get",
+            "name": "Get plant",
+            "description": "Get one plant by ID.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "plants.create",
+            "name": "Create plant",
+            "description": "Create a plant from a partial body. If `care` is omitted, an AI care profile (including a watering interval) is generated server-side. `heroImagePath` maps to the plant's hero image.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "commonName": {
+                  "type": "string"
+                },
+                "scientificName": {
+                  "type": "string"
+                },
+                "family": {
+                  "type": "string"
+                },
+                "nickname": {
+                  "type": "string"
+                },
+                "room": {
+                  "type": "string",
+                  "description": "Location grouping, e.g. \"Living room\"."
+                },
+                "location": {
+                  "type": "string",
+                  "description": "Free-text micro-location, e.g. \"south-facing window\"."
+                },
+                "notes": {
+                  "type": "string"
+                },
+                "light": {
+                  "type": "string"
+                },
+                "heroImagePath": {
+                  "type": "string",
+                  "description": "Workspace-relative assets path for the hero image."
+                },
+                "waterIntervalDays": {
+                  "type": "number"
+                },
+                "identification": {
+                  "type": "object"
+                },
+                "care": {
+                  "type": "object"
+                }
+              },
+              "required": ["commonName"]
+            }
+          },
+          {
+            "id": "plants.identifyAndCreate",
+            "name": "Identify and create plant",
+            "description": "Convenience for the desktop chat (vision): create a plant with identification source 'chat' and auto-generate its care profile. Pass `heroImagePath` (workspace-relative assets path) of the uploaded photo.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "commonName": {
+                  "type": "string"
+                },
+                "scientificName": {
+                  "type": "string"
+                },
+                "confidence": {
+                  "type": "number",
+                  "description": "Identification confidence, 0..1."
+                },
+                "candidates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "commonName": {
+                        "type": "string"
+                      },
+                      "confidence": {
+                        "type": "number"
+                      }
+                    },
+                    "required": ["name"]
+                  }
+                },
+                "heroImagePath": {
+                  "type": "string"
+                },
+                "room": {
+                  "type": "string"
+                },
+                "location": {
+                  "type": "string"
+                },
+                "notes": {
+                  "type": "string"
+                }
+              },
+              "required": ["commonName"]
+            }
+          },
+          {
+            "id": "plants.update",
+            "name": "Update plant",
+            "description": "Update plant fields.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "commonName": {
+                  "type": "string"
+                },
+                "scientificName": {
+                  "type": "string"
+                },
+                "family": {
+                  "type": "string"
+                },
+                "nickname": {
+                  "type": "string"
+                },
+                "heroImageUrl": {
+                  "type": "string"
+                },
+                "room": {
+                  "type": "string"
+                },
+                "location": {
+                  "type": "string"
+                },
+                "notes": {
+                  "type": "string"
+                },
+                "light": {
+                  "type": "string"
+                },
+                "care": {
+                  "type": "object"
+                },
+                "waterIntervalDays": {
+                  "type": "number"
+                },
+                "lastWateredAt": {
+                  "type": "string"
+                },
+                "identification": {
+                  "type": "object"
+                },
+                "isFavorite": {
+                  "type": "boolean"
+                },
+                "isDeleted": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "plants.water",
+            "name": "Water plant",
+            "description": "Mark a plant as watered now (or at the optional ISO timestamp `at`). Sets lastWateredAt and appends to watering history.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string",
+                  "description": "Optional ISO timestamp. Defaults to now."
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "plants.generateCare",
+            "name": "Generate care",
+            "description": "Regenerate the AI care profile (watering schedule, needs, care guide) for a plant via the host LLM.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": ["id"]
+            }
+          },
+          {
+            "id": "plants.favorite",
+            "name": "Favorite plant",
+            "description": "Set a plant's favorite state.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "isFavorite": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["id", "isFavorite"]
+            }
+          },
+          {
+            "id": "plants.delete",
+            "name": "Delete plant",
+            "description": "Move one plant to deleted state.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              },
+              "required": ["id"]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "env": [],
+  "routeName": "plants"
+}

@@ -44,6 +44,9 @@ const DEFAULT_SETTINGS: MicroscopeSettings = {
   quality: DEFAULT_QUALITY,
 }
 const activeModelRenderTokens = new Map<string, string>()
+const generatedWriteQueues = new Map<string, Promise<void>>()
+const deletedExplorationKeys = new Set<string>()
+const WORKSPACE_ID_PATTERN = /^[A-Za-z0-9_-]+$/
 
 type OpenAIImageResponse = {
   data?: Array<{
@@ -186,13 +189,19 @@ app.use('/api/*', cors())
 
 export { app }
 
-function getWorkspaceId(request: Request): string | undefined {
+function getWorkspaceId(
+  request: Request,
+  options: { allowQuery?: boolean } = {},
+): string | undefined {
+  const cleanWorkspaceId = (value: string | null | undefined) => {
+    const id = value?.trim()
+    return id && WORKSPACE_ID_PATTERN.test(id) ? id : undefined
+  }
   const fromQuery = new URL(request.url).searchParams.get('workspace')
   return (
-    request.headers.get('x-moldable-workspace-id') ??
-    getWorkspaceFromRequest(request) ??
-    fromQuery ??
-    undefined
+    cleanWorkspaceId(request.headers.get('x-moldable-workspace-id')) ??
+    cleanWorkspaceId(getWorkspaceFromRequest(request)) ??
+    (options.allowQuery ? cleanWorkspaceId(fromQuery) : undefined)
   )
 }
 
@@ -205,6 +214,46 @@ function modelRenderKey(
   explorationId: string,
 ): string {
   return `${workspaceLabel(workspaceId)}:${explorationId}`
+}
+
+function explorationLifecycleKey(
+  workspaceId: string | undefined,
+  explorationId: string,
+): string {
+  return modelRenderKey(workspaceId, explorationId)
+}
+
+function isExplorationDeleted(
+  workspaceId: string | undefined,
+  explorationId: string,
+): boolean {
+  return deletedExplorationKeys.has(
+    explorationLifecycleKey(workspaceId, explorationId),
+  )
+}
+
+async function withGeneratedWriteLock<T>(
+  workspaceId: string | undefined,
+  action: () => Promise<T>,
+): Promise<T> {
+  const key = workspaceLabel(workspaceId)
+  const previous = generatedWriteQueues.get(key) ?? Promise.resolve()
+  let release!: () => void
+  const current = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const queued = previous.catch(() => undefined).then(() => current)
+  generatedWriteQueues.set(key, queued)
+
+  await previous.catch(() => undefined)
+  try {
+    return await action()
+  } finally {
+    release()
+    if (generatedWriteQueues.get(key) === queued) {
+      generatedWriteQueues.delete(key)
+    }
+  }
 }
 
 function dataDir(workspaceId?: string): string {
@@ -238,11 +287,14 @@ function imageUrl(
   explorationId: string,
   fileName: string,
   workspaceId?: string,
+  version?: string,
 ): string {
   const path = `/api/explorations/assets/${encodeURIComponent(explorationId)}/${encodeURIComponent(fileName)}`
-  return workspaceId
-    ? `${path}?workspace=${encodeURIComponent(workspaceId)}`
-    : path
+  const params = new URLSearchParams()
+  if (workspaceId) params.set('workspace', workspaceId)
+  if (version) params.set('v', version)
+  const query = params.toString()
+  return query ? `${path}?${query}` : path
 }
 
 function contentTypeForFile(fileName: string): string {
@@ -366,19 +418,44 @@ function serializeGenerated(
   return {
     ...exploration,
     sourceImageUrl: exploration.sourceImageFileName
-      ? imageUrl(exploration.id, exploration.sourceImageFileName, workspaceId)
+      ? imageUrl(
+          exploration.id,
+          exploration.sourceImageFileName,
+          workspaceId,
+          exploration.updatedAt,
+        )
       : null,
     imageUrl: exploration.imageFileName
-      ? imageUrl(exploration.id, exploration.imageFileName, workspaceId)
+      ? imageUrl(
+          exploration.id,
+          exploration.imageFileName,
+          workspaceId,
+          exploration.updatedAt,
+        )
       : null,
     modelUrl: exploration.modelFileName
-      ? imageUrl(exploration.id, exploration.modelFileName, workspaceId)
+      ? imageUrl(
+          exploration.id,
+          exploration.modelFileName,
+          workspaceId,
+          exploration.updatedAt,
+        )
       : null,
     modelMaterialUrl: exploration.modelMaterialFileName
-      ? imageUrl(exploration.id, exploration.modelMaterialFileName, workspaceId)
+      ? imageUrl(
+          exploration.id,
+          exploration.modelMaterialFileName,
+          workspaceId,
+          exploration.updatedAt,
+        )
       : null,
     modelTextureUrl: exploration.modelTextureFileName
-      ? imageUrl(exploration.id, exploration.modelTextureFileName, workspaceId)
+      ? imageUrl(
+          exploration.id,
+          exploration.modelTextureFileName,
+          workspaceId,
+          exploration.updatedAt,
+        )
       : null,
     modelVariants,
   }
@@ -428,13 +505,28 @@ function modelVariantsWithUrls(
   return modelVariantsForStorage(exploration).map((variant) => ({
     ...variant,
     url: variant.fileName
-      ? imageUrl(exploration.id, variant.fileName, workspaceId)
+      ? imageUrl(
+          exploration.id,
+          variant.fileName,
+          workspaceId,
+          variant.updatedAt,
+        )
       : null,
     materialUrl: variant.materialFileName
-      ? imageUrl(exploration.id, variant.materialFileName, workspaceId)
+      ? imageUrl(
+          exploration.id,
+          variant.materialFileName,
+          workspaceId,
+          variant.updatedAt,
+        )
       : null,
     textureUrl: variant.textureFileName
-      ? imageUrl(exploration.id, variant.textureFileName, workspaceId)
+      ? imageUrl(
+          exploration.id,
+          variant.textureFileName,
+          workspaceId,
+          variant.updatedAt,
+        )
       : null,
   }))
 }
@@ -1037,17 +1129,19 @@ async function patchExploration(
   explorationId: string,
   update: (exploration: GeneratedExploration) => GeneratedExploration,
 ): Promise<GeneratedExploration | null> {
-  const explorations = await loadGenerated(workspaceId)
-  const index = explorations.findIndex((item) => item.id === explorationId)
-  if (index === -1) return null
+  return withGeneratedWriteLock(workspaceId, async () => {
+    const explorations = await loadGenerated(workspaceId)
+    const index = explorations.findIndex((item) => item.id === explorationId)
+    if (index === -1) return null
 
-  const next = update(explorations[index])
-  explorations[index] = {
-    ...next,
-    updatedAt: new Date().toISOString(),
-  }
-  await saveGenerated(workspaceId, explorations)
-  return explorations[index]
+    const next = update(explorations[index])
+    explorations[index] = {
+      ...next,
+      updatedAt: new Date().toISOString(),
+    }
+    await saveGenerated(workspaceId, explorations)
+    return explorations[index]
+  })
 }
 
 async function isExplorationCanceled(
@@ -1170,9 +1264,11 @@ async function queueGeneration(
     prompts: metadata.prompts,
   }
 
-  const explorations = await loadGenerated(workspaceId)
-  explorations.unshift(exploration)
-  await saveGenerated(workspaceId, explorations)
+  await withGeneratedWriteLock(workspaceId, async () => {
+    const explorations = await loadGenerated(workspaceId)
+    explorations.unshift(exploration)
+    await saveGenerated(workspaceId, explorations)
+  })
 
   void finishGeneration(workspaceId, exploration.id, {
     ...input,
@@ -1414,11 +1510,19 @@ async function deleteExploration(
   workspaceId: string | undefined,
   explorationId: string,
 ): Promise<boolean> {
-  const explorations = await loadGenerated(workspaceId)
-  const next = explorations.filter((item) => item.id !== explorationId)
-  if (next.length === explorations.length) return false
+  const deleted = await withGeneratedWriteLock(workspaceId, async () => {
+    const explorations = await loadGenerated(workspaceId)
+    const next = explorations.filter((item) => item.id !== explorationId)
+    if (next.length === explorations.length) return false
 
-  await saveGenerated(workspaceId, next)
+    await saveGenerated(workspaceId, next)
+    return true
+  })
+  if (!deleted) return false
+
+  deletedExplorationKeys.add(
+    explorationLifecycleKey(workspaceId, explorationId),
+  )
   await rm(assetDir(workspaceId, explorationId), {
     recursive: true,
     force: true,
@@ -1434,7 +1538,12 @@ async function finishGeneration(
 ): Promise<void> {
   try {
     const modelProvider = input.modelProvider ?? DEFAULT_SETTINGS.modelProvider
-    if (await isExplorationCanceled(workspaceId, explorationId)) return
+    if (
+      isExplorationDeleted(workspaceId, explorationId) ||
+      (await isExplorationCanceled(workspaceId, explorationId))
+    ) {
+      return
+    }
 
     const response = await invokeOpenAIImages<OpenAIImageResponse>(
       workspaceId,
@@ -1455,6 +1564,12 @@ async function finishGeneration(
         timeoutMs: IMAGE_GENERATION_TIMEOUT_MS,
       },
     )
+    if (
+      isExplorationDeleted(workspaceId, explorationId) ||
+      (await isExplorationCanceled(workspaceId, explorationId))
+    ) {
+      return
+    }
     const sourceFileName = await saveImageAsset({
       workspaceId,
       explorationId,
@@ -1484,11 +1599,23 @@ async function finishGeneration(
         }
       },
     )
-    if (!generated || generated.status === 'canceled') return
+    if (!generated) {
+      await rm(assetDir(workspaceId, explorationId), {
+        recursive: true,
+        force: true,
+      }).catch(() => undefined)
+      return
+    }
+    if (generated.status === 'canceled') return
 
     let modelSourceFileName = sourceFileName
     try {
-      if (await isExplorationCanceled(workspaceId, explorationId)) return
+      if (
+        isExplorationDeleted(workspaceId, explorationId) ||
+        (await isExplorationCanceled(workspaceId, explorationId))
+      ) {
+        return
+      }
       const removed = await removeBackground(
         workspaceId,
         assetPath(workspaceId, explorationId, sourceFileName),
@@ -1499,17 +1626,28 @@ async function finishGeneration(
         fileName: 'microscope-layer.png',
         buffer: removed,
       })
-      await patchExploration(workspaceId, explorationId, (item) => {
-        if (item.status === 'canceled') return item
-        return {
-          ...item,
-          backgroundStatus: 'ready',
-          modelStatus: 'rendering',
-          modelProvider,
-          imageFileName: modelSourceFileName,
-          imageUrl: imageUrl(explorationId, modelSourceFileName, workspaceId),
-        }
-      })
+      const removedBackground = await patchExploration(
+        workspaceId,
+        explorationId,
+        (item) => {
+          if (item.status === 'canceled') return item
+          return {
+            ...item,
+            backgroundStatus: 'ready',
+            modelStatus: 'rendering',
+            modelProvider,
+            imageFileName: modelSourceFileName,
+            imageUrl: imageUrl(explorationId, modelSourceFileName, workspaceId),
+          }
+        },
+      )
+      if (!removedBackground) {
+        await rm(assetDir(workspaceId, explorationId), {
+          recursive: true,
+          force: true,
+        }).catch(() => undefined)
+        return
+      }
     } catch (error) {
       console.warn(
         `[Microscope] remove_bg_failed workspace=${workspaceLabel(workspaceId)} id=${explorationId} message=${errorMessage(error, 'unknown')}`,
@@ -1534,20 +1672,16 @@ async function finishGeneration(
       input.quality,
     )
   } catch (error) {
-    const explorations = await loadGenerated(workspaceId)
-    const index = explorations.findIndex((item) => item.id === explorationId)
-    if (index !== -1) {
-      if (explorations[index].status === 'canceled') return
-      explorations[index] = {
-        ...explorations[index],
+    await patchExploration(workspaceId, explorationId, (item) => {
+      if (item.status === 'canceled') return item
+      return {
+        ...item,
         status: 'failed',
         backgroundStatus: 'skipped',
         modelStatus: 'skipped',
         errorMessage: errorMessage(error, 'Image generation failed.'),
-        updatedAt: new Date().toISOString(),
       }
-      await saveGenerated(workspaceId, explorations)
-    }
+    })
     console.error(
       `[Microscope] generation_failed workspace=${workspaceLabel(workspaceId)} id=${explorationId} message=${errorMessage(error, 'unknown')}`,
     )
@@ -1562,7 +1696,12 @@ async function finishBackgroundRemovalRetry(
   quality?: ImageQuality,
 ): Promise<void> {
   try {
-    if (await isExplorationCanceled(workspaceId, explorationId)) return
+    if (
+      isExplorationDeleted(workspaceId, explorationId) ||
+      (await isExplorationCanceled(workspaceId, explorationId))
+    ) {
+      return
+    }
     const removed = await removeBackground(
       workspaceId,
       assetPath(workspaceId, explorationId, sourceFileName),
@@ -1573,6 +1712,13 @@ async function finishBackgroundRemovalRetry(
       fileName: 'microscope-layer.png',
       buffer: removed,
     })
+    if (isExplorationDeleted(workspaceId, explorationId)) {
+      await rm(assetDir(workspaceId, explorationId), {
+        recursive: true,
+        force: true,
+      }).catch(() => undefined)
+      return
+    }
     const updated = await patchExploration(
       workspaceId,
       explorationId,
@@ -1609,7 +1755,14 @@ async function finishBackgroundRemovalRetry(
         }
       },
     )
-    if (!updated || updated.status === 'canceled') return
+    if (!updated) {
+      await rm(assetDir(workspaceId, explorationId), {
+        recursive: true,
+        force: true,
+      }).catch(() => undefined)
+      return
+    }
+    if (updated.status === 'canceled') return
 
     void finishModelRender(
       workspaceId,
@@ -1653,7 +1806,12 @@ async function finishModelRender(
     renderToken,
   )
   try {
-    if (await isExplorationCanceled(workspaceId, explorationId)) return
+    if (
+      isExplorationDeleted(workspaceId, explorationId) ||
+      (await isExplorationCanceled(workspaceId, explorationId))
+    ) {
+      return
+    }
 
     const sourcePath = assetPath(workspaceId, explorationId, imageFileName)
     const provider = getModelRenderProvider(modelProvider)
@@ -1740,6 +1898,7 @@ async function finishModelRender(
           throw error
         }
         if (
+          isExplorationDeleted(workspaceId, explorationId) ||
           !isCurrentModelRenderToken(workspaceId, explorationId, renderToken) ||
           !(await isCurrentModelTask(
             workspaceId,
@@ -1750,6 +1909,7 @@ async function finishModelRender(
         ) {
           return
         }
+        if (isExplorationDeleted(workspaceId, explorationId)) return
         const modelFileName = await saveBufferAsset({
           workspaceId,
           explorationId,
@@ -1778,56 +1938,66 @@ async function finishModelRender(
               buffer: model.texture.buffer,
             })
           : undefined
-        await patchExploration(workspaceId, explorationId, (item) => {
-          if (
-            !isCurrentModelRenderToken(
-              workspaceId,
-              explorationId,
-              renderToken,
-            ) ||
-            item.status === 'canceled' ||
-            item.modelProvider !== modelProvider ||
-            item.modelTaskId !== task.taskId
-          ) {
-            return item
-          }
-          return {
-            ...item,
-            status: 'ready',
-            backgroundStatus:
-              item.backgroundStatus === 'pending'
-                ? imageFileName === 'microscope-layer.png'
-                  ? 'ready'
-                  : 'skipped'
-                : item.backgroundStatus,
-            modelStatus: 'ready',
-            imageFileName: item.imageFileName ?? imageFileName,
-            imageUrl: imageUrl(
-              explorationId,
-              item.imageFileName ?? imageFileName,
-              workspaceId,
-            ),
-            modelFileName,
-            modelMaterialFileName,
-            modelTextureFileName,
-            modelVariants: upsertModelVariant(item, modelProvider, {
+        const updated = await patchExploration(
+          workspaceId,
+          explorationId,
+          (item) => {
+            if (
+              !isCurrentModelRenderToken(
+                workspaceId,
+                explorationId,
+                renderToken,
+              ) ||
+              item.status === 'canceled' ||
+              item.modelProvider !== modelProvider ||
+              item.modelTaskId !== task.taskId
+            ) {
+              return item
+            }
+            return {
+              ...item,
               status: 'ready',
-              taskId: task.taskId,
-              fileName: modelFileName,
-              materialFileName: modelMaterialFileName,
-              textureFileName: modelTextureFileName,
-              modelDetail: task.modelDetail,
-              errorMessage: undefined,
-            }),
-            modelUrl: imageUrl(explorationId, modelFileName, workspaceId),
-            modelMaterialUrl: modelMaterialFileName
-              ? imageUrl(explorationId, modelMaterialFileName, workspaceId)
-              : null,
-            modelTextureUrl: modelTextureFileName
-              ? imageUrl(explorationId, modelTextureFileName, workspaceId)
-              : null,
-          }
-        })
+              backgroundStatus:
+                item.backgroundStatus === 'pending'
+                  ? imageFileName === 'microscope-layer.png'
+                    ? 'ready'
+                    : 'skipped'
+                  : item.backgroundStatus,
+              modelStatus: 'ready',
+              imageFileName: item.imageFileName ?? imageFileName,
+              imageUrl: imageUrl(
+                explorationId,
+                item.imageFileName ?? imageFileName,
+                workspaceId,
+              ),
+              modelFileName,
+              modelMaterialFileName,
+              modelTextureFileName,
+              modelVariants: upsertModelVariant(item, modelProvider, {
+                status: 'ready',
+                taskId: task.taskId,
+                fileName: modelFileName,
+                materialFileName: modelMaterialFileName,
+                textureFileName: modelTextureFileName,
+                modelDetail: task.modelDetail,
+                errorMessage: undefined,
+              }),
+              modelUrl: imageUrl(explorationId, modelFileName, workspaceId),
+              modelMaterialUrl: modelMaterialFileName
+                ? imageUrl(explorationId, modelMaterialFileName, workspaceId)
+                : null,
+              modelTextureUrl: modelTextureFileName
+                ? imageUrl(explorationId, modelTextureFileName, workspaceId)
+                : null,
+            }
+          },
+        )
+        if (!updated) {
+          await rm(assetDir(workspaceId, explorationId), {
+            recursive: true,
+            force: true,
+          }).catch(() => undefined)
+        }
         return
       }
       await new Promise((resolve) => setTimeout(resolve, task.pollIntervalMs))
@@ -1913,30 +2083,34 @@ function shouldRetryModelRender(exploration: GeneratedExploration): boolean {
 async function resumeRecoverableModelJobs(
   workspaceId: string | undefined,
 ): Promise<void> {
-  const explorations = await loadGenerated(workspaceId)
-  const recoverable = explorations.filter(shouldRetryModelRender)
-  if (!recoverable.length) return
+  const recoverable = await withGeneratedWriteLock(workspaceId, async () => {
+    const explorations = await loadGenerated(workspaceId)
+    const items = explorations.filter(shouldRetryModelRender)
+    if (!items.length) return items
 
-  const now = new Date().toISOString()
-  const next = explorations.map((exploration) =>
-    shouldRetryModelRender(exploration)
-      ? {
-          ...exploration,
-          modelStatus: 'rendering' as const,
-          modelProvider: exploration.modelProvider ?? 'fal',
-          modelTaskId: undefined,
-          modelFileName: undefined,
-          modelMaterialFileName: undefined,
-          modelTextureFileName: undefined,
-          modelUrl: null,
-          modelMaterialUrl: null,
-          modelTextureUrl: null,
-          modelErrorMessage: undefined,
-          updatedAt: now,
-        }
-      : exploration,
-  )
-  await saveGenerated(workspaceId, next)
+    const now = new Date().toISOString()
+    const next = explorations.map((exploration) =>
+      shouldRetryModelRender(exploration)
+        ? {
+            ...exploration,
+            modelStatus: 'rendering' as const,
+            modelProvider: exploration.modelProvider ?? 'fal',
+            modelTaskId: undefined,
+            modelFileName: undefined,
+            modelMaterialFileName: undefined,
+            modelTextureFileName: undefined,
+            modelUrl: null,
+            modelMaterialUrl: null,
+            modelTextureUrl: null,
+            modelErrorMessage: undefined,
+            updatedAt: now,
+          }
+        : exploration,
+    )
+    await saveGenerated(workspaceId, next)
+    return items
+  })
+  if (!recoverable.length) return
 
   for (const exploration of recoverable) {
     if (!exploration.imageFileName) continue
@@ -2276,7 +2450,7 @@ app.post('/api/specimens/:id/generate', async (c) => {
 })
 
 app.get('/api/explorations/assets/:id/:fileName', async (c) => {
-  const workspaceId = getWorkspaceId(c.req.raw)
+  const workspaceId = getWorkspaceId(c.req.raw, { allowQuery: true })
   const id = c.req.param('id')
   const fileName = c.req.param('fileName')
 

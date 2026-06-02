@@ -26,6 +26,8 @@ const rpcRequestSchema = z.object({
   params: z.unknown().optional(),
 })
 
+const nonEmptyStringSchema = z.string().trim().min(1)
+
 const recipesListParamsSchema = z
   .object({
     query: z.string().optional(),
@@ -38,11 +40,11 @@ const recipesListParamsSchema = z
   .optional()
 
 const recipeGetParamsSchema = z.object({
-  id: z.string().min(1),
+  id: nonEmptyStringSchema,
 })
 
 const recipeCreateParamsSchema = z.object({
-  title: z.string().min(1),
+  title: nonEmptyStringSchema,
   description: z.string().optional(),
   imageUrl: z.string().optional(),
   ingredients: z.array(z.string()).optional(),
@@ -58,9 +60,31 @@ const recipeCreateParamsSchema = z.object({
 })
 
 const recipeUpdateParamsSchema = recipeCreateParamsSchema.partial().extend({
-  id: z.string().min(1),
+  id: nonEmptyStringSchema,
   isDeleted: z.boolean().optional(),
 })
+
+const savedRecipeSchema = z.object({
+  id: nonEmptyStringSchema,
+  title: nonEmptyStringSchema,
+  description: z.string(),
+  imageUrl: z.string().optional(),
+  ingredients: z.array(z.string()),
+  instructions: z.string(),
+  category: z.string(),
+  cookingTime: z.string().optional(),
+  prepTime: z.string().optional(),
+  servings: z.string().optional(),
+  difficulty: z.enum(['Easy', 'Medium', 'Hard']).optional(),
+  sourceUrl: z.string().optional(),
+  tags: z.array(z.string()).optional(),
+  isFavorite: z.boolean(),
+  isDeleted: z.boolean(),
+  createdAt: nonEmptyStringSchema,
+  updatedAt: nonEmptyStringSchema,
+}) satisfies z.ZodType<Recipe>
+
+const savedRecipesSchema = z.array(savedRecipeSchema)
 
 function getRecipesPath(workspaceId?: string): string {
   return safePath(getAppDataDir(workspaceId), 'recipes.json')
@@ -68,7 +92,7 @@ function getRecipesPath(workspaceId?: string): string {
 
 async function loadRecipes(workspaceId?: string): Promise<Recipe[]> {
   await ensureDir(getAppDataDir(workspaceId))
-  const recipes = await readJson<Recipe[] | null>(
+  const recipes = await readJson<unknown | null>(
     getRecipesPath(workspaceId),
     null,
   )
@@ -78,7 +102,7 @@ async function loadRecipes(workspaceId?: string): Promise<Recipe[]> {
     return DEMO_RECIPES
   }
 
-  return recipes
+  return savedRecipesSchema.parse(recipes)
 }
 
 async function saveRecipes(
@@ -236,10 +260,19 @@ app.get('/api/recipes', async (c) => {
 app.post('/api/recipes', async (c) => {
   try {
     const workspaceId = getWorkspaceFromRequest(c.req.raw)
-    const recipes = await c.req.json<Recipe[]>()
+    const recipes = savedRecipesSchema.parse(await c.req.json())
     await saveRecipes(recipes, workspaceId)
     return c.json({ success: true })
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json(
+        {
+          error: 'Invalid recipes payload',
+          detail: error.flatten(),
+        },
+        400,
+      )
+    }
     console.error('Failed to save recipes:', error)
     return c.json({ error: 'Failed to save recipes' }, 500)
   }

@@ -8,12 +8,9 @@ import {
 } from '../lib/calendar/google-auth'
 import type { calendar_v3 } from 'googleapis'
 import { Hono } from 'hono'
-import { cors } from 'hono/cors'
 import { z } from 'zod'
 
 export const app = new Hono()
-
-app.use('/api/*', cors())
 
 interface CalendarEvent {
   id: string | null | undefined
@@ -57,14 +54,41 @@ const rpcRequestSchema = z.object({
   params: z.unknown().optional(),
 })
 
+const dateTimeParamSchema = z.string().refine((value) => {
+  return !Number.isNaN(Date.parse(value))
+}, 'Expected a parseable date-time string.')
+
 const eventsListParamsSchema = z
   .object({
-    timeMin: z.string().optional(),
-    timeMax: z.string().optional(),
+    timeMin: dateTimeParamSchema.optional(),
+    timeMax: dateTimeParamSchema.optional(),
     onlyFuture: z.boolean().optional(),
     includeDeclined: z.boolean().optional(),
     maxResults: z.number().int().min(1).max(2500).optional(),
     query: z.string().optional(),
+  })
+  .superRefine((value, context) => {
+    if (!value.timeMin || !value.timeMax) return
+
+    const min = Date.parse(value.timeMin)
+    const max = Date.parse(value.timeMax)
+    if (min >= max) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'timeMin must be before timeMax.',
+        path: ['timeMax'],
+      })
+      return
+    }
+
+    const maxRangeMs = 366 * 24 * 60 * 60 * 1000
+    if (max - min > maxRangeMs) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Date range cannot exceed 366 days.',
+        path: ['timeMax'],
+      })
+    }
   })
   .optional()
 
@@ -139,6 +163,49 @@ function mapGoogleEvent(event: calendar_v3.Schema$Event): CalendarEvent {
   }
 }
 
+function googleSelfResponseStatus(event: calendar_v3.Schema$Event) {
+  return (
+    event.attendees?.find((attendee) => attendee.self)?.responseStatus ?? null
+  )
+}
+
+function shouldIncludeGoogleEvent(
+  event: calendar_v3.Schema$Event,
+  includeDeclined = false,
+) {
+  if (event.status === 'cancelled') return false
+  if (!includeDeclined && googleSelfResponseStatus(event) === 'declined') {
+    return false
+  }
+  return true
+}
+
+function visibleCalendarListEntry(item: calendar_v3.Schema$CalendarListEntry) {
+  return item.hidden !== true
+}
+
+async function fetchPrimaryCalendarListEntry(workspaceId: string) {
+  if (!(await isAuthenticated(workspaceId))) {
+    const error = new Error('Calendar is not connected')
+    error.name = 'CalendarNotConnected'
+    throw error
+  }
+
+  return invokeAivaultJson<calendar_v3.Schema$CalendarListEntry>(
+    workspaceId,
+    'google-calendar/lists',
+    {
+      method: 'GET',
+      path: calendarPath('/users/me/calendarList/primary'),
+    },
+  )
+}
+
+async function primaryCalendarIsVisible(workspaceId: string) {
+  const primary = await fetchPrimaryCalendarListEntry(workspaceId)
+  return visibleCalendarListEntry(primary)
+}
+
 async function fetchCalendarEvents(
   workspaceId: string,
   options: {
@@ -154,6 +221,10 @@ async function fetchCalendarEvents(
     throw error
   }
 
+  if (!(await primaryCalendarIsVisible(workspaceId))) {
+    return []
+  }
+
   const now = new Date()
   const defaultMin = new Date(
     now.getFullYear(),
@@ -164,6 +235,10 @@ async function fetchCalendarEvents(
     now.getFullYear(),
     now.getMonth() + 2,
     0,
+    23,
+    59,
+    59,
+    999,
   ).toISOString()
 
   const params = new URLSearchParams()
@@ -183,7 +258,7 @@ async function fetchCalendarEvents(
   )
 
   return (response.items ?? [])
-    .filter((event) => options.includeDeclined || event.status !== 'cancelled')
+    .filter((event) => shouldIncludeGoogleEvent(event, options.includeDeclined))
     .map(mapGoogleEvent)
 }
 
@@ -203,15 +278,17 @@ async function fetchCalendarList(workspaceId: string) {
     },
   )
 
-  return (response.items ?? []).map((item) => ({
-    id: item.id,
-    summary: item.summary,
-    description: item.description,
-    primary: item.primary,
-    accessRole: item.accessRole,
-    backgroundColor: item.backgroundColor,
-    foregroundColor: item.foregroundColor,
-  }))
+  return (response.items ?? [])
+    .filter(visibleCalendarListEntry)
+    .map((item) => ({
+      id: item.id,
+      summary: item.summary,
+      description: item.description,
+      primary: item.primary,
+      accessRole: item.accessRole,
+      backgroundColor: item.backgroundColor,
+      foregroundColor: item.foregroundColor,
+    }))
 }
 
 async function fetchEventById(workspaceId: string, eventId: string) {
@@ -221,16 +298,37 @@ async function fetchEventById(workspaceId: string, eventId: string) {
     throw error
   }
 
-  return invokeAivaultJson<calendar_v3.Schema$Event>(
-    workspaceId,
-    'google-calendar/events',
-    {
-      method: 'GET',
-      path: calendarPath(
-        `/calendars/primary/events/${encodeURIComponent(eventId)}`,
-      ),
-    },
-  )
+  if (!(await primaryCalendarIsVisible(workspaceId))) {
+    const notFound = new Error('Calendar event was not found')
+    notFound.name = 'CalendarEventNotFound'
+    throw notFound
+  }
+
+  try {
+    return await invokeAivaultJson<calendar_v3.Schema$Event>(
+      workspaceId,
+      'google-calendar/events',
+      {
+        method: 'GET',
+        path: calendarPath(
+          `/calendars/primary/events/${encodeURIComponent(eventId)}`,
+        ),
+      },
+    )
+  } catch (error) {
+    const status = (
+      error as { status?: number; response?: { status?: number } }
+    ).status
+    const responseStatus = (
+      error as { status?: number; response?: { status?: number } }
+    ).response?.status
+    if (status === 404 || responseStatus === 404) {
+      const notFound = new Error('Calendar event was not found')
+      notFound.name = 'CalendarEventNotFound'
+      throw notFound
+    }
+    throw error
+  }
 }
 
 async function fetchGoogleEventsByICalUid(
@@ -241,6 +339,10 @@ async function fetchGoogleEventsByICalUid(
     const error = new Error('Calendar is not connected')
     error.name = 'CalendarNotConnected'
     throw error
+  }
+
+  if (!(await primaryCalendarIsVisible(workspaceId))) {
+    return []
   }
 
   const params = new URLSearchParams()
@@ -333,9 +435,7 @@ function calendarPath(pathname: string, params?: URLSearchParams) {
 
 function rawQuery(params?: URLSearchParams) {
   if (!params) return ''
-  return Array.from(params.entries())
-    .map(([name, value]) => `${name}=${value}`)
-    .join('&')
+  return params.toString()
 }
 
 function appendParam(
@@ -364,6 +464,28 @@ function isCalendarAuthError(error: unknown) {
     message.includes('invalid_grant') ||
     message.includes('oauth2 token endpoint returned 400')
   )
+}
+
+function workspaceIdFromRequest(request: Request): string | null {
+  return (
+    request.headers.get('x-moldable-workspace-id') ??
+    getWorkspaceFromRequest(request) ??
+    null
+  )
+}
+
+function workspaceRequiredResponse() {
+  return {
+    ok: false,
+    error: {
+      code: 'workspace_required',
+      message: 'Calendar requires an explicit Moldable workspace.',
+    },
+  }
+}
+
+function isBrokerRpcRequest(request: Request) {
+  return request.headers.get('x-moldable-rpc') === '1'
 }
 
 function filterEventsByQuery(events: CalendarEvent[], query?: string) {
@@ -560,7 +682,11 @@ app.get('/api/moldable/health', (c) => {
 
 app.get('/api/auth/login', async (c) => {
   try {
-    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const workspaceId = workspaceIdFromRequest(c.req.raw)
+    if (!workspaceId) {
+      return c.json(workspaceRequiredResponse(), 400)
+    }
+
     const url = await getAuthUrl(workspaceId)
     return c.json({ url })
   } catch (error) {
@@ -596,7 +722,11 @@ app.get('/api/auth/callback', async (c) => {
 
 app.post('/api/auth/logout', async (c) => {
   try {
-    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const workspaceId = workspaceIdFromRequest(c.req.raw)
+    if (!workspaceId) {
+      return c.json(workspaceRequiredResponse(), 400)
+    }
+
     await clearTokens(workspaceId)
     return c.json({ success: true })
   } catch (error) {
@@ -605,12 +735,107 @@ app.post('/api/auth/logout', async (c) => {
   }
 })
 
+app.post('/api/rsvp', async (c) => {
+  try {
+    const workspaceId = workspaceIdFromRequest(c.req.raw)
+    if (!workspaceId) {
+      return c.json(workspaceRequiredResponse(), 400)
+    }
+
+    const eventParams = eventRsvpParamsSchema.parse(await c.req.json())
+    const event = await rsvpToGoogleEvent(workspaceId, eventParams)
+    return c.json({ ok: true, event: mapGoogleEvent(event) })
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json(
+        {
+          ok: false,
+          error: {
+            code: 'invalid_params',
+            message: 'Calendar received invalid RSVP parameters.',
+            detail: error.flatten(),
+          },
+        },
+        400,
+      )
+    }
+
+    if (error instanceof Error && error.name === 'CalendarEventNotFound') {
+      return c.json(
+        {
+          ok: false,
+          error: {
+            code: 'event_not_found',
+            message: 'Calendar event was not found.',
+          },
+        },
+        404,
+      )
+    }
+
+    if (error instanceof Error && error.name === 'CalendarAttendeeNotFound') {
+      return c.json(
+        {
+          ok: false,
+          error: {
+            code: 'attendee_not_found',
+            message:
+              'Calendar could not find your attendee record for this event.',
+          },
+        },
+        409,
+      )
+    }
+
+    if (
+      (error instanceof Error && error.name === 'CalendarNotConnected') ||
+      isCalendarAuthError(error)
+    ) {
+      return c.json(
+        {
+          ok: false,
+          error: {
+            code: 'calendar_not_connected',
+            message: 'Connect Calendar before updating events.',
+          },
+        },
+        401,
+      )
+    }
+
+    console.error('Calendar RSVP failed:', error)
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'calendar_rsvp_failed',
+          message:
+            error instanceof Error
+              ? error.message
+              : 'Calendar could not update the event.',
+        },
+      },
+      500,
+    )
+  }
+})
+
 app.get('/api/events', async (c) => {
   try {
-    const workspaceId = getWorkspaceFromRequest(c.req.raw) ?? 'personal'
-    const timeMin = c.req.query('timeMin')
-    const timeMax = c.req.query('timeMax')
-    const events = await fetchCalendarEvents(workspaceId, { timeMin, timeMax })
+    const workspaceId = workspaceIdFromRequest(c.req.raw)
+    if (!workspaceId) {
+      return c.json(workspaceRequiredResponse(), 400)
+    }
+
+    const params = eventsListParamsSchema.parse({
+      timeMin: c.req.query('timeMin'),
+      timeMax: c.req.query('timeMax'),
+    })
+    const events = await fetchCalendarEvents(workspaceId, {
+      timeMin: params?.timeMin,
+      timeMax: params?.timeMax,
+      includeDeclined: true,
+    })
 
     return c.json({ events })
   } catch (error) {
@@ -625,6 +850,16 @@ app.get('/api/events', async (c) => {
 
     if (errorMessage.includes('Missing') || isCalendarAuthError(error)) {
       return c.json({ events: [], authenticated: false }, 401)
+    }
+
+    if (error instanceof z.ZodError) {
+      return c.json(
+        {
+          error: 'Invalid event query parameters',
+          detail: error.flatten(),
+        },
+        400,
+      )
     }
 
     return c.json(
@@ -645,17 +880,17 @@ app.get('/api/events', async (c) => {
 // you haven't responded yet, and stay silent for far-off events, finished
 // meetings, all-day items, and when Calendar isn't connected.
 app.get('/api/moldable/today', async (c) => {
-  const workspaceId =
-    c.req.header('x-moldable-workspace-id') ??
-    getWorkspaceFromRequest(c.req.raw) ??
-    'personal'
+  const workspaceId = workspaceIdFromRequest(c.req.raw)
+  if (!workspaceId) {
+    return c.json({ items: [], generatedAt: new Date().toISOString() })
+  }
 
   try {
     const { timeMin, timeMax } = todayRange(false)
     const events = await fetchCalendarEvents(workspaceId, {
       timeMin,
       timeMax,
-      maxResults: 20,
+      maxResults: 2500,
     })
 
     const now = Date.now()
@@ -748,16 +983,30 @@ app.get('/api/moldable/today', async (c) => {
 })
 
 app.post('/api/moldable/rpc', async (c) => {
-  const workspaceId =
-    c.req.header('x-moldable-workspace-id') ??
-    getWorkspaceFromRequest(c.req.raw) ??
-    'personal'
+  if (!isBrokerRpcRequest(c.req.raw)) {
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'broker_required',
+          message: 'Calendar RPC must be invoked through Moldable.',
+        },
+      },
+      403,
+    )
+  }
+
+  const workspaceId = workspaceIdFromRequest(c.req.raw)
+  if (!workspaceId) {
+    return c.json(workspaceRequiredResponse(), 400)
+  }
 
   try {
     const body = rpcRequestSchema.parse(await c.req.json())
-    const params = eventsListParamsSchema.parse(body.params)
+    const rawParams = body.params ?? undefined
 
     if (body.method === 'events.today') {
+      const params = eventsListParamsSchema.parse(rawParams)
       const { timeMin, timeMax } = todayRange(params?.onlyFuture ?? true)
       const events = await fetchCalendarEvents(workspaceId, {
         timeMin,
@@ -773,7 +1022,7 @@ app.post('/api/moldable/rpc', async (c) => {
     }
 
     if (body.method === 'events.upcoming') {
-      const upcomingParams = upcomingEventsParamsSchema.parse(body.params)
+      const upcomingParams = upcomingEventsParamsSchema.parse(rawParams)
       const now = new Date()
       const end = new Date(now)
       end.setDate(end.getDate() + (upcomingParams?.days ?? 7))
@@ -788,6 +1037,7 @@ app.post('/api/moldable/rpc', async (c) => {
     }
 
     if (body.method === 'events.list' || body.method === 'events.search') {
+      const params = eventsListParamsSchema.parse(rawParams)
       const events = await fetchCalendarEvents(workspaceId, {
         timeMin: params?.timeMin,
         timeMax: params?.timeMax,
@@ -802,11 +1052,10 @@ app.post('/api/moldable/rpc', async (c) => {
     }
 
     if (body.method === 'events.get') {
-      const eventParams = eventGetParamsSchema.parse(body.params)
-      const events = await fetchCalendarEvents(workspaceId)
-      const event = events.find((item) => item.id === eventParams.id)
+      const eventParams = eventGetParamsSchema.parse(rawParams)
+      const event = await fetchEventById(workspaceId, eventParams.id)
 
-      if (!event) {
+      if (!event?.id) {
         return c.json(
           {
             ok: false,
@@ -819,11 +1068,11 @@ app.post('/api/moldable/rpc', async (c) => {
         )
       }
 
-      return c.json({ ok: true, result: event })
+      return c.json({ ok: true, result: mapGoogleEvent(event) })
     }
 
     if (body.method === 'events.findByICalUid') {
-      const eventParams = eventFindByICalUidParamsSchema.parse(body.params)
+      const eventParams = eventFindByICalUidParamsSchema.parse(rawParams)
       const event = await findGoogleEventByICalUid(
         workspaceId,
         eventParams.iCalUid,
@@ -836,7 +1085,7 @@ app.post('/api/moldable/rpc', async (c) => {
     }
 
     if (body.method === 'events.rsvp') {
-      const eventParams = eventRsvpParamsSchema.parse(body.params)
+      const eventParams = eventRsvpParamsSchema.parse(rawParams)
       const event = await rsvpToGoogleEvent(workspaceId, eventParams)
 
       return c.json({

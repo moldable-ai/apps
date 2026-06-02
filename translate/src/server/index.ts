@@ -1,4 +1,5 @@
 import { app } from './app'
+import { getStaticContentType, resolveStaticFilePath } from './static-files'
 import fs from 'node:fs/promises'
 import {
   type Server as HttpServer,
@@ -90,25 +91,20 @@ function writeWebResponse(response: Response, res: ServerResponse) {
 
 async function serveStatic(req: IncomingMessage, res: ServerResponse) {
   const url = requestUrl(req)
-  const requestedPath = decodeURIComponent(url.pathname)
-  const filePath =
-    requestedPath.startsWith('/assets/') ||
-    requestedPath === '/favicon.ico' ||
-    requestedPath === '/icon.png'
-      ? path.join(distDir, requestedPath)
-      : path.join(distDir, 'index.html')
+  const filePath = resolveStaticFilePath(distDir, url.pathname)
+
+  if (!filePath) {
+    res.statusCode = 404
+    res.end('Not found')
+    return
+  }
 
   try {
     const content = await fs.readFile(filePath)
     res.statusCode = 200
-    if (filePath.endsWith('.js')) {
-      res.setHeader('Content-Type', 'text/javascript; charset=utf-8')
-    } else if (filePath.endsWith('.css')) {
-      res.setHeader('Content-Type', 'text/css; charset=utf-8')
-    } else if (filePath.endsWith('.html')) {
-      res.setHeader('Content-Type', 'text/html; charset=utf-8')
-    } else if (filePath.endsWith('.png')) {
-      res.setHeader('Content-Type', 'image/png')
+    const contentType = getStaticContentType(filePath)
+    if (contentType) {
+      res.setHeader('Content-Type', contentType)
     }
     res.end(content)
   } catch {

@@ -8,7 +8,10 @@ import type { Context } from 'hono'
 type JsonErrorStatus = 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500 | 502 | 503
 
 export function getWorkspaceId(c: Context): string | undefined {
-  return getWorkspaceFromRequest(c.req.raw)
+  return (
+    c.req.header('x-moldable-workspace-id') ??
+    getWorkspaceFromRequest(c.req.raw)
+  )
 }
 
 export function getDataDir(c: Context): string {

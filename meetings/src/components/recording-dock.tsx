@@ -61,7 +61,7 @@ export function RecordingDock({
         <div className="absolute bottom-[4.75rem] flex w-full justify-center px-3">
           <div
             className={cn(
-              'bg-background/95 shadow-foreground/10 flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium shadow-lg backdrop-blur-xl sm:max-w-none',
+              'bg-background/95 shadow-foreground/10 flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium shadow-lg backdrop-blur-xl sm:max-w-[min(52rem,calc(100vw-2rem))]',
               transcriptionStatus.tone === 'danger'
                 ? 'border-destructive/40 text-destructive'
                 : 'border-border text-muted-foreground',
@@ -72,7 +72,7 @@ export function RecordingDock({
             ) : (
               <AlertCircle className="size-3.5 shrink-0" />
             )}
-            <span className="min-w-0 leading-5 sm:whitespace-nowrap">
+            <span className="min-w-0 truncate leading-5">
               {transcriptionStatus.message}
             </span>
           </div>
@@ -117,11 +117,15 @@ export function RecordingDock({
             size="sm"
             variant="ghost"
             onClick={onResume}
-            disabled={disabled}
+            disabled={disabled || isStarting}
             className="h-10 cursor-pointer gap-2 rounded-full px-4"
           >
-            <Play className="size-4" fill="currentColor" />
-            <span>Resume</span>
+            {isStarting ? (
+              <Loader2 className="size-4 animate-spin" />
+            ) : (
+              <Play className="size-4" fill="currentColor" />
+            )}
+            <span>{isStarting ? 'Resuming' : 'Resume'}</span>
           </Button>
         ) : (
           <Button
@@ -143,7 +147,7 @@ export function RecordingDock({
               variant="destructive"
               size="sm"
               onClick={onStop}
-              disabled={disabled}
+              disabled={disabled || isStarting}
               className="h-10 cursor-pointer gap-2 rounded-full px-4"
             >
               {isEnhancing ? (

@@ -8,6 +8,7 @@ import {
 } from 'node:http'
 import path from 'node:path'
 import { Readable } from 'node:stream'
+import { pathToFileURL } from 'node:url'
 import {
   type HmrOptions,
   type ViteDevServer,
@@ -19,6 +20,7 @@ const port = Number(process.env.MOLDABLE_PORT ?? process.env.PORT ?? 3000)
 const isProduction = process.env.NODE_ENV === 'production'
 const root = process.cwd()
 const distDir = path.join(root, 'dist')
+const distRoot = path.resolve(distDir)
 
 function createHmrOptions(server: HttpServer): HmrOptions {
   const appUrl = process.env.MOLDABLE_APP_URL
@@ -44,6 +46,23 @@ function requestUrl(req: IncomingMessage) {
     req.url ?? '/',
     `http://${req.headers.host ?? `${host}:${port}`}`,
   )
+}
+
+export function resolveStaticFilePath(requestedPath: string): string | null {
+  const hasExtension = path.extname(requestedPath).length > 0
+  const routePath =
+    requestedPath.startsWith('/assets/') ||
+    requestedPath === '/favicon.ico' ||
+    hasExtension
+      ? requestedPath
+      : '/index.html'
+  const filePath = path.resolve(distRoot, `.${routePath}`)
+
+  if (filePath !== distRoot && !filePath.startsWith(`${distRoot}${path.sep}`)) {
+    return null
+  }
+
+  return filePath
 }
 
 function toWebRequest(req: IncomingMessage) {
@@ -90,14 +109,21 @@ function writeWebResponse(response: Response, res: ServerResponse) {
 
 async function serveStatic(req: IncomingMessage, res: ServerResponse) {
   const url = requestUrl(req)
-  const requestedPath = decodeURIComponent(url.pathname)
-  const hasExtension = path.extname(requestedPath).length > 0
-  const filePath =
-    requestedPath.startsWith('/assets/') ||
-    requestedPath === '/favicon.ico' ||
-    hasExtension
-      ? path.join(distDir, requestedPath)
-      : path.join(distDir, 'index.html')
+  let requestedPath: string
+  try {
+    requestedPath = decodeURIComponent(url.pathname)
+  } catch {
+    res.statusCode = 404
+    res.end('Not found')
+    return
+  }
+  const filePath = resolveStaticFilePath(requestedPath)
+
+  if (!filePath) {
+    res.statusCode = 404
+    res.end('Not found')
+    return
+  }
 
   try {
     const content = await fs.readFile(filePath)
@@ -176,4 +202,9 @@ async function main() {
   })
 }
 
-void main()
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  void main()
+}

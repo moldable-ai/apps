@@ -23,6 +23,7 @@ import {
   type ReaderFont,
   type ReaderLayout,
   type ReaderSettings,
+  type ReadingTimeScope,
   resolveReaderTheme,
 } from '../../shared/reader-settings'
 
@@ -51,6 +52,11 @@ const THEME_KEYS: ConcreteReaderTheme[] = [
 const LAYOUTS: { value: ReaderLayout; label: string }[] = [
   { value: 'paginated', label: 'Paged' },
   { value: 'scroll', label: 'Scroll' },
+]
+
+const READING_TIME_SCOPES: { value: ReadingTimeScope; label: string }[] = [
+  { value: 'chapter', label: 'Chapter' },
+  { value: 'book', label: 'Book' },
 ]
 
 function Row({
@@ -113,7 +119,7 @@ export function TypographyPanel({
               <ToggleGroup
                 type="single"
                 value={settings.font}
-                onValueChange={(value) => {
+                onValueChange={(value: string) => {
                   if (value) update({ font: value as ReaderFont })
                 }}
                 className="grid w-full grid-cols-2 gap-1"
@@ -217,7 +223,7 @@ export function TypographyPanel({
                 min={READER_LINE_HEIGHT.min}
                 max={READER_LINE_HEIGHT.max}
                 step={READER_LINE_HEIGHT.step}
-                onValueChange={(value) => {
+                onValueChange={(value: number[]) => {
                   const next = value[0]
                   if (typeof next === 'number') update({ lineHeight: next })
                 }}
@@ -230,7 +236,7 @@ export function TypographyPanel({
                 min={READER_CONTENT_WIDTH.min}
                 max={READER_CONTENT_WIDTH.max}
                 step={READER_CONTENT_WIDTH.step}
-                onValueChange={(value) => {
+                onValueChange={(value: number[]) => {
                   const next = value[0]
                   if (typeof next === 'number') update({ contentWidth: next })
                 }}
@@ -247,16 +253,83 @@ export function TypographyPanel({
               <Switch
                 id="reader-justify"
                 checked={settings.justify}
-                onCheckedChange={(checked) => update({ justify: checked })}
+                onCheckedChange={(checked: boolean) =>
+                  update({ justify: checked })
+                }
                 className="cursor-pointer"
               />
             </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-1">
+                <Label
+                  htmlFor="reader-reading-time"
+                  className="text-muted-foreground cursor-pointer text-xs font-medium uppercase tracking-wide"
+                >
+                  Time remaining
+                </Label>
+                <p className="text-muted-foreground text-xs">
+                  Estimate from your reading pace
+                </p>
+              </div>
+              <Switch
+                id="reader-reading-time"
+                checked={settings.showReadingTime}
+                onCheckedChange={(checked: boolean) =>
+                  update({ showReadingTime: checked })
+                }
+                className="cursor-pointer"
+              />
+            </div>
+
+            {settings.showReadingTime ? (
+              <>
+                <Row label="Time left in">
+                  <ToggleGroup
+                    type="single"
+                    value={settings.readingTimeScope}
+                    onValueChange={(value: string) => {
+                      if (value) {
+                        update({ readingTimeScope: value as ReadingTimeScope })
+                      }
+                    }}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    {READING_TIME_SCOPES.map((scope) => (
+                      <ToggleGroupItem
+                        key={scope.value}
+                        value={scope.value}
+                        aria-label={scope.label}
+                        className="flex-1 cursor-pointer"
+                      >
+                        {scope.label}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                </Row>
+
+                <div className="bg-muted/35 flex items-center justify-between rounded-md px-3 py-2">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+                      Reading pace
+                    </span>
+                    <span className="text-muted-foreground text-xs">
+                      Learns from page turns and scrolling
+                    </span>
+                  </div>
+                  <span className="text-xs tabular-nums">
+                    Auto · {settings.readingPaceWpm} wpm
+                  </span>
+                </div>
+              </>
+            ) : null}
 
             <Row label="Layout">
               <ToggleGroup
                 type="single"
                 value={settings.layout}
-                onValueChange={(value) => {
+                onValueChange={(value: string) => {
                   if (value) update({ layout: value as ReaderLayout })
                 }}
                 className="w-full"

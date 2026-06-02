@@ -1,6 +1,6 @@
 import { readJson, safePath, writeJson } from '@moldable-ai/storage'
 import type { BookMeta } from '../shared/book'
-import { importBook } from './book-store'
+import { findBookBySource, importBook } from './book-store'
 import { gunzipSync, strFromU8 } from 'fflate'
 import { mkdir } from 'node:fs/promises'
 
@@ -548,9 +548,20 @@ export async function searchStore(
 export async function getInstalledIds(dataDir: string): Promise<string[]> {
   const ids = await readJson<Array<number | string>>(installedPath(dataDir), [])
   if (!Array.isArray(ids)) return []
-  return ids
+  const normalized = ids
     .map((id) => (typeof id === 'number' ? gutenbergKey(id) : id))
     .filter((id) => typeof id === 'string' && parseInstallKey(id) !== null)
+  const installed: string[] = []
+  for (const id of normalized) {
+    const key = parseInstallKey(id)
+    if (!key) continue
+    const source =
+      key.source === 'gutenberg'
+        ? `gutenberg-${key.id}.epub`
+        : `open-library-${key.id}.epub`
+    if (await findBookBySource(dataDir, source)) installed.push(id)
+  }
+  return installed
 }
 
 async function recordInstalled(dataDir: string, id: string): Promise<void> {
@@ -564,6 +575,13 @@ export async function installFromGutenberg(
   dataDir: string,
   id: number,
 ): Promise<BookMeta> {
+  const source = `gutenberg-${id}.epub`
+  const existing = await findBookBySource(dataDir, source)
+  if (existing) {
+    await recordInstalled(dataDir, gutenbergKey(id))
+    return existing
+  }
+
   let bytes: Uint8Array | null = null
   for (const url of gutenbergEpubUrls(id)) {
     try {
@@ -585,7 +603,7 @@ export async function installFromGutenberg(
   if (!bytes) {
     throw new Error('Could not download this book from Project Gutenberg')
   }
-  const meta = await importBook(dataDir, `gutenberg-${id}.epub`, bytes)
+  const meta = await importBook(dataDir, source, bytes)
   await recordInstalled(dataDir, gutenbergKey(id))
   return meta
 }
@@ -613,16 +631,19 @@ async function installFromOpenLibrary(
   dataDir: string,
   identifier: string,
 ): Promise<BookMeta> {
+  const source = `open-library-${identifier}.epub`
+  const existing = await findBookBySource(dataDir, source)
+  if (existing) {
+    await recordInstalled(dataDir, openLibraryKey(identifier))
+    return existing
+  }
+
   const epub = await findArchiveEpub(identifier)
   if (!epub)
     throw new Error('Open Library did not provide a direct EPUB for this book')
   const bytes = await downloadVerifiedEpub([epub])
   if (!bytes) throw new Error('Could not download this EPUB from Open Library')
-  const meta = await importBook(
-    dataDir,
-    `open-library-${identifier}.epub`,
-    bytes,
-  )
+  const meta = await importBook(dataDir, source, bytes)
   await recordInstalled(dataDir, openLibraryKey(identifier))
   return meta
 }

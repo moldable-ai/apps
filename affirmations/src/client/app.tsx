@@ -22,10 +22,12 @@ import {
   categories,
   getAffirmations,
   getDailyAffirmation,
+  getDayKey,
 } from '@/lib/affirmations'
 import {
   useFavorites,
   useSaveFavorites,
+  useSetFavorite,
   useUpdateFavoritesCache,
 } from '@/hooks/use-favorites'
 import { useStreak } from '@/hooks/use-streak'
@@ -57,10 +59,19 @@ function readLocalFavorites(workspaceId: string): string[] {
 }
 
 function writeLocalFavorites(workspaceId: string, favorites: string[]) {
-  localStorage.setItem(
-    getLocalFavoritesKey(workspaceId),
-    JSON.stringify(favorites),
-  )
+  try {
+    localStorage.setItem(
+      getLocalFavoritesKey(workspaceId),
+      JSON.stringify(favorites),
+    )
+  } catch {
+    // localStorage is a best-effort cache; the server save still runs.
+  }
+}
+
+function dateFromDayKey(dayKey: string) {
+  const [year, month, day] = dayKey.split('-').map(Number)
+  return new Date(year, month - 1, day)
 }
 
 /** A low-alpha tint of an accent color that adapts to light and dark themes. */
@@ -82,8 +93,8 @@ export default function DailyAffirmations() {
   const { workspaceId } = useWorkspace()
   const { data: favorites = [], isLoading, isError } = useFavorites()
   const { mutate: saveFavorites } = useSaveFavorites()
+  const { mutate: setFavorite } = useSetFavorite()
   const updateFavoritesCache = useUpdateFavoritesCache()
-  const streak = useStreak(workspaceId)
   const reduceMotion = useReducedMotion()
   const { toasts, notify, dismiss } = useToasts()
 
@@ -91,14 +102,16 @@ export default function DailyAffirmations() {
   const [currentAffirmation, setCurrentAffirmation] = useState('')
   const [deckPosition, setDeckPosition] = useState(0)
   const [showFavorites, setShowFavorites] = useState(false)
-  const [isMigrated, setIsMigrated] = useState(false)
+  const [dayKey, setDayKey] = useState(() => getDayKey())
+  const streak = useStreak(workspaceId, dayKey)
 
   // A shuffled deck per category. The cursor is the index of the affirmation
   // currently on screen, so ← / → step through it and `r` jumps to a random one.
   const deckRef = useRef<string[]>([])
   const deckCursorRef = useRef(0)
+  const migratedWorkspacesRef = useRef(new Set<string>())
 
-  const today = useMemo(() => new Date(), [])
+  const today = useMemo(() => dateFromDayKey(dayKey), [dayKey])
   const dailyAffirmation = useMemo(() => getDailyAffirmation(today), [today])
   const dateLabel = useMemo(
     () =>
@@ -111,7 +124,23 @@ export default function DailyAffirmations() {
   )
 
   useEffect(() => {
-    if (!workspaceId || isLoading || isMigrated) return
+    const now = new Date()
+    const nextDay = new Date(now)
+    nextDay.setHours(24, 0, 0, 0)
+    const delay = Math.max(1000, nextDay.getTime() - now.getTime() + 1000)
+    const timeout = window.setTimeout(() => setDayKey(getDayKey()), delay)
+
+    return () => window.clearTimeout(timeout)
+  }, [dayKey])
+
+  useEffect(() => {
+    if (
+      !workspaceId ||
+      isLoading ||
+      migratedWorkspacesRef.current.has(workspaceId)
+    ) {
+      return
+    }
 
     const localFavorites = readLocalFavorites(workspaceId)
     if (localFavorites.length > 0 && favorites.length === 0) {
@@ -119,11 +148,10 @@ export default function DailyAffirmations() {
       saveFavorites(localFavorites)
     }
 
-    setIsMigrated(true)
+    migratedWorkspacesRef.current.add(workspaceId)
   }, [
     favorites.length,
     isLoading,
-    isMigrated,
     saveFavorites,
     updateFavoritesCache,
     workspaceId,
@@ -182,10 +210,18 @@ export default function DailyAffirmations() {
         if (workspaceId) {
           writeLocalFavorites(workspaceId, nextFavorites)
         }
-        saveFavorites(nextFavorites, {
-          onError: () =>
-            notify("Couldn't sync your favorites", { variant: 'error' }),
-        })
+        setFavorite(
+          { text, favorite: !prev.includes(text) },
+          {
+            onSuccess: (serverFavorites) => {
+              if (workspaceId) {
+                writeLocalFavorites(workspaceId, serverFavorites)
+              }
+            },
+            onError: () =>
+              notify("Couldn't sync your favorites", { variant: 'error' }),
+          },
+        )
         return nextFavorites
       })
 
@@ -197,7 +233,7 @@ export default function DailyAffirmations() {
         ),
       })
     },
-    [favorites, notify, saveFavorites, updateFavoritesCache, workspaceId],
+    [favorites, notify, setFavorite, updateFavoritesCache, workspaceId],
   )
 
   const activeCat = useMemo<Category | undefined>(

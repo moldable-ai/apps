@@ -18,17 +18,29 @@ export interface ReaderViewProps {
 
 export interface SpeedReaderProps {
   open: boolean
-  onClose: () => void
+  onClose: (wordIndex?: number) => void
   /** Title shown in the speed-reader chrome (book or chapter title). */
   title: string
   /** Ordered word tokens for the current chapter. */
   words: string[]
   /** Word index to start from. */
   startIndex: number
+  /** Words before this chapter, used for whole-book progress. */
+  wordsBeforeChapter: number
+  /** Total words in the book, used for whole-book progress. */
+  bookWordCount: number
+  /** Words remaining after this chapter, used for whole-book time estimates. */
+  remainingWordsAfterChapter: number
   /** Live reader settings (uses wpm, chunkSize, punctuationPause, theme). */
   settings: ReaderSettings
   /** Persist a settings change (e.g. wpm tweak from the speed-reader chrome). */
   onSettingsChange: (patch: Partial<ReaderSettings>) => void
+  /** Whether another chapter is available after the current source words. */
+  hasNextChapter?: boolean
+  /** Auto-resume playback when the parent swaps in the next chapter's words. */
+  autoPlayOnSourceChange?: boolean
+  /** Called when playback reaches the end of the current chapter. */
+  onChapterComplete?: (wordIndex: number) => void
   /** Called as the reader advances so the host can persist resume position. */
   onProgress?: (wordIndex: number) => void
 }

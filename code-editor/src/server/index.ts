@@ -46,6 +46,44 @@ function requestUrl(req: IncomingMessage) {
   )
 }
 
+function safeDecodePathname(pathname: string): string | null {
+  try {
+    return decodeURIComponent(pathname)
+  } catch {
+    return null
+  }
+}
+
+function safeDistPath(requestedPath: string): string | null {
+  if (requestedPath.startsWith('/assets/')) {
+    const relativeAssetPath = path.normalize(
+      requestedPath.slice('/assets/'.length),
+    )
+
+    if (
+      relativeAssetPath.startsWith('..') ||
+      path.isAbsolute(relativeAssetPath)
+    ) {
+      return null
+    }
+
+    const filePath = path.join(distDir, 'assets', relativeAssetPath)
+    const relativeToDist = path.relative(distDir, filePath)
+
+    if (relativeToDist.startsWith('..') || path.isAbsolute(relativeToDist)) {
+      return null
+    }
+
+    return filePath
+  }
+
+  if (requestedPath === '/favicon.ico') {
+    return path.join(distDir, 'favicon.ico')
+  }
+
+  return path.join(distDir, 'index.html')
+}
+
 function toWebRequest(req: IncomingMessage) {
   const url = requestUrl(req)
   const headers = new Headers()
@@ -90,11 +128,14 @@ function writeWebResponse(response: Response, res: ServerResponse) {
 
 async function serveStatic(req: IncomingMessage, res: ServerResponse) {
   const url = requestUrl(req)
-  const requestedPath = decodeURIComponent(url.pathname)
-  const filePath =
-    requestedPath.startsWith('/assets/') || requestedPath === '/favicon.ico'
-      ? path.join(distDir, requestedPath)
-      : path.join(distDir, 'index.html')
+  const requestedPath = safeDecodePathname(url.pathname)
+  const filePath = requestedPath ? safeDistPath(requestedPath) : null
+
+  if (!filePath) {
+    res.statusCode = 404
+    res.end('Not found')
+    return
+  }
 
   try {
     const content = await fs.readFile(filePath)

@@ -23,6 +23,7 @@ export function useSaveFavorites() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
 
   return useMutation({
+    scope: { id: `affirmations-favorites-${workspaceId ?? 'default'}` },
     mutationFn: async (favorites: string[]): Promise<void> => {
       const res = await fetchWithWorkspace('/api/favorites', {
         method: 'POST',
@@ -36,6 +37,41 @@ export function useSaveFavorites() {
       queryClient.invalidateQueries({
         queryKey: ['affirmations-favorites', workspaceId],
       })
+    },
+  })
+}
+
+export function useSetFavorite() {
+  const queryClient = useQueryClient()
+  const { workspaceId, fetchWithWorkspace } = useWorkspace()
+
+  return useMutation({
+    scope: { id: `affirmations-favorites-${workspaceId ?? 'default'}` },
+    mutationFn: async ({
+      text,
+      favorite,
+    }: {
+      text: string
+      favorite: boolean
+    }): Promise<string[]> => {
+      const res = await fetchWithWorkspace('/api/favorites/item', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, favorite }),
+      })
+
+      if (!res.ok) throw new Error('Failed to update favorite affirmation')
+
+      const data: unknown = await res.json()
+      return Array.isArray(data)
+        ? data.filter((item): item is string => typeof item === 'string')
+        : []
+    },
+    onSuccess: (favorites) => {
+      queryClient.setQueryData(
+        ['affirmations-favorites', workspaceId],
+        favorites,
+      )
     },
   })
 }

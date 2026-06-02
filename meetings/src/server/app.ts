@@ -1029,8 +1029,12 @@ app.post('/api/meetings/:id/enhance', async (c) => {
       templateId?: string
     }
 
-    const meeting =
-      body.meeting ?? (await getMeeting(c.req.param('id'), workspaceId))
+    const meetingId = c.req.param('id')
+    if (body.meeting && body.meeting.id !== meetingId) {
+      return c.json({ error: 'Meeting id mismatch' }, 400)
+    }
+
+    const meeting = body.meeting ?? (await getMeeting(meetingId, workspaceId))
 
     if (!meeting) {
       return c.json({ error: 'Meeting not found' }, 404)
@@ -1086,8 +1090,12 @@ app.post('/api/meetings/:id/enhance/stream', async (c) => {
       templateId?: string
     }
 
-    const meeting =
-      body.meeting ?? (await getMeeting(c.req.param('id'), workspaceId))
+    const meetingId = c.req.param('id')
+    if (body.meeting && body.meeting.id !== meetingId) {
+      return c.json({ error: 'Meeting id mismatch' }, 400)
+    }
+
+    const meeting = body.meeting ?? (await getMeeting(meetingId, workspaceId))
 
     if (!meeting) {
       return c.json({ error: 'Meeting not found' }, 404)

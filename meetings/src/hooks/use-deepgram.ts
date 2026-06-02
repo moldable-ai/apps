@@ -1,19 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useWorkspace } from '@moldable-ai/ui'
 import {
   BoundedDeepgramAudioSpool,
   type DeepgramAudioSpoolStats,
 } from '@/lib/deepgram-audio-spool'
 import type { MeetingSettings, TranscriptSegment } from '@/types'
-import {
-  type DeepgramClientOptions,
-  type ListenLiveClient,
-  LiveTranscriptionEvents,
-  SOCKET_STATES,
-  createClient,
-} from '@deepgram/sdk'
+import type { DeepgramClientOptions, ListenLiveClient } from '@deepgram/sdk'
 import { v4 as uuidv4 } from 'uuid'
+
+type DeepgramRuntime = typeof import('@deepgram/sdk')
 
 type DeepgramState =
   | 'disconnected'
@@ -24,6 +21,7 @@ type DeepgramState =
 
 const FINALIZE_DRAIN_MS = 1200
 const MAX_QUEUED_AUDIO_CHUNKS = 120
+const DIAGNOSTICS_UPDATE_INTERVAL_MS = 500
 
 export type DeepgramIssue = {
   code:
@@ -121,6 +119,7 @@ function sleep(ms: number) {
 }
 
 export function useDeepgram(options: UseDeepgramOptions) {
+  const { fetchWithWorkspace } = useWorkspace()
   const {
     onSegment,
     onInterim,
@@ -132,12 +131,15 @@ export function useDeepgram(options: UseDeepgramOptions) {
   const [state, setState] = useState<DeepgramState>('disconnected')
   const [issue, setIssue] = useState<DeepgramIssue | null>(null)
   const connectionRef = useRef<ListenLiveClient | null>(null)
+  const deepgramRuntimeRef = useRef<DeepgramRuntime | null>(null)
   const isSocketOpenRef = useRef(false)
   const audioSpoolRef = useRef(
     new BoundedDeepgramAudioSpool(MAX_QUEUED_AUDIO_CHUNKS),
   )
   const keepAliveRef = useRef<NodeJS.Timeout | null>(null)
   const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const diagnosticsTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const lastDiagnosticsUpdateAtRef = useRef(0)
   const reconnectAttemptsRef = useRef(0)
   const activeFormatRef = useRef<AudioFormat>('webm')
   const intentionalCloseRef = useRef(false)
@@ -165,8 +167,16 @@ export function useDeepgram(options: UseDeepgramOptions) {
     | null
   >(null)
 
-  const updateDiagnostics = useCallback(() => {
-    setDiagnostics({
+  const loadDeepgramRuntime = useCallback(async () => {
+    if (!deepgramRuntimeRef.current) {
+      deepgramRuntimeRef.current = await import('@deepgram/sdk')
+    }
+
+    return deepgramRuntimeRef.current
+  }, [])
+
+  const snapshotDiagnostics = useCallback(
+    (): DeepgramProviderDiagnostics => ({
       provider: 'deepgram',
       connectionId: providerConnectionIdRef.current,
       connectionGeneration: connectionGenerationRef.current,
@@ -174,8 +184,51 @@ export function useDeepgram(options: UseDeepgramOptions) {
       maxReconnectAttempts,
       sentChunks: audioChunkCountRef.current,
       spool: audioSpoolRef.current.snapshot(),
-    })
-  }, [maxReconnectAttempts])
+    }),
+    [maxReconnectAttempts],
+  )
+
+  const flushDiagnostics = useCallback(() => {
+    if (diagnosticsTimerRef.current) {
+      clearTimeout(diagnosticsTimerRef.current)
+      diagnosticsTimerRef.current = null
+    }
+
+    lastDiagnosticsUpdateAtRef.current = Date.now()
+    setDiagnostics(snapshotDiagnostics())
+  }, [snapshotDiagnostics])
+
+  const updateDiagnostics = useCallback(
+    (immediate = false) => {
+      if (immediate) {
+        flushDiagnostics()
+        return
+      }
+
+      const now = Date.now()
+      const elapsed = now - lastDiagnosticsUpdateAtRef.current
+      if (elapsed >= DIAGNOSTICS_UPDATE_INTERVAL_MS) {
+        flushDiagnostics()
+        return
+      }
+
+      if (diagnosticsTimerRef.current) return
+
+      diagnosticsTimerRef.current = setTimeout(() => {
+        flushDiagnostics()
+      }, DIAGNOSTICS_UPDATE_INTERVAL_MS - elapsed)
+    },
+    [flushDiagnostics],
+  )
+
+  useEffect(() => {
+    return () => {
+      if (diagnosticsTimerRef.current) {
+        clearTimeout(diagnosticsTimerRef.current)
+        diagnosticsTimerRef.current = null
+      }
+    }
+  }, [])
 
   const clearKeepAlive = useCallback(() => {
     if (!keepAliveRef.current) return
@@ -248,7 +301,7 @@ export function useDeepgram(options: UseDeepgramOptions) {
         message: `Live transcription paused. Reconnecting (${attempt}/${maxReconnectAttempts})...`,
         retryable: true,
       })
-      updateDiagnostics()
+      updateDiagnostics(true)
 
       reconnectTimerRef.current = setTimeout(() => {
         if (generation !== connectionGenerationRef.current) {
@@ -292,13 +345,13 @@ export function useDeepgram(options: UseDeepgramOptions) {
         audioChunkCountRef.current = 0
         audioSpoolRef.current.clear({ resetCounters: true })
       }
-      updateDiagnostics()
+      updateDiagnostics(true)
 
       console.log('[Deepgram] Starting connection with format:', format)
 
       try {
         console.log('[Deepgram] Fetching token...')
-        const tokenRes = await fetch('/api/deepgram/token', {
+        const tokenRes = await fetchWithWorkspace('/api/deepgram/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ttl_seconds: 600 }),
@@ -349,6 +402,8 @@ export function useDeepgram(options: UseDeepgramOptions) {
           '[Deepgram] Token received, creating auth-grant client...',
           { source: source ?? 'unknown' },
         )
+        const { LiveTranscriptionEvents, createClient } =
+          await loadDeepgramRuntime()
         const client = createClient({
           accessToken: access_token,
         } as unknown as DeepgramClientOptions)
@@ -414,7 +469,7 @@ export function useDeepgram(options: UseDeepgramOptions) {
               connection.send(chunk)
             }
           }
-          updateDiagnostics()
+          updateDiagnostics(true)
 
           clearKeepAlive()
           keepAliveRef.current = setInterval(() => {
@@ -508,7 +563,7 @@ export function useDeepgram(options: UseDeepgramOptions) {
             connectionRef.current = null
           }
           clearKeepAlive()
-          updateDiagnostics()
+          updateDiagnostics(true)
 
           if (intentionalCloseRef.current) {
             setState('disconnected')
@@ -533,7 +588,7 @@ export function useDeepgram(options: UseDeepgramOptions) {
             connectionRef.current = null
           }
           clearKeepAlive()
-          updateDiagnostics()
+          updateDiagnostics(true)
 
           if (intentionalCloseRef.current) {
             setState('disconnected')
@@ -592,6 +647,8 @@ export function useDeepgram(options: UseDeepgramOptions) {
       clearReconnectTimer,
       closeCurrentConnection,
       emitError,
+      fetchWithWorkspace,
+      loadDeepgramRuntime,
       onInterim,
       onSegment,
       scheduleReconnect,
@@ -632,9 +689,11 @@ export function useDeepgram(options: UseDeepgramOptions) {
         }
 
         const readyState = connectionRef.current.getReadyState?.()
+        const socketStates = deepgramRuntimeRef.current?.SOCKET_STATES
         if (
-          readyState === SOCKET_STATES.closing ||
-          readyState === SOCKET_STATES.closed
+          socketStates &&
+          (readyState === socketStates.closing ||
+            readyState === socketStates.closed)
         ) {
           console.warn('[Deepgram] Socket is closed while sending audio', {
             readyState,
@@ -715,7 +774,7 @@ export function useDeepgram(options: UseDeepgramOptions) {
       setIssue(null)
       onInterim?.(null)
       setState('disconnected')
-      updateDiagnostics()
+      updateDiagnostics(true)
       console.log(
         '[Deepgram] Disconnected, sent',
         audioChunkCountRef.current,

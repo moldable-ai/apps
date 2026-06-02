@@ -9,7 +9,6 @@ import { MAX_SEARCH_RESULTS } from '../lib/constants'
 import { getImageMimeType, isImageFile } from '../lib/file-utils'
 import fg from 'fast-glob'
 import { Hono } from 'hono'
-import { cors } from 'hono/cors'
 import ignore, { type Ignore } from 'ignore'
 import fs from 'node:fs/promises'
 import path from 'node:path'
@@ -41,7 +40,7 @@ type RpcRequest = {
 }
 
 type RpcParams = Record<string, unknown>
-type RpcStatus = 400 | 404 | 500
+type RpcStatus = 400 | 403 | 404 | 500
 
 const DEFAULT_CONFIG: ProjectConfig = {
   rootPath: null,
@@ -52,10 +51,26 @@ const DEFAULT_CONFIG: ProjectConfig = {
 
 const PREFERENCES_FILE = 'preferences.json'
 const gitignoreCache = new Map<string, { ig: Ignore; mtime: number }>()
+const WORKSPACE_ID_PATTERN = /^[a-zA-Z0-9_-]+$/
+const PUBLIC_API_PATHS = new Set([
+  '/api/moldable/health',
+  '/api/moldable/today',
+])
 
 export const app = new Hono()
 
-app.use('/api/*', cors())
+app.use('/api/*', async (c, next) => {
+  if (PUBLIC_API_PATHS.has(new URL(c.req.url).pathname)) {
+    await next()
+    return
+  }
+
+  if (!getTrustedWorkspaceId(c.req.raw)) {
+    return c.json({ error: 'Workspace header is required' }, 403)
+  }
+
+  await next()
+})
 
 function getConfigPath(workspaceId?: string): string {
   return safePath(getAppDataDir(workspaceId), 'config.json')
@@ -65,11 +80,23 @@ function getPreferencesPath(workspaceId?: string): string {
   return safePath(getAppDataDir(workspaceId), PREFERENCES_FILE)
 }
 
-function getRpcWorkspaceId(request: Request): string | undefined {
+function normalizeWorkspaceId(
+  value: string | null | undefined,
+): string | undefined {
+  if (!value || !WORKSPACE_ID_PATTERN.test(value)) return undefined
+  return value
+}
+
+function getTrustedWorkspaceId(request: Request): string | undefined {
   return (
-    request.headers.get('x-moldable-workspace-id') ??
-    getWorkspaceFromRequest(request)
+    normalizeWorkspaceId(getWorkspaceFromRequest(request)) ??
+    normalizeWorkspaceId(request.headers.get('x-moldable-workspace-id'))
   )
+}
+
+function getRequestWorkspaceId(request: Request): string | undefined {
+  const queryWorkspace = new URL(request.url).searchParams.get('workspace')
+  return getTrustedWorkspaceId(request) ?? normalizeWorkspaceId(queryWorkspace)
 }
 
 function asParams(value: unknown): RpcParams {
@@ -101,6 +128,63 @@ function rpcError(code: string, message: string, status: RpcStatus = 400) {
   }
 }
 
+function isPathWithinRoot(rootPath: string, targetPath: string): boolean {
+  const root = path.resolve(rootPath)
+  const target = path.resolve(targetPath)
+  const relative = path.relative(root, target)
+  return (
+    relative === '' ||
+    (!relative.startsWith('..') && !path.isAbsolute(relative))
+  )
+}
+
+function validatePathWithinRoot(
+  rootPath: string | null,
+  targetPath: string,
+): { root: string; target: string } | { error: string; status: 400 | 403 } {
+  if (!rootPath) {
+    return { error: 'Project root is required', status: 400 }
+  }
+
+  const root = path.resolve(rootPath)
+  const target = path.resolve(targetPath)
+
+  if (!isPathWithinRoot(root, target)) {
+    return { error: 'Path is outside the current project', status: 403 }
+  }
+
+  return { root, target }
+}
+
+async function getProjectRoot(request: Request): Promise<string | null> {
+  const workspaceId = getRequestWorkspaceId(request)
+  const config = await readJson<ProjectConfig>(
+    getConfigPath(workspaceId),
+    DEFAULT_CONFIG,
+  )
+  return config.rootPath
+}
+
+async function validateRequestPath(
+  request: Request,
+  targetPath: string,
+): Promise<
+  { root: string; target: string } | { error: string; status: 400 | 403 }
+> {
+  return validatePathWithinRoot(await getProjectRoot(request), targetPath)
+}
+
+function isSafeFileName(name: string): boolean {
+  return (
+    name.length > 0 &&
+    name !== '.' &&
+    name !== '..' &&
+    !name.includes('/') &&
+    !name.includes('\\') &&
+    !name.includes('\0')
+  )
+}
+
 async function getGitignore(projectRoot: string): Promise<Ignore | null> {
   const gitignorePath = path.join(projectRoot, '.gitignore')
 
@@ -123,18 +207,18 @@ async function getGitignore(projectRoot: string): Promise<Ignore | null> {
 }
 
 function findProjectRoot(dirPath: string): string {
-  let current = dirPath
-  const root = path.parse(current).root
+  const normalized = path.resolve(dirPath)
+  const parts = normalized.split(path.sep)
+  const nodeModulesIndex = parts.lastIndexOf('node_modules')
 
-  while (current !== root) {
-    if (current.includes('node_modules')) {
-      current = path.dirname(current)
-      continue
-    }
-    return current.split('/node_modules')[0].split('/.')[0] || current
+  if (nodeModulesIndex > 0) {
+    return (
+      parts.slice(0, nodeModulesIndex).join(path.sep) ||
+      path.parse(normalized).root
+    )
   }
 
-  return dirPath
+  return normalized
 }
 
 async function getGitignorePatterns(root: string): Promise<string[]> {
@@ -184,7 +268,7 @@ app.get('/api/moldable/today', async (c) => {
   let resume: unknown = null
 
   try {
-    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const workspaceId = getRequestWorkspaceId(c.req.raw)
     const config = await readJson<ProjectConfig>(
       getConfigPath(workspaceId),
       DEFAULT_CONFIG,
@@ -234,7 +318,7 @@ app.get('/api/moldable/today', async (c) => {
 })
 
 app.get('/api/config', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const config = await readJson<ProjectConfig>(
     getConfigPath(workspaceId),
     DEFAULT_CONFIG,
@@ -243,7 +327,7 @@ app.get('/api/config', async (c) => {
 })
 
 app.post('/api/config', async (c) => {
-  const workspaceId = getWorkspaceFromRequest(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
   const configPath = getConfigPath(workspaceId)
   const existingConfig = await readJson<ProjectConfig>(
     configPath,
@@ -261,7 +345,7 @@ app.post('/api/config', async (c) => {
 
 app.get('/api/preferences', async (c) => {
   try {
-    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const workspaceId = getRequestWorkspaceId(c.req.raw)
     const prefs = await readJson<Preferences>(
       getPreferencesPath(workspaceId),
       {},
@@ -275,7 +359,7 @@ app.get('/api/preferences', async (c) => {
 
 app.post('/api/preferences', async (c) => {
   try {
-    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const workspaceId = getRequestWorkspaceId(c.req.raw)
     const prefsPath = getPreferencesPath(workspaceId)
     const body = await c.req.json<Preferences>()
     const existing = await readJson<Preferences>(prefsPath, {})
@@ -291,20 +375,35 @@ app.post('/api/preferences', async (c) => {
 
 app.get('/api/files', async (c) => {
   const dirPath = c.req.query('path')
-  const projectRoot = c.req.query('root') || dirPath
+  const requestedRoot = c.req.query('root') || dirPath
 
   if (!dirPath) {
     return c.json({ error: 'Path is required' }, 400)
   }
 
   try {
-    const root = projectRoot || findProjectRoot(dirPath)
+    const configuredRoot = await getProjectRoot(c.req.raw)
+    const root = configuredRoot ?? requestedRoot ?? findProjectRoot(dirPath)
+    const validation = validatePathWithinRoot(root, dirPath)
+
+    if ('error' in validation) {
+      return c.json({ error: validation.error }, validation.status)
+    }
+
+    if (
+      configuredRoot &&
+      requestedRoot &&
+      !isPathWithinRoot(configuredRoot, requestedRoot)
+    ) {
+      return c.json({ error: 'Root is outside the current project' }, 403)
+    }
+
     const gitignore = await getGitignore(root)
-    const entries = await fs.readdir(dirPath, { withFileTypes: true })
+    const entries = await fs.readdir(validation.target, { withFileTypes: true })
     const files = entries
       .filter((entry) => entry.name !== '.DS_Store')
       .map((entry) => {
-        const fullPath = path.join(dirPath, entry.name)
+        const fullPath = path.join(validation.target, entry.name)
         const relativePath = path.relative(root, fullPath)
         const matchPath = entry.isDirectory()
           ? `${relativePath}/`
@@ -341,17 +440,25 @@ app.post('/api/files/delete', async (c) => {
       return c.json({ error: 'path is required' }, 400)
     }
 
+    const validation = await validateRequestPath(c.req.raw, filePath)
+    if ('error' in validation) {
+      return c.json({ error: validation.error }, validation.status)
+    }
+    if (validation.target === validation.root) {
+      return c.json({ error: 'Cannot delete the project root' }, 400)
+    }
+
     try {
-      await fs.access(filePath)
+      await fs.access(validation.target)
     } catch {
       return c.json({ error: 'File not found' }, 404)
     }
 
-    const stats = await fs.stat(filePath)
+    const stats = await fs.stat(validation.target)
     if (stats.isDirectory()) {
-      await fs.rm(filePath, { recursive: true })
+      await fs.rm(validation.target, { recursive: true })
     } else {
-      await fs.unlink(filePath)
+      await fs.unlink(validation.target)
     }
 
     return c.json({ success: true })
@@ -368,19 +475,36 @@ app.post('/api/files/rename', async (c) => {
       newName?: string
     }>()
 
-    if (!oldPath || !newName) {
+    const trimmedNewName = newName?.trim()
+
+    if (!oldPath || !trimmedNewName) {
       return c.json({ error: 'oldPath and newName are required' }, 400)
     }
 
-    if (newName.includes('/') || newName.includes('\\')) {
-      return c.json({ error: 'New name cannot contain path separators' }, 400)
+    if (!isSafeFileName(trimmedNewName)) {
+      return c.json({ error: 'Invalid new name' }, 400)
     }
 
-    const dir = path.dirname(oldPath)
-    const newPath = path.join(dir, newName)
+    const validation = await validateRequestPath(c.req.raw, oldPath)
+    if ('error' in validation) {
+      return c.json({ error: validation.error }, validation.status)
+    }
+    if (validation.target === validation.root) {
+      return c.json({ error: 'Cannot rename the project root' }, 400)
+    }
+
+    const dir = path.dirname(validation.target)
+    const newPath = path.join(dir, trimmedNewName)
+    const newPathValidation = validatePathWithinRoot(validation.root, newPath)
+    if ('error' in newPathValidation) {
+      return c.json(
+        { error: newPathValidation.error },
+        newPathValidation.status,
+      )
+    }
 
     try {
-      await fs.access(oldPath)
+      await fs.access(validation.target)
     } catch {
       return c.json({ error: 'File not found' }, 404)
     }
@@ -392,7 +516,7 @@ app.post('/api/files/rename', async (c) => {
       // New path does not exist.
     }
 
-    await fs.rename(oldPath, newPath)
+    await fs.rename(validation.target, newPathValidation.target)
     return c.json({ success: true, newPath })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error'
@@ -411,14 +535,14 @@ app.get('/api/image', async (c) => {
     return c.json({ error: 'Not an image file' }, 400)
   }
 
-  const normalizedPath = path.normalize(filePath)
-  if (normalizedPath.includes('..')) {
-    return c.json({ error: 'Invalid path' }, 400)
+  const validation = await validateRequestPath(c.req.raw, filePath)
+  if ('error' in validation) {
+    return c.json({ error: validation.error }, validation.status)
   }
 
   try {
-    const buffer = await fs.readFile(normalizedPath)
-    const mimeType = getImageMimeType(normalizedPath)
+    const buffer = await fs.readFile(validation.target)
+    const mimeType = getImageMimeType(validation.target)
 
     return new Response(buffer, {
       headers: {
@@ -440,7 +564,12 @@ app.get('/api/read', async (c) => {
   }
 
   try {
-    const content = await fs.readFile(filePath, 'utf-8')
+    const validation = await validateRequestPath(c.req.raw, filePath)
+    if ('error' in validation) {
+      return c.json({ error: validation.error }, validation.status)
+    }
+
+    const content = await fs.readFile(validation.target, 'utf-8')
     return c.json({ content })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
@@ -456,12 +585,20 @@ app.get('/api/search', async (c) => {
   }
 
   try {
-    const ignorePatterns = await getGitignorePatterns(root)
-    ignorePatterns.push('**/.DS_Store')
+    const configuredRoot = await getProjectRoot(c.req.raw)
+    const validation = validatePathWithinRoot(configuredRoot ?? root, root)
+    if ('error' in validation) {
+      return c.json({ error: validation.error }, validation.status)
+    }
+    const searchRoot = validation.target
+    const ignorePatterns = new Set(await getGitignorePatterns(searchRoot))
+    ignorePatterns.add('**/node_modules/**')
+    ignorePatterns.add('**/.git/**')
+    ignorePatterns.add('**/.DS_Store')
 
     const files = await fg('**/*', {
-      cwd: root,
-      ignore: ignorePatterns,
+      cwd: searchRoot,
+      ignore: Array.from(ignorePatterns),
       onlyFiles: true,
       absolute: true,
       followSymbolicLinks: false,
@@ -470,7 +607,7 @@ app.get('/api/search', async (c) => {
     const results = files.slice(0, MAX_SEARCH_RESULTS).map((filePath) => ({
       path: filePath,
       name: filePath.split('/').pop() ?? '',
-      relativePath: filePath.replace(root, '').replace(/^\//, ''),
+      relativePath: path.relative(searchRoot, filePath),
     }))
 
     return c.json({ files: results })
@@ -491,7 +628,12 @@ app.post('/api/write', async (c) => {
       return c.json({ error: 'Path is required' }, 400)
     }
 
-    await fs.writeFile(filePath, content ?? '', 'utf-8')
+    const validation = await validateRequestPath(c.req.raw, filePath)
+    if ('error' in validation) {
+      return c.json({ error: validation.error }, validation.status)
+    }
+
+    await fs.writeFile(validation.target, content ?? '', 'utf-8')
     return c.json({ success: true })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
@@ -500,7 +642,7 @@ app.post('/api/write', async (c) => {
 })
 
 app.post('/api/moldable/rpc', async (c) => {
-  const workspaceId = getRpcWorkspaceId(c.req.raw)
+  const workspaceId = getRequestWorkspaceId(c.req.raw)
 
   try {
     const body = (await c.req.json()) as RpcRequest
@@ -567,11 +709,24 @@ app.post('/api/moldable/rpc', async (c) => {
         return c.json(error.body, error.status)
       }
 
-      const ignorePatterns = await getGitignorePatterns(root)
-      ignorePatterns.push('**/.DS_Store')
+      const validation = validatePathWithinRoot(config.rootPath ?? root, root)
+      if ('error' in validation) {
+        const error = rpcError(
+          validation.status === 403 ? 'path_outside_project' : 'root_required',
+          validation.error,
+          validation.status,
+        )
+        return c.json(error.body, error.status)
+      }
+
+      const searchRoot = validation.target
+      const ignorePatterns = new Set(await getGitignorePatterns(searchRoot))
+      ignorePatterns.add('**/node_modules/**')
+      ignorePatterns.add('**/.git/**')
+      ignorePatterns.add('**/.DS_Store')
       const files = await fg(stringParam(params, 'pattern') ?? '**/*', {
-        cwd: root,
-        ignore: ignorePatterns,
+        cwd: searchRoot,
+        ignore: Array.from(ignorePatterns),
         onlyFiles: true,
         absolute: true,
         followSymbolicLinks: false,
@@ -585,7 +740,7 @@ app.post('/api/moldable/rpc', async (c) => {
         .map((filePath) => ({
           path: filePath,
           name: path.basename(filePath),
-          relativePath: path.relative(root, filePath),
+          relativePath: path.relative(searchRoot, filePath),
         }))
         .filter((item) =>
           query
@@ -604,7 +759,17 @@ app.post('/api/moldable/rpc', async (c) => {
         return c.json(error.body, error.status)
       }
 
-      const content = await fs.readFile(filePath, 'utf-8')
+      const validation = await validateRequestPath(c.req.raw, filePath)
+      if ('error' in validation) {
+        const error = rpcError(
+          validation.status === 403 ? 'path_outside_project' : 'root_required',
+          validation.error,
+          validation.status,
+        )
+        return c.json(error.body, error.status)
+      }
+
+      const content = await fs.readFile(validation.target, 'utf-8')
       const maxChars = Math.max(
         1,
         Math.min(numberParam(params, 'maxChars') ?? 20000, 100000),
@@ -612,7 +777,7 @@ app.post('/api/moldable/rpc', async (c) => {
       return c.json({
         ok: true,
         result: {
-          path: filePath,
+          path: validation.target,
           content: content.slice(0, maxChars),
           truncated: content.length > maxChars,
         },
@@ -626,16 +791,51 @@ app.post('/api/moldable/rpc', async (c) => {
         return c.json(error.body, error.status)
       }
 
-      const root = stringParam(params, 'root') ?? dirPath
-      const gitignore = await getGitignore(root)
-      const entries = await fs.readdir(dirPath, { withFileTypes: true })
+      const config = await readJson<ProjectConfig>(
+        getConfigPath(workspaceId),
+        DEFAULT_CONFIG,
+      )
+      const root = stringParam(params, 'root') ?? config.rootPath ?? dirPath
+      const rootValidation = validatePathWithinRoot(
+        config.rootPath ?? root,
+        root,
+      )
+      if ('error' in rootValidation) {
+        const error = rpcError(
+          rootValidation.status === 403
+            ? 'path_outside_project'
+            : 'root_required',
+          rootValidation.error,
+          rootValidation.status,
+        )
+        return c.json(error.body, error.status)
+      }
+      const pathValidation = validatePathWithinRoot(
+        rootValidation.target,
+        dirPath,
+      )
+      if ('error' in pathValidation) {
+        const error = rpcError(
+          pathValidation.status === 403
+            ? 'path_outside_project'
+            : 'root_required',
+          pathValidation.error,
+          pathValidation.status,
+        )
+        return c.json(error.body, error.status)
+      }
+
+      const gitignore = await getGitignore(rootValidation.target)
+      const entries = await fs.readdir(pathValidation.target, {
+        withFileTypes: true,
+      })
       const includeHidden = booleanParam(params, 'includeHidden') ?? true
       const files = entries
         .filter((entry) => includeHidden || !entry.name.startsWith('.'))
         .filter((entry) => entry.name !== '.DS_Store')
         .map((entry) => {
-          const fullPath = path.join(dirPath, entry.name)
-          const relativePath = path.relative(root, fullPath)
+          const fullPath = path.join(pathValidation.target, entry.name)
+          const relativePath = path.relative(rootValidation.target, fullPath)
           const matchPath = entry.isDirectory()
             ? `${relativePath}/`
             : relativePath

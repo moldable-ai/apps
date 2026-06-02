@@ -8,9 +8,10 @@ interface BookCardProps {
   book: BookSummary
   coverUrl: string | null
   folders: Folder[]
-  currentFolderId: string | null
+  currentFolderIds: string[]
   onOpen: () => void
-  onMoveTo: (folderId: string | null) => void
+  onToggleFolder: (folderId: string, inFolder: boolean) => void
+  onClearFolders: () => void
   onCreateFolder: () => void
   onDelete: () => void
 }
@@ -19,9 +20,10 @@ export function BookCard({
   book,
   coverUrl,
   folders,
-  currentFolderId,
+  currentFolderIds,
   onOpen,
-  onMoveTo,
+  onToggleFolder,
+  onClearFolders,
   onCreateFolder,
   onDelete,
 }: BookCardProps) {
@@ -67,27 +69,18 @@ export function BookCard({
       </button>
 
       <div className="pointer-events-none absolute right-1.5 top-1.5 flex gap-1 opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100">
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon"
-          aria-label={`Open ${book.title}`}
-          className="pointer-events-auto size-7 cursor-pointer shadow-sm"
-          onClick={onOpen}
-        >
-          <BookOpen className="size-3.5" />
-        </Button>
         <MoveToMenu
           folders={folders}
-          currentFolderId={currentFolderId}
-          onMove={onMoveTo}
+          currentFolderIds={currentFolderIds}
+          onToggleFolder={onToggleFolder}
+          onClearFolders={onClearFolders}
           onCreateFolder={onCreateFolder}
           trigger={
             <Button
               type="button"
               variant="secondary"
               size="icon"
-              aria-label={`Move ${book.title} to a folder`}
+              aria-label={`Edit folders for ${book.title}`}
               className="pointer-events-auto size-7 cursor-pointer shadow-sm"
             >
               <FolderInput className="size-3.5" />

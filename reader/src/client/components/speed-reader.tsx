@@ -48,6 +48,24 @@ function clampIndex(value: number, length: number): number {
   return Math.min(Math.max(0, Math.round(value)), Math.max(0, length - 1))
 }
 
+function clampProgressIndex(value: number, length: number): number {
+  if (length <= 0) return 0
+  return Math.min(Math.max(0, Math.round(value)), length)
+}
+
+function formatReadingTime(minutes: number, scope: 'chapter' | 'book'): string {
+  const rounded = Math.max(1, Math.ceil(minutes))
+  const hours = Math.floor(rounded / 60)
+  const mins = rounded % 60
+  const time =
+    hours > 0
+      ? mins > 0
+        ? `${hours}h ${mins}m`
+        : `${hours}h`
+      : `${rounded} min`
+  return `${time} left in ${scope}`
+}
+
 export function SpeedReader(props: SpeedReaderProps) {
   const {
     open,
@@ -55,8 +73,14 @@ export function SpeedReader(props: SpeedReaderProps) {
     title,
     words,
     startIndex,
+    wordsBeforeChapter,
+    bookWordCount,
+    remainingWordsAfterChapter,
     settings,
     onSettingsChange,
+    hasNextChapter = false,
+    autoPlayOnSourceChange = false,
+    onChapterComplete,
     onProgress,
   } = props
 
@@ -96,13 +120,26 @@ export function SpeedReader(props: SpeedReaderProps) {
     }
   }, [])
 
-  // Reset position when the source words or requested start change meaningfully.
+  const previousOpenRef = useRef(open)
+  const previousWordsRef = useRef(words)
+
+  // Reset position only when the overlay opens or the source chapter changes.
+  // The parent updates `startIndex` as speed-reading progress crosses visible
+  // page boundaries; treating those progress updates as a reset pauses playback.
   useEffect(() => {
+    const opened = open && !previousOpenRef.current
+    const sourceChanged = previousWordsRef.current !== words
+
+    previousOpenRef.current = open
+    previousWordsRef.current = words
+
+    if (!open || (!opened && !sourceChanged)) return
+
+    clearTimer()
     setIndex(clampIndex(startIndex, total))
-    setPlaying(false)
     setFinished(false)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [words, startIndex])
+    setPlaying(sourceChanged && autoPlayOnSourceChange && total > 0)
+  }, [open, words, startIndex, total, autoPlayOnSourceChange, clearTimer])
 
   // Stop and report when the overlay closes or unmounts.
   useEffect(() => {
@@ -120,7 +157,11 @@ export function SpeedReader(props: SpeedReaderProps) {
     () => words.slice(index, Math.min(total, index + chunkSize)),
     [words, index, total, chunkSize],
   )
-  const chunkText = chunk.join(' ')
+  const displayChunk =
+    chunk.length > 0
+      ? chunk
+      : words.slice(Math.max(0, total - chunkSize), total)
+  const chunkText = displayChunk.join(' ')
 
   // Dwell time for the current chunk before advancing.
   const dwellFor = useCallback(
@@ -141,6 +182,10 @@ export function SpeedReader(props: SpeedReaderProps) {
   // Timing engine: setTimeout recursion so each delay can vary.
   useEffect(() => {
     if (!open || !playing) return
+    if (total <= 0) {
+      setPlaying(false)
+      return
+    }
     if (indexRef.current >= total) {
       setPlaying(false)
       setFinished(true)
@@ -157,9 +202,14 @@ export function SpeedReader(props: SpeedReaderProps) {
         const next = current + chunkSize
         if (next >= total) {
           setIndex(total)
+          reportProgress(total)
+          if (hasNextChapter && onChapterComplete) {
+            setFinished(false)
+            onChapterComplete(total)
+            return
+          }
           setPlaying(false)
           setFinished(true)
-          reportProgress(clampIndex(total - 1, total))
           return
         }
         setIndex(next)
@@ -174,8 +224,17 @@ export function SpeedReader(props: SpeedReaderProps) {
       cancelled = true
       clearTimer()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, playing, chunkSize, dwellFor, total])
+  }, [
+    open,
+    playing,
+    chunkSize,
+    dwellFor,
+    total,
+    hasNextChapter,
+    onChapterComplete,
+    reportProgress,
+    clearTimer,
+  ])
 
   const togglePlay = useCallback(() => {
     if (total === 0) return
@@ -188,7 +247,7 @@ export function SpeedReader(props: SpeedReaderProps) {
           setFinished(false)
         }
       } else {
-        reportProgress(clampIndex(indexRef.current, total))
+        reportProgress(clampProgressIndex(indexRef.current, total))
       }
       return next
     })
@@ -217,9 +276,8 @@ export function SpeedReader(props: SpeedReaderProps) {
   const handleClose = useCallback(() => {
     clearTimer()
     setPlaying(false)
-    reportProgress(clampIndex(indexRef.current, total))
-    onClose()
-  }, [clearTimer, reportProgress, total, onClose])
+    onClose(clampProgressIndex(indexRef.current, total))
+  }, [clearTimer, total, onClose])
 
   const changeWpm = useCallback(
     (delta: number) => {
@@ -286,9 +344,28 @@ export function SpeedReader(props: SpeedReaderProps) {
   if (!open) return null
 
   const displayIndex = total === 0 ? 0 : Math.min(index, total - 1)
-  const percent =
-    total === 0 ? 0 : Math.round((Math.min(index, total) / total) * 100)
-  const wordNumber = total === 0 ? 0 : Math.min(index + 1, total)
+  const progressIndex = clampProgressIndex(index, total)
+  const absoluteWordIndex = Math.min(
+    Math.max(0, wordsBeforeChapter + progressIndex),
+    Math.max(0, bookWordCount),
+  )
+  const bookPercent =
+    bookWordCount <= 0
+      ? 0
+      : Math.round((absoluteWordIndex / bookWordCount) * 100)
+  const readingTimeLabel = (() => {
+    if (!settings.showReadingTime || total === 0) return null
+    const remainingInChapter = Math.max(0, total - progressIndex)
+    const remainingWords =
+      settings.readingTimeScope === 'book'
+        ? remainingInChapter + Math.max(0, remainingWordsAfterChapter)
+        : remainingInChapter
+    if (remainingWords <= 0) return `Done with ${settings.readingTimeScope}`
+    return formatReadingTime(
+      remainingWords / Math.max(1, settings.wpm),
+      settings.readingTimeScope,
+    )
+  })()
 
   // Render the focal word, with ORP pivot when chunkSize === 1.
   const renderStage = () => {
@@ -437,24 +514,30 @@ export function SpeedReader(props: SpeedReaderProps) {
         <div
           className="flex flex-col items-center gap-4 px-6"
           style={{
-            paddingBottom: 'calc(var(--chat-safe-padding, 0px) + 1.75rem)',
+            paddingBottom:
+              'calc(var(--reader-control-safe-padding, var(--chat-safe-padding, 0px)) + var(--reader-speed-control-bottom-gutter, 1.75rem))',
           }}
         >
           {/* progress */}
           <div className="w-full max-w-[34rem]">
             <Progress
-              value={percent}
+              value={bookPercent}
               className="h-1"
               style={{ backgroundColor: theme.muted + '33' }}
             />
             <div
-              className="mt-2 flex items-center justify-between text-xs tabular-nums"
+              className="mt-2 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 text-xs tabular-nums"
               style={{ color: theme.muted }}
             >
-              <span>
-                word {wordNumber} of {total}
-              </span>
-              <span>{percent}%</span>
+              <span className="truncate">Book progress</span>
+              {readingTimeLabel ? (
+                <span className="max-w-[42vw] truncate text-center">
+                  {readingTimeLabel}
+                </span>
+              ) : (
+                <span aria-hidden />
+              )}
+              <span className="truncate text-right">{bookPercent}%</span>
             </div>
           </div>
 

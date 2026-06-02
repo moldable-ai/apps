@@ -1,10 +1,7 @@
 {
   "name": "Recipes",
-  "version": "0.1.1",
-  "aliases": [
-    "cooking",
-    "meals"
-  ],
+  "version": "0.1.2",
+  "aliases": ["cooking", "meals"],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "A photo-centric recipes app with beautiful cards, folders, rich Markdown steps, and a hands-free cook mode.",
@@ -40,11 +37,7 @@
                 },
                 "difficulty": {
                   "type": "string",
-                  "enum": [
-                    "Easy",
-                    "Medium",
-                    "Hard"
-                  ]
+                  "enum": ["Easy", "Medium", "Hard"]
                 },
                 "favoriteOnly": {
                   "type": "boolean"
@@ -89,9 +82,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -142,19 +133,13 @@
                 },
                 "difficulty": {
                   "type": "string",
-                  "enum": [
-                    "Easy",
-                    "Medium",
-                    "Hard"
-                  ]
+                  "enum": ["Easy", "Medium", "Hard"]
                 },
                 "isFavorite": {
                   "type": "boolean"
                 }
               },
-              "required": [
-                "title"
-              ]
+              "required": ["title"]
             }
           },
           {
@@ -208,11 +193,7 @@
                 },
                 "difficulty": {
                   "type": "string",
-                  "enum": [
-                    "Easy",
-                    "Medium",
-                    "Hard"
-                  ]
+                  "enum": ["Easy", "Medium", "Hard"]
                 },
                 "isFavorite": {
                   "type": "boolean"
@@ -221,9 +202,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -240,10 +219,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "id",
-                "isFavorite"
-              ]
+              "required": ["id", "isFavorite"]
             }
           },
           {
@@ -257,9 +233,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           }
         ]

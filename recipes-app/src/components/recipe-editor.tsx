@@ -16,7 +16,7 @@ import { useRecipeMedia } from '@/client/use-recipe-media'
 
 interface RecipeEditorProps {
   recipe?: Recipe | null
-  onSave: (recipe: Partial<Recipe>) => void
+  onSave: (recipe: Partial<Recipe>) => Promise<void> | void
   onCancel: () => void
 }
 
@@ -237,6 +237,14 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
     recipe?.ingredients?.join('\n') ?? '',
   )
   const [instructions, setInstructions] = useState(recipe?.instructions ?? '')
+  const [isSaving, setIsSaving] = useState(false)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const onMediaUpload = useCallback(
     async (file: File) => {
@@ -246,28 +254,35 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
     [uploadFile],
   )
 
-  const handleSubmit = () => {
-    if (!title.trim()) return
-    onSave({
-      title: title.trim(),
-      description: description.trim(),
-      imageUrl: imageUrl || undefined,
-      category: category.trim() || 'Uncategorized',
-      cookingTime: cookingTime.trim() || undefined,
-      prepTime: prepTime.trim() || undefined,
-      servings: servings.trim() || undefined,
-      sourceUrl: sourceUrl.trim() || undefined,
-      tags: tags
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean),
-      difficulty,
-      ingredients: ingredients
-        .split('\n')
-        .map((i) => i.trim())
-        .filter(Boolean),
-      instructions: instructions.trim(),
-    })
+  const handleSubmit = async () => {
+    if (!title.trim() || isSaving) return
+    setIsSaving(true)
+    try {
+      await onSave({
+        title: title.trim(),
+        description: description.trim(),
+        imageUrl: imageUrl || undefined,
+        category: category.trim() || 'Uncategorized',
+        cookingTime: cookingTime.trim() || undefined,
+        prepTime: prepTime.trim() || undefined,
+        servings: servings.trim() || undefined,
+        sourceUrl: sourceUrl.trim() || undefined,
+        tags: tags
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean),
+        difficulty,
+        ingredients: ingredients
+          .split('\n')
+          .map((i) => i.trim())
+          .filter(Boolean),
+        instructions: instructions.trim(),
+      })
+    } catch (error) {
+      console.error('Failed to save recipe:', error)
+    } finally {
+      if (mountedRef.current) setIsSaving(false)
+    }
   }
 
   const ingredientCount = ingredients.split('\n').filter((i) => i.trim()).length
@@ -297,7 +312,7 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
         <form
           onSubmit={(e) => {
             e.preventDefault()
-            handleSubmit()
+            void handleSubmit()
           }}
           className="mx-auto max-w-3xl space-y-8 px-6 pb-[var(--chat-safe-padding)] pt-6"
         >
@@ -463,8 +478,8 @@ export function RecipeEditor({ recipe, onSave, onCancel }: RecipeEditorProps) {
         </Button>
         <Button
           type="button"
-          onClick={handleSubmit}
-          disabled={!title.trim()}
+          onClick={() => void handleSubmit()}
+          disabled={!title.trim() || isSaving}
           className="rounded-full px-5"
         >
           {recipe ? 'Save changes' : 'Add recipe'}

@@ -45,7 +45,7 @@ function buildEpub(): Uint8Array {
 <head><title>Chapter Two</title></head>
 <body>
   <p>Here is a picture below.</p>
-  <img src="images/pic.png" alt="A picture"/>
+  <img src="images/pic.png?cache=1#cover" alt="A picture"/>
 </body>
 </html>`
 
@@ -88,10 +88,13 @@ describe('parseEbook', () => {
     expect(book.chapters).toHaveLength(2)
     expect(book.chapters[0]?.title).toBe('Chapter One')
     expect(book.chapters[0]?.text).toContain('quick brown fox')
+    expect(book.chapters[0]?.text).not.toContain('Chapter One\n\nChapter One')
+    expect(book.chapters[0]?.html).not.toContain('<title>')
 
     const ch2 = book.chapters[1]
     expect(ch2?.html).toContain('__RES__/')
     expect(ch2?.html).toContain('__RES__/OEBPS/images/pic.png')
+    expect(ch2?.html).not.toContain('cache=1')
 
     const picResource = book.resources.find((r) =>
       r.path.endsWith('images/pic.png'),

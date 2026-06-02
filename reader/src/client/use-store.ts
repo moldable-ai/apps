@@ -65,6 +65,7 @@ export function useInstallFromStore() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['books', workspaceId] })
+      void queryClient.invalidateQueries({ queryKey: ['store', workspaceId] })
     },
   })
 }

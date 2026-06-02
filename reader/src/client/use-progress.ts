@@ -1,7 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import { useWorkspace } from '@moldable-ai/ui'
-import type { ReadingProgress } from '../shared/book'
+import type { BookMeta, ReadingProgress } from '../shared/book'
+
+interface BookResponse {
+  book: BookMeta
+  progress: ReadingProgress | null
+}
 
 /**
  * Persist reading position. Returns a stable `save` that PUTs progress and
@@ -15,11 +20,18 @@ export function useProgressWriter(bookId: string | null) {
     async (patch: Partial<ReadingProgress>) => {
       if (!bookId) return
       try {
-        await fetchWithWorkspace(`/api/books/${bookId}/progress`, {
+        const res = await fetchWithWorkspace(`/api/books/${bookId}/progress`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(patch),
         })
+        if (!res.ok) throw new Error('Failed to save progress')
+        const data = (await res.json()) as { progress: ReadingProgress }
+        queryClient.setQueryData<BookResponse>(
+          ['book', workspaceId, bookId],
+          (previous) =>
+            previous ? { ...previous, progress: data.progress } : previous,
+        )
         void queryClient.invalidateQueries({ queryKey: ['books', workspaceId] })
       } catch {
         // Best-effort; position will resync on next save.

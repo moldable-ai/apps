@@ -1,10 +1,7 @@
 {
   "name": "DB Browser",
-  "version": "0.1.4",
-  "aliases": [
-    "database",
-    "postgres"
-  ],
+  "version": "0.1.5",
+  "aliases": ["database", "postgres"],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Connect to PostgreSQL databases and browse schemas, tables, and read-only query results",
@@ -85,9 +82,7 @@
                   "maximum": 100
                 }
               },
-              "required": [
-                "query"
-              ]
+              "required": ["query"]
             }
           },
           {
@@ -107,10 +102,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "schema",
-                "table"
-              ]
+              "required": ["schema", "table"]
             }
           },
           {
@@ -127,9 +119,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "sql"
-              ]
+              "required": ["sql"]
             }
           },
           {
@@ -146,9 +136,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "sql"
-              ]
+              "required": ["sql"]
             }
           },
           {
@@ -209,9 +197,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "tabId"
-              ]
+              "required": ["tabId"]
             }
           },
           {
@@ -240,10 +226,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "oldString",
-                "newString"
-              ]
+              "required": ["oldString", "newString"]
             }
           },
           {
@@ -260,9 +243,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "tabId"
-              ]
+              "required": ["tabId"]
             }
           },
           {
@@ -435,12 +416,7 @@
                 },
                 "size": {
                   "type": "string",
-                  "enum": [
-                    "sm",
-                    "md",
-                    "lg",
-                    "xl"
-                  ]
+                  "enum": ["sm", "md", "lg", "xl"]
                 },
                 "xAxis": {
                   "type": "string"
@@ -471,12 +447,7 @@
                 },
                 "comparisonMode": {
                   "type": "string",
-                  "enum": [
-                    "auto",
-                    "percent",
-                    "previous-value",
-                    "number"
-                  ]
+                  "enum": ["auto", "percent", "previous-value", "number"]
                 },
                 "tableColumns": {
                   "type": "array",
@@ -505,9 +476,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "sql"
-              ]
+              "required": ["sql"]
             }
           },
           {
@@ -560,12 +529,7 @@
                 },
                 "size": {
                   "type": "string",
-                  "enum": [
-                    "sm",
-                    "md",
-                    "lg",
-                    "xl"
-                  ]
+                  "enum": ["sm", "md", "lg", "xl"]
                 },
                 "xAxis": {
                   "type": "string"
@@ -596,12 +560,7 @@
                 },
                 "comparisonMode": {
                   "type": "string",
-                  "enum": [
-                    "auto",
-                    "percent",
-                    "previous-value",
-                    "number"
-                  ]
+                  "enum": ["auto", "percent", "previous-value", "number"]
                 },
                 "tableColumns": {
                   "type": "array",
@@ -664,10 +623,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "oldString",
-                "newString"
-              ]
+              "required": ["oldString", "newString"]
             }
           },
           {
@@ -700,9 +656,7 @@
     ]
   },
   "env": [],
-  "screenshots": [
-    "public/screenshots/1.png"
-  ],
+  "screenshots": ["public/screenshots/1.png"],
   "tagline": "Browse, query, and chart your Postgres databases locally",
   "upstream": {
     "repo": "moldable-ai/apps",

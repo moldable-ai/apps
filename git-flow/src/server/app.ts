@@ -6,6 +6,7 @@ import {
 import {
   addFileToGitignore,
   addRepo,
+  checkoutBranch,
   commitFiles,
   createBranchFromBaseIfNeeded,
   createPullRequestDraft,
@@ -24,6 +25,7 @@ import {
   getStatus,
   openFileInEditor,
   pushCommits,
+  resolveKnownRepoPath,
   sanitizeBranchName,
   setPreferredCommitAction,
   setPreferredEditor,
@@ -95,6 +97,7 @@ type BranchNameJson = {
 
 type GitPostBody = {
   action?: string
+  branch?: string
   paths?: string[]
   summary?: string
   description?: string
@@ -276,14 +279,18 @@ app.get('/api/moldable/commands', async (c) => {
   })
 })
 
-async function generateCommitMessage(paths: string[], workspaceId?: string) {
+async function generateCommitMessage(
+  paths: string[],
+  workspaceId?: string,
+  repoPath?: string,
+) {
   if (!Array.isArray(paths) || paths.length === 0) {
     throw new Error('At least one selected file is required.')
   }
 
   const [status, diff] = await Promise.all([
-    getStatus(undefined, workspaceId),
-    getDiffForFiles(paths, workspaceId),
+    getStatus(repoPath, workspaceId),
+    getDiffForFiles(paths, workspaceId, repoPath),
   ])
 
   if (!diff.trim()) {
@@ -332,14 +339,18 @@ Use only the selected changed files and diff provided by the user.`,
   return { summary, description }
 }
 
-async function reviewCode(paths: string[], workspaceId?: string) {
+async function reviewCode(
+  paths: string[],
+  workspaceId?: string,
+  repoPath?: string,
+) {
   if (!Array.isArray(paths) || paths.length === 0) {
     throw new Error('At least one selected file is required.')
   }
 
   const [status, diff] = await Promise.all([
-    getStatus(undefined, workspaceId),
-    getDiffForFiles(paths, workspaceId),
+    getStatus(repoPath, workspaceId),
+    getDiffForFiles(paths, workspaceId, repoPath),
   ])
 
   if (!diff.trim()) {
@@ -467,6 +478,7 @@ async function commitAndOpenPullRequest(input: {
   summary: string
   description: string
   workspaceId?: string
+  repoPath?: string
 }) {
   console.info('[git-flow] Commit & open PR: starting')
   const branchName = await generateBranchName({
@@ -478,6 +490,7 @@ async function commitAndOpenPullRequest(input: {
   const branch = await createBranchFromBaseIfNeeded(
     branchName,
     input.workspaceId,
+    input.repoPath,
   )
   console.info(
     `[git-flow] Commit & open PR: branch ready ${branch.branchName}${
@@ -490,9 +503,10 @@ async function commitAndOpenPullRequest(input: {
     input.summary,
     input.description,
     input.workspaceId,
+    input.repoPath,
   )
   console.info(`[git-flow] Commit & open PR: committed ${commit.commit}`)
-  await pushCommits(input.workspaceId)
+  await pushCommits(input.workspaceId, input.repoPath)
   console.info('[git-flow] Commit & open PR: pushed')
 
   if (branch.existingPullRequest?.url) {
@@ -511,7 +525,10 @@ async function commitAndOpenPullRequest(input: {
     }
   }
 
-  const draft = await generatePullRequestDraft(input.workspaceId)
+  const draft = await generatePullRequestDraft(
+    input.workspaceId,
+    input.repoPath,
+  )
   console.info('[git-flow] Commit & open PR: draft ready')
 
   return {
@@ -544,21 +561,25 @@ async function quickShipRepo(
     throw new Error('A repository path is required.')
   }
 
-  // Make this the active repo so the commit/push/PR primitives operate on it.
-  await addRepo(repoPath, workspaceId)
+  const knownRepoPath = await resolveKnownRepoPath(repoPath, workspaceId)
+  if (!knownRepoPath) {
+    throw new Error('A repository path is required.')
+  }
 
-  const status = await getStatus(repoPath, workspaceId)
-  const repoName = status.repoName || repoPath.split('/').pop() || repoPath
+  const status = await getStatus(knownRepoPath, workspaceId)
+  const repoName =
+    status.repoName || knownRepoPath.split('/').pop() || knownRepoPath
 
   if (status.isClean || status.files.length === 0) {
     throw new Error(`${repoName} has no uncommitted changes.`)
   }
 
   const paths = status.files.map((file) => file.path)
-  const action = await getRepoPreferredCommitAction(repoPath, workspaceId)
+  const action = await getRepoPreferredCommitAction(knownRepoPath, workspaceId)
   const { summary, description } = await generateCommitMessage(
     paths,
     workspaceId,
+    knownRepoPath,
   )
 
   if (action === 'commit-and-open-pr') {
@@ -567,10 +588,11 @@ async function quickShipRepo(
       summary,
       description,
       workspaceId,
+      repoPath: knownRepoPath,
     })
     return {
       ok: true,
-      repoPath,
+      repoPath: knownRepoPath,
       repoName,
       action,
       summary,
@@ -580,13 +602,13 @@ async function quickShipRepo(
     }
   }
 
-  await commitFiles(paths, summary, description, workspaceId)
+  await commitFiles(paths, summary, description, workspaceId, knownRepoPath)
 
   if (action === 'commit-and-push') {
-    await pushCommits(workspaceId)
+    await pushCommits(workspaceId, knownRepoPath)
     return {
       ok: true,
-      repoPath,
+      repoPath: knownRepoPath,
       repoName,
       action,
       summary,
@@ -597,7 +619,7 @@ async function quickShipRepo(
 
   return {
     ok: true,
-    repoPath,
+    repoPath: knownRepoPath,
     repoName,
     action,
     summary,
@@ -606,8 +628,11 @@ async function quickShipRepo(
   }
 }
 
-async function generatePullRequestDraft(workspaceId?: string) {
-  const context = await getPullRequestContext(workspaceId)
+async function generatePullRequestDraft(
+  workspaceId?: string,
+  repoPath?: string,
+) {
+  const context = await getPullRequestContext(workspaceId, repoPath)
   const prompt = `Repository: ${context.owner}/${context.repo}
 Base branch: ${context.baseBranch}
 Head branch: ${context.headBranch}
@@ -717,7 +742,6 @@ async function getLastTouchedAt(
 }
 
 app.get('/api/moldable/today', async (c) => {
-  const items: unknown[] = []
   let resume: unknown = null
 
   try {
@@ -729,12 +753,12 @@ app.get('/api/moldable/today', async (c) => {
     const changes = (n: number) =>
       `${n} uncommitted change${n === 1 ? '' : 's'}`
 
-    // Repos with uncommitted work — the real "pick up where you left off",
-    // not whichever repo happens to be selected. Most-recent first.
+    // Git Flow only contributes to "Pick up where you left off". Dirty and
+    // unpushed repo nudges should not appear in Today's "Worth a look" list.
     const dirty = repos.filter((r) => r.isDirty && r.changedCount > 0)
 
     if (dirty.length > 0) {
-      const [top, ...rest] = dirty
+      const [top] = dirty
       resume = {
         title: label(top.name, top.branch),
         subtitle: changes(top.changedCount),
@@ -742,52 +766,6 @@ app.get('/api/moldable/today', async (c) => {
         deepLink: top.path,
         lastTouchedAt: await getLastTouchedAt(top.path, workspaceId),
       }
-
-      // Collapse any other dirty repos into ONE summary nudge that just opens
-      // Git — one card, not a list of recent-item dumps.
-      if (rest.length > 0) {
-        const totalChanges = rest.reduce((sum, r) => sum + r.changedCount, 0)
-        items.push({
-          id: 'git:dirty:others',
-          kind: 'resume',
-          surface: 'nudge',
-          title:
-            rest.length === 1
-              ? label(rest[0].name, rest[0].branch)
-              : `${rest.length} more repos with uncommitted work`,
-          subtitle:
-            rest.length === 1
-              ? changes(rest[0].changedCount)
-              : `${totalChanges} uncommitted change${totalChanges === 1 ? '' : 's'} across them`,
-          icon: '🌳',
-          priority: 60,
-          actions: [
-            {
-              type: 'open-app',
-              label: 'Open Git',
-              ...(rest.length === 1 ? { deepLink: rest[0].path } : {}),
-            },
-          ],
-        })
-      }
-    }
-
-    // THRESHOLD: a repo with commits not yet pushed.
-    const unpushed = repos.find((r) => r.ahead >= 1)
-    if (unpushed) {
-      items.push({
-        id: 'git:unpushed',
-        kind: 'threshold',
-        surface: 'nudge',
-        title:
-          unpushed.ahead === 1
-            ? `1 unpushed commit on ${unpushed.branch}`
-            : `${unpushed.ahead} unpushed commits on ${unpushed.branch}`,
-        subtitle: `${unpushed.name} · not yet pushed to remote`,
-        icon: '⬆️',
-        priority: 75,
-        actions: [{ type: 'open-app', label: 'Push', deepLink: unpushed.path }],
-      })
     }
   } catch (error) {
     console.error('Git today endpoint failed:', error)
@@ -798,7 +776,7 @@ app.get('/api/moldable/today', async (c) => {
     })
   }
 
-  return c.json({ items, resume, generatedAt: new Date().toISOString() })
+  return c.json({ items: [], resume, generatedAt: new Date().toISOString() })
 })
 
 app.get('/api/git', async (c) => {
@@ -812,6 +790,10 @@ app.get('/api/git', async (c) => {
     const editors = c.req.query('editors')
     const editorIcon = c.req.query('editorIcon')
     const fileStatus = c.req.query('status')
+    const repoPath = await resolveKnownRepoPath(
+      c.req.query('repoPath'),
+      workspaceId,
+    )
     const offset = parseBoundedInteger(
       c.req.query('offset'),
       0,
@@ -879,6 +861,7 @@ app.get('/api/git', async (c) => {
       const preview = await getImagePreview(filePath, workspaceId, {
         hash,
         status: fileStatus,
+        repoPath,
       })
       const body = preview.buffer.buffer.slice(
         preview.buffer.byteOffset,
@@ -898,21 +881,21 @@ app.get('/api/git', async (c) => {
 
     if (hash) {
       if (files !== undefined) {
-        const commitFiles = await getCommitFiles(hash, undefined, workspaceId)
+        const commitFiles = await getCommitFiles(hash, repoPath, workspaceId)
         return c.json({ files: commitFiles })
       }
 
-      const diff = await getCommitDiff(hash, undefined, workspaceId, filePath)
+      const diff = await getCommitDiff(hash, repoPath, workspaceId, filePath)
       return c.json(createUiDiffResponse(diff))
     }
 
     if (filePath) {
-      const diff = await getDiff(undefined, filePath, workspaceId)
+      const diff = await getDiff(repoPath, filePath, workspaceId)
       return c.json(createUiDiffResponse(diff))
     }
 
     if (history !== undefined) {
-      const log = await getHistory(undefined, workspaceId, {
+      const log = await getHistory(repoPath, workspaceId, {
         offset,
         limit: limit + 1,
       })
@@ -942,41 +925,76 @@ app.post('/api/git', async (c) => {
     const body = await c.req.json<GitPostBody>()
 
     if (body.action === 'commit') {
+      const repoPath = await resolveKnownRepoPath(body.repoPath, workspaceId)
       const result = await commitFiles(
         body.paths ?? [],
         body.summary ?? '',
         body.description ?? '',
         workspaceId,
+        repoPath,
       )
       return c.json(result)
     }
 
+    if (body.action === 'commitAndPush') {
+      const repoPath = await resolveKnownRepoPath(body.repoPath, workspaceId)
+      const commit = await commitFiles(
+        body.paths ?? [],
+        body.summary ?? '',
+        body.description ?? '',
+        workspaceId,
+        repoPath,
+      )
+      const push = await pushCommits(workspaceId, repoPath)
+      return c.json({ success: true, commit, push })
+    }
+
     if (body.action === 'generateCommitMessage') {
-      const result = await generateCommitMessage(body.paths ?? [], workspaceId)
+      const repoPath = await resolveKnownRepoPath(body.repoPath, workspaceId)
+      const result = await generateCommitMessage(
+        body.paths ?? [],
+        workspaceId,
+        repoPath,
+      )
       return c.json(result)
     }
 
     if (body.action === 'reviewCode') {
-      const result = await reviewCode(body.paths ?? [], workspaceId)
+      const repoPath = await resolveKnownRepoPath(body.repoPath, workspaceId)
+      const result = await reviewCode(body.paths ?? [], workspaceId, repoPath)
       return c.json(result)
     }
 
     if (body.action === 'push') {
-      const result = await pushCommits(workspaceId)
+      const repoPath = await resolveKnownRepoPath(body.repoPath, workspaceId)
+      const result = await pushCommits(workspaceId, repoPath)
+      return c.json(result)
+    }
+
+    if (body.action === 'checkoutBranch') {
+      const repoPath = await resolveKnownRepoPath(body.repoPath, workspaceId)
+      const result = await checkoutBranch(
+        body.branch ?? '',
+        workspaceId,
+        repoPath,
+      )
       return c.json(result)
     }
 
     if (body.action === 'openPullRequest') {
-      const result = await generatePullRequestDraft(workspaceId)
+      const repoPath = await resolveKnownRepoPath(body.repoPath, workspaceId)
+      const result = await generatePullRequestDraft(workspaceId, repoPath)
       return c.json(result)
     }
 
     if (body.action === 'commitAndOpenPullRequest') {
+      const repoPath = await resolveKnownRepoPath(body.repoPath, workspaceId)
       const result = await commitAndOpenPullRequest({
         paths: body.paths ?? [],
         summary: body.summary ?? '',
         description: body.description ?? '',
         workspaceId,
+        repoPath,
       })
       return c.json(result)
     }
@@ -1011,6 +1029,7 @@ app.post('/api/git', async (c) => {
     }
 
     if (body.action === 'setPreferredCommitAction') {
+      const repoPath = await resolveKnownRepoPath(body.repoPath, workspaceId)
       const result = await setPreferredCommitAction(
         body.preferredCommitAction === 'commit-and-open-pr'
           ? 'commit-and-open-pr'
@@ -1018,7 +1037,7 @@ app.post('/api/git', async (c) => {
             ? 'commit-and-push'
             : 'commit',
         workspaceId,
-        body.repoPath,
+        repoPath,
       )
       return c.json(result)
     }
@@ -1051,7 +1070,10 @@ app.post('/api/moldable/rpc', async (c) => {
     const body = (await c.req.json()) as RpcRequest
     const method = typeof body.method === 'string' ? body.method : ''
     const params = asParams(body.params)
-    const repoPath = stringParam(params, 'repoPath')
+    const repoPath = await resolveKnownRepoPath(
+      stringParam(params, 'repoPath'),
+      workspaceId,
+    )
 
     if (!method) {
       const error = rpcError('invalid_request', 'method is required')
@@ -1124,6 +1146,7 @@ app.post('/api/moldable/rpc', async (c) => {
       const result = await generateCommitMessage(
         stringArrayParam(params, 'paths'),
         workspaceId,
+        repoPath,
       )
       return c.json({ ok: true, result })
     }
@@ -1132,6 +1155,7 @@ app.post('/api/moldable/rpc', async (c) => {
       const result = await reviewCode(
         stringArrayParam(params, 'paths'),
         workspaceId,
+        repoPath,
       )
       return c.json({ ok: true, result })
     }

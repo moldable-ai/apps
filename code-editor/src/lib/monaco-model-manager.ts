@@ -82,11 +82,17 @@ class MonacoModelManager {
   /**
    * Update the original content (called after save)
    */
-  markAsSaved(path: string) {
+  markAsSaved(path: string, savedContent?: string): boolean {
     const cached = this.models.get(path)
-    if (cached) {
-      cached.originalContent = cached.model.getValue()
+    if (!cached) return false
+
+    const currentContent = cached.model.getValue()
+    if (savedContent !== undefined && currentContent !== savedContent) {
+      return false
     }
+
+    cached.originalContent = savedContent ?? currentContent
+    return true
   }
 
   /**
@@ -128,6 +134,34 @@ class MonacoModelManager {
       cached.model.dispose()
       this.models.delete(path)
     }
+  }
+
+  /**
+   * Move a cached model to a new file path after a rename.
+   */
+  renameModel(path: string, newPath: string, language: string) {
+    if (!this.monaco || path === newPath) return
+
+    const cached = this.models.get(path)
+    if (!cached) return
+
+    const content = cached.model.getValue()
+    const originalContent = cached.originalContent
+    cached.model.dispose()
+    this.models.delete(path)
+
+    const uri = this.monaco.Uri.parse(`file://${newPath}`)
+    let model = this.monaco.editor.getModel(uri)
+    if (!model) {
+      model = this.monaco.editor.createModel(content, language, uri)
+    } else {
+      model.setValue(content)
+    }
+
+    this.models.set(newPath, {
+      model,
+      originalContent,
+    })
   }
 
   /**

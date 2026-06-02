@@ -1,8 +1,5 @@
 {
-  "aliases": [
-    "transcripts",
-    "recording"
-  ],
+  "aliases": ["transcripts", "recording"],
   "appApi": {
     "capabilities": [
       {
@@ -50,9 +47,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "query"
-              ],
+              "required": ["query"],
               "type": "object"
             },
             "name": "Search meetings"
@@ -71,9 +66,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "type": "object"
             },
             "name": "Get meeting"
@@ -104,9 +97,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "type": "object"
             },
             "name": "Update meeting"
@@ -120,9 +111,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "type": "object"
             },
             "name": "Delete meeting"
@@ -141,9 +130,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "type": "object"
             },
             "name": "Get note template"
@@ -172,21 +159,14 @@
                   "items": {
                     "properties": {
                       "format": {
-                        "enum": [
-                          "paragraph",
-                          "list"
-                        ],
+                        "enum": ["paragraph", "list"],
                         "type": "string"
                       },
                       "id": {
                         "type": "string"
                       },
                       "length": {
-                        "enum": [
-                          "concise",
-                          "standard",
-                          "detailed"
-                        ],
+                        "enum": ["concise", "standard", "detailed"],
                         "type": "string"
                       },
                       "prompt": {
@@ -199,29 +179,17 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "id",
-                      "title",
-                      "prompt"
-                    ],
+                    "required": ["id", "title", "prompt"],
                     "type": "object"
                   },
                   "type": "array"
                 },
                 "writingStyle": {
-                  "enum": [
-                    "direct",
-                    "narrative",
-                    "objective"
-                  ],
+                  "enum": ["direct", "narrative", "objective"],
                   "type": "string"
                 }
               },
-              "required": [
-                "id",
-                "name",
-                "sections"
-              ],
+              "required": ["id", "name", "sections"],
               "type": "object"
             },
             "name": "Save custom note template"
@@ -235,9 +203,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "type": "object"
             },
             "name": "Delete custom note template"
@@ -262,10 +228,7 @@
                   "type": "boolean"
                 },
                 "model": {
-                  "enum": [
-                    "nova-3",
-                    "nova-3-medical"
-                  ],
+                  "enum": ["nova-3", "nova-3-medical"],
                   "type": "string"
                 },
                 "saveAudio": {
@@ -291,9 +254,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "type": "object"
             },
             "name": "Enhance meeting notes"
@@ -331,16 +292,9 @@
   "repository": "moldable-ai/apps",
   "routeName": "meetings",
   "runtime": "vite_hono",
-  "screenshots": [
-    "public/screenshots/1.png"
-  ],
+  "screenshots": ["public/screenshots/1.png"],
   "tagline": "Record, transcribe, and summarize every meeting locally",
-  "tags": [
-    "meetings",
-    "transcription",
-    "audio",
-    "recording"
-  ],
+  "tags": ["meetings", "transcription", "audio", "recording"],
   "upstream": {
     "repo": "moldable-ai/apps",
     "path": "meetings",
@@ -412,9 +366,7 @@
   },
   "vault": [
     {
-      "capabilities": [
-        "deepgram/auth-grant"
-      ],
+      "capabilities": ["deepgram/auth-grant"],
       "description": "Powers real-time speech-to-text transcription",
       "key": "DEEPGRAM_API_KEY",
       "name": "Deepgram API Key",
@@ -422,6 +374,6 @@
       "url": "https://console.deepgram.com/"
     }
   ],
-  "version": "0.1.7",
+  "version": "0.1.8",
   "visibility": "public"
 }

@@ -4,7 +4,6 @@ import {
   getWorkspaceFromRequest,
   safePath,
   sanitizeId,
-  writeJson,
 } from '@moldable-ai/storage'
 import type { Note } from '../lib/types'
 import { Hono } from 'hono'
@@ -14,7 +13,68 @@ import { z } from 'zod'
 
 export const app = new Hono()
 
-app.use('/api/*', cors())
+const appUrlOrigin = (() => {
+  const appUrl = process.env.MOLDABLE_APP_URL
+  if (!appUrl) return null
+
+  try {
+    return new URL(appUrl).origin
+  } catch {
+    return null
+  }
+})()
+
+app.use(
+  '/api/*',
+  cors({
+    origin: (origin) => {
+      if (!origin) return ''
+      if (appUrlOrigin && origin === appUrlOrigin) return origin
+      return ''
+    },
+  }),
+)
+
+const workspaceIdSchema = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[a-zA-Z0-9_-]+$/)
+
+const isoDateSchema = z
+  .string()
+  .refine((value) => !Number.isNaN(Date.parse(value)))
+
+const noteSchema = z.object({
+  id: z
+    .string()
+    .min(1)
+    .max(255)
+    .regex(/^[a-zA-Z0-9_-]+$/),
+  title: z.string(),
+  content: z.string(),
+  isPinned: z.boolean(),
+  isArchived: z.boolean(),
+  isDeleted: z.boolean(),
+  labels: z.array(z.string()),
+  color: z.string().optional(),
+  createdAt: isoDateSchema,
+  updatedAt: isoDateSchema,
+})
+
+const notesBulkSaveSchema = z.array(noteSchema)
+
+const notePatchSchema = z.object({
+  title: z.string().optional(),
+  content: z.string().optional(),
+  labels: z.array(z.string()).optional(),
+  isPinned: z.boolean().optional(),
+  isArchived: z.boolean().optional(),
+  isDeleted: z.boolean().optional(),
+  color: z.string().optional(),
+})
+
+class NotesValidationError extends Error {}
 
 const rpcRequestSchema = z.object({
   method: z.string(),
@@ -33,7 +93,11 @@ const notesListParamsSchema = z
   .optional()
 
 const noteGetParamsSchema = z.object({
-  id: z.string().min(1),
+  id: z
+    .string()
+    .min(1)
+    .max(255)
+    .regex(/^[a-zA-Z0-9_-]+$/),
 })
 
 const noteCreateParamsSchema = z.object({
@@ -46,7 +110,11 @@ const noteCreateParamsSchema = z.object({
 })
 
 const noteUpdateParamsSchema = z.object({
-  id: z.string().min(1),
+  id: z
+    .string()
+    .min(1)
+    .max(255)
+    .regex(/^[a-zA-Z0-9_-]+$/),
   title: z.string().optional(),
   content: z.string().optional(),
   labels: z.array(z.string()).optional(),
@@ -65,6 +133,28 @@ function getNotePath(id: string, workspaceId?: string): string {
   return safePath(getNotesDir(workspaceId), `${safeId}.json`)
 }
 
+function validateWorkspaceId(
+  workspaceId: string | undefined,
+): string | undefined {
+  if (!workspaceId) return undefined
+  return workspaceIdSchema.parse(workspaceId)
+}
+
+function getHttpWorkspaceId(request: Request): string | undefined {
+  return validateWorkspaceId(getWorkspaceFromRequest(request))
+}
+
+function assertUniqueNoteIds(notes: Note[]) {
+  const ids = new Set<string>()
+
+  for (const note of notes) {
+    if (ids.has(note.id)) {
+      throw new NotesValidationError(`Duplicate note ID "${note.id}"`)
+    }
+    ids.add(note.id)
+  }
+}
+
 async function loadNotes(workspaceId?: string): Promise<Note[]> {
   const notesDir = getNotesDir(workspaceId)
   try {
@@ -77,9 +167,14 @@ async function loadNotes(workspaceId?: string): Promise<Note[]> {
       try {
         const filePath = safePath(notesDir, file)
         const data = await fs.readFile(filePath, 'utf-8')
-        notes.push(JSON.parse(data) as Note)
-      } catch {
-        // Ignore individual file read errors.
+        const parsed = noteSchema.safeParse(JSON.parse(data))
+        if (parsed.success) {
+          notes.push(parsed.data)
+        } else {
+          console.warn(`Skipping invalid note file: ${file}`)
+        }
+      } catch (error) {
+        console.warn(`Skipping unreadable note file: ${file}`, error)
       }
     }
 
@@ -92,9 +187,80 @@ async function loadNotes(workspaceId?: string): Promise<Note[]> {
   }
 }
 
+async function readNote(
+  id: string,
+  workspaceId?: string,
+): Promise<Note | null> {
+  try {
+    const data = await fs.readFile(getNotePath(id, workspaceId), 'utf-8')
+    return noteSchema.parse(JSON.parse(data))
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return null
+    }
+
+    throw error
+  }
+}
+
+async function writeJsonAtomic(filePath: string, data: unknown): Promise<void> {
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.${crypto.randomUUID()}.tmp`
+  const content = JSON.stringify(data, null, 2)
+
+  try {
+    await fs.writeFile(tempPath, content, 'utf-8')
+    await fs.rename(tempPath, filePath)
+  } catch (error) {
+    await fs.unlink(tempPath).catch(() => undefined)
+    throw error
+  }
+}
+
 async function saveNote(note: Note, workspaceId?: string): Promise<void> {
   await ensureDir(getNotesDir(workspaceId))
-  await writeJson(getNotePath(note.id, workspaceId), note)
+  const validatedNote = noteSchema.parse(note)
+  await writeJsonAtomic(
+    getNotePath(validatedNote.id, workspaceId),
+    validatedNote,
+  )
+}
+
+async function replaceNotes(
+  notes: Note[],
+  workspaceId?: string,
+): Promise<void> {
+  assertUniqueNoteIds(notes)
+  await ensureDir(getNotesDir(workspaceId))
+
+  const existingNotes = await loadNotes(workspaceId)
+  const newIds = new Set(notes.map((note) => note.id))
+  const stagedWrites: Array<{ tempPath: string; finalPath: string }> = []
+
+  try {
+    for (const note of notes) {
+      const finalPath = getNotePath(note.id, workspaceId)
+      const tempPath = `${finalPath}.${process.pid}.${Date.now()}.${crypto.randomUUID()}.tmp`
+      await fs.writeFile(tempPath, JSON.stringify(note, null, 2), 'utf-8')
+      stagedWrites.push({ tempPath, finalPath })
+    }
+
+    for (const staged of stagedWrites) {
+      await fs.rename(staged.tempPath, staged.finalPath)
+    }
+
+    for (const existing of existingNotes) {
+      if (!newIds.has(existing.id)) {
+        await deleteNote(existing.id, workspaceId)
+      }
+    }
+  } catch (error) {
+    await Promise.all(
+      stagedWrites.map((staged) =>
+        fs.unlink(staged.tempPath).catch(() => undefined),
+      ),
+    )
+    throw error
+  }
 }
 
 async function deleteNote(id: string, workspaceId?: string): Promise<void> {
@@ -106,9 +272,9 @@ async function deleteNote(id: string, workspaceId?: string): Promise<void> {
 }
 
 function getRpcWorkspaceId(request: Request): string | undefined {
-  return (
+  return validateWorkspaceId(
     request.headers.get('x-moldable-workspace-id') ??
-    getWorkspaceFromRequest(request)
+      getWorkspaceFromRequest(request),
   )
 }
 
@@ -184,34 +350,84 @@ app.get('/api/moldable/today', (c) => {
 
 app.get('/api/notes', async (c) => {
   try {
-    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const workspaceId = getHttpWorkspaceId(c.req.raw)
     const notes = await loadNotes(workspaceId)
     return c.json(notes)
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: 'Invalid workspace ID' }, 400)
+    }
+
     console.error('Failed to read notes:', error)
     return c.json({ error: 'Failed to read notes' }, 500)
   }
 })
 
-app.post('/api/notes', async (c) => {
+app.patch('/api/notes/:id', async (c) => {
   try {
-    const workspaceId = getWorkspaceFromRequest(c.req.raw)
-    const notes = await c.req.json<Note[]>()
-    const existingNotes = await loadNotes(workspaceId)
-    const newIds = new Set(notes.map((note) => note.id))
+    const workspaceId = getHttpWorkspaceId(c.req.raw)
+    const { id } = noteGetParamsSchema.parse({ id: c.req.param('id') })
+    const patch = notePatchSchema.parse(await c.req.json())
+    const note = await readNote(id, workspaceId)
 
-    for (const existing of existingNotes) {
-      if (!newIds.has(existing.id)) {
-        await deleteNote(existing.id, workspaceId)
-      }
+    if (!note) {
+      return c.json({ error: 'Note not found' }, 404)
     }
 
-    for (const note of notes) {
-      await saveNote(note, workspaceId)
+    const updated: Note = {
+      ...note,
+      ...patch,
+      updatedAt: new Date().toISOString(),
     }
 
+    await saveNote(updated, workspaceId)
+    return c.json(updated)
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: 'Invalid note update' }, 400)
+    }
+
+    console.error('Failed to update note:', error)
+    return c.json({ error: 'Failed to update note' }, 500)
+  }
+})
+
+app.delete('/api/notes/:id', async (c) => {
+  try {
+    const workspaceId = getHttpWorkspaceId(c.req.raw)
+    const { id } = noteGetParamsSchema.parse({ id: c.req.param('id') })
+    await deleteNote(id, workspaceId)
     return c.json({ success: true })
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return c.json({ error: 'Invalid note ID' }, 400)
+    }
+
+    console.error('Failed to delete note:', error)
+    return c.json({ error: 'Failed to delete note' }, 500)
+  }
+})
+
+app.post('/api/notes', async (c) => {
+  try {
+    const workspaceId = getHttpWorkspaceId(c.req.raw)
+    const body = await c.req.json()
+
+    if (Array.isArray(body)) {
+      const notes = notesBulkSaveSchema.parse(body)
+      assertUniqueNoteIds(notes)
+      await replaceNotes(notes, workspaceId)
+      return c.json({ success: true })
+    }
+
+    const note = noteSchema.parse(body)
+    await saveNote(note, workspaceId)
+    return c.json({ success: true, note })
+  } catch (error) {
+    if (error instanceof z.ZodError || error instanceof NotesValidationError) {
+      return c.json({ error: 'Invalid notes payload' }, 400)
+    }
+
     console.error('Failed to save notes:', error)
     return c.json({ error: 'Failed to save notes' }, 500)
   }

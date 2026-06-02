@@ -4,6 +4,7 @@ import {
   getWorkspaceFromRequest,
   readJson,
   safePath,
+  sanitizeId,
   writeJson,
 } from '@moldable-ai/storage'
 import { categories, getAffirmations } from '../lib/affirmations'
@@ -32,6 +33,54 @@ const favoritesUpdateParamsSchema = z.object({
   favorites: z.array(z.string()),
 })
 
+const favoriteItemSchema = z.object({
+  text: z.string().trim().min(1),
+  favorite: z.boolean(),
+})
+
+function normalizeFavorites(favorites: string[]): string[] {
+  return Array.from(
+    new Set(
+      favorites
+        .map((favorite) => favorite.trim())
+        .filter((favorite) => favorite.length > 0),
+    ),
+  )
+}
+
+const favoritesSchema = z.array(z.string()).transform(normalizeFavorites)
+
+class InvalidWorkspaceIdError extends Error {
+  constructor() {
+    super('Invalid workspace ID')
+    this.name = 'InvalidWorkspaceIdError'
+  }
+}
+
+function isInvalidWorkspaceIdError(
+  error: unknown,
+): error is InvalidWorkspaceIdError {
+  return error instanceof InvalidWorkspaceIdError
+}
+
+function validateWorkspaceId(workspaceId: string | null): string | undefined {
+  const trimmed = workspaceId?.trim()
+  if (!trimmed) return undefined
+
+  try {
+    return sanitizeId(trimmed)
+  } catch {
+    throw new InvalidWorkspaceIdError()
+  }
+}
+
+function getRequestWorkspaceId(request: Request): string | undefined {
+  return validateWorkspaceId(
+    getWorkspaceFromRequest(request) ??
+      request.headers.get('x-moldable-workspace-id'),
+  )
+}
+
 function getFavoritesPath(workspaceId?: string): string {
   return safePath(getAppDataDir(workspaceId), 'favorites.json')
 }
@@ -39,16 +88,11 @@ function getFavoritesPath(workspaceId?: string): string {
 async function loadFavorites(workspaceId?: string): Promise<string[]> {
   await ensureDir(getAppDataDir(workspaceId))
   const favorites = await readJson<unknown>(getFavoritesPath(workspaceId), [])
-  return Array.isArray(favorites)
-    ? favorites.filter((item): item is string => typeof item === 'string')
-    : []
+  return favoritesSchema.safeParse(favorites).data ?? []
 }
 
 function getRpcWorkspaceId(request: Request): string | undefined {
-  return (
-    request.headers.get('x-moldable-workspace-id') ??
-    getWorkspaceFromRequest(request)
-  )
+  return getRequestWorkspaceId(request)
 }
 
 function allAffirmations() {
@@ -64,18 +108,22 @@ function allAffirmations() {
 function filterAffirmations(
   params: z.infer<typeof affirmationsListParamsSchema>,
 ) {
+  const category = params?.categoryId
+    ? categories.find((item) => item.id === params.categoryId)
+    : undefined
+
   let affirmations = params?.categoryId
-    ? getAffirmations(params.categoryId).map((text) => ({
-        text,
-        categoryId: params.categoryId!,
-        categoryName:
-          categories.find((category) => category.id === params.categoryId)
-            ?.name ?? params.categoryId!,
-      }))
+    ? category
+      ? getAffirmations(category.id).map((text) => ({
+          text,
+          categoryId: category.id,
+          categoryName: category.name,
+        }))
+      : []
     : allAffirmations()
 
-  if (params?.query?.trim()) {
-    const query = params.query.toLowerCase()
+  const query = params?.query?.trim().toLowerCase()
+  if (query) {
     affirmations = affirmations.filter((item) =>
       item.text.toLowerCase().includes(query),
     )
@@ -122,10 +170,14 @@ app.get('/api/moldable/today', (c) => {
 
 app.get('/api/favorites', async (c) => {
   try {
-    const workspaceId = getWorkspaceFromRequest(c.req.raw)
+    const workspaceId = getRequestWorkspaceId(c.req.raw)
     const favorites = await loadFavorites(workspaceId)
     return c.json(favorites)
   } catch (error) {
+    if (isInvalidWorkspaceIdError(error)) {
+      return c.json({ error: 'Invalid workspace ID' }, 400)
+    }
+
     console.error('Failed to read favorite affirmations:', error)
     return c.json({ error: 'Failed to read favorite affirmations' }, 500)
   }
@@ -133,26 +185,65 @@ app.get('/api/favorites', async (c) => {
 
 app.post('/api/favorites', async (c) => {
   try {
-    const workspaceId = getWorkspaceFromRequest(c.req.raw)
-    const body: unknown = await c.req.json()
-    const favorites = Array.isArray(body)
-      ? body.filter((item): item is string => typeof item === 'string')
-      : []
+    const workspaceId = getRequestWorkspaceId(c.req.raw)
+    const body: unknown = await c.req.json().catch(() => null)
+    const parsed = favoritesSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return c.json(
+        { error: 'Expected an array of favorite affirmations' },
+        400,
+      )
+    }
+
+    const favorites = parsed.data
 
     await ensureDir(getAppDataDir(workspaceId))
     await writeJson(getFavoritesPath(workspaceId), favorites)
 
     return c.json({ success: true })
   } catch (error) {
+    if (isInvalidWorkspaceIdError(error)) {
+      return c.json({ error: 'Invalid workspace ID' }, 400)
+    }
+
     console.error('Failed to save favorite affirmations:', error)
     return c.json({ error: 'Failed to save favorite affirmations' }, 500)
   }
 })
 
-app.post('/api/moldable/rpc', async (c) => {
-  const workspaceId = getRpcWorkspaceId(c.req.raw)
-
+app.post('/api/favorites/item', async (c) => {
   try {
+    const workspaceId = getRequestWorkspaceId(c.req.raw)
+    const body: unknown = await c.req.json().catch(() => null)
+    const parsed = favoriteItemSchema.safeParse(body)
+
+    if (!parsed.success) {
+      return c.json({ error: 'Expected a favorite item update' }, 400)
+    }
+
+    const current = await loadFavorites(workspaceId)
+    const favorites = parsed.data.favorite
+      ? normalizeFavorites([...current, parsed.data.text])
+      : current.filter((favorite) => favorite !== parsed.data.text)
+
+    await ensureDir(getAppDataDir(workspaceId))
+    await writeJson(getFavoritesPath(workspaceId), favorites)
+
+    return c.json(favorites)
+  } catch (error) {
+    if (isInvalidWorkspaceIdError(error)) {
+      return c.json({ error: 'Invalid workspace ID' }, 400)
+    }
+
+    console.error('Failed to update favorite affirmation:', error)
+    return c.json({ error: 'Failed to update favorite affirmation' }, 500)
+  }
+})
+
+app.post('/api/moldable/rpc', async (c) => {
+  try {
+    const workspaceId = getRpcWorkspaceId(c.req.raw)
     const body = rpcRequestSchema.parse(await c.req.json())
 
     if (body.method === 'affirmations.categories') {
@@ -192,9 +283,10 @@ app.post('/api/moldable/rpc', async (c) => {
 
     if (body.method === 'affirmations.favorites.update') {
       const params = favoritesUpdateParamsSchema.parse(body.params)
+      const favorites = normalizeFavorites(params.favorites)
       await ensureDir(getAppDataDir(workspaceId))
-      await writeJson(getFavoritesPath(workspaceId), params.favorites)
-      return c.json({ ok: true, result: params.favorites })
+      await writeJson(getFavoritesPath(workspaceId), favorites)
+      return c.json({ ok: true, result: favorites })
     }
 
     return c.json(
@@ -216,6 +308,19 @@ app.post('/api/moldable/rpc', async (c) => {
             code: 'invalid_params',
             message: 'Affirmations received invalid RPC parameters.',
             detail: error.flatten(),
+          },
+        },
+        400,
+      )
+    }
+
+    if (isInvalidWorkspaceIdError(error)) {
+      return c.json(
+        {
+          ok: false,
+          error: {
+            code: 'invalid_workspace',
+            message: 'Affirmations received an invalid workspace ID.',
           },
         },
         400,

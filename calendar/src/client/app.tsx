@@ -44,6 +44,7 @@ import {
 } from '@moldable-ai/ui'
 import { cn } from '@/lib/utils'
 import {
+  addDays,
   addMonths,
   eachDayOfInterval,
   endOfMonth,
@@ -54,10 +55,12 @@ import {
   isToday,
   parse,
   parseISO,
+  startOfDay,
   startOfMonth,
   startOfWeek,
   subMonths,
 } from 'date-fns'
+import { z } from 'zod'
 
 type ResponseStatus = 'accepted' | 'tentative' | 'declined' | 'needsAction'
 
@@ -111,15 +114,129 @@ const GOOGLE_COLORS: Record<string, string> = {
 }
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/
+
+const attendeeSchema = z.object({
+  email: z.string().nullable().optional(),
+  displayName: z.string().nullable().optional(),
+  responseStatus: z.string().nullable().optional(),
+  optional: z.boolean().nullable().optional(),
+  organizer: z.boolean().nullable().optional(),
+  self: z.boolean().nullable().optional(),
+})
+
+const apiEventSchema = z.object({
+  id: z.string().nullable().optional(),
+  iCalUID: z.string().nullable().optional(),
+  title: z.string().nullable().optional(),
+  start: z.string().nullable().optional(),
+  end: z.string().nullable().optional(),
+  isAllDay: z.boolean().optional(),
+  location: z.string().nullable().optional(),
+  link: z.string().nullable().optional(),
+  status: z.string().nullable().optional(),
+  colorId: z.string().nullable().optional(),
+  organizer: z
+    .object({
+      email: z.string().nullable().optional(),
+      displayName: z.string().nullable().optional(),
+      self: z.boolean().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
+  attendees: z.array(attendeeSchema).optional(),
+  selfResponseStatus: z.string().nullable().optional(),
+  conferenceUrl: z.string().nullable().optional(),
+  conferenceProvider: z.string().nullable().optional(),
+})
 
 // All-day events arrive as a date-only string ('2026-05-29'). parseISO would
 // read that as local midnight and can drift across timezones; parse the raw
 // y-M-d into a local date so the event lands on the intended calendar cell.
 function parseEventDay(event: Pick<CalendarEvent, 'start' | 'isAllDay'>): Date {
-  if (event.isAllDay && /^\d{4}-\d{2}-\d{2}$/.test(event.start)) {
+  if (event.isAllDay && DATE_ONLY_RE.test(event.start)) {
     return parse(event.start, 'yyyy-MM-dd', new Date())
   }
   return parseISO(event.start)
+}
+
+function isValidDate(date: Date): boolean {
+  return !Number.isNaN(date.getTime())
+}
+
+function isValidEventRange(
+  event: Pick<CalendarEvent, 'start' | 'end' | 'isAllDay'>,
+) {
+  if (event.isAllDay) {
+    return (
+      DATE_ONLY_RE.test(event.start) &&
+      DATE_ONLY_RE.test(event.end) &&
+      isValidDate(parseEventDay(event))
+    )
+  }
+
+  return isValidDate(parseISO(event.start)) && isValidDate(parseISO(event.end))
+}
+
+function eventOccursOnDay(event: CalendarEvent, day: Date): boolean {
+  if (!event.isAllDay) {
+    const start = parseISO(event.start)
+    const end = parseISO(event.end)
+    if (!isValidDate(start) || !isValidDate(end)) return false
+
+    const dayStart = startOfDay(day)
+    const nextDay = addDays(dayStart, 1)
+    return start < nextDay && end > dayStart
+  }
+
+  const start = startOfDay(parseEventDay(event))
+  const end =
+    event.end && DATE_ONLY_RE.test(event.end)
+      ? startOfDay(parse(event.end, 'yyyy-MM-dd', new Date()))
+      : start
+
+  const inclusiveEnd = new Date(end)
+  if (inclusiveEnd > start) {
+    inclusiveEnd.setDate(inclusiveEnd.getDate() - 1)
+  }
+
+  const target = startOfDay(day).getTime()
+  return target >= start.getTime() && target <= inclusiveEnd.getTime()
+}
+
+function eventSortTime(event: CalendarEvent): number {
+  return event.isAllDay
+    ? parseEventDay(event).getTime()
+    : parseISO(event.start).getTime()
+}
+
+function normalizeCalendarEvents(value: unknown): CalendarEvent[] {
+  const parsed = z.array(apiEventSchema).safeParse(value)
+  if (!parsed.success) return []
+
+  return parsed.data.flatMap((event): CalendarEvent[] => {
+    if (!event.id || !event.start || !event.end) return []
+
+    const normalized: CalendarEvent = {
+      id: event.id,
+      iCalUID: event.iCalUID ?? undefined,
+      title: event.title ?? 'Untitled event',
+      start: event.start,
+      end: event.end,
+      isAllDay: event.isAllDay,
+      location: event.location ?? undefined,
+      link: event.link ?? undefined,
+      status: event.status ?? undefined,
+      colorId: event.colorId ?? undefined,
+      organizer: event.organizer ?? undefined,
+      attendees: event.attendees,
+      selfResponseStatus: event.selfResponseStatus ?? undefined,
+      conferenceUrl: event.conferenceUrl ?? undefined,
+      conferenceProvider: event.conferenceProvider ?? undefined,
+    }
+
+    return isValidEventRange(normalized) ? [normalized] : []
+  })
 }
 
 function eventColor(event: CalendarEvent): string | null {
@@ -186,7 +303,7 @@ export default function FullPage() {
       if (!res.ok) throw new Error('Failed to fetch events')
       const data = await res.json()
       setAuthenticated(true)
-      return data.events as CalendarEvent[]
+      return normalizeCalendarEvents(data.events)
     },
     retry: false,
   })
@@ -199,6 +316,7 @@ export default function FullPage() {
     queryError instanceof Error && queryError.message === 'Unauthorized'
   const loadError = queryError && !isAuthError ? queryError : null
   const showErrorBanner = Boolean(loadError) && !errorDismissed
+  const showConnectScreen = isAuthError || (!authenticated && !loadError)
 
   useEffect(() => {
     if (queryError) setErrorDismissed(false)
@@ -322,7 +440,7 @@ export default function FullPage() {
     (day: Date) => {
       const now = new Date()
       return events
-        .filter((e) => isSameDay(parseEventDay(e), day))
+        .filter((e) => eventOccursOnDay(e, day))
         .filter(matchesSearch)
         .map((e) => ({
           ...e,
@@ -331,7 +449,7 @@ export default function FullPage() {
         .sort((a, b) => {
           if (a.isAllDay && !b.isAllDay) return -1
           if (!a.isAllDay && b.isAllDay) return 1
-          return a.start.localeCompare(b.start)
+          return eventSortTime(a) - eventSortTime(b)
         })
     },
     [events, matchesSearch],
@@ -418,7 +536,7 @@ export default function FullPage() {
     return <CalendarSkeleton />
   }
 
-  if (!authenticated) {
+  if (showConnectScreen) {
     return (
       <div className="bg-background flex h-screen flex-col items-center justify-center p-8 text-center">
         <div className="bg-primary/10 mb-6 rounded-full p-4">
@@ -445,6 +563,7 @@ export default function FullPage() {
           </Button>
         ) : (
           <button
+            type="button"
             onClick={handleConnect}
             className="flex h-10 cursor-pointer items-center gap-3 rounded-sm border border-[#747775] bg-white px-3 font-['Roboto',sans-serif] text-sm font-medium text-[#1f1f1f] shadow-sm transition-shadow hover:shadow-md active:bg-[#f8f8f8]"
           >
@@ -539,6 +658,7 @@ export default function FullPage() {
                       openExternalLink={openExternalLink}
                     >
                       <button
+                        type="button"
                         className="hover:bg-muted/60 flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left transition-colors"
                         style={{
                           borderLeft: `3px solid ${color ?? 'var(--primary)'}`,
@@ -576,6 +696,7 @@ export default function FullPage() {
                         openExternalLink={openExternalLink}
                       >
                         <button
+                          type="button"
                           className={cn(
                             'group flex w-full gap-3 rounded-md px-1 py-1 text-left transition-colors',
                             'hover:bg-muted/50',
@@ -670,6 +791,7 @@ export default function FullPage() {
               />
               {search && (
                 <button
+                  type="button"
                   onClick={() => setSearch('')}
                   className="text-muted-foreground hover:text-foreground absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer"
                   aria-label="Clear search"
@@ -716,6 +838,7 @@ export default function FullPage() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
+                  type="button"
                   className="ring-offset-background focus-visible:ring-ring cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
                   aria-label="Account menu"
                 >
@@ -777,6 +900,7 @@ export default function FullPage() {
               Retry
             </Button>
             <button
+              type="button"
               onClick={() => setErrorDismissed(true)}
               className="hover:text-foreground cursor-pointer"
               aria-label="Dismiss"
@@ -820,6 +944,7 @@ export default function FullPage() {
 
                 return (
                   <button
+                    type="button"
                     key={day.toISOString()}
                     role="gridcell"
                     aria-selected={isSelected}
@@ -967,12 +1092,12 @@ function EventPopover({
 
   const rsvp = useMutation({
     mutationFn: async (responseStatus: ResponseStatus) => {
-      const res = await fetchWithWorkspace('/api/moldable/rpc', {
+      const res = await fetchWithWorkspace('/api/rsvp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          method: 'events.rsvp',
-          params: { eventId: event.id, responseStatus },
+          eventId: event.id,
+          responseStatus,
         }),
       })
       if (!res.ok) throw new Error('Failed to update RSVP')
@@ -984,6 +1109,7 @@ function EventPopover({
     onMutate: (responseStatus) => setOptimisticRsvp(responseStatus),
     onError: () => setOptimisticRsvp(null),
     onSettled: () => {
+      setOptimisticRsvp(null)
       queryClient.invalidateQueries({ queryKey: ['events'] })
     },
   })
@@ -1173,6 +1299,7 @@ function RsvpButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       className={cn(

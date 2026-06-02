@@ -5,9 +5,11 @@ import { existsSync, readdirSync } from 'fs'
 import {
   appendFile,
   copyFile,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rm,
   stat,
 } from 'fs/promises'
@@ -78,6 +80,14 @@ const DEFAULT_SETTINGS: Settings = {
   preferredEditorId: undefined,
   preferredCommitAction: 'commit',
   repoPreferences: {},
+}
+
+function createDefaultSettings(): Settings {
+  return {
+    ...DEFAULT_SETTINGS,
+    recentRepos: [...DEFAULT_SETTINGS.recentRepos],
+    repoPreferences: {},
+  }
 }
 
 const MAX_GIT_OUTPUT_CHARS = 16000
@@ -362,12 +372,15 @@ async function runGitBuffer(args: string[], cwd: string) {
     const chunks: Buffer[] = []
     let byteLength = 0
     let stderr = ''
+    let settled = false
 
     child.stdin.end()
 
     child.stdout.on('data', (chunk: Buffer) => {
+      if (settled) return
       byteLength += chunk.byteLength
       if (byteLength > MAX_IMAGE_PREVIEW_BYTES) {
+        settled = true
         child.kill()
         reject(new Error('Image preview is too large.'))
         return
@@ -379,8 +392,14 @@ async function runGitBuffer(args: string[], cwd: string) {
       stderr = appendCappedOutput(stderr, chunk.toString('utf8'))
     })
 
-    child.on('error', reject)
+    child.on('error', (error) => {
+      if (settled) return
+      settled = true
+      reject(error)
+    })
     child.on('close', (code, signal) => {
+      if (settled) return
+      settled = true
       if (code === 0) {
         resolve(Buffer.concat(chunks))
         return
@@ -577,6 +596,17 @@ async function refExists(g: ReturnType<typeof simpleGit>, ref: string) {
     .raw(['rev-parse', '--verify', '--quiet', ref])
     .then(() => true)
     .catch(() => false)
+}
+
+async function resolveCommitOid(g: ReturnType<typeof simpleGit>, hash: string) {
+  const trimmed = hash.trim()
+  if (!/^[0-9a-fA-F]{7,64}$/.test(trimmed)) {
+    throw new Error('Commit hash must be a hexadecimal commit id.')
+  }
+
+  return g
+    .raw(['rev-parse', '--verify', `${trimmed}^{commit}`])
+    .then((value) => value.trim())
 }
 
 async function countRevisions(
@@ -830,6 +860,10 @@ function resolveRepoPath(repoPath?: string, currentRepoPath?: string) {
   return pathToUse.trim() || null
 }
 
+function normalizeRepoPath(repoPath: string) {
+  return path.resolve(repoPath.replace(/^~/, os.homedir()))
+}
+
 function requireRepoPath(repoPath?: string | null) {
   if (!repoPath) {
     throw new Error('No repository selected.')
@@ -838,14 +872,14 @@ function requireRepoPath(repoPath?: string | null) {
   return repoPath
 }
 
-function normalizeCommitPaths(paths: string[]) {
+function normalizeCommitPaths(paths: string[], repoPath: string) {
   const normalized: string[] = []
   const seen = new Set<string>()
 
   for (const filePath of paths) {
     if (typeof filePath !== 'string') continue
 
-    const trimmed = filePath.trim()
+    const trimmed = normalizeRepoRelativePath(repoPath, filePath)
     if (!trimmed || seen.has(trimmed)) continue
 
     seen.add(trimmed)
@@ -855,16 +889,23 @@ function normalizeCommitPaths(paths: string[]) {
   return normalized
 }
 
-async function getCurrentChangedPathSet(repoPath: string) {
+async function getCurrentChangedPathEntries(repoPath: string) {
   const status = await simpleGit(repoPath).status()
-  const changedPaths = new Set<string>()
+  const changedPaths = new Map<string, string[]>()
 
   for (const file of status.files) {
-    if (file.path) changedPaths.add(file.path)
+    if (!file.path) continue
+
+    const normalizedPath = normalizeRepoRelativePath(repoPath, file.path)
+    const relatedPaths = new Set([normalizedPath])
 
     const previousPath = (file as { from?: unknown }).from
     if (typeof previousPath === 'string' && previousPath) {
-      changedPaths.add(previousPath)
+      relatedPaths.add(normalizeRepoRelativePath(repoPath, previousPath))
+    }
+
+    for (const relatedPath of relatedPaths) {
+      changedPaths.set(relatedPath, Array.from(relatedPaths))
     }
   }
 
@@ -872,31 +913,38 @@ async function getCurrentChangedPathSet(repoPath: string) {
 }
 
 async function resolveCommitPaths(paths: string[], repoPath: string) {
-  const requestedPaths = normalizeCommitPaths(paths)
+  const requestedPaths = normalizeCommitPaths(paths, repoPath)
   if (requestedPaths.length === 0) {
     throw new Error('At least one selected file is required.')
   }
 
-  const changedPaths = await getCurrentChangedPathSet(repoPath)
-  const activePaths = requestedPaths.filter((filePath) =>
-    changedPaths.has(filePath),
-  )
+  const changedPaths = await getCurrentChangedPathEntries(repoPath)
+  const activePaths = new Set<string>()
 
-  if (activePaths.length === 0) {
+  for (const filePath of requestedPaths) {
+    const relatedPaths = changedPaths.get(filePath)
+    if (!relatedPaths) continue
+    relatedPaths.forEach((relatedPath) => activePaths.add(relatedPath))
+  }
+
+  if (activePaths.size === 0) {
     throw new Error(
       'Selected files are no longer changed. Refresh the file list and choose files again.',
     )
   }
 
-  if (activePaths.length !== requestedPaths.length) {
+  const activeRequestedCount = requestedPaths.filter((filePath) =>
+    changedPaths.has(filePath),
+  ).length
+  if (activeRequestedCount !== requestedPaths.length) {
     console.info(
       `[git-flow] Ignoring ${
-        requestedPaths.length - activePaths.length
+        requestedPaths.length - activeRequestedCount
       } stale selected path(s) before commit`,
     )
   }
 
-  return activePaths
+  return Array.from(activePaths)
 }
 
 async function runGit(
@@ -919,6 +967,7 @@ async function runGit(
         ? null
         : setTimeout(() => {
             if (settled) return
+            settled = true
             child.kill('SIGTERM')
             reject(
               new Error(
@@ -966,10 +1015,10 @@ async function getSettings(workspaceId?: string): Promise<Settings> {
   const dataDir = getAppDataDir(workspaceId)
   const configPath = path.join(dataDir, 'settings.json')
   try {
-    const raw = await readJson(configPath, DEFAULT_SETTINGS)
+    const raw = await readJson(configPath, createDefaultSettings())
     return SettingsSchema.parse(raw)
   } catch {
-    return DEFAULT_SETTINGS
+    return createDefaultSettings()
   }
 }
 
@@ -996,6 +1045,27 @@ export async function getRepoPreferredCommitAction(
 ): Promise<PreferredCommitAction> {
   const settings = await getSettings(workspaceId)
   return resolveRepoCommitAction(settings, repoPath)
+}
+
+export async function resolveKnownRepoPath(
+  repoPath: string | undefined,
+  workspaceId?: string,
+) {
+  if (!repoPath) return undefined
+
+  const settings = await getSettings(workspaceId)
+  const normalizedPath = normalizeRepoPath(repoPath)
+  const knownPaths = new Set(
+    [settings.currentRepoPath, ...settings.recentRepos.map((repo) => repo.path)]
+      .filter(Boolean)
+      .map((knownPath) => normalizeRepoPath(knownPath)),
+  )
+
+  if (!knownPaths.has(normalizedPath)) {
+    throw new Error('Repository must be opened in Git before using it here.')
+  }
+
+  return normalizedPath
 }
 
 export async function getRecentRepos(workspaceId?: string) {
@@ -1032,7 +1102,7 @@ export async function getRecentRepos(workspaceId?: string) {
 
 export async function addRepo(repoPath: string, workspaceId?: string) {
   const settings = await getSettings(workspaceId)
-  const normalizedPath = path.resolve(repoPath.replace(/^~/, os.homedir()))
+  const normalizedPath = normalizeRepoPath(repoPath)
 
   // Verify it's a git repo
   try {
@@ -1106,21 +1176,98 @@ export async function getStatus(repoPath?: string, workspaceId?: string) {
   }
 }
 
+function parseBranchList(output: string) {
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+function assertSafeBranchSelection(branchName: string) {
+  const trimmed = branchName.trim()
+
+  if (!trimmed || trimmed.startsWith('-')) {
+    throw new Error('Invalid branch selection.')
+  }
+
+  if (trimmed.includes('HEAD ->') || trimmed.endsWith('/HEAD')) {
+    throw new Error('Cannot switch to a symbolic HEAD reference.')
+  }
+
+  return trimmed
+}
+
+export async function checkoutBranch(
+  branchName: string,
+  workspaceId?: string,
+  repoPath?: string,
+) {
+  const settings = await getSettings(workspaceId)
+  const pathToUse = requireRepoPath(
+    resolveRepoPath(repoPath, settings.currentRepoPath),
+  )
+  const targetBranch = assertSafeBranchSelection(branchName)
+  const currentBranch = (
+    await runGit(['branch', '--show-current'], pathToUse, 10_000)
+  ).stdout.trim()
+
+  if (targetBranch === currentBranch) {
+    return getStatus(pathToUse, workspaceId)
+  }
+
+  const [localBranches, remoteBranches] = await Promise.all([
+    runGit(['branch', '--format=%(refname:short)'], pathToUse, 10_000).then(
+      (result) => parseBranchList(result.stdout),
+    ),
+    runGit(
+      ['branch', '--remotes', '--format=%(refname:short)'],
+      pathToUse,
+      10_000,
+    ).then((result) => parseBranchList(result.stdout)),
+  ])
+
+  if (localBranches.includes(targetBranch)) {
+    await runGit(['switch', targetBranch], pathToUse, 30_000)
+    return getStatus(pathToUse, workspaceId)
+  }
+
+  const remoteTarget = targetBranch.startsWith('remotes/')
+    ? targetBranch.slice('remotes/'.length)
+    : targetBranch
+
+  if (remoteBranches.includes(remoteTarget)) {
+    const slashIndex = remoteTarget.indexOf('/')
+    const localBranchName =
+      slashIndex === -1 ? remoteTarget : remoteTarget.slice(slashIndex + 1)
+
+    if (localBranches.includes(localBranchName)) {
+      await runGit(['switch', localBranchName], pathToUse, 30_000)
+    } else {
+      await runGit(['switch', '--track', remoteTarget], pathToUse, 30_000)
+    }
+
+    return getStatus(pathToUse, workspaceId)
+  }
+
+  throw new Error('Branch was not found in the current repository.')
+}
+
 export async function getPullRequestContext(
   workspaceId?: string,
+  repoPath?: string,
 ): Promise<PullRequestContext> {
   const settings = await getSettings(workspaceId)
-  const repoPath = requireRepoPath(
-    resolveRepoPath(undefined, settings.currentRepoPath),
+  const pathToUse = requireRepoPath(
+    resolveRepoPath(repoPath, settings.currentRepoPath),
   )
-  const g = simpleGit(repoPath)
+  const g = simpleGit(pathToUse)
   const branchView = await g.branch()
   const currentBranch = branchView.current
   const status = await getPullRequestStatusForRepo(
     g,
     currentBranch,
     branchView.all,
-    repoPath,
+    pathToUse,
   )
 
   if (status.existingPullRequest?.url) {
@@ -1185,15 +1332,16 @@ export function sanitizeBranchName(value: string) {
 export async function createBranchFromBaseIfNeeded(
   proposedBranchName: string,
   workspaceId?: string,
+  repoPath?: string,
 ) {
   const settings = await getSettings(workspaceId)
-  const repoPath = requireRepoPath(
-    resolveRepoPath(undefined, settings.currentRepoPath),
+  const pathToUse = requireRepoPath(
+    resolveRepoPath(repoPath, settings.currentRepoPath),
   )
 
   console.info('[git-flow] Commit & open PR: checking current branch')
   const currentBranch = (
-    await runGit(['branch', '--show-current'], repoPath, 10_000)
+    await runGit(['branch', '--show-current'], pathToUse, 10_000)
   ).stdout.trim()
 
   if (!currentBranch || currentBranch === 'HEAD') {
@@ -1202,14 +1350,14 @@ export async function createBranchFromBaseIfNeeded(
 
   const upstream = await runGit(
     ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
-    repoPath,
+    pathToUse,
     10_000,
   )
     .then((result) => parseRemoteRef(result.stdout.trim()))
     .catch(() => undefined)
   const branchList = await runGit(
     ['branch', '--list', '--format=%(refname:short)'],
-    repoPath,
+    pathToUse,
     10_000,
   )
     .then((result) => result.stdout.split(/\r?\n/).map((line) => line.trim()))
@@ -1227,7 +1375,7 @@ export async function createBranchFromBaseIfNeeded(
             : undefined
 
   const existingPullRequest = await getExistingPullRequest(
-    repoPath,
+    pathToUse,
     currentBranch,
   )
 
@@ -1258,7 +1406,7 @@ export async function createBranchFromBaseIfNeeded(
   while (
     await runGit(
       ['rev-parse', '--verify', '--quiet', candidate],
-      repoPath,
+      pathToUse,
       5_000,
     )
       .then(() => true)
@@ -1269,7 +1417,7 @@ export async function createBranchFromBaseIfNeeded(
   }
 
   console.info(`[git-flow] Commit & open PR: creating branch ${candidate}`)
-  await runGit(['checkout', '-b', candidate], repoPath, 20_000)
+  await runGit(['checkout', '-b', candidate], pathToUse, 20_000)
 
   return {
     created: true,
@@ -1320,27 +1468,30 @@ export async function commitFiles(
   summary: string,
   description: string,
   workspaceId?: string,
+  repoPath?: string,
 ) {
   const settings = await getSettings(workspaceId)
-  const repoPath = requireRepoPath(
-    resolveRepoPath(undefined, settings.currentRepoPath),
+  const pathToUse = requireRepoPath(
+    resolveRepoPath(repoPath, settings.currentRepoPath),
   )
 
   try {
-    const activePaths = await resolveCommitPaths(paths, repoPath)
+    const activePaths = await resolveCommitPaths(paths, pathToUse)
 
     // 1. Stage only the selected files that are still present in git status.
     // Large commits and pre-commit hooks can legitimately take a long time, so
     // commit workflows intentionally do not impose a fixed timeout.
-    await runGit(['add', '--', ...activePaths], repoPath, null)
+    await runGit(['add', '--', ...activePaths], pathToUse, null)
 
-    // 2. Commit with summary and description
-    const commitArgs = ['commit', '-m', summary]
+    // 2. Commit only the selected paths. A plain `git commit` would also
+    // include unrelated files that happened to be staged before Git Flow ran.
+    const commitArgs = ['commit', '--only', '-m', summary]
     if (description) {
       commitArgs.push('-m', description)
     }
-    await runGit(commitArgs, repoPath, null)
-    const result = await runGit(['rev-parse', 'HEAD'], repoPath)
+    commitArgs.push('--', ...activePaths)
+    await runGit(commitArgs, pathToUse, null)
+    const result = await runGit(['rev-parse', 'HEAD'], pathToUse)
 
     return { success: true, commit: result.stdout.trim() }
   } catch (err) {
@@ -1351,12 +1502,12 @@ export async function commitFiles(
   }
 }
 
-export async function pushCommits(workspaceId?: string) {
+export async function pushCommits(workspaceId?: string, repoPath?: string) {
   const settings = await getSettings(workspaceId)
-  const repoPath = requireRepoPath(
-    resolveRepoPath(undefined, settings.currentRepoPath),
+  const pathToUse = requireRepoPath(
+    resolveRepoPath(repoPath, settings.currentRepoPath),
   )
-  const g = simpleGit(repoPath)
+  const g = simpleGit(pathToUse)
 
   try {
     const currentBranch = (await g.revparse(['--abbrev-ref', 'HEAD'])).trim()
@@ -1371,7 +1522,7 @@ export async function pushCommits(workspaceId?: string) {
       .catch(() => null)
 
     if (upstream) {
-      const result = await runGit(['push'], repoPath)
+      const result = await runGit(['push'], pathToUse)
       return { success: true, result, upstreamSet: false }
     }
 
@@ -1387,7 +1538,7 @@ export async function pushCommits(workspaceId?: string) {
 
     const result = await runGit(
       ['push', '--set-upstream', preferredRemote.name, currentBranch],
-      repoPath,
+      pathToUse,
     )
 
     return {
@@ -1489,19 +1640,20 @@ export async function getCommitDiff(
   const g = simpleGit(pathToUse)
 
   try {
+    const commitHash = await resolveCommitOid(g, hash)
     if (filePath) {
       return await g.show([
         '--format=',
         '--no-ext-diff',
         '--find-renames',
-        hash,
+        commitHash,
         '--',
         filePath,
       ])
     }
 
     // Show stats and the diff for the specific commit
-    return await g.show([hash])
+    return await g.show([commitHash])
   } catch (error) {
     console.error('Git show error:', error)
     return 'Failed to load commit diff'
@@ -1519,6 +1671,7 @@ export async function getCommitFiles(
   const g = simpleGit(pathToUse)
 
   try {
+    const commitHash = await resolveCommitOid(g, hash)
     const output = await g.raw([
       'diff-tree',
       '--no-commit-id',
@@ -1526,7 +1679,7 @@ export async function getCommitFiles(
       '-r',
       '-M',
       '--root',
-      hash,
+      commitHash,
     ])
 
     return output
@@ -1565,18 +1718,23 @@ export async function getImagePreview(
     resolveRepoPath(options.repoPath, settings.currentRepoPath),
   )
   const gitPath = filePath.replace(/\\/g, '/')
+  const g = simpleGit(pathToUse)
 
   if (options.hash) {
+    const commitHash = await resolveCommitOid(g, options.hash)
     const treeish = isDeletedStatus(options.status)
-      ? `${options.hash}^:${gitPath}`
-      : `${options.hash}:${gitPath}`
+      ? `${commitHash}^:${gitPath}`
+      : `${commitHash}:${gitPath}`
     const buffer = await runGitBuffer(['show', treeish], pathToUse)
     return { buffer, mimeType }
   }
 
   const resolvedFilePath = resolveRepoFilePath(pathToUse, filePath)
   if (existsSync(resolvedFilePath) && !isDeletedStatus(options.status)) {
-    const imageStat = await stat(resolvedFilePath)
+    const imageStat = await lstat(resolvedFilePath)
+    if (!imageStat.isFile()) {
+      throw new Error('Image preview is only available for regular files.')
+    }
     if (imageStat.size > MAX_IMAGE_PREVIEW_BYTES) {
       throw new Error('Image preview is too large.')
     }
@@ -1585,6 +1743,34 @@ export async function getImagePreview(
 
   const buffer = await runGitBuffer(['show', `HEAD:${gitPath}`], pathToUse)
   return { buffer, mimeType }
+}
+
+async function getRegularRepoFileForRead(
+  repoPath: string,
+  relativeFilePath: string,
+) {
+  const normalizedPath = normalizeRepoRelativePath(repoPath, relativeFilePath)
+  const repoRoot = path.resolve(repoPath)
+  const fullPath = path.join(repoRoot, normalizedPath)
+  const fileStat = await lstat(fullPath)
+
+  if (!fileStat.isFile()) {
+    throw new Error('Preview is only available for regular files.')
+  }
+
+  const [realRepoRoot, realFilePath] = await Promise.all([
+    realpath(repoRoot),
+    realpath(fullPath),
+  ])
+
+  if (
+    realFilePath !== realRepoRoot &&
+    !realFilePath.startsWith(realRepoRoot + path.sep)
+  ) {
+    throw new Error('File must be inside the current repository.')
+  }
+
+  return { fullPath, fileStat, normalizedPath }
 }
 
 export async function getDiff(
@@ -1611,18 +1797,18 @@ export async function getDiff(
       // For untracked files, generate a synthetic diff. Avoid reading very large
       // files into memory just to render a preview in the UI.
       try {
-        const fullPath = path.join(pathToUse, filePath)
+        const { fullPath, fileStat, normalizedPath } =
+          await getRegularRepoFileForRead(pathToUse, filePath)
         if (existsSync(fullPath)) {
-          const fileStat = await stat(fullPath)
           if (fileStat.size > MAX_UNTRACKED_DIFF_BYTES) {
-            untrackedDiff = `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1 @@\n+[Untracked file is ${formatBytes(
+            untrackedDiff = `--- /dev/null\n+++ b/${normalizedPath}\n@@ -0,0 +1 @@\n+[Untracked file is ${formatBytes(
               fileStat.size,
             )}. Preview skipped to keep Git Flow responsive. Open the file in your editor for full contents.]`
           } else {
             const fileContent = await readFile(fullPath, 'utf8')
             const lines = fileContent.split('\n')
             untrackedDiff = lines.map((line: string) => `+${line}`).join('\n')
-            untrackedDiff = `--- /dev/null\n+++ b/${filePath}\n@@ -0,0 +1,${lines.length} @@\n${untrackedDiff}`
+            untrackedDiff = `--- /dev/null\n+++ b/${normalizedPath}\n@@ -0,0 +1,${lines.length} @@\n${untrackedDiff}`
           }
         }
       } catch (e) {
@@ -1639,11 +1825,15 @@ export async function getDiff(
   return [staged, unstaged].filter(Boolean).join('\n')
 }
 
-export async function getDiffForFiles(paths: string[], workspaceId?: string) {
+export async function getDiffForFiles(
+  paths: string[],
+  workspaceId?: string,
+  repoPath?: string,
+) {
   const uniquePaths = Array.from(new Set(paths)).filter(Boolean)
   const diffs = await Promise.all(
     uniquePaths.map(async (filePath) => {
-      const diff = await getDiff(undefined, filePath, workspaceId)
+      const diff = await getDiff(repoPath, filePath, workspaceId)
       return diff ? `diff --moldable-selected-file ${filePath}\n${diff}` : ''
     }),
   )
@@ -1693,7 +1883,10 @@ export async function discardChanges(paths: string[], workspaceId?: string) {
   const repoPath = requireRepoPath(
     resolveRepoPath(undefined, settings.currentRepoPath),
   )
-  const pathsToDiscard = uniqueRepoRelativePaths(repoPath, paths)
+  const pathsToDiscard = await resolveCommitPaths(
+    uniqueRepoRelativePaths(repoPath, paths),
+    repoPath,
+  )
 
   if (pathsToDiscard.length === 0) {
     throw new Error('At least one file is required.')

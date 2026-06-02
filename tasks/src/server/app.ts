@@ -253,6 +253,14 @@ function sanitizeFilename(filename: string) {
   return safe || 'attachment'
 }
 
+function isPathInside(parent: string, child: string) {
+  const relative = path.relative(parent, child)
+  return (
+    relative === '' ||
+    (!relative.startsWith('..') && !path.isAbsolute(relative))
+  )
+}
+
 function normalizeLabels(labels: z.infer<typeof labelSchema>[]): TaskLabel[] {
   return labels.map((label, index) => ({
     id: label.id?.trim() || newId('label'),
@@ -272,9 +280,9 @@ async function persistAttachment(
   const createdAt = attachment.createdAt ?? nowIso()
 
   if (attachment.path) {
-    const dataDir = path.normalize(getDataDir(c))
-    const attachmentPath = path.normalize(attachment.path)
-    if (!attachmentPath.startsWith(dataDir)) {
+    const dataDir = path.resolve(getDataDir(c))
+    const attachmentPath = path.resolve(attachment.path)
+    if (!isPathInside(dataDir, attachmentPath)) {
       throw new Error('Attachment path must be inside the app data directory')
     }
     return {
@@ -475,6 +483,12 @@ function requireProject(
   return project
 }
 
+function hasProjectSelector(selector: z.infer<typeof projectSelectorSchema>) {
+  return Boolean(
+    selector.projectId || selector.projectKey || selector.projectName,
+  )
+}
+
 function splitTaskKey(value: string) {
   const match = value.trim().match(/^([A-Za-z]+)-(\d+)$/)
   if (!match) return null
@@ -489,7 +503,19 @@ function findTask(
   selector: z.infer<typeof taskSelectorSchema>,
 ) {
   if (selector.taskId) {
-    return data.tasks.find((task) => task.id === selector.taskId)
+    const task = data.tasks.find((item) => item.id === selector.taskId)
+    if (!task) return undefined
+    const project = data.projects.find((item) => item.id === task.projectId)
+    if (selector.projectId && task.projectId !== selector.projectId) {
+      return undefined
+    }
+    const projectKey = selector.projectKey
+      ? normalizeProjectKey(selector.projectKey)
+      : ''
+    if (projectKey && project?.key.toUpperCase() !== projectKey) {
+      return undefined
+    }
+    return task
   }
 
   const taskKeyParts = selector.taskKey ? splitTaskKey(selector.taskKey) : null
@@ -500,11 +526,14 @@ function findTask(
 
   if (!number) return undefined
 
-  const project = selector.projectId
-    ? data.projects.find((item) => item.id === selector.projectId)
-    : data.projects.find((item) => item.key.toUpperCase() === projectKey)
+  const project = taskKeyParts?.projectKey
+    ? data.projects.find((item) => item.key.toUpperCase() === projectKey)
+    : selector.projectId
+      ? data.projects.find((item) => item.id === selector.projectId)
+      : data.projects.find((item) => item.key.toUpperCase() === projectKey)
 
   if (!project) return undefined
+  if (selector.projectId && selector.projectId !== project.id) return undefined
   return data.tasks.find(
     (task) => task.projectId === project.id && task.number === number,
   )
@@ -838,7 +867,10 @@ app.post('/api/moldable/rpc', async (c) => {
 
     if (method === 'tasks.list' || method === 'tasks.search') {
       const params = tasksListParamsSchema.parse(body.params)
-      const project = params ? findProject(data, params) : undefined
+      const project =
+        params && hasProjectSelector(params)
+          ? requireProject(data, params)
+          : undefined
       const query = params?.query?.trim().toLowerCase()
       const labelName = params?.labelName?.trim().toLowerCase()
       const tasks = data.tasks
@@ -1132,8 +1164,24 @@ app.patch('/api/projects/:projectId', async (c) => {
     if (input.description !== undefined) project.description = input.description
     if (input.logoUrl !== undefined) project.logoUrl = input.logoUrl
     if (input.websiteUrl !== undefined) project.websiteUrl = input.websiteUrl
-    if (input.labels !== undefined)
+    if (input.labels !== undefined) {
+      const previousProjectLabelIds = new Set(
+        project.labels.map((label) => label.id),
+      )
       project.labels = normalizeLabels(input.labels)
+      const nextProjectLabels = new Map(
+        project.labels.map((label) => [label.id, label]),
+      )
+
+      for (const task of data.tasks) {
+        if (task.projectId !== project.id) continue
+        task.labels = task.labels.flatMap((label) => {
+          if (!previousProjectLabelIds.has(label.id)) return [label]
+          const nextLabel = nextProjectLabels.get(label.id)
+          return nextLabel ? [nextLabel] : []
+        })
+      }
+    }
     project.updatedAt = nowIso()
 
     await writeData(c, data)

@@ -42,10 +42,14 @@ export async function translateText(
   })
 
   const translation = data.translations?.[0]
+  if (!translation || typeof translation.text !== 'string') {
+    throw new Error('DeepL returned an invalid translation response')
+  }
+
   const detected = translation?.detected_source_language
 
   return {
-    translatedText: translation?.text ?? '',
+    translatedText: translation.text,
     detectedSourceLanguage: detected
       ? resolveLanguage(detected, from === 'auto' ? 'en' : from)
       : from === 'auto'

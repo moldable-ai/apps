@@ -11,7 +11,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react'
 import {
   Badge,
   Button,
@@ -46,9 +46,105 @@ interface TranslateResponse {
   detectedSourceLanguage: Language
 }
 
+interface TranslateVariables {
+  text: string
+  from: SourceSelection
+  to: Language
+}
+
 interface TranslateError {
   message: string
   missingCredential: boolean
+}
+
+interface TranslateState {
+  source: SourceSelection
+  target: Language
+  input: string
+  output: string
+  detected: Language | null
+  error: TranslateError | null
+  copied: boolean
+  historyOpen: boolean
+}
+
+type TranslateAction =
+  | { type: 'set-source'; source: SourceSelection }
+  | { type: 'set-target'; target: Language }
+  | { type: 'set-input'; input: string }
+  | { type: 'clear-input' }
+  | { type: 'set-output'; output: string; detected: Language | null }
+  | { type: 'set-error'; error: TranslateError | null }
+  | { type: 'set-copied'; copied: boolean }
+  | { type: 'set-history-open'; open: boolean }
+  | { type: 'swap' }
+  | { type: 'restore-record'; record: TranslationRecord }
+
+const initialTranslateState: TranslateState = {
+  source: 'auto',
+  target: 'es',
+  input: '',
+  output: '',
+  detected: null,
+  error: null,
+  copied: false,
+  historyOpen: false,
+}
+
+function translateReducer(
+  state: TranslateState,
+  action: TranslateAction,
+): TranslateState {
+  switch (action.type) {
+    case 'set-source':
+      return { ...state, source: action.source, error: null }
+    case 'set-target':
+      return { ...state, target: action.target, error: null }
+    case 'set-input':
+      return { ...state, input: action.input }
+    case 'clear-input':
+      return { ...state, input: '', output: '', detected: null, error: null }
+    case 'set-output':
+      return {
+        ...state,
+        output: action.output,
+        detected: action.detected,
+        error: null,
+      }
+    case 'set-error':
+      return { ...state, error: action.error }
+    case 'set-copied':
+      return { ...state, copied: action.copied }
+    case 'set-history-open':
+      return { ...state, historyOpen: action.open }
+    case 'swap': {
+      const nextSource: Language =
+        state.source === 'auto' ? (state.detected ?? 'en') : state.source
+      return {
+        ...state,
+        source: state.target,
+        target: nextSource,
+        input: state.output || state.input,
+        output: '',
+        detected: null,
+        error: null,
+      }
+    }
+    case 'restore-record':
+      return {
+        ...state,
+        source: action.record.requestedSource,
+        target: action.record.targetLanguage,
+        input: action.record.sourceText,
+        output: action.record.translatedText,
+        detected:
+          action.record.requestedSource === 'auto'
+            ? action.record.sourceLanguage
+            : null,
+        error: null,
+        historyOpen: false,
+      }
+  }
 }
 
 function useHistory() {
@@ -103,14 +199,19 @@ export default function Home() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
 
-  const [source, setSource] = useState<SourceSelection>('auto')
-  const [target, setTarget] = useState<Language>('es')
-  const [input, setInput] = useState('')
-  const [output, setOutput] = useState('')
-  const [detected, setDetected] = useState<Language | null>(null)
-  const [error, setError] = useState<TranslateError | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [historyOpen, setHistoryOpen] = useState(false)
+  const [state, dispatch] = useReducer(translateReducer, initialTranslateState)
+  const {
+    source,
+    target,
+    input,
+    output,
+    detected,
+    error,
+    copied,
+    historyOpen,
+  } = state
+  const currentTranslationState = useRef({ input, source, target })
+  currentTranslationState.current = { input, source, target }
 
   const { data: history = [] } = useHistory()
 
@@ -118,12 +219,20 @@ export default function Home() {
     void queryClient.invalidateQueries({ queryKey: ['history', workspaceId] })
   }, [queryClient, workspaceId])
 
-  const translateMutation = useMutation({
-    mutationFn: async (): Promise<TranslateResponse> => {
+  const translateMutation = useMutation<
+    TranslateResponse,
+    TranslateError,
+    TranslateVariables
+  >({
+    mutationFn: async (variables): Promise<TranslateResponse> => {
       const res = await fetchWithWorkspace('/api/translate', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ text: input, from: source, to: target }),
+        body: JSON.stringify({
+          text: variables.text,
+          from: variables.from,
+          to: variables.to,
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -136,45 +245,69 @@ export default function Home() {
       }
       return data as TranslateResponse
     },
-    onSuccess: async (data) => {
-      setOutput(data.translatedText)
-      setDetected(source === 'auto' ? data.detectedSourceLanguage : null)
-      setError(null)
-      if (input.trim() && data.translatedText.trim()) {
-        await fetchWithWorkspace('/api/history', {
+    onSuccess: async (data, variables) => {
+      const isCurrent =
+        currentTranslationState.current.input === variables.text &&
+        currentTranslationState.current.source === variables.from &&
+        currentTranslationState.current.target === variables.to
+
+      if (isCurrent) {
+        dispatch({
+          type: 'set-output',
+          output: data.translatedText,
+          detected:
+            variables.from === 'auto' ? data.detectedSourceLanguage : null,
+        })
+      }
+
+      if (variables.text.trim() && data.translatedText.trim()) {
+        const historyRes = await fetchWithWorkspace('/api/history', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            sourceText: input,
+            sourceText: variables.text,
             translatedText: data.translatedText,
-            requestedSource: source,
+            requestedSource: variables.from,
             sourceLanguage:
-              source === 'auto' ? data.detectedSourceLanguage : source,
-            targetLanguage: target,
+              variables.from === 'auto'
+                ? data.detectedSourceLanguage
+                : variables.from,
+            targetLanguage: variables.to,
           }),
         })
-        invalidateHistory()
+        if (historyRes.ok) {
+          invalidateHistory()
+        } else {
+          console.error('Failed to save translation history')
+        }
       }
     },
     onError: (err: TranslateError) => {
-      setError(
-        err.message
+      dispatch({
+        type: 'set-error',
+        error: err.message
           ? err
           : { message: 'Translation failed', missingCredential: false },
-      )
+      })
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await fetchWithWorkspace(`/api/history/${id}`, { method: 'DELETE' })
+      const res = await fetchWithWorkspace(`/api/history/${id}`, {
+        method: 'DELETE',
+      })
+      if (!res.ok) throw new Error('Failed to delete history record')
     },
     onSuccess: invalidateHistory,
   })
 
   const clearMutation = useMutation({
     mutationFn: async () => {
-      await fetchWithWorkspace('/api/history', { method: 'DELETE' })
+      const res = await fetchWithWorkspace('/api/history', {
+        method: 'DELETE',
+      })
+      if (!res.ok) throw new Error('Failed to clear history')
     },
     onSuccess: invalidateHistory,
   })
@@ -198,25 +331,18 @@ export default function Home() {
   const handleTranslate = useCallback(() => {
     if (input.trim().length === 0) return
     if (requestIsTooLarge) return
-    translateMutation.mutate()
-  }, [input, requestIsTooLarge, translateMutation])
+    translateMutation.mutate({ text: input, from: source, to: target })
+  }, [input, requestIsTooLarge, source, target, translateMutation])
 
   const handleSwap = useCallback(() => {
-    const newSource: Language = source === 'auto' ? (detected ?? 'en') : source
-    const nextInput = output || input
-    setSource(target)
-    setTarget(newSource)
-    setInput(nextInput)
-    setOutput('')
-    setDetected(null)
-    setError(null)
-  }, [source, target, detected, output, input])
+    dispatch({ type: 'swap' })
+  }, [])
 
   const handleCopy = useCallback(async () => {
     if (!output) return
     try {
       await navigator.clipboard.writeText(output)
-      setCopied(true)
+      dispatch({ type: 'set-copied', copied: true })
     } catch {
       // Clipboard may be unavailable; fail quietly.
     }
@@ -224,20 +350,15 @@ export default function Home() {
 
   useEffect(() => {
     if (!copied) return
-    const timer = setTimeout(() => setCopied(false), 1500)
+    const timer = setTimeout(
+      () => dispatch({ type: 'set-copied', copied: false }),
+      1500,
+    )
     return () => clearTimeout(timer)
   }, [copied])
 
   const restoreRecord = useCallback((record: TranslationRecord) => {
-    setSource(record.requestedSource)
-    setTarget(record.targetLanguage)
-    setInput(record.sourceText)
-    setOutput(record.translatedText)
-    setDetected(
-      record.requestedSource === 'auto' ? record.sourceLanguage : null,
-    )
-    setError(null)
-    setHistoryOpen(false)
+    dispatch({ type: 'restore-record', record })
   }, [])
 
   const sourceLabel = useMemo(() => {
@@ -254,231 +375,428 @@ export default function Home() {
   return (
     <main className="bg-background text-foreground flex min-h-screen flex-col">
       <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 px-4 pb-[calc(var(--chat-safe-padding,0px)+1.5rem)] pt-6 sm:px-6">
-        <div className="flex items-center gap-2">
-          <LanguageBar
-            source={source}
-            target={target}
-            sourceLabel={sourceLabel}
-            onSourceChange={(value) => {
-              setSource(value)
-              setError(null)
-            }}
-            onTargetChange={(value) => {
-              setTarget(value)
-              setError(null)
-            }}
-            onSwap={handleSwap}
-          />
+        <Toolbar
+          source={source}
+          target={target}
+          sourceLabel={sourceLabel}
+          historyCount={history.length}
+          onSourceChange={(value) =>
+            dispatch({ type: 'set-source', source: value })
+          }
+          onTargetChange={(value) =>
+            dispatch({ type: 'set-target', target: value })
+          }
+          onSwap={handleSwap}
+          onOpenHistory={() =>
+            dispatch({ type: 'set-history-open', open: true })
+          }
+        />
 
-          {history.length > 0 && (
-            <>
-              <Separator orientation="vertical" className="!h-6" />
+        <TranslationWorkspace
+          source={source}
+          target={target}
+          sourceLabel={sourceLabel}
+          input={input}
+          output={output}
+          detected={detected}
+          copied={copied}
+          overflowStart={overflowStart}
+          requestIsTooLarge={requestIsTooLarge}
+          isPending={isPending}
+          onInputChange={(value) =>
+            dispatch({ type: 'set-input', input: value })
+          }
+          onClearInput={() => dispatch({ type: 'clear-input' })}
+          onSubmit={handleTranslate}
+          onCopy={handleCopy}
+        />
+
+        <TranslationErrorBanner error={error} />
+
+        <TranslateButton
+          canTranslate={canTranslate}
+          isPending={isPending}
+          onTranslate={handleTranslate}
+        />
+      </div>
+
+      <HistorySheet
+        open={historyOpen}
+        history={history}
+        groups={groups}
+        onOpenChange={(open) => dispatch({ type: 'set-history-open', open })}
+        onClear={() => clearMutation.mutate()}
+        onRestore={restoreRecord}
+        onDelete={(id) => deleteMutation.mutate(id)}
+      />
+    </main>
+  )
+}
+
+function Toolbar({
+  source,
+  target,
+  sourceLabel,
+  historyCount,
+  onSourceChange,
+  onTargetChange,
+  onSwap,
+  onOpenHistory,
+}: {
+  source: SourceSelection
+  target: Language
+  sourceLabel: string
+  historyCount: number
+  onSourceChange: (value: SourceSelection) => void
+  onTargetChange: (value: Language) => void
+  onSwap: () => void
+  onOpenHistory: () => void
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <LanguageBar
+        source={source}
+        target={target}
+        sourceLabel={sourceLabel}
+        onSourceChange={onSourceChange}
+        onTargetChange={onTargetChange}
+        onSwap={onSwap}
+      />
+
+      {historyCount > 0 && (
+        <>
+          <Separator orientation="vertical" className="!h-6" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onOpenHistory}
+            aria-label="Translation history"
+            title="History"
+            className="text-muted-foreground hover:text-foreground shrink-0 gap-1.5"
+          >
+            <History className="size-4" />
+            <span className="text-xs tabular-nums">{historyCount}</span>
+          </Button>
+        </>
+      )}
+    </div>
+  )
+}
+
+function TranslationWorkspace({
+  source,
+  target,
+  sourceLabel,
+  input,
+  output,
+  detected,
+  copied,
+  overflowStart,
+  requestIsTooLarge,
+  isPending,
+  onInputChange,
+  onClearInput,
+  onSubmit,
+  onCopy,
+}: {
+  source: SourceSelection
+  target: Language
+  sourceLabel: string
+  input: string
+  output: string
+  detected: Language | null
+  copied: boolean
+  overflowStart: number | null
+  requestIsTooLarge: boolean
+  isPending: boolean
+  onInputChange: (value: string) => void
+  onClearInput: () => void
+  onSubmit: () => void
+  onCopy: () => void
+}) {
+  return (
+    <div className="border-border divide-border grid min-h-0 flex-1 divide-y overflow-hidden rounded-xl border md:grid-cols-2 md:divide-x md:divide-y-0">
+      <SourcePanel
+        source={source}
+        sourceLabel={sourceLabel}
+        input={input}
+        overflowStart={overflowStart}
+        requestIsTooLarge={requestIsTooLarge}
+        onInputChange={onInputChange}
+        onClearInput={onClearInput}
+        onSubmit={onSubmit}
+      />
+
+      <OutputPanel
+        target={target}
+        source={source}
+        output={output}
+        detected={detected}
+        copied={copied}
+        isPending={isPending}
+        onCopy={onCopy}
+      />
+    </div>
+  )
+}
+
+function SourcePanel({
+  source,
+  sourceLabel,
+  input,
+  overflowStart,
+  requestIsTooLarge,
+  onInputChange,
+  onClearInput,
+  onSubmit,
+}: {
+  source: SourceSelection
+  sourceLabel: string
+  input: string
+  overflowStart: number | null
+  requestIsTooLarge: boolean
+  onInputChange: (value: string) => void
+  onClearInput: () => void
+  onSubmit: () => void
+}) {
+  return (
+    <div className="flex min-h-0 flex-col gap-3 p-4 sm:p-5">
+      <div className="text-muted-foreground flex items-center justify-between text-xs font-medium">
+        <span>{source === 'auto' ? 'Source' : sourceLabel}</span>
+        {input.length > 0 && (
+          <button
+            type="button"
+            onClick={onClearInput}
+            className="hover:text-foreground flex items-center gap-1 transition-colors"
+          >
+            <X className="size-3" /> Clear
+          </button>
+        )}
+      </div>
+      <SourceTextField
+        value={input}
+        dir={source !== 'auto' && isRTL(source) ? 'rtl' : 'ltr'}
+        overflowStart={overflowStart}
+        autoFocus
+        onChange={onInputChange}
+        onSubmit={onSubmit}
+      />
+      <div className="flex items-center justify-between gap-3 text-xs">
+        {requestIsTooLarge ? (
+          <span className="text-destructive flex items-center gap-1.5 font-medium">
+            <AlertTriangle className="size-3.5 shrink-0" />
+            Highlighted text is too long to send. Trim it to translate.
+          </span>
+        ) : (
+          <span />
+        )}
+        <span className="text-muted-foreground hidden shrink-0 sm:inline">
+          ⌘↵ to translate
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function OutputPanel({
+  target,
+  source,
+  output,
+  detected,
+  copied,
+  isPending,
+  onCopy,
+}: {
+  target: Language
+  source: SourceSelection
+  output: string
+  detected: Language | null
+  copied: boolean
+  isPending: boolean
+  onCopy: () => void
+}) {
+  return (
+    <div className="flex min-h-0 flex-col gap-3 p-4 sm:p-5">
+      <div className="text-muted-foreground flex items-center justify-between text-xs font-medium">
+        <span>{languageLabel(target)}</span>
+        {output && (
+          <button
+            type="button"
+            onClick={onCopy}
+            className="hover:text-foreground flex items-center gap-1 transition-colors"
+          >
+            {copied ? (
+              <>
+                <Check className="size-3" /> Copied
+              </>
+            ) : (
+              <>
+                <Copy className="size-3" /> Copy
+              </>
+            )}
+          </button>
+        )}
+      </div>
+      <div
+        className={cn(
+          'min-h-44 flex-1 overflow-y-auto whitespace-pre-wrap text-sm md:text-base',
+          !output && 'text-muted-foreground',
+        )}
+        dir={isRTL(target) ? 'rtl' : 'ltr'}
+      >
+        {isPending ? (
+          <span className="text-muted-foreground inline-flex items-center gap-2">
+            <Spinner className="size-4" /> Translating…
+          </span>
+        ) : (
+          output || 'Translation will appear here.'
+        )}
+      </div>
+      {detected && source === 'auto' && output && (
+        <Badge variant="secondary" className="w-fit">
+          Detected {languageLabel(detected)} {LANGUAGES[detected].flag}
+        </Badge>
+      )}
+    </div>
+  )
+}
+
+function TranslationErrorBanner({ error }: { error: TranslateError | null }) {
+  if (!error) return null
+
+  return (
+    <div className="border-destructive/40 bg-destructive/5 text-destructive flex items-start gap-3 rounded-lg border p-4 text-sm">
+      <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+      <div className="space-y-1">
+        <p className="font-medium">
+          {error.missingCredential
+            ? 'Translation needs a DeepL API key'
+            : 'Translation failed'}
+        </p>
+        <p className="text-destructive/80">
+          {error.missingCredential
+            ? 'Add your DeepL API key in Moldable settings, then try again.'
+            : error.message}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function TranslateButton({
+  canTranslate,
+  isPending,
+  onTranslate,
+}: {
+  canTranslate: boolean
+  isPending: boolean
+  onTranslate: () => void
+}) {
+  return (
+    <div className="flex justify-end">
+      <Button onClick={onTranslate} disabled={!canTranslate} size="lg">
+        {isPending ? (
+          <>
+            <Spinner className="size-4" /> Translating…
+          </>
+        ) : (
+          <>
+            <Languages className="size-4" /> Translate
+          </>
+        )}
+      </Button>
+    </div>
+  )
+}
+
+function HistorySheet({
+  open,
+  history,
+  groups,
+  onOpenChange,
+  onClear,
+  onRestore,
+  onDelete,
+}: {
+  open: boolean
+  history: TranslationRecord[]
+  groups: { label: string; items: TranslationRecord[] }[]
+  onOpenChange: (open: boolean) => void
+  onClear: () => void
+  onRestore: (record: TranslationRecord) => void
+  onDelete: (id: string) => void
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent
+        showCloseButton={false}
+        className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
+      >
+        <div className="flex items-center justify-between border-b px-4 py-3">
+          <SheetTitle className="text-base">History</SheetTitle>
+          <div className="flex items-center gap-1">
+            {history.length > 0 && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setHistoryOpen(true)}
-                aria-label="Translation history"
-                title="History"
-                className="text-muted-foreground hover:text-foreground shrink-0 gap-1.5"
+                onClick={onClear}
+                className="text-muted-foreground hover:text-foreground h-8 text-xs"
               >
-                <History className="size-4" />
-                <span className="text-xs tabular-nums">{history.length}</span>
+                Clear all
               </Button>
-            </>
-          )}
-        </div>
-
-        <div className="border-border divide-border grid min-h-0 flex-1 divide-y overflow-hidden rounded-xl border md:grid-cols-2 md:divide-x md:divide-y-0">
-          <div className="flex min-h-0 flex-col gap-3 p-4 sm:p-5">
-            <div className="text-muted-foreground flex items-center justify-between text-xs font-medium">
-              <span>{source === 'auto' ? 'Source' : sourceLabel}</span>
-              {input.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setInput('')
-                    setOutput('')
-                    setDetected(null)
-                    setError(null)
-                  }}
-                  className="hover:text-foreground flex items-center gap-1 transition-colors"
-                >
-                  <X className="size-3" /> Clear
-                </button>
-              )}
-            </div>
-            <SourceTextField
-              value={input}
-              dir={source !== 'auto' && isRTL(source) ? 'rtl' : 'ltr'}
-              overflowStart={overflowStart}
-              autoFocus
-              onChange={setInput}
-              onSubmit={handleTranslate}
-            />
-            <div className="flex items-center justify-between gap-3 text-xs">
-              {requestIsTooLarge ? (
-                <span className="text-destructive flex items-center gap-1.5 font-medium">
-                  <AlertTriangle className="size-3.5 shrink-0" />
-                  Highlighted text is too long to send — trim it to translate.
-                </span>
-              ) : (
-                <span />
-              )}
-              <span className="text-muted-foreground hidden shrink-0 sm:inline">
-                ⌘↵ to translate
-              </span>
-            </div>
-          </div>
-
-          <div className="flex min-h-0 flex-col gap-3 p-4 sm:p-5">
-            <div className="text-muted-foreground flex items-center justify-between text-xs font-medium">
-              <span>{languageLabel(target)}</span>
-              {output && (
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  className="hover:text-foreground flex items-center gap-1 transition-colors"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="size-3" /> Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="size-3" /> Copy
-                    </>
-                  )}
-                </button>
-              )}
-            </div>
-            <div
-              className={cn(
-                'min-h-44 flex-1 overflow-y-auto whitespace-pre-wrap text-sm md:text-base',
-                !output && 'text-muted-foreground',
-              )}
-              dir={isRTL(target) ? 'rtl' : 'ltr'}
-            >
-              {isPending ? (
-                <span className="text-muted-foreground inline-flex items-center gap-2">
-                  <Spinner className="size-4" /> Translating…
-                </span>
-              ) : (
-                output || 'Translation will appear here.'
-              )}
-            </div>
-            {detected && source === 'auto' && output && (
-              <Badge variant="secondary" className="w-fit">
-                Detected {languageLabel(detected)} {LANGUAGES[detected].flag}
-              </Badge>
             )}
+            <SheetClose asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                aria-label="Close history"
+              >
+                <X className="size-4" />
+              </Button>
+            </SheetClose>
           </div>
         </div>
+        <SheetDescription className="sr-only">
+          Your recent translations. Select one to bring it back into the editor.
+        </SheetDescription>
 
-        {error && (
-          <div className="border-destructive/40 bg-destructive/5 text-destructive flex items-start gap-3 rounded-lg border p-4 text-sm">
-            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-            <div className="space-y-1">
-              <p className="font-medium">
-                {error.missingCredential
-                  ? 'Translation needs a DeepL API key'
-                  : 'Translation failed'}
-              </p>
-              <p className="text-destructive/80">
-                {error.missingCredential
-                  ? 'Add your DeepL API key in Moldable settings, then try again.'
-                  : error.message}
-              </p>
+        {history.length === 0 ? (
+          <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+            <div className="bg-muted flex size-12 items-center justify-center rounded-full">
+              <History className="size-5" />
             </div>
+            <p className="text-sm">No translations yet.</p>
           </div>
+        ) : (
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="space-y-5 p-3 pb-[calc(var(--chat-safe-padding,0px)+1rem)]">
+              {groups.map((group) => (
+                <div key={group.label} className="space-y-2">
+                  <p className="text-muted-foreground px-1 text-xs font-medium tracking-wide">
+                    {group.label}
+                  </p>
+                  <ul className="space-y-2">
+                    {group.items.map((record) => (
+                      <li key={record.id}>
+                        <HistoryRow
+                          record={record}
+                          onRestore={() => onRestore(record)}
+                          onDelete={() => onDelete(record.id)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
         )}
-
-        <div className="flex justify-end">
-          <Button onClick={handleTranslate} disabled={!canTranslate} size="lg">
-            {isPending ? (
-              <>
-                <Spinner className="size-4" /> Translating…
-              </>
-            ) : (
-              <>
-                <Languages className="size-4" /> Translate
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-
-      <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
-        <SheetContent
-          showCloseButton={false}
-          className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
-        >
-          <div className="flex items-center justify-between border-b px-4 py-3">
-            <SheetTitle className="text-base">History</SheetTitle>
-            <div className="flex items-center gap-1">
-              {history.length > 0 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => clearMutation.mutate()}
-                  className="text-muted-foreground hover:text-foreground h-8 text-xs"
-                >
-                  Clear all
-                </Button>
-              )}
-              <SheetClose asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-8"
-                  aria-label="Close history"
-                >
-                  <X className="size-4" />
-                </Button>
-              </SheetClose>
-            </div>
-          </div>
-          <SheetDescription className="sr-only">
-            Your recent translations. Select one to bring it back into the
-            editor.
-          </SheetDescription>
-
-          {history.length === 0 ? (
-            <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
-              <div className="bg-muted flex size-12 items-center justify-center rounded-full">
-                <History className="size-5" />
-              </div>
-              <p className="text-sm">No translations yet.</p>
-            </div>
-          ) : (
-            <ScrollArea className="min-h-0 flex-1">
-              <div className="space-y-5 p-3 pb-[calc(var(--chat-safe-padding,0px)+1rem)]">
-                {groups.map((group) => (
-                  <div key={group.label} className="space-y-2">
-                    <p className="text-muted-foreground px-1 text-xs font-medium tracking-wide">
-                      {group.label}
-                    </p>
-                    <ul className="space-y-2">
-                      {group.items.map((record) => (
-                        <li key={record.id}>
-                          <HistoryRow
-                            record={record}
-                            onRestore={() => restoreRecord(record)}
-                            onDelete={() => deleteMutation.mutate(record.id)}
-                          />
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-          )}
-        </SheetContent>
-      </Sheet>
-    </main>
+      </SheetContent>
+    </Sheet>
   )
 }
 
@@ -551,6 +869,7 @@ function SourceTextField({
         ref={textareaRef}
         value={value}
         autoFocus={autoFocus}
+        aria-label="Text to translate"
         dir={dir}
         spellCheck={false}
         placeholder="Enter text to translate…"

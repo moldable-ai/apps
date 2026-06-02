@@ -15,6 +15,7 @@ afterAll(() => {
 })
 
 const { app } = await import('./app')
+const { resolveStaticFilePath } = await import('./index')
 
 function req(path: string, init?: RequestInit) {
   return app.fetch(new Request(`http://test${path}`, init))
@@ -106,6 +107,51 @@ describe('folder routes', () => {
   })
 })
 
+describe('recipe routes', () => {
+  it('rejects whitespace-only RPC recipe titles', async () => {
+    const res = await jsonReq('/api/moldable/rpc', 'POST', {
+      method: 'recipes.create',
+      params: { title: '   ' },
+    })
+
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.ok).toBe(false)
+    expect(body.error.code).toBe('invalid_params')
+  })
+
+  it('rejects malformed whole-array saves', async () => {
+    const before = await (await req('/api/recipes')).json()
+    const res = await jsonReq('/api/recipes', 'POST', [
+      {
+        id: 'bad-recipe',
+        title: 'Broken',
+      },
+    ])
+
+    expect(res.status).toBe(400)
+    const after = await (await req('/api/recipes')).json()
+    expect(after).toEqual(before)
+  })
+})
+
+describe('static file resolution', () => {
+  it('serves built assets and app routes from dist', () => {
+    expect(resolveStaticFilePath('/assets/app.js')).toMatch(
+      /\/dist\/assets\/app\.js$/,
+    )
+    expect(resolveStaticFilePath('/recipes/demo')).toMatch(
+      /\/dist\/index\.html$/,
+    )
+  })
+
+  it('rejects traversal outside dist', () => {
+    expect(resolveStaticFilePath('/../package.json')).toBeNull()
+    expect(resolveStaticFilePath('/assets/../../package.json')).toBeNull()
+    expect(resolveStaticFilePath('/%2e%2e/package.json')).toBeNull()
+  })
+})
+
 // A 1x1 transparent PNG.
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
@@ -137,6 +183,16 @@ describe('media routes', () => {
   it('rejects a non-image upload', async () => {
     const form = new FormData()
     form.append('file', new File(['hello'], 'note.txt', { type: 'text/plain' }))
+    const res = await req('/api/recipes/media', { method: 'POST', body: form })
+    expect(res.status).toBe(400)
+  })
+
+  it('rejects uploads with unsupported image media types', async () => {
+    const form = new FormData()
+    form.append(
+      'file',
+      new File(['hello'], 'image', { type: 'image/x-unknown' }),
+    )
     const res = await req('/api/recipes/media', { method: 'POST', body: form })
     expect(res.status).toBe(400)
   })

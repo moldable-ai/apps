@@ -5,6 +5,17 @@ export const DEEPL_TEXT_REQUEST_LIMIT_BYTES = 128 * 1024
 
 const encoder = new TextEncoder()
 
+function toDeepLSourceLanguage(code: Language): string {
+  return code.toUpperCase()
+}
+
+function toDeepLTargetLanguage(code: Language): string {
+  if (code === 'en') return 'EN-US'
+  if (code === 'pt') return 'PT-PT'
+  if (code === 'zh') return 'ZH-HANS'
+  return code.toUpperCase()
+}
+
 export function createDeepLTranslateRequestBody(
   text: string,
   from: SourceSelection,
@@ -12,11 +23,11 @@ export function createDeepLTranslateRequestBody(
 ): Record<string, unknown> {
   const body: Record<string, unknown> = {
     text: [text],
-    target_lang: to.toUpperCase(),
+    target_lang: toDeepLTargetLanguage(to),
   }
 
   if (from !== 'auto') {
-    body.source_lang = from.toUpperCase()
+    body.source_lang = toDeepLSourceLanguage(from)
   }
 
   return body

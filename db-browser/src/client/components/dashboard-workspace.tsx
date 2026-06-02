@@ -719,11 +719,12 @@ function DashboardChartCard({
   dragHandle?: DragHandleProps
   dragging: boolean
 }) {
-  const { fetchWithWorkspace } = useWorkspace()
+  const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const queryClient = useQueryClient()
   const chartQuery = useQuery({
     queryKey: [
       'db-browser-dashboard-chart',
+      workspaceId,
       connectionId,
       chart.id,
       chart.sql,
@@ -788,6 +789,7 @@ function DashboardChartCard({
                 void queryClient.invalidateQueries({
                   queryKey: [
                     'db-browser-dashboard-chart',
+                    workspaceId,
                     connectionId,
                     chart.id,
                   ],
@@ -1928,7 +1930,7 @@ function ChartEditorDialog({
   onClose: () => void
   onSave: (chart: DashboardChart) => void
 }) {
-  const { fetchWithWorkspace } = useWorkspace()
+  const { workspaceId, fetchWithWorkspace } = useWorkspace()
   const [draft, setDraft] = useState(chart)
   const [aiEditActive, setAiEditActive] = useState(false)
   const [tableColumnsInput, setTableColumnsInput] = useState(
@@ -1937,6 +1939,7 @@ function ChartEditorDialog({
   const previewQuery = useQuery({
     queryKey: [
       'db-browser-dashboard-chart-editor-preview',
+      workspaceId,
       connectionId,
       draft.sql,
       draft.maxRows,
@@ -1958,9 +1961,10 @@ function ChartEditorDialog({
   const previewColumns = previewQuery.data?.columns ?? EMPTY_COLUMNS
 
   useEffect(() => {
+    if (mode !== 'edit') return
     setDraft(chart)
     setTableColumnsInput(chart.tableColumns.join(', '))
-  }, [chart])
+  }, [chart, mode])
 
   useEffect(() => {
     if (previewColumns.length === 0) return
