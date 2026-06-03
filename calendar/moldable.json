@@ -1,10 +1,7 @@
 {
   "name": "Calendar",
   "version": "0.1.9",
-  "aliases": [
-    "schedule",
-    "events"
-  ],
+  "aliases": ["schedule", "events"],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Integrated calendar with Google Calendar connection",
@@ -14,12 +11,7 @@
   "icon": "🗓️",
   "iconPath": "public/icon.png",
   "category": "productivity",
-  "tags": [
-    "calendar",
-    "schedule",
-    "events",
-    "google"
-  ],
+  "tags": ["calendar", "schedule", "events", "google"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
     "@moldable-ai/storage": "^0.1.5"
@@ -143,9 +135,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -159,9 +149,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "iCalUid"
-              ]
+              "required": ["iCalUid"]
             }
           },
           {
@@ -179,25 +167,14 @@
                 },
                 "responseStatus": {
                   "type": "string",
-                  "enum": [
-                    "accepted",
-                    "tentative",
-                    "declined",
-                    "needsAction"
-                  ]
+                  "enum": ["accepted", "tentative", "declined", "needsAction"]
                 },
                 "sendUpdates": {
                   "type": "string",
-                  "enum": [
-                    "all",
-                    "externalOnly",
-                    "none"
-                  ]
+                  "enum": ["all", "externalOnly", "none"]
                 }
               },
-              "required": [
-                "responseStatus"
-              ]
+              "required": ["responseStatus"]
             }
           },
           {
@@ -248,8 +225,6 @@
   },
   "modified": false,
   "routeName": "calendar",
-  "screenshots": [
-    "public/screenshots/1.png"
-  ],
+  "screenshots": ["public/screenshots/1.png"],
   "tagline": "Your Google Calendar, clean month view plus daily agenda"
 }

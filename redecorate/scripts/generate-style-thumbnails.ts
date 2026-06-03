@@ -1,36 +1,31 @@
 #!/usr/bin/env -S pnpm exec tsx
 import { STYLE_PRESETS, type StylePreset } from '../src/shared/catalog'
-import { execSync } from 'node:child_process'
-import { createHash, randomUUID } from 'node:crypto'
+import { spawnSync } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import {
   appendFileSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
+  rmSync,
   writeFileSync,
 } from 'node:fs'
-import { homedir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const CODEX_IMAGE_SOURCE = 'codex-cli:gpt-image-2'
+const CODEX_IMAGE_SOURCE = 'moldable-openai-codex-oauth:gpt-image-2'
 const THUMB_EXTENSIONS = ['webp', 'jpg', 'jpeg', 'png', 'avif'] as const
-const DEFAULT_LIMIT = 10
+const MAX_IMAGES_PER_RUN = 200
+const DEFAULT_LIMIT = MAX_IMAGES_PER_RUN
 const DEFAULT_DELAY_MS = 30_000
 const DEFAULT_MAX_RETRIES = 4
 const DEFAULT_RETRY_DELAY_MS = 60_000
 const DEFAULT_BUDGET = 200
-const MAX_IMAGES_PER_RUN = 200
-const DEFAULT_CODEX_BASE_URL = 'https://chatgpt.com/backend-api/codex'
-const DEFAULT_CODEX_RESPONSES_MODEL = 'gpt-5.5'
+const CODEX_RESPONSES_MODEL = 'gpt-5.5'
 const CODEX_IMAGE_INSTRUCTIONS = 'You are an image generation assistant.'
-const CODEX_OAUTH_ISSUER = 'https://auth.openai.com'
-const CODEX_OAUTH_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
-const CODEX_CLI_AUTH_FILENAME = 'auth.json'
-const CODEX_KEYCHAIN_SERVICE = 'Codex Auth'
-const CODEX_CLI_NEAR_EXPIRY_MS = 5 * 60 * 1000
-const DEFAULT_TOKEN_TTL_MS = 60 * 60 * 1000
-const DEFAULT_EXPIRES_IN_SECONDS = 60 * 60
+const AIVAULT_BIN = process.env.AIVAULT_BIN?.trim() || 'aivault'
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const appRoot = resolve(scriptDir, '..')
@@ -89,36 +84,8 @@ type OpenAIImageResponse = {
   }
 }
 
-type CodexCliCredential = {
-  access: string
-  refresh: string
-  expires: number
-  accountId?: string
-}
-
-type CodexJwtClaims = {
-  exp?: number
-  chatgpt_account_id?: string
-  organizations?: Array<{ id?: string }>
-  'https://api.openai.com/auth'?: {
-    chatgpt_account_id?: string
-  }
-}
-
-type CodexTokenResponse = {
-  id_token?: string
-  access_token?: string
-  refresh_token?: string
-  expires_in?: number
-}
-
 type CodexImageEvent = {
   type?: string
-  message?: string
-  error?: {
-    message?: string
-    code?: string
-  }
   item?: {
     type?: string
     result?: string
@@ -131,6 +98,11 @@ type CodexImageEvent = {
       revised_prompt?: string
     }>
   }
+  error?: {
+    code?: string
+    message?: string
+  }
+  message?: string
 }
 
 class ImageGenerationError extends Error {
@@ -433,243 +405,35 @@ function presetsToGenerate(options: Options): StylePreset[] {
   return presets.slice(0, allowed)
 }
 
-function resolveCodexHomePath(): string {
-  const configured = process.env.CODEX_HOME
-  const base = configured?.trim()
-    ? configured.startsWith('~')
-      ? join(homedir(), configured.slice(1))
-      : configured
-    : join(homedir(), '.codex')
-  return resolve(base)
-}
-
-function resolveCodexCliAuthPath(): string {
-  return join(resolveCodexHomePath(), CODEX_CLI_AUTH_FILENAME)
-}
-
-function computeCodexKeychainAccount(codexHome: string): string {
-  const hash = createHash('sha256').update(codexHome).digest('hex')
-  return `cli|${hash.slice(0, 16)}`
-}
-
-function parseJwtClaims(token: string): CodexJwtClaims | undefined {
-  const parts = token.split('.')
-  if (parts.length !== 3) return undefined
-  try {
-    const payload = parts[1]
-    if (!payload) return undefined
-    return JSON.parse(
-      Buffer.from(payload, 'base64url').toString(),
-    ) as CodexJwtClaims
-  } catch {
-    return undefined
+function createCodexImageTool(options: Options): Record<string, unknown> {
+  const tool: Record<string, unknown> = {
+    type: 'image_generation',
+    model: options.model,
+    size: options.size,
+    quality: options.quality,
+    output_format: options.outputFormat,
+    background: 'auto',
   }
-}
-
-function extractAccountIdFromClaims(
-  claims: CodexJwtClaims | undefined,
-): string | undefined {
-  if (!claims) return undefined
-  return (
-    claims.chatgpt_account_id ||
-    claims['https://api.openai.com/auth']?.chatgpt_account_id ||
-    claims.organizations?.find((org) => typeof org.id === 'string')?.id
-  )
-}
-
-function resolveTokenExpires(accessToken: string): number | undefined {
-  const exp = parseJwtClaims(accessToken)?.exp
-  if (typeof exp !== 'number' || !Number.isFinite(exp) || exp <= 0) {
-    return undefined
+  if (options.outputFormat === 'webp' || options.outputFormat === 'jpeg') {
+    tool.output_compression = Math.trunc(options.outputCompression)
   }
-  return exp * 1000
+  return tool
 }
 
-function parseLastRefreshMs(value: unknown): number | undefined {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : undefined
-  }
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = new Date(value).getTime()
-    return Number.isFinite(parsed) ? parsed : undefined
-  }
-  return undefined
-}
-
-function readCodexKeychainCredentials(): CodexCliCredential | null {
-  if (process.platform !== 'darwin') return null
-
-  const codexHome = resolveCodexHomePath()
-  const account = computeCodexKeychainAccount(codexHome)
-
-  try {
-    const secret = execSync(
-      `security find-generic-password -s "${CODEX_KEYCHAIN_SERVICE}" -a "${account}" -w`,
-      {
-        encoding: 'utf8',
-        timeout: 5000,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      },
-    ).trim()
-    const parsed = JSON.parse(secret) as Record<string, unknown>
-    const tokens = parsed.tokens as Record<string, unknown> | undefined
-    const accessToken = tokens?.access_token
-    const refreshToken = tokens?.refresh_token
-    if (typeof accessToken !== 'string' || !accessToken) return null
-    if (typeof refreshToken !== 'string' || !refreshToken) return null
-
-    const lastRefresh = parseLastRefreshMs(parsed.last_refresh) ?? Date.now()
-    return {
-      access: accessToken,
-      refresh: refreshToken,
-      expires:
-        resolveTokenExpires(accessToken) ?? lastRefresh + DEFAULT_TOKEN_TTL_MS,
-      accountId:
-        typeof tokens.account_id === 'string'
-          ? tokens.account_id
-          : extractAccountIdFromClaims(parseJwtClaims(accessToken)),
-    }
-  } catch {
-    return null
-  }
-}
-
-function readCodexFileCredentials(): CodexCliCredential | null {
-  let parsed: Record<string, unknown>
-  try {
-    parsed = JSON.parse(
-      readFileSync(resolveCodexCliAuthPath(), 'utf8'),
-    ) as Record<string, unknown>
-  } catch {
-    return null
-  }
-  if (typeof parsed.auth_mode === 'string' && parsed.auth_mode !== 'chatgpt') {
-    return null
-  }
-  const tokens = parsed.tokens as Record<string, unknown> | undefined
-  const accessToken = tokens?.access_token
-  const refreshToken = tokens?.refresh_token
-  if (typeof accessToken !== 'string' || !accessToken) return null
-  if (typeof refreshToken !== 'string' || !refreshToken) return null
-
-  return {
-    access: accessToken,
-    refresh: refreshToken,
-    expires:
-      resolveTokenExpires(accessToken) ?? Date.now() + DEFAULT_TOKEN_TTL_MS,
-    accountId:
-      typeof tokens.account_id === 'string'
-        ? tokens.account_id
-        : extractAccountIdFromClaims(parseJwtClaims(accessToken)),
-  }
-}
-
-function isTokenFresh(expires: number): boolean {
-  return (
-    Number.isFinite(expires) && expires > Date.now() + CODEX_CLI_NEAR_EXPIRY_MS
-  )
-}
-
-function readCodexCliCredentials(): CodexCliCredential | null {
-  return readCodexKeychainCredentials() ?? readCodexFileCredentials()
-}
-
-function extractAccountIdFromTokenResponse(
-  tokens: CodexTokenResponse,
-): string | undefined {
-  return (
-    extractAccountIdFromClaims(parseJwtClaims(tokens.id_token ?? '')) ??
-    extractAccountIdFromClaims(parseJwtClaims(tokens.access_token ?? ''))
-  )
-}
-
-async function refreshCodexAccessToken(
-  current: CodexCliCredential,
-): Promise<CodexCliCredential> {
-  const response = await fetch(`${CODEX_OAUTH_ISSUER}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: current.refresh,
-      client_id: CODEX_OAUTH_CLIENT_ID,
-    }).toString(),
-  })
-  if (!response.ok) {
-    const text = await response.text().catch(() => '')
-    throw new ImageGenerationError(
-      `Codex OAuth refresh failed (${response.status}): ${text || response.statusText}`,
-      response.status,
-    )
-  }
-
-  const data = (await response.json()) as CodexTokenResponse
-  if (!data.access_token) {
-    throw new ImageGenerationError(
-      'Codex OAuth refresh returned no access token',
-    )
-  }
-  const expiresIn =
-    typeof data.expires_in === 'number' && data.expires_in > 0
-      ? data.expires_in
-      : DEFAULT_EXPIRES_IN_SECONDS
-
-  return {
-    access: data.access_token,
-    refresh: data.refresh_token || current.refresh,
-    expires: Date.now() + expiresIn * 1000,
-    accountId: extractAccountIdFromTokenResponse(data) ?? current.accountId,
-  }
-}
-
-async function resolveCodexAuth(): Promise<CodexCliCredential> {
-  const creds = readCodexCliCredentials()
-  if (!creds) {
-    throw new ImageGenerationError(
-      'Codex CLI authentication is not available. Sign in to Codex/Moldable, then rerun this generator.',
-    )
-  }
-  if (isTokenFresh(creds.expires)) return creds
-  return refreshCodexAccessToken(creds)
-}
-
-function resolveCodexBaseUrl(): string {
-  return (
-    process.env.MOLDABLE_CODEX_BASE_URL?.trim() ||
-    process.env.CODEX_BASE_URL?.trim() ||
-    DEFAULT_CODEX_BASE_URL
-  ).replace(/\/+$/, '')
-}
-
-function createCodexResponsesBody(
+function createCodexImageBody(
   options: Options,
   preset: StylePreset,
 ): Record<string, unknown> {
   return {
-    model: DEFAULT_CODEX_RESPONSES_MODEL,
+    model: CODEX_RESPONSES_MODEL,
     input: [
       {
         role: 'user',
-        content: [
-          {
-            type: 'input_text',
-            text: promptForPreset(preset),
-          },
-        ],
+        content: [{ type: 'input_text', text: promptForPreset(preset) }],
       },
     ],
     instructions: CODEX_IMAGE_INSTRUCTIONS,
-    tools: [
-      {
-        type: 'image_generation',
-        action: 'generate',
-        model: options.model,
-        size: options.size,
-        quality: options.quality,
-        output_format: options.outputFormat,
-        output_compression: Math.trunc(options.outputCompression),
-      },
-    ],
+    tools: [createCodexImageTool(options)],
     tool_choice: { type: 'image_generation' },
     stream: true,
     store: false,
@@ -697,101 +461,109 @@ function parseCodexImageEvents(text: string): CodexImageEvent[] {
       continue
     }
   }
-
-  if (events.length === 0) {
-    const parsed = parseJsonOrError(text)
-    if (parsed && typeof parsed === 'object') {
-      const completedResponse = parsed as NonNullable<
-        CodexImageEvent['response']
-      >
-      events.push({
-        type: 'response.completed',
-        response: {
-          output: completedResponse.output,
-        },
-      })
-    }
-  }
-
   return events
 }
 
-function extractCodexImagesFromEvents(
-  events: CodexImageEvent[],
-): OpenAIImageResponse {
+function imageFromCodexEvent(entry: {
+  result?: string
+  revised_prompt?: string
+}): NonNullable<OpenAIImageResponse['data']>[number] | null {
+  if (typeof entry.result !== 'string' || !entry.result) return null
+  return {
+    b64_json: entry.result,
+    ...(entry.revised_prompt ? { revised_prompt: entry.revised_prompt } : {}),
+  }
+}
+
+function extractCodexImages(text: string): OpenAIImageResponse {
+  const events = parseCodexImageEvents(text)
+  if (events.length === 0 && text.trim()) {
+    const parsed = parseJsonOrError(text) as OpenAIImageResponse | null
+    if (parsed?.data || parsed?.error) return parsed
+  }
+
   const failure = events.find(
     (event) => event.type === 'response.failed' || event.type === 'error',
   )
   if (failure) {
-    throw new ImageGenerationError(
-      failure.error?.message ??
-        failure.message ??
-        (failure.error?.code
-          ? `Codex image generation failed (${failure.error.code})`
-          : 'Codex image generation failed'),
-    )
+    return {
+      error: {
+        message:
+          failure.error?.message ||
+          failure.message ||
+          failure.error?.code ||
+          'Codex image generation failed',
+        code: failure.error?.code,
+      },
+    }
   }
 
   const outputItemImages = events
     .filter(
       (event) =>
         event.type === 'response.output_item.done' &&
-        event.item?.type === 'image_generation_call' &&
-        typeof event.item.result === 'string' &&
-        event.item.result.length > 0,
+        event.item?.type === 'image_generation_call',
     )
-    .map((event) => event.item!)
+    .map((event) => imageFromCodexEvent(event.item ?? {}))
+    .filter(
+      (image): image is NonNullable<OpenAIImageResponse['data']>[number] =>
+        Boolean(image),
+    )
 
   const completedImages = events
     .flatMap((event) => event.response?.output ?? [])
+    .filter((entry) => entry.type === 'image_generation_call')
+    .map((entry) => imageFromCodexEvent(entry))
     .filter(
-      (entry) =>
-        entry.type === 'image_generation_call' &&
-        typeof entry.result === 'string' &&
-        entry.result.length > 0,
+      (image): image is NonNullable<OpenAIImageResponse['data']>[number] =>
+        Boolean(image),
     )
 
-  const images =
-    outputItemImages.length > 0 ? outputItemImages : completedImages
   return {
-    data: images.slice(0, 1).map((image) => ({
-      b64_json: image.result!,
-      revised_prompt: image.revised_prompt,
-    })),
+    data: outputItemImages.length > 0 ? outputItemImages : completedImages,
   }
 }
 
-async function generateCodexImage(
-  options: Options,
-  preset: StylePreset,
-  auth: CodexCliCredential,
-): Promise<{ status: number; json: OpenAIImageResponse }> {
-  const headers = new Headers()
-  headers.set('Authorization', `Bearer ${auth.access}`)
-  headers.set('Accept', 'text/event-stream')
-  headers.set('Content-Type', 'application/json')
-  if (auth.accountId) headers.set('ChatGPT-Account-Id', auth.accountId)
+function statusFromAivaultError(stderr: string): number {
+  const match = stderr.match(/\b(429|5\d\d|401|403)\b/)
+  return match ? Number(match[1]) : 0
+}
 
-  const response = await fetch(`${resolveCodexBaseUrl()}/responses`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(createCodexResponsesBody(options, preset)),
-  })
-  const text = await response.text()
-  if (!response.ok) {
-    const parsed = parseJsonOrError(text) as {
-      error?: { message?: string }
-    } | null
-    throw new ImageGenerationError(
-      parsed?.error?.message ||
-        text ||
-        `Codex image generation failed with status ${response.status}`,
-      response.status,
+function runAivaultWithBodyFile(args: string[], body: string): string {
+  const tempDir = mkdtempSync(join(tmpdir(), 'redecorate-aivault-'))
+  const bodyPath = join(tempDir, 'body.json')
+  try {
+    writeFileSync(bodyPath, body, { mode: 0o600 })
+    const result = spawnSync(
+      AIVAULT_BIN,
+      [...args, '--body-file-path', bodyPath],
+      {
+        encoding: 'utf8',
+        maxBuffer: 80 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
     )
-  }
-  return {
-    status: response.status,
-    json: extractCodexImagesFromEvents(parseCodexImageEvents(text)),
+    if (result.error) {
+      throw result.error
+    }
+    if (result.status !== 0) {
+      const stderr = result.stderr?.trim() || ''
+      const stdout = result.stdout?.trim() || ''
+      const exitDetail =
+        result.status === null
+          ? `signal ${result.signal ?? 'unknown'}`
+          : `code ${result.status}`
+      const output = [stderr, stdout].filter(Boolean).join('\n')
+      throw new ImageGenerationError(
+        output
+          ? `aivault ${args.slice(0, 2).join(' ')} exited with ${exitDetail}\n${output}`
+          : `aivault ${args.slice(0, 2).join(' ')} exited with ${exitDetail}`,
+        statusFromAivaultError(stderr),
+      )
+    }
+    return result.stdout ?? ''
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true })
   }
 }
 
@@ -799,20 +571,34 @@ async function generateImageResponse(
   options: Options,
   preset: StylePreset,
 ): Promise<{ status: number; json: OpenAIImageResponse }> {
-  let auth = await resolveCodexAuth()
-  try {
-    return await generateCodexImage(options, preset, auth)
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    if (
-      error instanceof ImageGenerationError &&
-      error.status === 401 &&
-      message.includes('token_invalidated')
-    ) {
-      auth = await refreshCodexAccessToken(auth)
-      return generateCodexImage(options, preset, auth)
-    }
-    throw error
+  const text = runAivaultWithBodyFile(
+    [
+      'invoke',
+      'openai/codex-responses',
+      '--stream',
+      '--method',
+      'POST',
+      '--path',
+      '/responses',
+      '--header',
+      'content-type=application/json',
+      '--header',
+      'accept=text/event-stream',
+    ],
+    JSON.stringify(createCodexImageBody(options, preset)),
+  )
+  if (text.includes('<title>Just a moment...</title>')) {
+    throw new ImageGenerationError(
+      'Codex image endpoint returned a Cloudflare challenge page.',
+    )
+  }
+  const parsed = extractCodexImages(text)
+  if (parsed.error?.message) {
+    throw new ImageGenerationError(parsed.error.message)
+  }
+  return {
+    status: 200,
+    json: parsed,
   }
 }
 
@@ -821,7 +607,9 @@ function writeImage(
   outPath: string,
 ): void {
   if (!image.b64_json) {
-    throw new ImageGenerationError('OpenAI response did not include image data')
+    throw new ImageGenerationError(
+      'Codex image response did not include image data',
+    )
   }
   writeFileSync(outPath, Buffer.from(image.b64_json, 'base64'))
 }
@@ -850,8 +638,11 @@ async function generateOne(
     try {
       const { json } = await generateImageResponse(options, preset)
       const image = json.data?.[0]
-      if (!image)
-        throw new ImageGenerationError('OpenAI response had no images')
+      if (!image) {
+        throw new ImageGenerationError(
+          `Codex image response had no images: ${JSON.stringify(json).slice(0, 1000)}`,
+        )
+      }
 
       writeImage(image, outPath)
 

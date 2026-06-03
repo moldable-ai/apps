@@ -19,7 +19,7 @@ auth path used by Moldable's local AI server.
 
 The generator is intentionally resumable and conservative:
 
-- default batch size is 10 images;
+- default run limit is 200 images, which covers the current built-in library;
 - existing `<preset-id>.<ext>` files are skipped;
 - total output is capped at 200 thumbnails by default;
 - each preset's own prompt is included verbatim, with only a short wrapper that
@@ -30,7 +30,7 @@ Examples:
 
 ```bash
 pnpm generate-style-thumbnails --dry-run
-pnpm generate-style-thumbnails --limit 8
-pnpm generate-style-thumbnails --category interior-styles --limit 12
+pnpm generate-style-thumbnails --delay-ms 30000
+pnpm generate-style-thumbnails --category interior-styles --delay-ms 30000
 pnpm generate-style-thumbnails --only interior-japandi,interior-modern
 ```

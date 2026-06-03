@@ -9,12 +9,7 @@
   "icon": "📚",
   "iconPath": "public/icon.png",
   "category": "reference",
-  "tags": [
-    "markdown",
-    "notes",
-    "wiki",
-    "knowledge-base"
-  ],
+  "tags": ["markdown", "notes", "wiki", "knowledge-base"],
   "moldableDependencies": {
     "@moldable-ai/editor": "^0.1.16",
     "@moldable-ai/ui": "^0.2.17",

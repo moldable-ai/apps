@@ -1,10 +1,7 @@
 {
   "name": "Scribo Languages",
   "version": "0.1.9",
-  "aliases": [
-    "translation",
-    "languages"
-  ],
+  "aliases": ["translation", "languages"],
   "visibility": "public",
   "description": "Language learning journal with AI-powered translations",
   "runtime": "vite_hono",
@@ -14,12 +11,7 @@
   "icon": "📓",
   "iconPath": "public/icon.png",
   "category": "education",
-  "tags": [
-    "languages",
-    "translation",
-    "learning",
-    "journal"
-  ],
+  "tags": ["languages", "translation", "learning", "journal"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
     "@moldable-ai/editor": "^0.1.16",
@@ -92,9 +84,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -148,9 +138,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -164,9 +152,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -186,18 +172,11 @@
                   "type": "string"
                 },
                 "cache": {
-                  "type": [
-                    "object",
-                    "null"
-                  ],
+                  "type": ["object", "null"],
                   "description": "Optional Scribo translation cache."
                 }
               },
-              "required": [
-                "markdown",
-                "from",
-                "to"
-              ]
+              "required": ["markdown", "from", "to"]
             }
           }
         ]
@@ -212,9 +191,7 @@
       "description": "Powers automatic translations between languages",
       "url": "https://www.deepl.com/en/your-account/keys",
       "required": true,
-      "capabilities": [
-        "deepl/translate"
-      ]
+      "capabilities": ["deepl/translate"]
     },
     {
       "key": "ELEVENLABS_API_KEY",
@@ -222,9 +199,7 @@
       "description": "Powers text-to-speech pronunciation playback",
       "url": "https://elevenlabs.io/app/settings/api-keys",
       "required": false,
-      "capabilities": [
-        "elevenlabs/text-to-speech"
-      ]
+      "capabilities": ["elevenlabs/text-to-speech"]
     }
   ],
   "upstream": {
@@ -275,8 +250,6 @@
   },
   "modified": false,
   "routeName": "scribo",
-  "screenshots": [
-    "public/screenshots/1.png"
-  ],
+  "screenshots": ["public/screenshots/1.png"],
   "tagline": "Write in any language, translate and learn as you go"
 }

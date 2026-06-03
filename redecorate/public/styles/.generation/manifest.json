@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-06-02T18:07:35.813Z",
+  "updatedAt": "2026-06-03T01:06:15.202Z",
   "source": "codex-cli:gpt-image-2",
   "items": {
     "interior-modern": {
@@ -210,6 +210,32 @@
       "outputFormat": "webp",
       "outputCompression": 72,
       "generatedAt": "2026-06-02T18:07:35.813Z"
+    },
+    "interior-maximalist": {
+      "id": "interior-maximalist",
+      "name": "Maximalist",
+      "category": "interior-styles",
+      "file": "interior-maximalist.webp",
+      "prompt": "Create one original photorealistic style-library sample image for Redecorate, a home redesign app.\n\nPreset: Maximalist.\n\nScene: a bright residential kitchen with cabinetry, counters, fixtures, and natural daylight.\n\nUse the preset prompt below as the authoritative aesthetic direction. The image must visibly demonstrate this specific style as a finished design render, not a before-and-after transformation.\n\nDo not include text, labels, watermarks, UI chrome, people, split-screen panels, or visible brand marks. Keep the composition readable as a thumbnail in a style picker.\n\nPreset prompt:\n\nRestyle this room as bold Maximalism: saturated jewel-tone walls, clashing-yet-curated patterns, layered rugs and textiles, gallery walls of framed art, and shelves brimming with books and objects. Mix velvet, brass, and lacquer in a rich exuberant palette under warm layered lighting, while preserving the existing room geometry, windows, doors, openings, built-ins, and architectural layout.",
+      "model": "gpt-image-2",
+      "size": "1024x768",
+      "quality": "medium",
+      "outputFormat": "webp",
+      "outputCompression": 72,
+      "generatedAt": "2026-06-03T01:00:04.066Z"
+    },
+    "interior-rustic": {
+      "id": "interior-rustic",
+      "name": "Rustic",
+      "category": "interior-styles",
+      "file": "interior-rustic.webp",
+      "prompt": "Create one original photorealistic style-library sample image for Redecorate, a home redesign app.\n\nPreset: Rustic.\n\nScene: a bright residential kitchen with cabinetry, counters, fixtures, and natural daylight.\n\nUse the preset prompt below as the authoritative aesthetic direction. The image must visibly demonstrate this specific style as a finished design render, not a before-and-after transformation.\n\nDo not include text, labels, watermarks, UI chrome, people, split-screen panels, or visible brand marks. Keep the composition readable as a thumbnail in a style picker.\n\nPreset prompt:\n\nReimagine this room in a Rustic aesthetic: rough-hewn timber furniture, exposed wood-beam-look ceiling finishes, a stacked-stone fireplace-surround look, leather and wool upholstery, and cozy plaid throws. Use warm earthy browns, amber, and forest green with a glowing fireside light for a rugged lodge comfort, while preserving the existing room geometry, windows, doors, openings, built-ins, and architectural layout.",
+      "model": "gpt-image-2",
+      "size": "1024x768",
+      "quality": "medium",
+      "outputFormat": "webp",
+      "outputCompression": 72,
+      "generatedAt": "2026-06-03T01:06:15.202Z"
     }
   }
 }
