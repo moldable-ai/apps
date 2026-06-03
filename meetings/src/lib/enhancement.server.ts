@@ -195,6 +195,7 @@ export async function generateEnhancedNotes({
     schemaDescription:
       'Template-driven enhanced meeting notes generated from manual notes and transcript.',
     maxOutputTokens: 3600,
+    timeoutMs: 120_000,
     system: enhancedNotesSystemPrompt,
     prompt: buildEnhancedNotesPrompt({ meeting, template }),
   })
@@ -220,6 +221,7 @@ export async function streamEnhancedNotes({
     workspaceId,
     purpose: 'meetings.enhanced-notes.stream',
     maxOutputTokens: 3600,
+    timeoutMs: 120_000,
     system: `${enhancedNotesSystemPrompt}
 
 Return only the Markdown notes as plain text. Do not wrap the result in JSON or a Markdown code fence.`,

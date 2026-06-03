@@ -7,6 +7,7 @@ type AivaultRequest = {
   path?: string
   headers?: Record<string, string>
   body?: AivaultBody
+  timeoutMs?: number
 }
 
 const AIVAULT_ENV_KEYS = [
@@ -40,6 +41,7 @@ function buildArgs(
   request: AivaultRequest,
 ): string[] {
   const args = [mode, capability]
+  if (request.timeoutMs) args.push('--timeout-ms', String(request.timeoutMs))
   if (request.method) args.push('--method', request.method)
   if (request.path) args.push('--path', request.path)
   for (const [name, value] of Object.entries(request.headers ?? {})) {

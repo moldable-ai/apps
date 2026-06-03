@@ -34,3 +34,7 @@ coverage/
 
 # Tool caches
 .prettiercache
+
+# Redecorate thumbnail generation scratch data; shipped thumbnails live directly
+# in redecorate/public/styles/ as <preset-id>.<ext>.
+redecorate/public/styles/.generation/

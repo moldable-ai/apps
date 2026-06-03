@@ -139,6 +139,9 @@ type ImageThread = {
   presetId?: string
   status?: 'generating' | 'ready' | 'failed'
   errorMessage?: string
+  // True while we're auto-generating a title from the rendered image, so the
+  // client can show a skeleton instead of the placeholder prompt-derived title.
+  titlePending?: boolean
   pendingIteration?: PendingIteration
   pendingIterations?: PendingIteration[]
   pendingRequestId?: string
@@ -807,6 +810,7 @@ function recoverOrphanedGeneratingThreads(threads: ImageThread[]): {
       quality: latest?.quality ?? thread.quality,
       status: latest ? 'ready' : 'failed',
       errorMessage: latest ? undefined : ORPHANED_GENERATION_MESSAGE,
+      titlePending: false,
       pendingIteration: undefined,
       pendingIterations: undefined,
       pendingRequestId: undefined,
@@ -1133,7 +1137,7 @@ const IMAGE_TITLE_SCHEMA: Record<string, unknown> = {
     title: {
       type: 'string',
       description:
-        'A super-concise 2-5 word Title Case name for the space in the photo (e.g. "Sunny White Kitchen", "Backyard Patio", "Floor Plan"). No quotes, no trailing punctuation.',
+        'An evocative 5-7 word Title Case name for the space, capturing both the room/area and its style or mood (e.g. "Sunlit Scandinavian Kitchen Retreat", "Moody Industrial Living Room", "Lush Backyard Garden Patio"). No quotes, no trailing punctuation.',
     },
   },
   required: ['title'],
@@ -1150,17 +1154,17 @@ async function titleFromImagePath(
       workspaceId,
       purpose: 'redecorate.title-from-image',
       system:
-        'You write ultra-concise, friendly titles for photos of rooms and outdoor spaces in a home-redesign app.',
+        'You write evocative, friendly titles for photos and renders of rooms and outdoor spaces in a home-redesign app.',
       prompt:
-        'Give a 2-5 word Title Case title naming the space shown (the room or area). No quotes or punctuation.',
+        'Give a vivid 5-7 word Title Case title that names the space shown (the room or area) and captures its style or mood. No quotes or punctuation.',
       imagePaths: [imagePath],
       schema: IMAGE_TITLE_SCHEMA,
       schemaName: 'image_title',
-      maxOutputTokens: 60,
+      maxOutputTokens: 80,
       timeoutMs: 30_000,
     })
     const title = (result?.title ?? '').replace(/["']/g, '').trim()
-    return title ? title.slice(0, 60) : null
+    return title ? title.slice(0, 80) : null
   } catch {
     return null
   }
@@ -1184,6 +1188,60 @@ async function titleImportedThreads(
       if (title) thread.title = title
     }),
   )
+}
+
+// After a from-scratch generation lands, replace the prompt-derived title with
+// an AI title describing the actual render — but only if the user hasn't renamed
+// it in the meantime. Best-effort: never throws, so a titling hiccup can't flip
+// the finished render to a failed state.
+async function autoTitleGeneratedThread(
+  workspaceId: string | undefined,
+  thread: ImageThread,
+  defaultTitle: string,
+  requestId: string,
+): Promise<void> {
+  let title: string | null = null
+  try {
+    const cover =
+      thread.iterations.find((it) => it.id === thread.coverIterationId) ??
+      thread.iterations.at(-1)
+    if (cover) {
+      title = await titleFromImagePath(
+        workspaceId,
+        assetPath(workspaceId, thread.id, cover.fileName),
+      )
+    }
+  } catch (error) {
+    console.warn(
+      `[Redecorate generation ${requestId}] auto_title_failed thread=${thread.id} workspace=${workspaceLabel(workspaceId)} message=${errorMessage(error, 'unknown')}`,
+    )
+  }
+
+  // Always clear the pending flag so the title skeleton can't get stuck, and
+  // apply the new title only if the user hasn't renamed it in the meantime.
+  // Best-effort: never throws, so this can't flip the finished render to failed.
+  try {
+    const threads = await loadThreads(workspaceId)
+    const index = threads.findIndex((it) => it.id === thread.id)
+    if (index === -1) return
+    const current = threads[index]
+    if (!current.titlePending) return
+    const applied = Boolean(title) && current.title === defaultTitle
+    threads[index] = {
+      ...current,
+      title: applied ? (title as string) : current.title,
+      titlePending: false,
+      updatedAt: new Date().toISOString(),
+    }
+    await saveThreads(workspaceId, threads)
+    console.info(
+      `[Redecorate generation ${requestId}] auto_titled thread=${thread.id} workspace=${workspaceLabel(workspaceId)} applied=${applied}`,
+    )
+  } catch (error) {
+    console.warn(
+      `[Redecorate generation ${requestId}] auto_title_persist_failed thread=${thread.id} workspace=${workspaceLabel(workspaceId)} message=${errorMessage(error, 'unknown')}`,
+    )
+  }
 }
 
 async function importImages(
@@ -1433,6 +1491,7 @@ async function buildGeneratedThread(
     aspectRatio,
     quality,
     status: 'ready',
+    titlePending: true,
     createdAt: options.createdAt,
     updatedAt: now,
     iterations: [
@@ -1470,6 +1529,7 @@ async function createGeneratingThread(
     folderId: params.folderId ?? null,
     presetId: params.presetId,
     status: 'generating',
+    titlePending: true,
     pendingRequestId: requestId,
     createdAt: now,
     updatedAt: now,
@@ -1577,6 +1637,7 @@ async function retryThreadGeneration(
     ...thread,
     status: 'generating',
     errorMessage: undefined,
+    titlePending: true,
     pendingRequestId: requestId,
     updatedAt: new Date().toISOString(),
   }
@@ -1657,6 +1718,14 @@ async function finishGeneratingThread(
     await saveThreads(workspaceId, threads)
     console.info(
       `[Redecorate generation ${requestId}] background_success thread=${threadId} workspace=${workspaceLabel(workspaceId)} durationMs=${elapsedMs(startedAt)}`,
+    )
+
+    // Now that the render exists, give it a title that matches the image.
+    await autoTitleGeneratedThread(
+      workspaceId,
+      preservedReadyThread,
+      titleFromPrompt(params.prompt),
+      requestId,
     )
   } catch (error) {
     const rpcError = rpcErrorFromUnknown(error)
@@ -3739,8 +3808,10 @@ app.patch('/api/designs/:id', async (c) => {
       }
       patch.folderId = body.folderId as string | null
     }
-    if (typeof body.title === 'string' && body.title.trim())
+    if (typeof body.title === 'string' && body.title.trim()) {
       patch.title = body.title.trim()
+      patch.titlePending = false
+    }
     const thread = await patchThread(workspaceId, id, patch)
     if (!thread) return c.json({ error: 'Design not found' }, 404)
     return c.json(serializeThread(thread, workspaceId))

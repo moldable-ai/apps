@@ -210,6 +210,7 @@ export async function streamInboxBriefing({
     workspaceId,
     purpose: 'emails.inbox-briefing',
     reasoningEffort: 'medium',
+    timeoutMs: 90_000,
     system: BRIEFING_SYSTEM_PROMPT,
     prompt: buildBriefingPrompt({ messages, account }),
   })

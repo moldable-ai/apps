@@ -13,6 +13,7 @@ type GenerateAppJsonOptions = {
   schemaName?: string
   schemaDescription?: string
   maxOutputTokens?: number
+  timeoutMs?: number
 }
 
 function getAppLlmConfig() {
@@ -51,6 +52,7 @@ export async function generateAppJson<T>(
       schemaName: options.schemaName,
       schemaDescription: options.schemaDescription,
       maxOutputTokens: options.maxOutputTokens,
+      timeoutMs: options.timeoutMs,
     }),
   })
 

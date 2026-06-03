@@ -88,6 +88,7 @@ type Design = {
   aspectRatio: AspectRatioId
   status: 'generating' | 'ready' | 'failed'
   errorMessage?: string
+  titlePending?: boolean
   folderId?: string | null
   favorite?: boolean
   archived?: boolean
@@ -685,11 +686,15 @@ function DesignCard({
             </span>
           ) : null}
 
-          {design.title.trim() && cover ? (
+          {cover && (design.titlePending || design.title.trim()) ? (
             <span className="pointer-events-none absolute inset-x-0 bottom-0 flex min-h-16 items-end bg-gradient-to-t from-black/80 via-black/20 to-transparent p-3 pt-12">
-              <span className="line-clamp-2 text-sm font-semibold leading-5 text-white drop-shadow-sm">
-                {design.title}
-              </span>
+              {design.titlePending ? (
+                <span className="h-4 w-2/3 max-w-[9rem] animate-pulse rounded bg-white/40" />
+              ) : (
+                <span className="line-clamp-2 text-sm font-semibold leading-5 text-white drop-shadow-sm">
+                  {design.title}
+                </span>
+              )}
             </span>
           ) : null}
         </div>
@@ -1963,25 +1968,35 @@ export function App() {
             <ToolBtn label="Back (Esc)" onClick={closeDesign}>
               <ArrowLeft className="size-4" />
             </ToolBtn>
-            <Input
-              value={designTitleDraft}
-              onChange={(event) => setDesignTitleDraft(event.target.value)}
-              onBlur={() => saveDesignTitle(design, designTitleDraft)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  event.currentTarget.blur()
-                } else if (event.key === 'Escape') {
-                  event.preventDefault()
-                  skipNextTitleSaveRef.current = true
-                  setDesignTitleDraft(design.title ?? '')
-                  event.currentTarget.blur()
-                }
-              }}
-              aria-label="Design title"
-              placeholder="Untitled design"
-              className="rd-serif text-foreground h-auto w-full min-w-0 truncate border-none !bg-transparent px-0 py-0 text-lg font-semibold shadow-none outline-none focus-visible:!bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 md:text-lg"
-            />
+            {design.titlePending ? (
+              <div
+                className="flex h-9 min-w-0 flex-1 items-center"
+                aria-label="Generating title"
+                aria-busy="true"
+              >
+                <div className="bg-muted/70 h-5 w-44 max-w-full animate-pulse rounded-md" />
+              </div>
+            ) : (
+              <Input
+                value={designTitleDraft}
+                onChange={(event) => setDesignTitleDraft(event.target.value)}
+                onBlur={() => saveDesignTitle(design, designTitleDraft)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    event.currentTarget.blur()
+                  } else if (event.key === 'Escape') {
+                    event.preventDefault()
+                    skipNextTitleSaveRef.current = true
+                    setDesignTitleDraft(design.title ?? '')
+                    event.currentTarget.blur()
+                  }
+                }}
+                aria-label="Design title"
+                placeholder="Untitled design"
+                className="rd-serif text-foreground h-auto w-full min-w-0 truncate border-none !bg-transparent px-0 py-0 text-lg font-semibold shadow-none outline-none focus-visible:!bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 md:text-lg"
+              />
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
@@ -2086,7 +2101,7 @@ export function App() {
           {isRendering ? (
             <Shimmer
               aspectRatio={shimmerAspect}
-              className="max-h-full w-auto max-w-full"
+              className="h-[calc(100dvh-var(--chat-safe-padding,0px)-12rem)] max-h-full w-auto max-w-full shadow-2xl shadow-black/40"
               label="Rendering your redesign"
             />
           ) : isFailed ? (

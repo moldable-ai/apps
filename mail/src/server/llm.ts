@@ -10,6 +10,7 @@ interface StreamAppTextOptions {
   system?: string
   prompt?: string
   messages?: AppLlmMessage[]
+  timeoutMs?: number
 }
 
 function getAppLlmConfig() {
@@ -45,6 +46,7 @@ export async function streamAppText(
       system: options.system,
       prompt: options.prompt,
       messages: options.messages,
+      timeoutMs: options.timeoutMs,
     }),
   })
 

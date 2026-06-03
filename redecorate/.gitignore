@@ -20,3 +20,5 @@ yarn-error.log*
 # moldable
 .moldable.instances.json
 
+# seeded thumbnail generation scratch data
+public/styles/.generation/

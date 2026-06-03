@@ -24,7 +24,7 @@ import {
 } from 'fs'
 import { homedir } from 'os'
 import { tmpdir } from 'os'
-import { basename, join, relative } from 'path'
+import { basename, extname, join, relative } from 'path'
 
 const SOURCE_DIR =
   process.env.MOLDABLE_APPS_SOURCE_DIR ||
@@ -36,6 +36,13 @@ const VERSION_BUMP_FLAGS = new Map([
   ['--patch', 'patch'],
   ['--minor', 'minor'],
   ['--major', 'major'],
+])
+const REDECORATE_STYLE_THUMBNAIL_EXTENSIONS = new Set([
+  '.webp',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.avif',
 ])
 
 // Local dependency, build, and Moldable runtime files to always exclude.
@@ -92,6 +99,46 @@ function shouldExclude(filePath, sourceRoot, patterns) {
   }
 
   return false
+}
+
+function readRedecorateStylePresetIds(sourceApp) {
+  const catalogPath = join(sourceApp, 'src', 'shared', 'catalog.ts')
+  if (!existsSync(catalogPath)) return new Set()
+
+  const catalog = readFileSync(catalogPath, 'utf-8')
+  const ids = new Set()
+  for (const match of catalog.matchAll(
+    /(?:\bid\b|["']id["']):\s*['"]([^'"]+)['"]/g,
+  )) {
+    ids.add(match[1])
+  }
+  return ids
+}
+
+function shouldExcludeAppSpecific(filePath, sourceRoot, appId, context) {
+  if (appId !== 'redecorate') return false
+
+  const relativePath = relative(sourceRoot, filePath)
+  if (relativePath === 'public' || relativePath === 'public/styles') {
+    return false
+  }
+  if (relativePath.startsWith('public/styles/.generation')) {
+    return true
+  }
+  if (!relativePath.startsWith('public/styles/')) {
+    return false
+  }
+
+  const stat = statSync(filePath)
+  if (stat.isDirectory()) return true
+  if (relativePath === 'public/styles/README.md') return false
+
+  const extension = extname(relativePath).toLowerCase()
+  if (!REDECORATE_STYLE_THUMBNAIL_EXTENSIONS.has(extension)) return true
+
+  const filename = basename(relativePath)
+  const presetId = filename.slice(0, -extension.length)
+  return !context.redecorateStylePresetIds.has(presetId)
 }
 
 /**
@@ -229,7 +276,7 @@ function resolveBumpedManifestVersion(targetApp, previousVersion, versionBump) {
   return bumpSemver(baseVersion, versionBump)
 }
 
-function listComparableFiles(root, patterns = []) {
+function listComparableFiles(root, patterns = [], appId = null, context = {}) {
   if (!existsSync(root)) return []
 
   const files = []
@@ -238,6 +285,9 @@ function listComparableFiles(root, patterns = []) {
       const fullPath = join(dir, entry)
       const relativePath = relative(root, fullPath)
       if (shouldExclude(fullPath, root, patterns)) continue
+      if (appId && shouldExcludeAppSpecific(fullPath, root, appId, context)) {
+        continue
+      }
 
       const stat = statSync(fullPath)
       if (stat.isDirectory()) {
@@ -272,11 +322,22 @@ function comparableContentEquals(leftRoot, rightRoot, relativePath) {
   return left === right
 }
 
-function hasMeaningfulChanges(previousTargetApp, targetApp, patterns = []) {
+function hasMeaningfulChanges(
+  previousTargetApp,
+  targetApp,
+  patterns = [],
+  appId = null,
+  context = {},
+) {
   if (!previousTargetApp) return true
 
-  const previousFiles = listComparableFiles(previousTargetApp, patterns)
-  const currentFiles = listComparableFiles(targetApp, patterns)
+  const previousFiles = listComparableFiles(
+    previousTargetApp,
+    patterns,
+    appId,
+    context,
+  )
+  const currentFiles = listComparableFiles(targetApp, patterns, appId, context)
   if (previousFiles.length !== currentFiles.length) return true
 
   for (let index = 0; index < previousFiles.length; index += 1) {
@@ -307,6 +368,12 @@ function copyApp(appId, { versionBump } = {}) {
   // Parse the app's .gitignore for exclusion patterns
   const gitignorePath = join(sourceApp, '.gitignore')
   const excludePatterns = parseGitignore(gitignorePath)
+  const copyContext = {
+    redecorateStylePresetIds:
+      appId === 'redecorate'
+        ? readRedecorateStylePresetIds(sourceApp)
+        : new Set(),
+  }
 
   console.log(`📦 Copying ${appId}...`)
   console.log(`   From: ${sourceApp}`)
@@ -340,7 +407,10 @@ function copyApp(appId, { versionBump } = {}) {
     cpSync(sourceApp, targetApp, {
       recursive: true,
       filter: (src) => {
-        return !shouldExclude(src, sourceApp, excludePatterns)
+        return (
+          !shouldExclude(src, sourceApp, excludePatterns) &&
+          !shouldExcludeAppSpecific(src, sourceApp, appId, copyContext)
+        )
       },
     })
 
@@ -353,6 +423,8 @@ function copyApp(appId, { versionBump } = {}) {
       previousTargetSnapshot,
       targetApp,
       excludePatterns,
+      appId,
+      copyContext,
     )
     const targetVersion =
       versionBump && hasChanges

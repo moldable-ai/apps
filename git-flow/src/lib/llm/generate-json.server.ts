@@ -53,6 +53,7 @@ export async function generateAppJson<T>(
       schemaName: options.schemaName,
       schemaDescription: options.schemaDescription,
       maxOutputTokens: options.maxOutputTokens,
+      timeoutMs: options.timeoutMs,
     }),
   })
 

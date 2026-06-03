@@ -269,3 +269,53 @@ test('copy without a bump preserves the previous target manifest version', () =>
     '2.0.0',
   )
 })
+
+test('redecorate copy includes seeded preset thumbnails and excludes generation scratch files', () => {
+  const fixture = makeFixture()
+  const sourceApp = writeApp(fixture.source, 'redecorate', { version: '0.4.0' })
+  mkdirSync(join(sourceApp, 'src', 'shared'), { recursive: true })
+  writeFileSync(
+    join(sourceApp, 'src', 'shared', 'catalog.ts'),
+    `export const STYLE_PRESETS = [{ "id": "interior-modern" }]\n`,
+  )
+  mkdirSync(join(sourceApp, 'public', 'styles', '.generation'), {
+    recursive: true,
+  })
+  writeFileSync(join(sourceApp, 'public', 'styles', 'README.md'), 'seed docs\n')
+  writeFileSync(
+    join(sourceApp, 'public', 'styles', 'interior-modern.webp'),
+    'seed image\n',
+  )
+  writeFileSync(
+    join(sourceApp, 'public', 'styles', 'personal-style.webp'),
+    'do not ship\n',
+  )
+  writeFileSync(
+    join(sourceApp, 'public', 'styles', '.generation', 'runs.jsonl'),
+    'scratch\n',
+  )
+  writeFileSync(
+    join(sourceApp, 'public', 'styles', '.generation', 'oauth-probe.webp'),
+    'probe\n',
+  )
+
+  runCopy(fixture, ['redecorate'])
+
+  const targetApp = join(fixture.target, 'redecorate')
+  assert.equal(
+    existsSync(join(targetApp, 'public', 'styles', 'interior-modern.webp')),
+    true,
+  )
+  assert.equal(
+    existsSync(join(targetApp, 'public', 'styles', 'README.md')),
+    true,
+  )
+  assert.equal(
+    existsSync(join(targetApp, 'public', 'styles', 'personal-style.webp')),
+    false,
+  )
+  assert.equal(
+    existsSync(join(targetApp, 'public', 'styles', '.generation')),
+    false,
+  )
+})

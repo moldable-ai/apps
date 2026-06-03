@@ -10,6 +10,7 @@ type StreamAppTextOptions = {
   prompt?: string
   messages?: AppLlmMessage[]
   maxOutputTokens?: number
+  timeoutMs?: number
 }
 
 function getAppLlmConfig() {
@@ -45,6 +46,7 @@ export async function streamAppText(
       prompt: options.prompt,
       messages: options.messages,
       maxOutputTokens: options.maxOutputTokens,
+      timeoutMs: options.timeoutMs,
     }),
   })
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm exec tsx
 import { STYLE_PRESETS, type StylePreset } from '../src/shared/catalog'
-import { spawnSync } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import {
   appendFileSync,
@@ -20,9 +20,12 @@ const THUMB_EXTENSIONS = ['webp', 'jpg', 'jpeg', 'png', 'avif'] as const
 const MAX_IMAGES_PER_RUN = 200
 const DEFAULT_LIMIT = MAX_IMAGES_PER_RUN
 const DEFAULT_DELAY_MS = 30_000
+const DEFAULT_CONCURRENCY = 3
+const MAX_CONCURRENCY = 8
 const DEFAULT_MAX_RETRIES = 4
 const DEFAULT_RETRY_DELAY_MS = 60_000
 const DEFAULT_BUDGET = 200
+const DEFAULT_AIVAULT_TIMEOUT_MS = 420_000
 const CODEX_RESPONSES_MODEL = 'gpt-5.5'
 const CODEX_IMAGE_INSTRUCTIONS = 'You are an image generation assistant.'
 const AIVAULT_BIN = process.env.AIVAULT_BIN?.trim() || 'aivault'
@@ -36,8 +39,10 @@ type ThumbExtension = (typeof THUMB_EXTENSIONS)[number]
 type Options = {
   limit: number
   delayMs: number
+  concurrency: number
   maxRetries: number
   retryDelayMs: number
+  aivaultTimeoutMs: number
   budget: number
   model: string
   size: string
@@ -121,9 +126,11 @@ function usage(exitCode = 2): never {
 
 Options:
   --limit <n>                 Number of thumbnails to generate this run. Default: ${DEFAULT_LIMIT}
-  --delay-ms <n>              Delay between successful generations. Default: ${DEFAULT_DELAY_MS}
+  --delay-ms <n>              Minimum delay between request starts. Default: ${DEFAULT_DELAY_MS}
+  --concurrency <n>           Maximum in-flight image requests. Default: ${DEFAULT_CONCURRENCY}
   --max-retries <n>           Retries per preset for 429/5xx failures. Default: ${DEFAULT_MAX_RETRIES}
   --retry-delay-ms <n>        Base retry delay for 429/5xx failures. Default: ${DEFAULT_RETRY_DELAY_MS}
+  --aivault-timeout-ms <n>    Upstream aivault request timeout per image. Default: ${DEFAULT_AIVAULT_TIMEOUT_MS}
   --budget <n>                Maximum style thumbnails to create in total. Default: ${DEFAULT_BUDGET}
   --model <id>                OpenAI image model. Default: gpt-image-2
   --size <WxH|auto>           Image size. Default: 1024x768
@@ -162,8 +169,10 @@ function parseOptions(): Options {
   const options: Options = {
     limit: DEFAULT_LIMIT,
     delayMs: DEFAULT_DELAY_MS,
+    concurrency: DEFAULT_CONCURRENCY,
     maxRetries: DEFAULT_MAX_RETRIES,
     retryDelayMs: DEFAULT_RETRY_DELAY_MS,
+    aivaultTimeoutMs: DEFAULT_AIVAULT_TIMEOUT_MS,
     budget: DEFAULT_BUDGET,
     model: 'gpt-image-2',
     size: '1024x768',
@@ -190,12 +199,20 @@ function parseOptions(): Options {
         options.delayMs = parseNumber(next, '--delay-ms')
         i += 1
         break
+      case '--concurrency':
+        options.concurrency = parseNumber(next, '--concurrency')
+        i += 1
+        break
       case '--max-retries':
         options.maxRetries = parseNumber(next, '--max-retries')
         i += 1
         break
       case '--retry-delay-ms':
         options.retryDelayMs = parseNumber(next, '--retry-delay-ms')
+        i += 1
+        break
+      case '--aivault-timeout-ms':
+        options.aivaultTimeoutMs = parseNumber(next, '--aivault-timeout-ms')
         i += 1
         break
       case '--budget':
@@ -263,8 +280,26 @@ function parseOptions(): Options {
   if (options.limit > MAX_IMAGES_PER_RUN) {
     throw new Error(`--limit cannot exceed ${MAX_IMAGES_PER_RUN}`)
   }
+  if (!Number.isInteger(options.delayMs) || options.delayMs < 0) {
+    throw new Error('--delay-ms must be a non-negative integer')
+  }
+  if (
+    !Number.isInteger(options.concurrency) ||
+    options.concurrency <= 0 ||
+    options.concurrency > MAX_CONCURRENCY
+  ) {
+    throw new Error(
+      `--concurrency must be an integer between 1 and ${MAX_CONCURRENCY}`,
+    )
+  }
   if (!Number.isInteger(options.budget) || options.budget <= 0) {
     throw new Error('--budget must be a positive integer')
+  }
+  if (
+    !Number.isInteger(options.aivaultTimeoutMs) ||
+    options.aivaultTimeoutMs <= 0
+  ) {
+    throw new Error('--aivault-timeout-ms must be a positive integer')
   }
   if (options.budget > DEFAULT_BUDGET) {
     throw new Error(`--budget cannot exceed ${DEFAULT_BUDGET}`)
@@ -529,39 +564,90 @@ function statusFromAivaultError(stderr: string): number {
   return match ? Number(match[1]) : 0
 }
 
-function runAivaultWithBodyFile(args: string[], body: string): string {
+async function runAivaultWithBodyFile(
+  args: string[],
+  body: string,
+): Promise<string> {
   const tempDir = mkdtempSync(join(tmpdir(), 'redecorate-aivault-'))
   const bodyPath = join(tempDir, 'body.json')
   try {
     writeFileSync(bodyPath, body, { mode: 0o600 })
-    const result = spawnSync(
-      AIVAULT_BIN,
-      [...args, '--body-file-path', bodyPath],
-      {
-        encoding: 'utf8',
-        maxBuffer: 80 * 1024 * 1024,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      },
-    )
-    if (result.error) {
-      throw result.error
-    }
-    if (result.status !== 0) {
-      const stderr = result.stderr?.trim() || ''
-      const stdout = result.stdout?.trim() || ''
-      const exitDetail =
-        result.status === null
-          ? `signal ${result.signal ?? 'unknown'}`
-          : `code ${result.status}`
-      const output = [stderr, stdout].filter(Boolean).join('\n')
-      throw new ImageGenerationError(
-        output
-          ? `aivault ${args.slice(0, 2).join(' ')} exited with ${exitDetail}\n${output}`
-          : `aivault ${args.slice(0, 2).join(' ')} exited with ${exitDetail}`,
-        statusFromAivaultError(stderr),
+    return await new Promise((resolvePromise, reject) => {
+      const child = spawn(
+        AIVAULT_BIN,
+        [...args, '--body-file-path', bodyPath],
+        {
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
       )
-    }
-    return result.stdout ?? ''
+      const stdoutChunks: Buffer[] = []
+      const stderrChunks: Buffer[] = []
+      const maxBuffer = 80 * 1024 * 1024
+      let stdoutBytes = 0
+      let stderrBytes = 0
+      let childError: Error | null = null
+      let killedForBuffer = false
+
+      child.stdout.on('data', (chunk: Buffer) => {
+        stdoutBytes += chunk.length
+        if (stdoutBytes > maxBuffer) {
+          killedForBuffer = true
+          child.kill('SIGTERM')
+          return
+        }
+        stdoutChunks.push(chunk)
+      })
+
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderrBytes += chunk.length
+        if (stderrBytes > maxBuffer) {
+          killedForBuffer = true
+          child.kill('SIGTERM')
+          return
+        }
+        stderrChunks.push(chunk)
+      })
+
+      child.on('error', (error) => {
+        childError = error
+      })
+
+      child.on('close', (code, signal) => {
+        const stdout = Buffer.concat(stdoutChunks).toString('utf8')
+        const stderr = Buffer.concat(stderrChunks).toString('utf8')
+        const stderrText = stderr.trim()
+        const stdoutText = stdout.trim()
+
+        if (childError) {
+          reject(childError)
+          return
+        }
+        if (killedForBuffer) {
+          reject(
+            new ImageGenerationError(
+              `aivault ${args.slice(0, 2).join(' ')} exceeded ${maxBuffer} bytes of buffered output`,
+            ),
+          )
+          return
+        }
+        if (code !== 0) {
+          const exitDetail =
+            code === null ? `signal ${signal ?? 'unknown'}` : `code ${code}`
+          const output = [stderrText, stdoutText].filter(Boolean).join('\n')
+          reject(
+            new ImageGenerationError(
+              output
+                ? `aivault ${args.slice(0, 2).join(' ')} exited with ${exitDetail}\n${output}`
+                : `aivault ${args.slice(0, 2).join(' ')} exited with ${exitDetail}`,
+              statusFromAivaultError(stderrText),
+            ),
+          )
+          return
+        }
+
+        resolvePromise(stdout)
+      })
+    })
   } finally {
     rmSync(tempDir, { recursive: true, force: true })
   }
@@ -571,11 +657,13 @@ async function generateImageResponse(
   options: Options,
   preset: StylePreset,
 ): Promise<{ status: number; json: OpenAIImageResponse }> {
-  const text = runAivaultWithBodyFile(
+  const text = await runAivaultWithBodyFile(
     [
       'invoke',
       'openai/codex-responses',
       '--stream',
+      '--timeout-ms',
+      String(options.aivaultTimeoutMs),
       '--method',
       'POST',
       '--path',
@@ -690,6 +778,57 @@ async function generateOne(
   }
 }
 
+async function generatePlanned(
+  options: Options,
+  planned: StylePreset[],
+  manifest: Manifest,
+): Promise<void> {
+  const active = new Set<Promise<void>>()
+  let nextIndex = 0
+  let lastStartAt = 0
+  let firstError: unknown = null
+
+  const startOne = (index: number): void => {
+    const preset = planned[index]
+    lastStartAt = Date.now()
+    console.log(
+      `[${index + 1}/${planned.length}] Starting ${preset.id} (${preset.name}) ` +
+        `[active ${active.size + 1}/${options.concurrency}]`,
+    )
+
+    const task = generateOne(options, preset, manifest)
+      .catch((error: unknown) => {
+        firstError ??= error
+      })
+      .finally(() => {
+        active.delete(task)
+      })
+    active.add(task)
+  }
+
+  while (nextIndex < planned.length && !firstError) {
+    while (active.size >= options.concurrency) {
+      await Promise.race(active)
+      if (firstError) break
+    }
+    if (firstError) break
+
+    const elapsedSinceStart = Date.now() - lastStartAt
+    const waitMs =
+      lastStartAt === 0 ? 0 : Math.max(0, options.delayMs - elapsedSinceStart)
+    if (waitMs > 0) {
+      await sleep(waitMs)
+    }
+    if (firstError) break
+
+    startOne(nextIndex)
+    nextIndex += 1
+  }
+
+  await Promise.allSettled(active)
+  if (firstError) throw firstError
+}
+
 async function main(): Promise<void> {
   const options = parseOptions()
   mkdirSync(options.outDir, { recursive: true })
@@ -724,18 +863,11 @@ async function main(): Promise<void> {
     size: options.size,
     quality: options.quality,
     outputFormat: options.outputFormat,
+    concurrency: options.concurrency,
+    requestStartDelayMs: options.delayMs,
   })
 
-  for (let index = 0; index < planned.length; index += 1) {
-    const preset = planned[index]
-    console.log(
-      `[${index + 1}/${planned.length}] Generating ${preset.id} (${preset.name})`,
-    )
-    await generateOne(options, preset, manifest)
-    if (index < planned.length - 1 && options.delayMs > 0) {
-      await sleep(options.delayMs)
-    }
-  }
+  await generatePlanned(options, planned, manifest)
 
   appendLog(options.outDir, {
     type: 'run-finish',
