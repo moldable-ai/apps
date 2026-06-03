@@ -91,3 +91,17 @@ test('generate-manifest excludes apps without explicit public visibility', () =>
 
   assert.deepEqual(manifest.apps, [])
 })
+
+test('generate-manifest marks first-party app ids as official', () => {
+  const root = makeFixture()
+  writeApp(root, 'plants', { name: 'Plants', author: '' })
+  writeApp(root, 'redecorate', { name: 'Redecorate', author: 'Someone' })
+
+  const manifest = runGenerate(root)
+  const byId = new Map(manifest.apps.map((app) => [app.id, app]))
+
+  assert.equal(byId.get('plants')?.official, true)
+  assert.equal(byId.get('plants')?.author, 'Moldable')
+  assert.equal(byId.get('redecorate')?.official, true)
+  assert.equal(byId.get('redecorate')?.author, 'Moldable')
+})
