@@ -578,6 +578,30 @@ function summarizeSong(song: PianoSong): SongSummary {
   }
 }
 
+function formatCommandDuration(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00'
+  const totalSeconds = Math.round(seconds)
+  const minutes = Math.floor(totalSeconds / 60)
+  const remainingSeconds = totalSeconds % 60
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  if (hours > 0) {
+    return `${hours}:${String(remainingMinutes).padStart(2, '0')}:${String(
+      remainingSeconds,
+    ).padStart(2, '0')}`
+  }
+  return `${minutes}:${String(remainingSeconds).padStart(2, '0')}`
+}
+
+function songCommandDescription(song: SongSummary) {
+  const credits = song.composer || song.artist || song.source
+  const noteLabel = `${song.noteCount} ${song.noteCount === 1 ? 'note' : 'notes'}`
+  const parts = [credits, formatCommandDuration(song.duration), noteLabel]
+    .filter(Boolean)
+    .map(String)
+  return parts.length > 0 ? `Open song • ${parts.join(' • ')}` : 'Open song'
+}
+
 function catalogSongTitle(title: string, opus: string | undefined) {
   if (!opus || title.toLowerCase().includes(opus.toLowerCase())) return title
   return `${title}, ${opus}`
@@ -1773,6 +1797,32 @@ app.get('/api/moldable/today', async (c) => {
   }
 
   return c.json({ items: [], resume, generatedAt: new Date().toISOString() })
+})
+
+app.get('/api/moldable/commands', async (c) => {
+  const dataDir = getDataDir(c)
+  const songs = (await readSongs(dataDir)).map(summarizeSong)
+
+  return c.json({
+    commands: songs.map((song) => ({
+      id: `piano.open-song.${song.id}`,
+      label: song.title,
+      description: songCommandDescription(song),
+      icon: '🎵',
+      indicator: song.isTutorial
+        ? {
+            label: 'Tutorial',
+            color: 'var(--primary)',
+          }
+        : undefined,
+      group: 'Songs',
+      action: {
+        type: 'message',
+        command: 'piano.open-song',
+        payload: { songId: song.id },
+      },
+    })),
+  })
 })
 
 app.post('/api/moldable/rpc', async (c) => {

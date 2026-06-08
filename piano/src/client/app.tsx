@@ -5,9 +5,12 @@ import {
 } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  type AppCommand,
   popMoldableNavigation,
   pushMoldableNavigation,
   resetMoldableNavigation,
+  useMoldableAppCommands,
+  useMoldableCommands,
   useMoldableNavigationPop,
   useWorkspace,
 } from '@moldable-ai/ui'
@@ -68,11 +71,20 @@ function isPianoPresetId(value: string | undefined): value is PianoPresetId {
   return Boolean(value && PIANO_PRESETS.some((preset) => preset.id === value))
 }
 
-const APP_SOURCE_PATH = '/Users/rob/.moldable/shared/apps/piano'
+const APP_SOURCE_PATH = '~/.moldable/shared/apps/piano'
 const INSTRUMENTS_STORAGE_PATH =
   '~/.moldable/workspaces/{workspace-id}/apps/piano/data/instruments'
 const AUDIO_MODEL_PATH = `${APP_SOURCE_PATH}/src/shared/audio.ts`
 const AUDIO_SCHEDULE_LOOKAHEAD_SECONDS = 0.12
+
+function songCommandDescription(song: SongSummary) {
+  const credits = song.composer || song.artist || song.source
+  const noteLabel = `${song.noteCount} ${song.noteCount === 1 ? 'note' : 'notes'}`
+  const parts = [credits, formatDuration(song.duration), noteLabel]
+    .filter(Boolean)
+    .map(String)
+  return parts.length > 0 ? `Open song • ${parts.join(' • ')}` : 'Open song'
+}
 
 export function App() {
   const { workspaceId, fetchWithWorkspace } = useWorkspace()
@@ -1120,6 +1132,63 @@ If the user asks to install a piano instrument pack, do not use shell curl/wget.
     },
     [activeCourseId, activeCourseLessonId, activeSongId, fetchWithWorkspace],
   )
+
+  const openSongFromCommand = useCallback(
+    (songId: string) => {
+      const nextSong = songsQuery.data?.songs.find((item) => item.id === songId)
+      if (!nextSong || nextSong.id === activeSongId) return
+
+      resetMoldableNavigation()
+      pushMoldableNavigation({
+        id: `song:${nextSong.id}`,
+        title: nextSong.title,
+      })
+      setIsPlaying(false)
+      stopAll()
+      setCursor(0)
+      setActiveFolderId(null)
+      setActiveCourseId(null)
+      setActiveCourseLessonId(null)
+      lessonHistoryRef.current = []
+      setLibraryTab('library')
+      setActiveSongId(nextSong.id)
+    },
+    [activeSongId, songsQuery.data?.songs, stopAll],
+  )
+
+  const pianoCommands = useMemo<AppCommand[]>(() => {
+    const songs = songsQuery.data?.songs ?? []
+    return songs
+      .filter((entry) => entry.id !== activeSongId)
+      .map((entry) => ({
+        id: `piano.open-song.${entry.id}`,
+        label: entry.title,
+        description: songCommandDescription(entry),
+        icon: '🎵',
+        indicator: entry.isTutorial
+          ? {
+              label: 'Tutorial',
+              color: 'var(--primary)',
+            }
+          : undefined,
+        group: 'Songs',
+        action: {
+          type: 'message',
+          command: 'piano.open-song',
+          payload: { songId: entry.id },
+        },
+      }))
+  }, [activeSongId, songsQuery.data?.songs])
+
+  useMoldableAppCommands('piano', pianoCommands)
+  useMoldableCommands({
+    'piano.open-song': (payload?: unknown) => {
+      if (!payload || typeof payload !== 'object') return
+      const songId = (payload as { songId?: unknown }).songId
+      if (typeof songId !== 'string') return
+      openSongFromCommand(songId)
+    },
+  })
 
   useMoldableNavigationPop(() => {
     if (activeSongId) {

@@ -1,6 +1,6 @@
 {
   "name": "Git",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "aliases": ["repo", "version-control"],
   "visibility": "public",
   "description": "Simple Git client for branch management, staging, and diffing",
@@ -15,7 +15,7 @@
   "tags": ["git", "version-control", "developer", "code"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
     "version": 1,

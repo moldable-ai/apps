@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@moldable-ai/storage':
-        specifier: ^0.1.5
-        version: 0.1.5
+        specifier: ^0.1.6
+        version: 0.1.6
       '@moldable-ai/ui':
         specifier: ^0.2.17
         version: 0.2.17(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -472,8 +472,8 @@ packages:
       eslint: ^9.0.0
       typescript: '>=5.0.0 <7.0.0'
 
-  '@moldable-ai/storage@0.1.5':
-    resolution: {integrity: sha512-T1jTlGttbUIDNNHrWaPEuRwlrvLiAh0ixmeW17x6PlNrK0co1m4I0TqwC8kdyzTF9UaotSRI50txFVIqh+ihdg==}
+  '@moldable-ai/storage@0.1.6':
+    resolution: {integrity: sha512-K4F3CkdvJA5jY7sNxZQSaWNkk7xIqWPuZQXC3SoxgNe+5YePHgXl7C672IZIWKTMr4ZV1XiUBPoQlddT0vGBeg==}
 
   '@moldable-ai/typescript-config@0.1.4':
     resolution: {integrity: sha512-eSRLkG4oqtIH9H75AFusRRlaQLBPNMSp4IiCaJf5TU9NC5LM8awvEtlLOoknlKSwugZZ+Grt7VagSJ9nTqZvLQ==}
@@ -1998,7 +1998,7 @@ packages:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
     engines: {node: '>=12.0.0'}
     peerDependencies:
-      picomatch: 4.0.4
+      picomatch: ^3 || ^4
     peerDependenciesMeta:
       picomatch:
         optional: true
@@ -3715,7 +3715,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@moldable-ai/storage@0.1.5': {}
+  '@moldable-ai/storage@0.1.6': {}
 
   '@moldable-ai/typescript-config@0.1.4': {}
 

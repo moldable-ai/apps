@@ -1,6 +1,6 @@
 {
   "name": "Piano",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "A local-first piano song library with 88-key playback and falling-note practice visualization.",
@@ -12,7 +12,7 @@
   "tags": [],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "env": [],
   "appApi": {

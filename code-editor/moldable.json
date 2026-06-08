@@ -1,6 +1,6 @@
 {
   "name": "Code",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "aliases": ["editor", "ide"],
   "visibility": "public",
   "description": "A lightweight, VS Code-like IDE for exploring and editing local codebases with integrated AI context and browser preview.",
@@ -13,7 +13,7 @@
   "tags": [],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
     "version": 1,

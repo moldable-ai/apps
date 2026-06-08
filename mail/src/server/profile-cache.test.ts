@@ -30,13 +30,13 @@ describe('profile cache', () => {
     )
 
     await writeCachedProfile('personal', {
-      emailAddress: 'rob@example.com',
+      emailAddress: 'user@example.com',
       messagesTotal: 12,
       threadsTotal: 8,
     })
 
     expect(await readCachedProfile('personal')).toMatchObject({
-      emailAddress: 'rob@example.com',
+      emailAddress: 'user@example.com',
       messagesTotal: 12,
       threadsTotal: 8,
     })

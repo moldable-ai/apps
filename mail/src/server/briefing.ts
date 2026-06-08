@@ -169,7 +169,7 @@ Format:
 - Then a short bulleted list (2 to 6 bullets) of the individual items worth knowing. Each bullet:
   - Starts with a bolded 1-3 word label for the sender or topic.
   - Uses an em dash, then states the substance in one or two sentences. Include the ask, amount, deadline, address, or number.
-  - If action is needed, end with a short recommended move phrased as a clause, not an instruction to go read the email. Example: "- **Landlord (1226 Love St.)** — tenant reports the AC failed over the weekend; they want approval to send a tech. Reasonable move: approve and ask for the estimate."
+  - If action is needed, end with a short recommended move phrased as a clause, not an instruction to go read the email. Example: "- **Landlord (Example St.)** — tenant reports the AC failed over the weekend; they want approval to send a tech. Reasonable move: approve and ask for the estimate."
   - End the bullet with a hidden HTML comment listing the source message IDs you used, exactly like: <!-- message-ids: 18cabc123,18cdef456 -->. Use the IDs from the message blocks. Do not invent IDs.
   - Never say "skim," "open," "check," "review," "look at," "see below," "read the thread," or "dig in."
 - If nothing in the inbox actually matters, write a single reassuring sentence and stop. No bullets.

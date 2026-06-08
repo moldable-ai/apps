@@ -1,6 +1,6 @@
 {
   "name": "Time Tracker",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "aliases": ["timer", "timesheet"],
   "visibility": "public",
   "description": "Track time for work projects with weekly views and export",
@@ -13,7 +13,7 @@
   "tags": [],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
     "version": 1,

@@ -1,6 +1,6 @@
 {
   "name": "Calculator",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "aliases": ["calc", "convert", "converter"],
   "runtime": "vite_hono",
   "visibility": "public",
@@ -14,7 +14,7 @@
   "tags": ["calculator", "math", "scientific", "convert", "currency", "units"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
     "version": 1,

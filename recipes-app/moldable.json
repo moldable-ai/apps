@@ -1,6 +1,6 @@
 {
   "name": "Recipes",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "aliases": ["cooking", "meals"],
   "runtime": "vite_hono",
   "visibility": "public",

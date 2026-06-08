@@ -1,6 +1,6 @@
 {
   "name": "Weather",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "aliases": ["forecast", "conditions"],
   "runtime": "vite_hono",
   "visibility": "public",
@@ -13,7 +13,7 @@
   "tags": ["weather", "forecast", "essentials"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
     "version": 1,

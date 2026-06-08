@@ -1,6 +1,6 @@
 {
   "name": "Images",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "aliases": ["image generation", "pictures", "art"],
   "runtime": "vite_hono",
   "visibility": "public",
@@ -13,7 +13,7 @@
   "tags": ["images", "generation", "openai", "gpt-image-2"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
     "version": 1,

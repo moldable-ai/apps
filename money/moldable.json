@@ -1,0 +1,3921 @@
+{
+  "name": "Money",
+  "version": "0.1.0",
+  "runtime": "vite_hono",
+  "routeName": "money",
+  "url": "https://money.localhost:1355",
+  "visibility": "private",
+  "description": "Local-first personal finance backend with Plaid sync, normalized facts, and formula-backed cards.",
+  "author": "",
+  "license": "MIT",
+  "icon": "💵",
+  "category": "productivity",
+  "tags": [],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.17",
+    "@moldable-ai/storage": "^0.1.6"
+  },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "money.finance",
+        "name": "Money finance data",
+        "description": "Allow approved apps to read normalized personal-finance summaries, accounts, debts, holdings, merchants, persons, transactions, and sync status in this workspace.",
+        "scopes": [
+          {
+            "id": "money.summary",
+            "name": "Money summary",
+            "description": "Read net worth, income, expenses, cash flow, savings rate, and data freshness.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "generatedAt": {
+                  "type": "string"
+                },
+                "accountCount": {
+                  "type": "number"
+                },
+                "transactionCount": {
+                  "type": "number"
+                },
+                "netWorth": {
+                  "type": "number"
+                },
+                "assets": {
+                  "type": "number"
+                },
+                "liabilities": {
+                  "type": "number"
+                },
+                "income": {
+                  "type": "number"
+                },
+                "expenses": {
+                  "type": "number"
+                },
+                "cashFlow": {
+                  "type": "number"
+                },
+                "savingsRate": {
+                  "type": ["number", "null"]
+                }
+              }
+            }
+          },
+          {
+            "id": "money.data.health",
+            "name": "Money data health",
+            "description": "Read privacy-safe aggregate diagnostics for import usefulness: fact counts, direction split, cash-flow transfer safety, provider product coverage, extension/proposal coverage, review counts, card health, label-plan summary, executable next actions, and warnings without transaction rows or raw provider payloads. Pending transaction proposals point to grouped review actions.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "generatedAt": {
+                  "type": "string"
+                },
+                "dataMode": {
+                  "type": "string"
+                },
+                "counts": {
+                  "type": "object"
+                },
+                "transactions": {
+                  "type": "object"
+                },
+                "cashFlow": {
+                  "type": "object"
+                },
+                "providerProducts": {
+                  "type": "object"
+                },
+                "extensions": {
+                  "type": "object"
+                },
+                "review": {
+                  "type": "object"
+                },
+                "cards": {
+                  "type": "object"
+                },
+                "nextActions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "labelPlan": {
+                  "type": "object"
+                },
+                "warnings": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.data.firstRun",
+            "name": "First-run state",
+            "description": "Read a lightweight onboarding gate with accountsConnected, account count, connection count, and current data mode without the full data-health payload.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "accountsConnected": {
+                  "type": "boolean"
+                },
+                "accountCount": {
+                  "type": "number"
+                },
+                "connectionCount": {
+                  "type": "number"
+                },
+                "dataMode": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.accounts.list",
+            "name": "List accounts",
+            "description": "Read normalized account balances and account metadata.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "accounts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.debts.list",
+            "name": "List debts",
+            "description": "Read normalized debt balances, APRs, minimum payments, and due dates.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "debts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.debts.patch",
+            "name": "Patch debt metadata",
+            "description": "Create or update manual debt metadata such as APR, minimum payment, due date, and balance for an existing debt or account id. Use when Plaid liabilities consent has not imported enough payoff metadata.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "accountId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": ["credit", "mortgage", "student", "loan", "other"]
+                },
+                "balance": {
+                  "type": "number"
+                },
+                "apr": {
+                  "type": "number",
+                  "description": "APR as a rate such as 0.12 for 12%; values over 1 are accepted and normalized as percentages."
+                },
+                "minimumPayment": {
+                  "type": "number"
+                },
+                "nextPaymentDueDate": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "debt": {
+                  "type": "object"
+                },
+                "created": {
+                  "type": "boolean"
+                },
+                "refreshedMetrics": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.holdings.list",
+            "name": "List holdings",
+            "description": "Read normalized investment holdings, quantities, prices, and market values.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "holdings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.balanceSnapshots.list",
+            "name": "List balance snapshots",
+            "description": "Read dated account, holding, and aggregate balance snapshots for net worth, asset, liability, and investment history formulas.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "account",
+                    "holding",
+                    "netWorth",
+                    "assets",
+                    "liabilities",
+                    "investment"
+                  ]
+                },
+                "startDate": {
+                  "type": "string"
+                },
+                "endDate": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 1000
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "snapshots": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "offset": {
+                  "type": "number"
+                },
+                "hasMore": {
+                  "type": "boolean"
+                },
+                "nextOffset": {
+                  "type": "number"
+                },
+                "nextCursor": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.allocationTargets.list",
+            "name": "List allocation targets",
+            "description": "Read saved investment allocation target definitions for formula-backed allocation drift cards.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "targets": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.forecastScenarios.list",
+            "name": "List forecast scenarios",
+            "description": "Read saved forecast/scenario definitions for formula-backed change impact cards.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "scenarios": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.taxContributionLimits.list",
+            "name": "List tax contribution limits",
+            "description": "Read saved tax-advantaged contribution limits for formula-backed contribution room cards.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "limits": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.merchants.list",
+            "name": "List merchants",
+            "description": "Read derived and stored merchant catalogs with transaction counts, income, expenses, and freshness.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "merchants": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.merchants.review",
+            "name": "Review merchants",
+            "description": "Read paged merchant grouping review jobs with aggregate grouped/ungrouped counts, bounded transaction samples, label selectors, suggested merchantGroup values, and ready-to-run label preview/apply requests.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["needs-group", "grouped", "low-volume", "all"],
+                  "default": "needs-group"
+                },
+                "minTransactions": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 100,
+                  "default": 2
+                },
+                "minExpenses": {
+                  "type": "number",
+                  "minimum": 0,
+                  "default": 100
+                },
+                "transactionSampleLimit": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 25,
+                  "default": 5
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200,
+                  "default": 100
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "generatedAt": {
+                  "type": "string"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "summary": {
+                  "type": "object"
+                },
+                "filters": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.persons.list",
+            "name": "List persons",
+            "description": "Read derived and stored person catalogs for shared-expense and relationship-backed finance workflows.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "persons": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.recommendations.list",
+            "name": "List recommendations",
+            "description": "Read persisted and rule-derived review actions, warnings, and savings opportunities with status/kind/severity/source filters and bounded paging.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "all",
+                    "required",
+                    "suggested",
+                    "accepted",
+                    "rejected",
+                    "done",
+                    "ignored"
+                  ],
+                  "default": "active"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": ["action", "warning", "opportunity"]
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high"]
+                },
+                "sourceEntity": {
+                  "type": "string",
+                  "enum": [
+                    "transaction",
+                    "account",
+                    "holding",
+                    "debt",
+                    "merchant",
+                    "person"
+                  ]
+                },
+                "sourceEntityId": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500,
+                  "default": 100
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "recommendations": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "counts": {
+                  "type": "object"
+                },
+                "filters": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.recommendations.groups",
+            "name": "Group recommendations",
+            "description": "Read grouped review actions, warnings, and opportunities by merchant, source, or kind with compact bulk action payloads for de-noised review. Defaults omit row ids, source links, and samples; opt into details for drill-in.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "groupBy": {
+                  "type": "string",
+                  "enum": ["merchant", "source", "kind"],
+                  "default": "merchant"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "all",
+                    "required",
+                    "suggested",
+                    "accepted",
+                    "rejected",
+                    "done",
+                    "ignored"
+                  ],
+                  "default": "active"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": ["action", "warning", "opportunity"]
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high"]
+                },
+                "sourceEntity": {
+                  "type": "string",
+                  "enum": [
+                    "transaction",
+                    "account",
+                    "holding",
+                    "debt",
+                    "merchant",
+                    "person"
+                  ]
+                },
+                "sourceEntityId": {
+                  "type": "string"
+                },
+                "minCount": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500,
+                  "default": 1
+                },
+                "includeRecommendations": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "includeRecommendationIds": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "includeSourceLinks": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "recommendationSampleLimit": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 25,
+                  "default": 3
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500,
+                  "default": 100
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "groups": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "counts": {
+                  "type": "object"
+                },
+                "filters": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.recommendations.patch",
+            "name": "Patch recommendations",
+            "description": "Bulk update recommendation status by bounded ids, compact recommendation group selector, or filters such as kind, severity, current status, source entity, and source entity id.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["status"],
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "required",
+                    "suggested",
+                    "accepted",
+                    "rejected",
+                    "done",
+                    "ignored"
+                  ]
+                },
+                "ids": {
+                  "type": "array",
+                  "maxItems": 500,
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "groupBy": {
+                  "type": "string",
+                  "enum": ["merchant", "source", "kind"]
+                },
+                "groupId": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": ["action", "warning", "opportunity"]
+                },
+                "severity": {
+                  "type": "string",
+                  "enum": ["low", "medium", "high"]
+                },
+                "currentStatus": {
+                  "type": "string",
+                  "enum": [
+                    "active",
+                    "required",
+                    "suggested",
+                    "accepted",
+                    "rejected",
+                    "done",
+                    "ignored"
+                  ]
+                },
+                "sourceEntity": {
+                  "type": "string",
+                  "enum": [
+                    "transaction",
+                    "account",
+                    "holding",
+                    "debt",
+                    "merchant",
+                    "person"
+                  ]
+                },
+                "sourceEntityId": {
+                  "type": "string"
+                },
+                "dryRun": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500,
+                  "default": 100
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "matched": {
+                  "type": "object"
+                },
+                "recommendations": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "counts": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.recurring.series",
+            "name": "List recurring series",
+            "description": "Read grouped subscription and recurring-obligation series with review selectors, executable activate/skip/dismiss review actions, confidence, cadence, due dates, and bounded paging.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "namespace": {
+                  "type": "string",
+                  "enum": ["subscription", "recurringObligation"]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["active", "skipped", "dismissed", "all"]
+                },
+                "dueWithinDays": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 730
+                },
+                "minConfidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "series": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "offset": {
+                  "type": "number"
+                },
+                "hasMore": {
+                  "type": "boolean"
+                },
+                "nextOffset": {
+                  "type": "number"
+                },
+                "nextCursor": {
+                  "type": "string"
+                },
+                "counts": {
+                  "type": "object"
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "generatedAt": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.moneyFlows.list",
+            "name": "List money flows",
+            "description": "Read grouped money-flow transfer chains by flowId with balanced/external/incomplete/unbalanced status, source/destination/fee totals, warnings, transaction samples, bounded paging, and nextActions/candidateSearches for finding or marking missing destination/source/fee legs.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "all",
+                    "needs-review",
+                    "balanced",
+                    "external",
+                    "unbalanced",
+                    "incomplete"
+                  ]
+                },
+                "flowId": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "source",
+                    "destination",
+                    "bridge",
+                    "transfer",
+                    "fee",
+                    "external_spend",
+                    "ignored"
+                  ]
+                },
+                "reportingCurrency": {
+                  "type": "string"
+                },
+                "startDate": {
+                  "type": "string"
+                },
+                "endDate": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "flows": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "offset": {
+                  "type": "number"
+                },
+                "hasMore": {
+                  "type": "boolean"
+                },
+                "nextOffset": {
+                  "type": "number"
+                },
+                "nextCursor": {
+                  "type": "string"
+                },
+                "counts": {
+                  "type": "object"
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "generatedAt": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.moneyFlows.markExternalDestination",
+            "name": "Mark external money-flow destination",
+            "description": "Mark a money-flow source/transfer leg as landing in an owned but unlinked destination account, preserving transfer semantics without inventing a fake destination transaction.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "flowId": {
+                  "type": "string"
+                },
+                "transactionId": {
+                  "type": "string"
+                },
+                "targetCurrency": {
+                  "type": "string"
+                },
+                "reportingCurrency": {
+                  "type": "string"
+                },
+                "externalAccountName": {
+                  "type": "string"
+                },
+                "note": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string",
+                  "enum": ["user", "agent"]
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "dryRun": {
+                  "type": "boolean"
+                }
+              },
+              "required": ["flowId"]
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "dryRun": {
+                  "type": "boolean"
+                },
+                "flowId": {
+                  "type": "string"
+                },
+                "selectedTransaction": {
+                  "type": "object"
+                },
+                "patchRequest": {
+                  "type": "object"
+                },
+                "extension": {
+                  "type": "object"
+                },
+                "flow": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.connections.list",
+            "name": "List Plaid connections",
+            "description": "Read safe Plaid connection summaries with item ids, institution names, status, products, sync cursors, imported fact counts, warnings, and next actions. Credential references and access tokens are never returned.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "generatedAt": {
+                  "type": "string"
+                },
+                "connections": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "counts": {
+                  "type": "object"
+                },
+                "nextActions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.sync.status",
+            "name": "Sync status",
+            "description": "Read Plaid sync health, scheduling status, active connection counts, and the next scheduled run.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "settings": {
+                  "type": "object"
+                },
+                "syncState": {
+                  "type": "object"
+                },
+                "due": {
+                  "type": "boolean"
+                },
+                "reason": {
+                  "type": "string"
+                },
+                "connectionCount": {
+                  "type": "number"
+                },
+                "activeConnectionCount": {
+                  "type": "number"
+                },
+                "generatedAt": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.sync.history",
+            "name": "Sync history",
+            "description": "Read safe per-Item Plaid sync history, product coverage, cursors, recent evidence summaries, structured next actions, and backfill limitations without raw provider payloads or credentials.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "generatedAt": {
+                  "type": "string"
+                },
+                "schedule": {
+                  "type": "object"
+                },
+                "syncState": {
+                  "type": "object"
+                },
+                "counts": {
+                  "type": "object"
+                },
+                "backfill": {
+                  "type": "object"
+                },
+                "nextActions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "recentEvidence": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.connections.sync",
+            "name": "Sync Plaid connection",
+            "description": "Sync one Plaid Item by itemId and return the standard Money sync result with counts, errors, cursors, refreshed metrics, and sync state. Use this for per-institution Sync now actions and agent validation loops.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["itemId"],
+              "properties": {
+                "itemId": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "syncedConnections": {
+                  "type": "number"
+                },
+                "failedConnections": {
+                  "type": "number"
+                },
+                "accounts": {
+                  "type": "number"
+                },
+                "transactions": {
+                  "type": "number"
+                },
+                "debts": {
+                  "type": "number"
+                },
+                "holdings": {
+                  "type": "number"
+                },
+                "rawEvidence": {
+                  "type": "number"
+                },
+                "removedTransactions": {
+                  "type": "number"
+                },
+                "refreshedMetrics": {
+                  "type": "number"
+                },
+                "errors": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "syncState": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.connections.delete",
+            "name": "Delete Plaid connection",
+            "description": "Revoke one Plaid Item through aivault, remove its local item-scoped accounts, transactions, debts, holdings, balance snapshots, sync cursor, and refresh dependent metrics. Access tokens and credential refs are never returned.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["itemId"],
+              "properties": {
+                "itemId": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "removedConnection": {
+                  "type": "object"
+                },
+                "revokeResult": {
+                  "type": "object"
+                },
+                "remainingConnections": {
+                  "type": "number"
+                },
+                "refreshedMetrics": {
+                  "type": "number"
+                },
+                "removedAccounts": {
+                  "type": "number"
+                },
+                "removedTransactions": {
+                  "type": "number"
+                },
+                "removedDebts": {
+                  "type": "number"
+                },
+                "removedHoldings": {
+                  "type": "number"
+                },
+                "removedBalanceSnapshots": {
+                  "type": "number"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.plaid.connectionCheck",
+            "name": "Plaid connection check",
+            "description": "Read non-secret post-Link verification checks for Plaid connection, sync, imported facts, credential boundary, and raw sync evidence.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "generatedAt": {
+                  "type": "string"
+                },
+                "counts": {
+                  "type": "object"
+                },
+                "syncState": {
+                  "type": "object"
+                },
+                "checks": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.plaid.connectSession",
+            "name": "Create Plaid connect session",
+            "description": "Create a short-lived external-browser Plaid Link session. Pass itemId plus additionalConsentedProducts for Plaid update mode on an existing Item. Returns a local URL and session id, never a Link token or Plaid credential.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "itemId": {
+                  "type": "string"
+                },
+                "products": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "optionalProducts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "additionalConsentedProducts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "countryCodes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "transactionsDaysRequested": {
+                  "type": "number"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                },
+                "redirectUri": {
+                  "type": "string"
+                },
+                "expiresAt": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": ["create", "update"]
+                },
+                "itemId": {
+                  "type": "string"
+                },
+                "productsToAdd": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "requestId": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.plaid.connectSessions",
+            "name": "Create Plaid connect sessions",
+            "description": "Create multiple short-lived external-browser Plaid Link sessions for update-mode consent. Each session still maps to one existing Item; use this after data-health returns a batched consent repair action. Returns local URLs and session ids, never Link tokens or Plaid credentials.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "sessions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "itemId": {
+                        "type": "string"
+                      },
+                      "additionalConsentedProducts": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "countryCodes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "transactionsDaysRequested": {
+                        "type": "number"
+                      }
+                    },
+                    "required": ["itemId", "additionalConsentedProducts"]
+                  }
+                },
+                "timeoutMs": {
+                  "type": "number"
+                }
+              },
+              "required": ["sessions"]
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "sessions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "created": {
+                  "type": "number"
+                },
+                "failed": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.currency.settings",
+            "name": "Currency settings",
+            "description": "Read the workspace reporting currency used for formula/card display and FX fallback rollups.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "settings": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.currency.settings.patch",
+            "name": "Patch currency settings",
+            "description": "Set the workspace reporting currency, such as CAD or USD, and refresh materialized card metrics.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["reportingCurrency"],
+              "properties": {
+                "reportingCurrency": {
+                  "type": "string",
+                  "minLength": 3,
+                  "maxLength": 12
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "settings": {
+                  "type": "object"
+                },
+                "refreshedMetrics": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.fxRates.list",
+            "name": "List FX rates",
+            "description": "Read workspace FX rates used for deterministic reporting-currency conversion. Rates are stored as baseCurrency to quoteCurrency with as-of date, source, and locked/estimated status.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "rates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.fxRates.replace",
+            "name": "Replace FX rates",
+            "description": "Replace workspace FX rates used for reporting-currency conversion and refresh materialized card metrics.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["rates"],
+              "properties": {
+                "rates": {
+                  "type": "array",
+                  "maxItems": 5000,
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "baseCurrency",
+                      "quoteCurrency",
+                      "rate",
+                      "asOf"
+                    ],
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "baseCurrency": {
+                        "type": "string"
+                      },
+                      "quoteCurrency": {
+                        "type": "string"
+                      },
+                      "rate": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "asOf": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "type": "string",
+                        "enum": ["user", "agent", "provider", "market"]
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": ["locked", "estimated"]
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "rates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "refreshedMetrics": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.transactions.search",
+            "name": "Search transactions",
+            "description": "Search normalized transactions by text, account, direction, category, date range, and pagination.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "q": {
+                  "type": "string"
+                },
+                "accountId": {
+                  "type": "string"
+                },
+                "direction": {
+                  "type": "string",
+                  "enum": ["income", "expense", "transfer"]
+                },
+                "category": {
+                  "type": "string"
+                },
+                "currencyCode": {
+                  "type": "string",
+                  "description": "ISO currency code such as USD or CAD."
+                },
+                "minAmount": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Minimum absolute normalized transaction amount."
+                },
+                "maxAmount": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Maximum absolute normalized transaction amount."
+                },
+                "startDate": {
+                  "type": "string"
+                },
+                "endDate": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "transactions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "offset": {
+                  "type": "number"
+                },
+                "hasMore": {
+                  "type": "boolean"
+                },
+                "nextOffset": {
+                  "type": "number"
+                },
+                "nextCursor": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.transactions.get",
+            "name": "Get transaction",
+            "description": "Read one visible normalized transaction by id for recommendation/card drilldown inspection.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "transaction": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.transactions.labelPlan",
+            "name": "Plan transaction labeling",
+            "description": "Read aggregate, privacy-safe labeling work plans by transaction extension namespace, including missing-label counts, pending proposal counts, and ready-to-run classify/review selectors without transaction rows.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "namespaces": {
+                  "type": "string"
+                },
+                "includeComplete": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "limitPerJob": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 100,
+                  "default": 50
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "generatedAt": {
+                  "type": "string"
+                },
+                "jobs": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "summary": {
+                  "type": "object"
+                },
+                "filters": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.transactions.review",
+            "name": "Review transactions",
+            "description": "List a paged transaction review queue joined with extension labels, pending proposals, active recommendations, missing namespaces, label selectors, and namespace-aware label action templates for agent/UI workflows.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "needs_review",
+                    "has_proposals",
+                    "has_recommendations",
+                    "missing_namespace",
+                    "unlabeled",
+                    "recurring"
+                  ]
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "q": {
+                  "type": "string"
+                },
+                "accountId": {
+                  "type": "string"
+                },
+                "direction": {
+                  "type": "string",
+                  "enum": ["income", "expense", "transfer"]
+                },
+                "category": {
+                  "type": "string"
+                },
+                "currencyCode": {
+                  "type": "string",
+                  "description": "ISO currency code such as USD or CAD."
+                },
+                "minAmount": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Minimum absolute normalized transaction amount."
+                },
+                "maxAmount": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Maximum absolute normalized transaction amount."
+                },
+                "startDate": {
+                  "type": "string"
+                },
+                "endDate": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "offset": {
+                  "type": "number"
+                },
+                "hasMore": {
+                  "type": "boolean"
+                },
+                "nextOffset": {
+                  "type": "number"
+                },
+                "nextCursor": {
+                  "type": "string"
+                },
+                "counts": {
+                  "type": "object"
+                },
+                "generatedAt": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.transactions.reviewGroups",
+            "name": "Review transaction groups",
+            "description": "List merchant-grouped transaction review tasks with counts, totals, impact estimates, suggested labels, pending proposal ids, active recommendations, transaction samples, bulk label selectors, and ready-to-run suggested-label apply actions for agent/UI workflows.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "enum": [
+                    "needs_review",
+                    "has_proposals",
+                    "has_recommendations",
+                    "missing_namespace",
+                    "unlabeled",
+                    "recurring"
+                  ]
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "groupBy": {
+                  "type": "string",
+                  "enum": ["merchant"],
+                  "default": "merchant"
+                },
+                "minCount": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500,
+                  "default": 1
+                },
+                "sort": {
+                  "type": "string",
+                  "enum": ["impact", "priority", "count", "recency"],
+                  "default": "impact",
+                  "description": "Sort merchant review groups. impact prioritizes annualized dollar impact; priority preserves proposal/recommendation/count ordering; count and recency are explicit alternatives."
+                },
+                "q": {
+                  "type": "string"
+                },
+                "accountId": {
+                  "type": "string"
+                },
+                "direction": {
+                  "type": "string",
+                  "enum": ["income", "expense", "transfer"]
+                },
+                "category": {
+                  "type": "string"
+                },
+                "currencyCode": {
+                  "type": "string",
+                  "description": "ISO currency code such as USD or CAD."
+                },
+                "minAmount": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Minimum absolute normalized transaction amount."
+                },
+                "maxAmount": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "Maximum absolute normalized transaction amount."
+                },
+                "startDate": {
+                  "type": "string"
+                },
+                "endDate": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "groupBy": {
+                  "type": "string"
+                },
+                "groups": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "offset": {
+                  "type": "number"
+                },
+                "hasMore": {
+                  "type": "boolean"
+                },
+                "nextOffset": {
+                  "type": "number"
+                },
+                "nextCursor": {
+                  "type": "string"
+                },
+                "counts": {
+                  "type": "object"
+                },
+                "generatedAt": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.transactions.reviewGroups.applySuggestions",
+            "name": "Apply review group suggestions",
+            "description": "Preview or apply suggestedLabelAction payloads from transaction review groups in batch. Defaults to dryRun=true; use for agent repair loops after money.data.health returns review-label-proposal-groups.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string",
+                  "enum": ["has_proposals"],
+                  "default": "has_proposals"
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "dryRun": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "maxGroups": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 50,
+                  "default": 25
+                },
+                "minConfidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "default": 0
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 200,
+                  "default": 100
+                },
+                "sort": {
+                  "type": "string",
+                  "enum": ["impact", "priority", "count", "recency"],
+                  "default": "impact"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "dryRun": {
+                  "type": "boolean"
+                },
+                "matched": {
+                  "type": "object"
+                },
+                "groups": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "skipped": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "failures": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.transactions.labelPreview",
+            "name": "Preview transaction labels",
+            "description": "Preview applying a namespaced extension label to transactions selected by ids, merchant ids/names, text, category, direction, account, currency, amount range, and date range. Does not write.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["selector", "namespace", "values"],
+              "properties": {
+                "selector": {
+                  "type": "object",
+                  "properties": {
+                    "transactionIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "merchantIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "merchantNames": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "q": {
+                      "type": "string"
+                    },
+                    "textPattern": {
+                      "type": "string",
+                      "description": "Plain substring match over transaction text; not a regular expression."
+                    },
+                    "accountId": {
+                      "type": "string"
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": ["income", "expense", "transfer"]
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "currencyCode": {
+                      "type": "string",
+                      "description": "ISO currency code such as USD or CAD."
+                    },
+                    "minAmount": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Minimum absolute normalized transaction amount."
+                    },
+                    "maxAmount": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Maximum absolute normalized transaction amount."
+                    },
+                    "startDate": {
+                      "type": "string"
+                    },
+                    "endDate": {
+                      "type": "string"
+                    },
+                    "missingNamespace": {
+                      "type": "string"
+                    },
+                    "limit": {
+                      "type": "number",
+                      "minimum": 1,
+                      "maximum": 2000
+                    }
+                  }
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "object"
+                },
+                "source": {
+                  "type": "string",
+                  "enum": ["user", "agent", "rule", "provider"]
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.transactions.labelApply",
+            "name": "Apply transaction labels",
+            "description": "Validate and apply a namespaced extension label to selected transactions, resolve matching pending proposals for the same transaction namespace, refresh transaction-backed materialized metrics, and return reviewAfter counts for affected transaction namespaces.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["selector", "namespace", "values"],
+              "properties": {
+                "selector": {
+                  "type": "object",
+                  "properties": {
+                    "transactionIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "merchantIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "merchantNames": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "q": {
+                      "type": "string"
+                    },
+                    "textPattern": {
+                      "type": "string",
+                      "description": "Plain substring match over transaction text; not a regular expression."
+                    },
+                    "accountId": {
+                      "type": "string"
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": ["income", "expense", "transfer"]
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "currencyCode": {
+                      "type": "string",
+                      "description": "ISO currency code such as USD or CAD."
+                    },
+                    "minAmount": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Minimum absolute normalized transaction amount."
+                    },
+                    "maxAmount": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Maximum absolute normalized transaction amount."
+                    },
+                    "startDate": {
+                      "type": "string"
+                    },
+                    "endDate": {
+                      "type": "string"
+                    },
+                    "missingNamespace": {
+                      "type": "string"
+                    },
+                    "limit": {
+                      "type": "number",
+                      "minimum": 1,
+                      "maximum": 2000
+                    }
+                  }
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "object"
+                },
+                "source": {
+                  "type": "string",
+                  "enum": ["user", "agent", "rule", "provider"]
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "dryRun": {
+                  "type": "boolean"
+                },
+                "teachRule": {
+                  "type": "boolean",
+                  "description": "When true, persist a forward label rule from the reusable selector/match after applying current labels."
+                },
+                "rule": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": ["merchant", "pattern"]
+                    },
+                    "match": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.transactions.labelRules.list",
+            "name": "List transaction label rules",
+            "description": "List persistent transaction label rules taught by users or agents. Rules auto-apply labels to current and future matching transactions during money-data writes.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "rules": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "counts": {
+                  "type": "object"
+                },
+                "generatedAt": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.transactions.labelRules.create",
+            "name": "Create transaction label rule",
+            "description": "Create a persistent merchant or pattern transaction label rule, validate values against the extension registry, optionally apply it to existing transactions, and return matched transaction samples.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["namespace", "values"],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "scope": {
+                  "type": "string",
+                  "enum": ["merchant", "pattern"],
+                  "default": "merchant"
+                },
+                "match": {
+                  "type": "object",
+                  "properties": {
+                    "merchantId": {
+                      "type": "string"
+                    },
+                    "merchantIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "merchantName": {
+                      "type": "string"
+                    },
+                    "merchantNames": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "q": {
+                      "type": "string"
+                    },
+                    "textPattern": {
+                      "type": "string",
+                      "description": "Plain substring match over transaction text; not a regular expression."
+                    },
+                    "accountId": {
+                      "type": "string"
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": ["income", "expense", "transfer"]
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "currencyCode": {
+                      "type": "string"
+                    },
+                    "minAmount": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "maxAmount": {
+                      "type": "number",
+                      "minimum": 0
+                    },
+                    "startDate": {
+                      "type": "string"
+                    },
+                    "endDate": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "selector": {
+                  "type": "object",
+                  "description": "Optional label selector to derive a reusable rule match from."
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "object"
+                },
+                "createdBy": {
+                  "type": "string",
+                  "enum": ["user", "agent"]
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["active", "disabled"]
+                },
+                "applyExisting": {
+                  "type": "boolean"
+                },
+                "dryRun": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "rule": {
+                  "type": "object"
+                },
+                "matched": {
+                  "type": "object"
+                },
+                "rules": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "counts": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.transactions.labelRules.delete",
+            "name": "Delete transaction label rule",
+            "description": "Delete a persistent transaction label rule by id, clear stale rule-applied labels for its namespace, and refresh affected transaction metrics.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "deleted": {
+                  "type": "object"
+                },
+                "rules": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "counts": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.transactions.classify",
+            "name": "Classify transactions",
+            "description": "Use structured AI output to propose registry-backed transaction extension labels, optionally apply high-confidence proposals, refresh transaction-backed materialized metrics, and return reviewAfter counts for affected namespaces.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["selector", "targetNamespaces"],
+              "properties": {
+                "selector": {
+                  "type": "object",
+                  "properties": {
+                    "transactionIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "merchantIds": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "merchantNames": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "q": {
+                      "type": "string"
+                    },
+                    "accountId": {
+                      "type": "string"
+                    },
+                    "direction": {
+                      "type": "string",
+                      "enum": ["income", "expense", "transfer"]
+                    },
+                    "category": {
+                      "type": "string"
+                    },
+                    "currencyCode": {
+                      "type": "string",
+                      "description": "ISO currency code such as USD or CAD."
+                    },
+                    "minAmount": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Minimum absolute normalized transaction amount."
+                    },
+                    "maxAmount": {
+                      "type": "number",
+                      "minimum": 0,
+                      "description": "Maximum absolute normalized transaction amount."
+                    },
+                    "startDate": {
+                      "type": "string"
+                    },
+                    "endDate": {
+                      "type": "string"
+                    },
+                    "missingNamespace": {
+                      "type": "string"
+                    },
+                    "limit": {
+                      "type": "number",
+                      "minimum": 1,
+                      "maximum": 2000
+                    }
+                  }
+                },
+                "targetNamespaces": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 8,
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "instructions": {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                "model": {
+                  "type": "string",
+                  "default": "openai/gpt-5.5"
+                },
+                "maxTransactions": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 100,
+                  "default": 50
+                },
+                "saveProposals": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "apply": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "minConfidenceToApply": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1,
+                  "default": 0.9
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.extensions.proposals.list",
+            "name": "List extension proposals",
+            "description": "List pending, accepted, or rejected registry-backed extension proposals created by agent/rule/provider classification workflows.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "entity": {
+                  "type": "string",
+                  "enum": [
+                    "transaction",
+                    "account",
+                    "holding",
+                    "debt",
+                    "merchant",
+                    "person"
+                  ]
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "entityId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["pending", "accepted", "rejected"]
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.extensions.proposals.decide",
+            "name": "Batch decide extension proposals",
+            "description": "Accept, reject, or correct a bounded batch of extension proposals by ids or filters, with dry-run support, validation, extension writes for accepts/corrections, optional teachRule for corrected transaction labels, formula/card refresh, and reviewAfter counts for transaction namespaces.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["action"],
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": ["accept", "reject", "correct"]
+                },
+                "ids": {
+                  "type": "array",
+                  "maxItems": 500,
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "entity": {
+                  "type": "string",
+                  "enum": [
+                    "transaction",
+                    "account",
+                    "holding",
+                    "debt",
+                    "merchant",
+                    "person"
+                  ]
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "entityId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["pending", "accepted", "rejected"],
+                  "default": "pending"
+                },
+                "batchId": {
+                  "type": "string"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "minConfidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "maxConfidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "reason": {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                "correctedNamespace": {
+                  "type": "string",
+                  "description": "Optional replacement namespace for action=correct. Defaults to each proposal namespace."
+                },
+                "values": {
+                  "type": "object",
+                  "description": "Corrected extension values for action=correct. Values are validated against the registry."
+                },
+                "source": {
+                  "type": "string",
+                  "enum": ["user", "agent", "rule", "provider"],
+                  "default": "user"
+                },
+                "confidence": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "teachRule": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "For corrected transaction labels, persist a forward merchant/pattern label rule after writing the corrected values."
+                },
+                "rule": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": ["merchant", "pattern"]
+                    },
+                    "match": {
+                      "type": "object"
+                    }
+                  }
+                },
+                "dryRun": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500,
+                  "default": 100
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.extensions.proposals.accept",
+            "name": "Accept extension proposal",
+            "description": "Accept one extension proposal, validate it against the registry, write the corresponding extension value, refresh affected formulas/cards, and return reviewAfter counts when it targets transactions.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string",
+                  "maxLength": 1000
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.extensions.proposals.reject",
+            "name": "Reject extension proposal",
+            "description": "Reject one extension proposal while preserving the local audit record and returning reviewAfter counts when it targets transactions.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string",
+                  "maxLength": 1000
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.extensions.values.list",
+            "name": "List extension values",
+            "description": "List namespaced extension values by entity, namespace, entity id, and cursor pagination.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "entity": {
+                  "type": "string",
+                  "enum": [
+                    "transaction",
+                    "account",
+                    "holding",
+                    "debt",
+                    "merchant",
+                    "person"
+                  ]
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "entityId": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "extensions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "offset": {
+                  "type": "number"
+                },
+                "hasMore": {
+                  "type": "boolean"
+                },
+                "nextOffset": {
+                  "type": "number"
+                },
+                "nextCursor": {
+                  "type": "string"
+                },
+                "counts": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.extensions.values.patch",
+            "name": "Patch extension value",
+            "description": "Patch one existing namespaced extension value for review/edit workflows. Values merge by default; set replaceValues to replace the values object.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["entity", "namespace", "entityId"],
+              "properties": {
+                "entity": {
+                  "type": "string",
+                  "enum": [
+                    "transaction",
+                    "account",
+                    "holding",
+                    "debt",
+                    "merchant",
+                    "person"
+                  ]
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "entityId": {
+                  "type": "string"
+                },
+                "values": {
+                  "type": "object"
+                },
+                "replaceValues": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "source": {
+                  "type": "string",
+                  "enum": ["user", "agent", "rule", "provider"]
+                },
+                "confidence": {
+                  "type": ["number", "null"],
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.extensions.values.delete",
+            "name": "Delete extension value",
+            "description": "Delete one existing namespaced extension value by entity, namespace, and entity id.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["entity", "namespace", "entityId"],
+              "properties": {
+                "entity": {
+                  "type": "string",
+                  "enum": [
+                    "transaction",
+                    "account",
+                    "holding",
+                    "debt",
+                    "merchant",
+                    "person"
+                  ]
+                },
+                "namespace": {
+                  "type": "string"
+                },
+                "entityId": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.formulas.schema",
+            "name": "Formula schema",
+            "description": "Read formula DSL metadata, semantic collection definitions, supported methods/functions, card kinds, formats, output types, and examples for generating Money cards.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "version": {
+                  "type": "number"
+                },
+                "generatedAt": {
+                  "type": "string"
+                },
+                "collections": {
+                  "type": "object"
+                },
+                "allocationTargets": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "forecastScenarios": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "taxContributionLimits": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "entities": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "methods": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "functions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "operators": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "formats": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "outputTypes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "cardKinds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "examples": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.formulas.complete",
+            "name": "Complete formula",
+            "description": "Return context-aware DSL completions for formula authoring, including collections, methods, functions, fields, enum values, operators, and replacement ranges.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "formula": {
+                  "type": "string"
+                },
+                "cursor": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "formula": {
+                  "type": "string"
+                },
+                "cursor": {
+                  "type": "number"
+                },
+                "context": {
+                  "type": "string"
+                },
+                "completions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.formulas.list",
+            "name": "List formulas",
+            "description": "Read saved Money formula definitions and their materialized outputs.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "formulas": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "materialized": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.formulas.preview",
+            "name": "Preview formula",
+            "description": "Evaluate a proposed Money formula without persisting it, returning typed output or structured diagnostics.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["formula"],
+              "properties": {
+                "formula": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "currency",
+                    "percent",
+                    "number",
+                    "compact",
+                    "duration",
+                    "date"
+                  ]
+                },
+                "outputType": {
+                  "type": "string",
+                  "enum": [
+                    "money",
+                    "percent",
+                    "count",
+                    "number",
+                    "duration",
+                    "date",
+                    "series",
+                    "table",
+                    "entity-list"
+                  ]
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "collections": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.cards.list",
+            "name": "List cards",
+            "description": "Read saved Money card definitions, evaluated cards, and materialized card outputs.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "definitions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "cards": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "materialized": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.dashboards.list",
+            "name": "List dashboards",
+            "description": "Read saved Money dashboards in display order.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "dashboards": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.dashboards.reorder",
+            "name": "Reorder dashboards",
+            "description": "Persist the user's dashboard display order and return the reordered dashboard list.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["ids"],
+              "properties": {
+                "ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "dashboards": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.dashboards.delete",
+            "name": "Delete dashboard",
+            "description": "Delete one saved Money dashboard by id and return the remaining dashboard list.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "dashboard": {
+                  "type": "object"
+                },
+                "dashboards": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.cards.readiness",
+            "name": "Card readiness",
+            "description": "Read privacy-safe per-card usefulness diagnostics: referenced collections, backing transaction counts, extension namespace gaps, proposal-review needs, and repair status without transaction rows.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "ids": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ready",
+                    "empty",
+                    "needs-labels",
+                    "needs-review",
+                    "error"
+                  ]
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "generatedAt": {
+                  "type": "string"
+                },
+                "cards": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "summary": {
+                  "type": "object"
+                },
+                "total": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "offset": {
+                  "type": "number"
+                },
+                "hasMore": {
+                  "type": "boolean"
+                },
+                "nextCursor": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.cards.transactions",
+            "name": "List card transactions",
+            "description": "Read paged transaction rows backing a card. Pass formulaKey to drill into a named secondary formula. Single collection formula chains apply formula filters first; unsupported shapes fall back to transaction-backed referenced collections with collection, search, direction, date, category, account, and cursor filters.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "cardId": {
+                  "type": "string"
+                },
+                "formula": {
+                  "type": "string"
+                },
+                "formulaKey": {
+                  "type": "string",
+                  "description": "Name of a secondaryFormulas entry to drill into for the selected cardId."
+                },
+                "collection": {
+                  "type": "string"
+                },
+                "q": {
+                  "type": "string"
+                },
+                "accountId": {
+                  "type": "string"
+                },
+                "direction": {
+                  "type": "string",
+                  "enum": ["income", "expense", "transfer"]
+                },
+                "category": {
+                  "type": "string"
+                },
+                "startDate": {
+                  "type": "string"
+                },
+                "endDate": {
+                  "type": "string"
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 500
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "cardId": {
+                  "type": "string"
+                },
+                "formula": {
+                  "type": "string"
+                },
+                "formulaKey": {
+                  "type": "string"
+                },
+                "collection": {
+                  "type": "string"
+                },
+                "availableCollections": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "drilldownBasis": {
+                  "type": "string",
+                  "enum": ["formula", "collection"]
+                },
+                "formulaFiltered": {
+                  "type": "boolean"
+                },
+                "formulaUnsupportedReason": {
+                  "type": "string"
+                },
+                "transactions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "limit": {
+                  "type": "number"
+                },
+                "offset": {
+                  "type": "number"
+                },
+                "hasMore": {
+                  "type": "boolean"
+                },
+                "nextOffset": {
+                  "type": "number"
+                },
+                "nextCursor": {
+                  "type": "string"
+                },
+                "filters": {
+                  "type": "object"
+                },
+                "generatedAt": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.cards.templates.list",
+            "name": "List card templates",
+            "description": "Read curated starter card templates with categories, referenced collections, required extension namespaces, and optional validation/evaluation results.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string",
+                  "enum": [
+                    "overview",
+                    "cash-flow",
+                    "recurring",
+                    "credit-debt",
+                    "investing",
+                    "tax",
+                    "review",
+                    "sharing",
+                    "forecasting",
+                    "merchants"
+                  ]
+                },
+                "ids": {
+                  "type": "string"
+                },
+                "includeEvaluation": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "limit": {
+                  "type": "number",
+                  "minimum": 1,
+                  "maximum": 100
+                },
+                "offset": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "cursor": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "templates": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "total": {
+                  "type": "number"
+                },
+                "categories": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.cards.preview",
+            "name": "Preview card",
+            "description": "Validate and evaluate a proposed Money card without persisting it, returning the normalized definition, evaluated card with referencedCollections and secondaryResults, materialized result, or structured diagnostics plus executable repair actions agents can heal from.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["title"],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "metric",
+                    "ratio",
+                    "list",
+                    "status",
+                    "trend",
+                    "breakdown",
+                    "entity-list",
+                    "optimizer",
+                    "comparison",
+                    "forecast"
+                  ]
+                },
+                "formula": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "primaryFormula": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "secondaryFormulas": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "visualization": {
+                  "type": "string"
+                },
+                "timeWindow": {
+                  "type": "string",
+                  "enum": ["1M", "3M", "6M", "YTD", "1Y", "ALL"]
+                },
+                "outputType": {
+                  "type": "string",
+                  "enum": [
+                    "money",
+                    "percent",
+                    "count",
+                    "number",
+                    "duration",
+                    "date",
+                    "series",
+                    "forecast",
+                    "table",
+                    "entity-list"
+                  ]
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "currency",
+                    "percent",
+                    "number",
+                    "compact",
+                    "duration",
+                    "date"
+                  ]
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                },
+                "repairHints": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "repairActions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.cards.test",
+            "name": "Test cards",
+            "description": "Batch-validate and evaluate proposed Money card definitions without persisting them. Returns per-card pass/fail results, evaluated cards with secondaryResults, structured diagnostics, repair hints, executable repair actions, aggregate next actions, a primary drilldown preview, and secondaryDrilldowns keyed by secondary formula name that agents can use to heal generated cards.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["cards"],
+              "properties": {
+                "cards": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 50,
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "testedAt": {
+                  "type": "string"
+                },
+                "total": {
+                  "type": "number"
+                },
+                "passed": {
+                  "type": "number"
+                },
+                "failed": {
+                  "type": "number"
+                },
+                "cards": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "nextActions": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "money.cards.save",
+            "name": "Save card",
+            "description": "Validate, evaluate, persist, and materialize a Money card definition. Successful responses include the evaluated card with secondaryResults. Use after preview succeeds.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["title"],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "metric",
+                    "ratio",
+                    "list",
+                    "status",
+                    "trend",
+                    "breakdown",
+                    "entity-list",
+                    "optimizer",
+                    "comparison",
+                    "forecast"
+                  ]
+                },
+                "formula": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "primaryFormula": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "secondaryFormulas": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "visualization": {
+                  "type": "string"
+                },
+                "timeWindow": {
+                  "type": "string",
+                  "enum": ["1M", "3M", "6M", "YTD", "1Y", "ALL"]
+                },
+                "outputType": {
+                  "type": "string",
+                  "enum": [
+                    "money",
+                    "percent",
+                    "count",
+                    "number",
+                    "duration",
+                    "date",
+                    "series",
+                    "forecast",
+                    "table",
+                    "entity-list"
+                  ]
+                },
+                "format": {
+                  "type": "string",
+                  "enum": [
+                    "currency",
+                    "percent",
+                    "number",
+                    "compact",
+                    "duration",
+                    "date"
+                  ]
+                },
+                "description": {
+                  "type": "string"
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "money.cards.refresh",
+            "name": "Refresh card",
+            "description": "Re-evaluate and re-materialize a saved Money card by id after data or formula changes.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "outputSchema": {
+              "type": "object",
+              "properties": {
+                "ok": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object"
+                },
+                "error": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "env": [],
+  "vault": [
+    {
+      "key": "PLAID_CLIENT_ID",
+      "name": "Plaid Client ID",
+      "description": "Connects your banks, cards, and brokerages via Plaid so your dashboards fill with real numbers. Use your own Plaid Production keys.",
+      "url": "https://dashboard.plaid.com/developers/keys",
+      "required": true,
+      "capabilities": [
+        "plaid/link-token-create",
+        "plaid/link-token-update",
+        "plaid/item-exchange-store",
+        "plaid/accounts-sync",
+        "plaid/transactions-sync",
+        "plaid/item-remove",
+        "plaid/liabilities-sync",
+        "plaid/investments-sync"
+      ]
+    },
+    {
+      "key": "PLAID_SECRET",
+      "name": "Plaid Secret",
+      "description": "Server-side secret paired with your Plaid Client ID for all Plaid API calls. Never leaves your machine.",
+      "url": "https://dashboard.plaid.com/developers/keys",
+      "required": true,
+      "capabilities": [
+        "plaid/link-token-create",
+        "plaid/link-token-update",
+        "plaid/item-exchange-store",
+        "plaid/accounts-sync",
+        "plaid/transactions-sync",
+        "plaid/item-remove",
+        "plaid/liabilities-sync",
+        "plaid/investments-sync"
+      ]
+    }
+  ]
+}

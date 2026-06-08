@@ -149,7 +149,7 @@ describe('wiki note metadata and search', () => {
         '  - project',
         '  - alpha',
         'status: active',
-        'owner: "Rob"',
+        'owner: "Example User"',
         '---',
         '# Alpha Project',
         '',
@@ -171,7 +171,7 @@ describe('wiki note metadata and search', () => {
     expect(file.properties).toMatchObject([
       { key: 'tags', type: 'tags', value: 'project, alpha' },
       { key: 'status', value: 'active' },
-      { key: 'owner', value: 'Rob' },
+      { key: 'owner', value: 'Example User' },
     ])
 
     const { body: tagResults } = await jsonRequest<

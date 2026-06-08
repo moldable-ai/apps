@@ -285,7 +285,7 @@
   "modified": false,
   "moldableDependencies": {
     "@moldable-ai/editor": "^0.1.16",
-    "@moldable-ai/storage": "^0.1.5",
+    "@moldable-ai/storage": "^0.1.6",
     "@moldable-ai/ui": "^0.2.17"
   },
   "name": "Meetings",
@@ -374,6 +374,6 @@
       "url": "https://console.deepgram.com/"
     }
   ],
-  "version": "0.1.10",
+  "version": "0.1.11",
   "visibility": "public"
 }

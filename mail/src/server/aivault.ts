@@ -36,6 +36,24 @@ const AIVAULT_ENV_KEYS = [
   'USER',
 ] as const
 
+const MAX_AIVAULT_CONCURRENCY = 4
+let activeAivaultCommands = 0
+const pendingAivaultCommands: Array<() => void> = []
+
+async function withAivaultSlot<T>(task: () => Promise<T>): Promise<T> {
+  if (activeAivaultCommands >= MAX_AIVAULT_CONCURRENCY) {
+    await new Promise<void>((resolve) => pendingAivaultCommands.push(resolve))
+  }
+
+  activeAivaultCommands += 1
+  try {
+    return await task()
+  } finally {
+    activeAivaultCommands -= 1
+    pendingAivaultCommands.shift()?.()
+  }
+}
+
 function aivaultContextArgs(workspaceId?: string): string[] {
   const id = workspaceId?.trim()
   if (!id) return []
@@ -58,37 +76,40 @@ function getAivaultEnv(): NodeJS.ProcessEnv {
 }
 
 function runAivault(args: string[]): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const child = spawn('aivault', args, {
-      env: getAivaultEnv(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-    const stdout: Buffer[] = []
-    const stderr: Buffer[] = []
+  return withAivaultSlot(
+    () =>
+      new Promise((resolve, reject) => {
+        const child = spawn('aivault', args, {
+          env: getAivaultEnv(),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        })
+        const stdout: Buffer[] = []
+        const stderr: Buffer[] = []
 
-    child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk))
-    child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
-    child.on('error', reject)
-    child.on('close', (code) => {
-      if (code === 0) {
-        resolve(Buffer.concat(stdout))
-        return
-      }
+        child.stdout.on('data', (chunk: Buffer) => stdout.push(chunk))
+        child.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
+        child.on('error', reject)
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolve(Buffer.concat(stdout))
+            return
+          }
 
-      const stderrText = Buffer.concat(stderr).toString('utf8').trim()
-      const stdoutText = Buffer.concat(stdout).toString('utf8').trim()
-      const message =
-        stderrText ||
-        `aivault ${args.slice(0, 2).join(' ')} exited with code ${code}`
-      const error = new Error(message) as Error & {
-        status?: number
-        response?: { stdout?: string; stderr?: string; args?: string[] }
-      }
-      error.status = code ?? undefined
-      error.response = { stdout: stdoutText, stderr: stderrText, args }
-      reject(error)
-    })
-  })
+          const stderrText = Buffer.concat(stderr).toString('utf8').trim()
+          const stdoutText = Buffer.concat(stdout).toString('utf8').trim()
+          const message =
+            stderrText ||
+            `aivault ${args.slice(0, 2).join(' ')} exited with code ${code}`
+          const error = new Error(message) as Error & {
+            status?: number
+            response?: { stdout?: string; stderr?: string; args?: string[] }
+          }
+          error.status = code ?? undefined
+          error.response = { stdout: stdoutText, stderr: stderrText, args }
+          reject(error)
+        })
+      }),
+  )
 }
 
 export async function listWorkspaceSecrets(

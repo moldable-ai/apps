@@ -39,7 +39,7 @@ function message(
     id,
     threadId: overrides.threadId ?? id,
     from: overrides.from ?? 'Sender <sender@example.com>',
-    to: overrides.to ?? 'rob@example.com',
+    to: overrides.to ?? 'user@example.com',
     cc: overrides.cc ?? '',
     subject: overrides.subject ?? `Subject ${id}`,
     date: overrides.date ?? 'Mon, 01 Jun 2026 12:00:00 +0000',

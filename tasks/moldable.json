@@ -1,6 +1,6 @@
 {
   "name": "Tasks",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Linear-style local project and task management",
@@ -11,7 +11,7 @@
   "tags": [],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
     "version": 1,

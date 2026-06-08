@@ -1,6 +1,6 @@
 {
   "name": "Reader",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "A local-first ebook reader. Open EPUB and text files, organize a library into folders, read with fully configurable typography and themes, or speed-read with an RSVP word-by-word mode.",
@@ -12,7 +12,7 @@
   "tags": ["reading", "books", "epub", "library"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "env": [],
   "appApi": {

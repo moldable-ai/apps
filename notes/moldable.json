@@ -1,6 +1,6 @@
 {
   "name": "Notes",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "aliases": ["notepad", "writing"],
   "visibility": "public",
   "description": "A Google Keep-style note taking app with pinning and markdown support",
@@ -15,7 +15,7 @@
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
     "@moldable-ai/editor": "^0.1.16",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
     "version": 1,

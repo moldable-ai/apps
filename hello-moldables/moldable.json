@@ -37,7 +37,7 @@
       "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
     }
   },
-  "version": "0.1.7",
+  "version": "0.1.8",
   "aliases": ["welcome", "tutorial"],
   "visibility": "public",
   "routeName": "hello-moldables",

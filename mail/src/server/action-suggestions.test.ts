@@ -9,7 +9,7 @@ function message(
     id: overrides.id,
     threadId: overrides.threadId ?? overrides.id,
     from: overrides.from ?? 'sender@example.com',
-    to: overrides.to ?? 'rob@example.com',
+    to: overrides.to ?? 'user@example.com',
     subject: overrides.subject ?? '',
     date: overrides.date ?? new Date(0).toISOString(),
     snippet: overrides.snippet ?? '',
