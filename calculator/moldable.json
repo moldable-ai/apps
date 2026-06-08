@@ -1,7 +1,11 @@
 {
   "name": "Calculator",
-  "version": "0.1.4",
-  "aliases": ["calc", "convert", "converter"],
+  "version": "0.1.5",
+  "aliases": [
+    "calc",
+    "convert",
+    "converter"
+  ],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Everyday, scientific, and unit/currency calculator with history",
@@ -11,10 +15,17 @@
   "icon": "🧮",
   "iconPath": "public/icon.png",
   "category": "utilities",
-  "tags": ["calculator", "math", "scientific", "convert", "currency", "units"],
+  "tags": [
+    "calculator",
+    "math",
+    "scientific",
+    "convert",
+    "currency",
+    "units"
+  ],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
     "version": 1,
@@ -37,7 +48,10 @@
                 },
                 "angleMode": {
                   "type": "string",
-                  "enum": ["deg", "rad"],
+                  "enum": [
+                    "deg",
+                    "rad"
+                  ],
                   "description": "Angle unit for trigonometric functions. Defaults to deg."
                 },
                 "record": {
@@ -45,7 +59,9 @@
                   "description": "Whether to save this calculation to history. Defaults to true."
                 }
               },
-              "required": ["expression"]
+              "required": [
+                "expression"
+              ]
             }
           },
           {
@@ -86,7 +102,11 @@
                   "description": "Whether to save this conversion to history. Defaults to true."
                 }
               },
-              "required": ["value", "from", "to"]
+              "required": [
+                "value",
+                "from",
+                "to"
+              ]
             }
           }
         ]
@@ -127,7 +147,9 @@
                   "maximum": 500
                 }
               },
-              "required": ["query"]
+              "required": [
+                "query"
+              ]
             }
           },
           {

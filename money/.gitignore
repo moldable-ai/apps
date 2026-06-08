@@ -1,0 +1,26 @@
+# dependencies
+/node_modules
+/.pnpm-debug.log*
+
+# build output
+/dist
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# moldable
+.moldable.instances.json
+
+# local dev-fallback workspace data (when MOLDABLE_APP_DATA_DIR is unset, storage
+# falls back to ./data — never commit real or cached financial artifacts)
+/data
+

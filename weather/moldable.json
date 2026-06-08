@@ -1,7 +1,10 @@
 {
   "name": "Weather",
-  "version": "0.1.3",
-  "aliases": ["forecast", "conditions"],
+  "version": "0.1.4",
+  "aliases": [
+    "forecast",
+    "conditions"
+  ],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Local forecast and current conditions, at a glance. Keyless and local-first.",
@@ -10,10 +13,14 @@
   "icon": "⛅",
   "iconPath": "public/icon.png",
   "category": "weather",
-  "tags": ["weather", "forecast", "essentials"],
+  "tags": [
+    "weather",
+    "forecast",
+    "essentials"
+  ],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
     "version": 1,
@@ -38,7 +45,10 @@
                 },
                 "unit": {
                   "type": "string",
-                  "enum": ["fahrenheit", "celsius"]
+                  "enum": [
+                    "fahrenheit",
+                    "celsius"
+                  ]
                 }
               }
             }
@@ -58,7 +68,10 @@
                 },
                 "unit": {
                   "type": "string",
-                  "enum": ["fahrenheit", "celsius"]
+                  "enum": [
+                    "fahrenheit",
+                    "celsius"
+                  ]
                 }
               }
             }
@@ -78,7 +91,10 @@
                 },
                 "unit": {
                   "type": "string",
-                  "enum": ["fahrenheit", "celsius"]
+                  "enum": [
+                    "fahrenheit",
+                    "celsius"
+                  ]
                 }
               }
             }

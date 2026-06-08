@@ -1,6 +1,6 @@
 {
   "name": "Reader",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "A local-first ebook reader. Open EPUB and text files, organize a library into folders, read with fully configurable typography and themes, or speed-read with an RSVP word-by-word mode.",
@@ -9,10 +9,15 @@
   "icon": "📖",
   "iconPath": "public/icon.png",
   "category": "reference",
-  "tags": ["reading", "books", "epub", "library"],
+  "tags": [
+    "reading",
+    "books",
+    "epub",
+    "library"
+  ],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "env": [],
   "appApi": {
@@ -52,7 +57,9 @@
                   "description": "Create folderName if it does not already exist. Defaults to false."
                 }
               },
-              "required": ["filePath"]
+              "required": [
+                "filePath"
+              ]
             }
           },
           {
@@ -80,7 +87,9 @@
                   "description": "Zero-based page index."
                 }
               },
-              "required": ["query"]
+              "required": [
+                "query"
+              ]
             }
           },
           {
@@ -91,11 +100,16 @@
               "type": "object",
               "properties": {
                 "id": {
-                  "type": ["string", "number"],
+                  "type": [
+                    "string",
+                    "number"
+                  ],
                   "description": "Store install key returned by store.search, such as gutenberg:84 or open-library:identifier. Numeric Gutenberg ids are still accepted."
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           }
         ]

@@ -4,6 +4,9 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
 
+process.env.PORTLESS_HTTPS ??= '1'
+process.env.PORTLESS_PORT ??= '1355'
+
 function getArgValue(flagA, flagB) {
   const idxA = process.argv.indexOf(flagA)
   if (idxA !== -1 && process.argv[idxA + 1]) return process.argv[idxA + 1]

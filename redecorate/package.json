@@ -15,7 +15,7 @@
   "dependencies": {
     "@moldable-ai/editor": "link:/Users/rob/moldable/packages/editor",
     "@hono/node-server": "^1.19.14",
-    "@moldable-ai/storage": "^0.1.5",
+    "@moldable-ai/storage": "^0.1.6",
     "@moldable-ai/ui": "^0.2.17",
     "@tanstack/react-query": "^5.99.2",
     "@vitejs/plugin-react": "^6.0.1",

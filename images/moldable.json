@@ -1,7 +1,11 @@
 {
   "name": "Images",
-  "version": "0.1.6",
-  "aliases": ["image generation", "pictures", "art"],
+  "version": "0.1.7",
+  "aliases": [
+    "image generation",
+    "pictures",
+    "art"
+  ],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Generate and iterate images with GPT Image 2",
@@ -10,10 +14,15 @@
   "icon": "🖼️",
   "iconPath": "public/icon.png",
   "category": "graphics-design",
-  "tags": ["images", "generation", "openai", "gpt-image-2"],
+  "tags": [
+    "images",
+    "generation",
+    "openai",
+    "gpt-image-2"
+  ],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
     "version": 1,
@@ -49,7 +58,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -74,10 +85,17 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 }
               },
-              "required": ["prompt"]
+              "required": [
+                "prompt"
+              ]
             }
           },
           {
@@ -92,10 +110,17 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -113,7 +138,9 @@
                   "description": "When true or omitted, delete a pending generation thread that has no completed iterations. When false, keep it as failed."
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -127,7 +154,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -149,7 +178,10 @@
                   "description": "Array of iteration IDs to delete from the thread."
                 }
               },
-              "required": ["id", "iterationId"]
+              "required": [
+                "id",
+                "iterationId"
+              ]
             }
           },
           {
@@ -180,10 +212,18 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 }
               },
-              "required": ["id", "prompt"]
+              "required": [
+                "id",
+                "prompt"
+              ]
             }
           },
           {
@@ -214,10 +254,18 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 }
               },
-              "required": ["id", "prompt"]
+              "required": [
+                "id",
+                "prompt"
+              ]
             }
           },
           {
@@ -253,10 +301,17 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 }
               },
-              "required": ["imagePath"]
+              "required": [
+                "imagePath"
+              ]
             }
           },
           {
@@ -283,7 +338,10 @@
                   ]
                 }
               },
-              "required": ["id", "aspectRatio"]
+              "required": [
+                "id",
+                "aspectRatio"
+              ]
             }
           },
           {
@@ -301,7 +359,9 @@
                   "description": "Existing iteration id to process. Omit to process the thread's displayed image."
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           }
         ]
@@ -316,7 +376,9 @@
       "description": "Fallback for GPT Image 2 generation and image edits when Codex CLI auth is unavailable.",
       "url": "https://platform.openai.com/api-keys",
       "required": true,
-      "capabilities": ["openai/image-generation"]
+      "capabilities": [
+        "openai/image-generation"
+      ]
     },
     {
       "key": "REMOVE_BG_API_KEY",
@@ -324,7 +386,9 @@
       "description": "Optional. Enables one-click background removal for the current image.",
       "url": "https://www.remove.bg/api",
       "required": false,
-      "capabilities": ["remove-bg/background-removal"]
+      "capabilities": [
+        "remove-bg/background-removal"
+      ]
     }
   ],
   "routeName": "images",

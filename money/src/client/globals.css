@@ -1,0 +1,124 @@
+@import 'tailwindcss';
+@import '@moldable-ai/ui/styles';
+@source './**/*.{js,jsx,ts,tsx}';
+@source '../../node_modules/@moldable-ai/ui/dist/**/*.{js,jsx,ts,tsx}';
+
+@theme {
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* ----------------------------------------------------------- UI-kit motion */
+/* CSS-only motion (no framer-motion — Rolldown breaks it in prod builds).
+   House easing cubic-bezier(0.22, 1, 0.36, 1). All gated on reduced-motion. */
+
+@keyframes uk-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes uk-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes uk-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@layer utilities {
+  .uk-rise {
+    animation: uk-rise 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: var(--uk-rise-delay, 0ms);
+  }
+
+  .uk-fade {
+    animation: uk-fade 400ms ease both;
+    animation-delay: var(--uk-rise-delay, 0ms);
+  }
+
+  /* Tabular, slightly tightened numerics for big finance figures. */
+  .uk-nums {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings:
+      'tnum' 1,
+      'ss01' 1;
+    letter-spacing: -0.02em;
+  }
+
+  .uk-draw {
+    stroke-dasharray: var(--uk-draw-len, 1);
+    stroke-dashoffset: var(--uk-draw-len, 1);
+    animation: uk-draw 1100ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  /* Fades the bottom edge of a scroll region so clipped content reads as
+     "scroll for more" rather than a hard cut. */
+  .uk-scroll-fade {
+    mask-image: linear-gradient(
+      to bottom,
+      black calc(100% - 1.25rem),
+      transparent
+    );
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      black calc(100% - 1.25rem),
+      transparent
+    );
+  }
+
+  /* Flip-to-formula card. Front face drives height; back fills it. */
+  .uk-flip {
+    perspective: 1600px;
+  }
+  .uk-flip-inner {
+    position: relative;
+    transform-style: preserve-3d;
+    transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .uk-flip[data-flipped='true'] .uk-flip-inner {
+    transform: rotateY(180deg);
+  }
+  .uk-flip-face {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+  .uk-flip-back {
+    position: absolute;
+    inset: 0;
+    transform: rotateY(180deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .uk-rise,
+  .uk-fade,
+  .uk-draw {
+    animation: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+  .uk-flip-inner {
+    transition: none !important;
+  }
+}

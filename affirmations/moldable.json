@@ -1,7 +1,10 @@
 {
   "name": "Daily Affirmations",
-  "version": "0.1.10",
-  "aliases": ["mindfulness", "wellness"],
+  "version": "0.1.11",
+  "aliases": [
+    "mindfulness",
+    "wellness"
+  ],
   "visibility": "public",
   "description": "A soothing, daily affirmation app to improve mental health and positivity.",
   "runtime": "vite_hono",
@@ -13,7 +16,7 @@
   "tags": [],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
     "version": 1,
@@ -105,7 +108,9 @@
                   }
                 }
               },
-              "required": ["favorites"]
+              "required": [
+                "favorites"
+              ]
             }
           }
         ]
@@ -114,7 +119,9 @@
   },
   "env": [],
   "routeName": "affirmations",
-  "screenshots": ["public/screenshots/1.png"],
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
   "tagline": "Daily affirmations across ten themes, saved to your favorites",
   "upstream": {
     "repo": "moldable-ai/apps",

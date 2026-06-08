@@ -1,7 +1,10 @@
 {
   "name": "Translate",
-  "version": "0.1.3",
-  "aliases": ["translation", "translator"],
+  "version": "0.1.4",
+  "aliases": [
+    "translation",
+    "translator"
+  ],
   "visibility": "public",
   "description": "Fast, private text translation across dozens of languages",
   "runtime": "vite_hono",
@@ -11,10 +14,15 @@
   "icon": "🌐",
   "iconPath": "public/icon.png",
   "category": "productivity",
-  "tags": ["translate", "translation", "languages", "essentials"],
+  "tags": [
+    "translate",
+    "translation",
+    "languages",
+    "essentials"
+  ],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.17",
-    "@moldable-ai/storage": "^0.1.5"
+    "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
     "version": 1,
@@ -43,7 +51,10 @@
                   "description": "Target language code."
                 }
               },
-              "required": ["text", "to"]
+              "required": [
+                "text",
+                "to"
+              ]
             }
           },
           {
@@ -57,7 +68,9 @@
                   "type": "string"
                 }
               },
-              "required": ["text"]
+              "required": [
+                "text"
+              ]
             }
           },
           {
@@ -87,7 +100,9 @@
       "description": "Powers automatic text translation between languages",
       "url": "https://www.deepl.com/en/your-account/keys",
       "required": true,
-      "capabilities": ["deepl/translate"]
+      "capabilities": [
+        "deepl/translate"
+      ]
     }
   ],
   "routeName": "translate",

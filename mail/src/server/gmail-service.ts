@@ -125,11 +125,13 @@ const gmailTokenKeepalives = new Map<string, ReturnType<typeof setInterval>>()
 const messageListSyncs = new Map<string, Promise<void>>()
 const messageListSyncedAt = new Map<string, number>()
 const mailBackgroundSyncs = new Map<string, ReturnType<typeof setInterval>>()
+const mailBackgroundRefreshes = new Set<string>()
 
 const GMAIL_TOKEN_KEEPALIVE_INTERVAL_MS = 55 * 60 * 1000
 const GMAIL_TOKEN_KEEPALIVE_INITIAL_DELAY_MS = 30 * 1000
 const BACKGROUND_MESSAGE_SYNC_MIN_INTERVAL_MS = 5_000
 const MAIL_BACKGROUND_SYNC_INTERVAL_MS = 60_000
+const GMAIL_METADATA_CONCURRENCY = 4
 const CACHE_PAGE_TOKEN_PREFIX = 'cache:'
 
 function detailWarmupKey(workspaceId: string, id: string) {
@@ -143,6 +145,21 @@ function messageListSyncKey(workspaceId: string, options: ListMessagesOptions) {
     query: options.query ?? '',
     maxResults: options.maxResults ?? 20,
   })
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T) => Promise<R>,
+) {
+  const results: R[] = []
+
+  for (let index = 0; index < items.length; index += concurrency) {
+    const batch = items.slice(index, index + concurrency)
+    results.push(...(await Promise.all(batch.map(mapper))))
+  }
+
+  return results
 }
 
 export function isAuthError(error: unknown) {
@@ -1196,8 +1213,12 @@ export function startMailBackgroundSync(workspaceId: string) {
   if (mailBackgroundSyncs.has(workspaceId)) return
 
   const refresh = () => {
-    void isAuthenticated(workspaceId)
-      .then((authenticated) => {
+    if (mailBackgroundRefreshes.has(workspaceId)) return
+    mailBackgroundRefreshes.add(workspaceId)
+
+    void (async () => {
+      try {
+        const authenticated = await isAuthenticated(workspaceId)
         if (!authenticated) return
 
         const folders: ListMessagesOptions[] = [
@@ -1212,12 +1233,19 @@ export function startMailBackgroundSync(workspaceId: string) {
 
         for (const options of folders) {
           syncMessagesInBackground(workspaceId, options)
+          const key = messageListSyncKey(workspaceId, {
+            ...options,
+            pageToken: undefined,
+          })
+          await messageListSyncs.get(key)
         }
-      })
-      .catch((error) => {
+      } catch (error) {
         if (isAuthError(error)) return
         console.warn('Failed to run background mail sync:', error)
-      })
+      } finally {
+        mailBackgroundRefreshes.delete(workspaceId)
+      }
+    })()
   }
 
   refresh()
@@ -1234,8 +1262,10 @@ async function listMessagesFromGmail(
     const entries = await listActiveSnoozes(workspaceId)
     const limited = entries.slice(0, options.maxResults ?? 20)
     const summaries = (
-      await Promise.all(
-        limited.map(async (entry): Promise<MailMessageSummary | null> => {
+      await mapWithConcurrency(
+        limited,
+        GMAIL_METADATA_CONCURRENCY,
+        async (entry): Promise<MailMessageSummary | null> => {
           try {
             const summary = await getMessageSummary(workspaceId, entry.id)
             return {
@@ -1249,7 +1279,7 @@ async function listMessagesFromGmail(
             console.warn(`Failed to load snoozed message ${entry.id}:`, error)
             return null
           }
-        }),
+        },
       )
     ).filter((message): message is MailMessageSummary => message !== null)
     await cacheMessageSummaries(workspaceId, summaries)
@@ -1285,11 +1315,13 @@ async function listMessagesFromGmail(
     'google-gmail/messages-read',
     { path: gmailPath('/messages', params) },
   )
-  const summaries = await Promise.all(
-    (response.messages ?? [])
-      .map((message) => message.id)
-      .filter((id): id is string => !!id)
-      .map((id) => getMessageSummary(workspaceId, id)),
+  const messageIds = (response.messages ?? [])
+    .map((message) => message.id)
+    .filter((id): id is string => !!id)
+  const summaries = await mapWithConcurrency(
+    messageIds,
+    GMAIL_METADATA_CONCURRENCY,
+    (id) => getMessageSummary(workspaceId, id),
   )
   await cacheMessageSummaries(workspaceId, summaries)
   const reconciledLabelId =
