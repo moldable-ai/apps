@@ -3,7 +3,9 @@ import {
   ChevronRight,
   List,
   RotateCw,
+  Search as SearchIcon,
   Type,
+  Undo2,
   Zap,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -17,8 +19,9 @@ import {
   isInMoldable,
   sendToMoldable,
   useTheme,
+  useWorkspace,
 } from '@moldable-ai/ui'
-import type { ChapterRef } from '../../shared/book'
+import type { BookSearchResult, ChapterRef } from '../../shared/book'
 import {
   READER_FONT_STACKS,
   READER_READING_PACE_WPM,
@@ -29,6 +32,7 @@ import type { ReaderViewProps } from '../reader-types'
 import { useBook, useChapter } from '../use-book'
 import { useProgressWriter } from '../use-progress'
 import { useReaderSettings } from '../use-reader-settings'
+import { SearchDrawer } from './search-drawer'
 import { SpeedReader } from './speed-reader'
 import { TocDrawer } from './toc-drawer'
 import { TypographyPanel } from './typography-panel'
@@ -136,9 +140,225 @@ function findAnchorElement(
   return null
 }
 
+interface ReaderLocation {
+  chapterIndex: number
+  pageIndex: number
+  scrollRatio: number
+}
+
+interface PendingSearchJump {
+  chapterIndex: number
+  textStart: number
+  textLength: number
+  query: string
+  nonce: number
+}
+
+interface RenderedWordDebug {
+  index: number
+  text: string
+  rect: {
+    top: number
+    left: number
+    width: number
+    height: number
+  }
+}
+
+interface RenderedWordCapture {
+  firstVisibleWordIndex: number | null
+  visibleWordsInDomOrder: RenderedWordDebug[]
+  visibleWordsInVisualOrder: RenderedWordDebug[]
+  viewport: {
+    top: number
+    left: number
+    width: number
+    height: number
+  }
+}
+
+function roundRect(rect: DOMRect): RenderedWordDebug['rect'] {
+  return {
+    top: Math.round(rect.top),
+    left: Math.round(rect.left),
+    width: Math.round(rect.width),
+    height: Math.round(rect.height),
+  }
+}
+
+function wordWindow(words: string[], center: number, before = 30, after = 180) {
+  const start = Math.max(0, Math.round(center) - before)
+  const end = Math.min(words.length, Math.round(center) + after)
+  return {
+    start,
+    end,
+    words: words.slice(start, end).map((text, offset) => ({
+      index: start + offset,
+      text,
+    })),
+  }
+}
+
+function findTextPoint(
+  root: HTMLElement,
+  targetOffset: number,
+): { node: Text; offset: number } | null {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let cursor = 0
+  let lastTextNode: Text | null = null
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text
+    const parent = node.parentElement
+    if (parent?.closest('script, style')) continue
+
+    const text = node.nodeValue ?? ''
+    if (!text) continue
+    lastTextNode = node
+    if (cursor + text.length >= targetOffset) {
+      return {
+        node,
+        offset: Math.min(text.length, Math.max(0, targetOffset - cursor)),
+      }
+    }
+    cursor += text.length
+  }
+
+  if (!lastTextNode) return null
+  return { node: lastTextNode, offset: lastTextNode.length }
+}
+
+function findSearchTextOffset(
+  root: HTMLElement,
+  result: PendingSearchJump,
+  chapterText: string,
+): number {
+  const rawText = root.textContent ?? ''
+  if (!rawText) return 0
+
+  const approx = Math.round(
+    (result.textStart / Math.max(1, chapterText.length)) * rawText.length,
+  )
+  const needle = result.query.trim().toLocaleLowerCase()
+  if (needle.length < 2) return approx
+
+  const haystack = rawText.toLocaleLowerCase()
+  const searchStart = Math.max(0, approx - 1500)
+  const nearby = haystack.indexOf(needle, searchStart)
+  if (nearby >= 0 && Math.abs(nearby - approx) < 5000) return nearby
+
+  const first = haystack.indexOf(needle)
+  return first >= 0 ? first : approx
+}
+
+function textRangeRect(root: HTMLElement, offset: number): DOMRect | null {
+  const point = findTextPoint(root, offset)
+  if (!point) return null
+
+  const range = document.createRange()
+  range.setStart(point.node, point.offset)
+  range.setEnd(point.node, Math.min(point.node.length, point.offset + 1))
+  const rect = range.getBoundingClientRect()
+  range.detach()
+  return rect.width > 0 || rect.height > 0 ? rect : null
+}
+
+function rectIntersectsViewport(rect: DOMRect, viewport: DOMRect): boolean {
+  const inset = 2
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.right > viewport.left + inset &&
+    rect.left < viewport.right - inset &&
+    rect.bottom > viewport.top + inset &&
+    rect.top < viewport.bottom - inset
+  )
+}
+
+function wordMatches(text: string): RegExpMatchArray[] {
+  return Array.from(text.matchAll(/\S+/g))
+}
+
+function captureVisibleWordsInRenderedText(
+  root: HTMLElement,
+  viewport: HTMLElement,
+  maxWords = 180,
+): RenderedWordCapture | null {
+  const viewportRect = viewport.getBoundingClientRect()
+  if (viewportRect.width <= 0 || viewportRect.height <= 0) return null
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  const visibleWordsInDomOrder: RenderedWordDebug[] = []
+  let firstVisibleWordIndex: number | null = null
+  let wordIndex = 0
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text
+    const parent = node.parentElement
+    if (parent?.closest('script, style')) continue
+
+    const text = node.nodeValue ?? ''
+    if (!text.trim()) continue
+
+    const words = wordMatches(text)
+    if (words.length === 0) continue
+
+    const nodeRange = document.createRange()
+    nodeRange.selectNodeContents(node)
+    const nodeVisible = Array.from(nodeRange.getClientRects()).some((rect) =>
+      rectIntersectsViewport(rect, viewportRect),
+    )
+    nodeRange.detach()
+
+    if (!nodeVisible) {
+      wordIndex += words.length
+      continue
+    }
+
+    for (const word of words) {
+      const start = word.index ?? 0
+      const end = start + word[0].length
+      const range = document.createRange()
+      range.setStart(node, start)
+      range.setEnd(node, end)
+      const visibleRect = Array.from(range.getClientRects()).find((rect) =>
+        rectIntersectsViewport(rect, viewportRect),
+      )
+      range.detach()
+
+      if (visibleRect) {
+        firstVisibleWordIndex ??= wordIndex
+        visibleWordsInDomOrder.push({
+          index: wordIndex,
+          text: word[0],
+          rect: roundRect(visibleRect),
+        })
+        if (visibleWordsInDomOrder.length >= maxWords) break
+      }
+      wordIndex += 1
+    }
+
+    if (visibleWordsInDomOrder.length >= maxWords) break
+  }
+
+  const visibleWordsInVisualOrder = [...visibleWordsInDomOrder].sort((a, b) => {
+    const topDelta = a.rect.top - b.rect.top
+    if (Math.abs(topDelta) > 4) return topDelta
+    return a.rect.left - b.rect.left
+  })
+
+  return {
+    firstVisibleWordIndex,
+    visibleWordsInDomOrder,
+    visibleWordsInVisualOrder,
+    viewport: roundRect(viewportRect),
+  }
+}
+
 export function ReaderView({ bookId, onClose }: ReaderViewProps) {
   const bookQuery = useBook(bookId)
   const { settings, update } = useReaderSettings()
+  const { fetchWithWorkspace } = useWorkspace()
   const save = useProgressWriter(bookId)
 
   const book = bookQuery.data?.book ?? null
@@ -158,6 +378,8 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
   } | null>(null)
 
   const [tocOpen, setTocOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchHistory, setSearchHistory] = useState<ReaderLocation[]>([])
   const [typoOpen, setTypoOpen] = useState(false)
   const [speedOpen, setSpeedOpen] = useState(false)
   const [speedAutoResume, setSpeedAutoResume] = useState(false)
@@ -208,7 +430,11 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
   // --- Pagination ---
   const pageViewportRef = useRef<HTMLDivElement | null>(null)
   const paginatedContentRef = useRef<HTMLDivElement | null>(null)
+  const scrollContentRef = useRef<HTMLDivElement | null>(null)
   const anchorJumpNonceRef = useRef(0)
+  const searchJumpNonceRef = useRef(0)
+  const [pendingSearchJump, setPendingSearchJump] =
+    useState<PendingSearchJump | null>(null)
   const [pageWidth, setPageWidth] = useState(0)
   const [animate, setAnimate] = useState(false)
 
@@ -398,6 +624,63 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
     [chapterIndex, settings.layout],
   )
 
+  const jumpToSearchResult = useCallback(
+    (result: BookSearchResult, query: string) => {
+      setSearchHistory((history) => [
+        ...history,
+        { chapterIndex, pageIndex, scrollRatio },
+      ])
+      setSearchOpen(false)
+      setAnimate(false)
+      restoreLastPageRef.current = false
+      searchJumpNonceRef.current += 1
+      setPendingSearchJump({
+        chapterIndex: result.chapterIndex,
+        textStart: result.textStart,
+        textLength: result.textLength,
+        query,
+        nonce: searchJumpNonceRef.current,
+      })
+
+      if (result.chapterIndex !== chapterIndex) {
+        setChapterIndex(result.chapterIndex)
+      }
+      setPageIndex(0)
+      setScrollRatio(result.position)
+      if (settings.layout === 'scroll') {
+        const scroller = scrollRef.current
+        if (scroller) {
+          const max = scroller.scrollHeight - scroller.clientHeight
+          scroller.scrollTop = max > 0 ? max * result.position : 0
+        }
+      }
+    },
+    [chapterIndex, pageIndex, scrollRatio, settings.layout],
+  )
+
+  const restoreSearchReturnPoint = useCallback(() => {
+    const point = searchHistory[searchHistory.length - 1]
+    if (!point) return
+    setSearchHistory((history) => history.slice(0, -1))
+    setAnimate(false)
+    restoreLastPageRef.current = false
+    setPendingSearchJump(null)
+
+    if (settings.layout === 'scroll') {
+      pendingInitialScrollRatioRef.current =
+        point.chapterIndex === chapterIndex ? null : point.scrollRatio
+      setScrollRatio(point.scrollRatio)
+      const scroller = scrollRef.current
+      if (point.chapterIndex === chapterIndex && scroller) {
+        const max = scroller.scrollHeight - scroller.clientHeight
+        scroller.scrollTop = max > 0 ? max * point.scrollRatio : 0
+      }
+    }
+
+    setChapterIndex(point.chapterIndex)
+    setPageIndex(point.pageIndex)
+  }, [chapterIndex, searchHistory, settings.layout])
+
   const openExternalLink = useCallback((href: string) => {
     if (/^https?:/i.test(href) && isInMoldable()) {
       sendToMoldable({ type: 'moldable:open-url', url: href })
@@ -565,6 +848,70 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
     return () => window.clearTimeout(id)
   }, [chapter, chapterIndex, columnGap, pendingAnchor, settings.layout])
 
+  // Complete jumps from search results once the destination chapter has rendered.
+  useEffect(() => {
+    if (!pendingSearchJump || !chapter) return
+    if (pendingSearchJump.chapterIndex !== chapterIndex) return
+
+    const id = window.setTimeout(() => {
+      const root =
+        settings.layout === 'paginated'
+          ? paginatedContentRef.current
+          : scrollContentRef.current
+      if (!root) return
+
+      const targetOffset = findSearchTextOffset(
+        root,
+        pendingSearchJump,
+        chapter.text,
+      )
+      const rect = textRangeRect(root, targetOffset)
+      if (!rect) {
+        setPendingSearchJump(null)
+        return
+      }
+
+      if (settings.layout === 'paginated') {
+        const viewport = pageViewportRef.current
+        const content = paginatedContentRef.current
+        if (!viewport || !content) return
+
+        const width = viewport.clientWidth
+        if (width <= 0) return
+
+        const step = width + columnGap
+        const count = Math.max(
+          1,
+          Math.round((content.scrollWidth + columnGap) / step),
+        )
+        const contentRect = content.getBoundingClientRect()
+        const x = Math.max(0, rect.left - contentRect.left)
+        const targetPage = Math.min(count - 1, Math.floor((x + 1) / step))
+
+        setAnimate(false)
+        setPageWidth(width)
+        setPageCount(count)
+        setPageIndex(targetPage)
+      } else {
+        const scroller = scrollRef.current
+        if (!scroller) return
+        const scrollerRect = scroller.getBoundingClientRect()
+        const top = rect.top - scrollerRect.top + scroller.scrollTop - 32
+        scroller.scrollTop = Math.max(0, top)
+        window.requestAnimationFrame(() => {
+          const max = scroller.scrollHeight - scroller.clientHeight
+          setScrollRatio(
+            max > 0 ? Math.min(1, Math.max(0, scroller.scrollTop / max)) : 0,
+          )
+        })
+      }
+
+      setPendingSearchJump(null)
+    }, 100)
+
+    return () => window.clearTimeout(id)
+  }, [chapter, chapterIndex, columnGap, pendingSearchJump, settings.layout])
+
   // --- Intra-chapter fraction + overall percent ---
   const intraFraction = useMemo(() => {
     if (settings.layout === 'scroll') return scrollRatio
@@ -725,10 +1072,19 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
   // --- Keyboard ---
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault()
+        if (!speedOpen) setSearchOpen(true)
+        return
+      }
       if (event.key === 'Escape') {
         if (speedOpen) {
           // The speed-reader overlay owns Escape so it can persist the exact
           // word position before returning to the standard reader.
+          return
+        }
+        if (searchOpen) {
+          setSearchOpen(false)
           return
         }
         if (typoOpen) {
@@ -742,7 +1098,7 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
         onClose()
         return
       }
-      if (speedOpen || typoOpen || tocOpen) return
+      if (speedOpen || searchOpen || typoOpen || tocOpen) return
       if (settings.layout !== 'paginated') return
       if (event.key === 'ArrowRight') {
         event.preventDefault()
@@ -756,6 +1112,7 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
     return () => window.removeEventListener('keydown', onKey)
   }, [
     speedOpen,
+    searchOpen,
     typoOpen,
     tocOpen,
     settings.layout,
@@ -770,17 +1127,14 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
     [chapter],
   )
   // Start speed reading from the CURRENT spot you're on, not where the book was
-  // opened. Use the fraction at the START of the current page (page/pageCount)
-  // or the scroll position, so it lines up with what you can see right now.
+  // opened. Prefer the first word that is actually rendered in the visible
+  // reading viewport; this is much more reliable than estimating by
+  // pageIndex/pageCount because some EPUB spine files contain multiple visible
+  // chapters plus front matter.
   const speedStartIndex = useMemo(() => {
     if (speedWords.length === 0) return 0
     const resumeWordIndex = resumeSpeedWordIndexRef.current
-    if (
-      speedOpen &&
-      resumeWordIndex !== null &&
-      initialProgress?.readerMode === 'speed' &&
-      initialProgress.chapterIndex === chapterIndex
-    ) {
+    if (speedOpen && resumeWordIndex !== null) {
       return Math.min(
         Math.max(0, Math.round(resumeWordIndex)),
         Math.max(0, speedWords.length - 1),
@@ -800,8 +1154,6 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
   }, [
     speedWords.length,
     speedOpen,
-    initialProgress,
-    chapterIndex,
     settings.layout,
     scrollRatio,
     pageIndex,
@@ -867,12 +1219,91 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
     ],
   )
 
+  const currentRenderedWordCapture =
+    useCallback((): RenderedWordCapture | null => {
+      if (settings.layout === 'paginated') {
+        const root = paginatedContentRef.current
+        const viewport = pageViewportRef.current
+        if (!root || !viewport) return null
+        return captureVisibleWordsInRenderedText(root, viewport)
+      }
+
+      const root = scrollContentRef.current
+      const viewport = scrollRef.current
+      if (!root || !viewport) return null
+      return captureVisibleWordsInRenderedText(root, viewport)
+    }, [settings.layout])
+
+  const saveSpeedReaderDebugSnapshot = useCallback(
+    (
+      reason: string,
+      startIndex: number,
+      capture: RenderedWordCapture | null,
+    ) => {
+      if (!book || !chapter) return
+      const snapshot = {
+        reason,
+        clientGeneratedAt: new Date().toISOString(),
+        book: {
+          id: book.id,
+          title: book.title,
+          author: book.author,
+          wordCount: book.wordCount,
+        },
+        chapter: {
+          index: chapterIndex,
+          title: chapter.title,
+          wordCount: chapter.wordCount,
+        },
+        readerState: {
+          layout: settings.layout,
+          pageIndex,
+          pageCount,
+          scrollRatio,
+          chosenSpeedStartIndex: startIndex,
+          renderedFirstVisibleWordIndex: capture?.firstVisibleWordIndex ?? null,
+        },
+        renderedPage: capture,
+        speedReaderTokensAroundStart: wordWindow(speedWords, startIndex),
+      }
+
+      void fetchWithWorkspace('/api/debug/speed-reader/latest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(snapshot),
+      }).catch(() => {
+        // Debug-only best effort.
+      })
+    },
+    [
+      book,
+      chapter,
+      chapterIndex,
+      fetchWithWorkspace,
+      pageCount,
+      pageIndex,
+      scrollRatio,
+      settings.layout,
+      speedWords,
+    ],
+  )
+
   const handleOpenSpeedReader = useCallback(() => {
-    resumeSpeedWordIndexRef.current = null
+    const capture = currentRenderedWordCapture()
+    const renderedStartIndex = capture?.firstVisibleWordIndex ?? null
+    const startIndex =
+      renderedStartIndex === null ? speedStartIndex : renderedStartIndex
+    resumeSpeedWordIndexRef.current = startIndex
+    saveSpeedReaderDebugSnapshot('open-speed-reader', startIndex, capture)
     setSpeedAutoResume(false)
     setSpeedOpen(true)
     void save({ readerMode: 'speed' })
-  }, [save])
+  }, [
+    currentRenderedWordCapture,
+    save,
+    saveSpeedReaderDebugSnapshot,
+    speedStartIndex,
+  ])
 
   const handleSpeedChapterComplete = useCallback(
     (wordIndex: number) => {
@@ -991,12 +1422,46 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            {searchHistory.length > 0 ? (
+              <ChromeButton
+                label={
+                  searchHistory.length === 1
+                    ? 'Back to previous spot'
+                    : `Back ${searchHistory.length} search jumps`
+                }
+                theme={theme}
+                onClick={restoreSearchReturnPoint}
+              >
+                <span className="relative flex size-5 items-center justify-center">
+                  <Undo2 className="size-5" aria-hidden />
+                  {searchHistory.length > 1 ? (
+                    <span
+                      className="absolute -right-1.5 -top-1.5 flex size-3.5 items-center justify-center rounded-full text-[9px] font-medium leading-none"
+                      style={{
+                        color: theme.bg,
+                        backgroundColor: theme.fg,
+                      }}
+                      aria-hidden
+                    >
+                      {Math.min(9, searchHistory.length)}
+                    </span>
+                  ) : null}
+                </span>
+              </ChromeButton>
+            ) : null}
             <ChromeButton
               label="Contents"
               theme={theme}
               onClick={() => setTocOpen(true)}
             >
               <List className="size-5" aria-hidden />
+            </ChromeButton>
+            <ChromeButton
+              label="Search book"
+              theme={theme}
+              onClick={() => setSearchOpen(true)}
+            >
+              <SearchIcon className="size-5" aria-hidden />
             </ChromeButton>
             <ChromeButton
               label="Typography"
@@ -1096,6 +1561,7 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
               }}
             >
               <div
+                ref={scrollContentRef}
                 className="mx-auto"
                 style={{
                   ...columnStyle,
@@ -1158,6 +1624,13 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
             goToChapter(index)
             setTocOpen(false)
           }}
+        />
+        <SearchDrawer
+          open={searchOpen}
+          onOpenChange={setSearchOpen}
+          bookId={book.id}
+          currentChapterIndex={chapterIndex}
+          onSelect={jumpToSearchResult}
         />
         <TypographyPanel
           open={typoOpen}

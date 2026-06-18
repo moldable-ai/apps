@@ -1,7 +1,10 @@
 {
   "name": "Recipes",
-  "version": "0.1.4",
-  "aliases": ["cooking", "meals"],
+  "version": "0.1.5",
+  "aliases": [
+    "cooking",
+    "meals"
+  ],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "A photo-centric recipes app with beautiful cards, folders, rich Markdown steps, and a hands-free cook mode.",
@@ -12,7 +15,7 @@
   "category": "lifestyle",
   "tags": [],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.17"
+    "@moldable-ai/ui": "^0.2.18"
   },
   "appApi": {
     "version": 1,
@@ -37,7 +40,11 @@
                 },
                 "difficulty": {
                   "type": "string",
-                  "enum": ["Easy", "Medium", "Hard"]
+                  "enum": [
+                    "Easy",
+                    "Medium",
+                    "Hard"
+                  ]
                 },
                 "favoriteOnly": {
                   "type": "boolean"
@@ -82,7 +89,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -133,13 +142,19 @@
                 },
                 "difficulty": {
                   "type": "string",
-                  "enum": ["Easy", "Medium", "Hard"]
+                  "enum": [
+                    "Easy",
+                    "Medium",
+                    "Hard"
+                  ]
                 },
                 "isFavorite": {
                   "type": "boolean"
                 }
               },
-              "required": ["title"]
+              "required": [
+                "title"
+              ]
             }
           },
           {
@@ -193,7 +208,11 @@
                 },
                 "difficulty": {
                   "type": "string",
-                  "enum": ["Easy", "Medium", "Hard"]
+                  "enum": [
+                    "Easy",
+                    "Medium",
+                    "Hard"
+                  ]
                 },
                 "isFavorite": {
                   "type": "boolean"
@@ -202,7 +221,9 @@
                   "type": "boolean"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -219,7 +240,10 @@
                   "type": "boolean"
                 }
               },
-              "required": ["id", "isFavorite"]
+              "required": [
+                "id",
+                "isFavorite"
+              ]
             }
           },
           {
@@ -233,7 +257,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           }
         ]

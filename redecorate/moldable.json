@@ -1,6 +1,6 @@
 {
   "name": "Redecorate",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "aliases": [
     "interior design",
     "home design",
@@ -28,8 +28,8 @@
     "gpt-image-2"
   ],
   "moldableDependencies": {
-    "@moldable-ai/editor": "^0.1.16",
-    "@moldable-ai/ui": "^0.2.17",
+    "@moldable-ai/editor": "^0.1.17",
+    "@moldable-ai/ui": "^0.2.18",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
@@ -64,13 +64,19 @@
                 },
                 "space": {
                   "type": "string",
-                  "enum": ["interior", "exterior", "both"]
+                  "enum": [
+                    "interior",
+                    "exterior",
+                    "both"
+                  ]
                 },
                 "blurb": {
                   "type": "string"
                 }
               },
-              "required": ["name"]
+              "required": [
+                "name"
+              ]
             }
           },
           {
@@ -93,7 +99,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -107,7 +115,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -136,7 +146,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -161,16 +173,26 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 },
                 "folderId": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "presetId": {
                   "type": "string"
                 }
               },
-              "required": ["prompt"]
+              "required": [
+                "prompt"
+              ]
             }
           },
           {
@@ -194,7 +216,10 @@
                   "type": "string"
                 },
                 "folderId": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "aspectRatio": {
                   "type": "string",
@@ -207,7 +232,9 @@
                   ]
                 }
               },
-              "required": ["imagePath"]
+              "required": [
+                "imagePath"
+              ]
             }
           },
           {
@@ -238,10 +265,18 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 }
               },
-              "required": ["id", "prompt"]
+              "required": [
+                "id",
+                "prompt"
+              ]
             }
           },
           {
@@ -272,10 +307,18 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 }
               },
-              "required": ["id", "prompt"]
+              "required": [
+                "id",
+                "prompt"
+              ]
             }
           },
           {
@@ -292,7 +335,9 @@
                   "type": "boolean"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -309,7 +354,9 @@
                   "type": "boolean"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -323,10 +370,16 @@
                   "type": "string"
                 },
                 "folderId": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
-              "required": ["id", "folderId"]
+              "required": [
+                "id",
+                "folderId"
+              ]
             }
           },
           {
@@ -340,7 +393,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -361,7 +416,10 @@
                   "minItems": 1
                 }
               },
-              "required": ["id", "iterationId"]
+              "required": [
+                "id",
+                "iterationId"
+              ]
             }
           },
           {
@@ -376,10 +434,17 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -396,7 +461,9 @@
                   "type": "boolean"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -423,7 +490,10 @@
                   ]
                 }
               },
-              "required": ["id", "aspectRatio"]
+              "required": [
+                "id",
+                "aspectRatio"
+              ]
             }
           },
           {
@@ -457,13 +527,23 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["low", "medium", "high", "auto"]
+                  "enum": [
+                    "low",
+                    "medium",
+                    "high",
+                    "auto"
+                  ]
                 },
                 "folderId": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 }
               },
-              "required": ["imagePath"]
+              "required": [
+                "imagePath"
+              ]
             }
           },
           {
@@ -480,7 +560,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -504,7 +586,9 @@
       "description": "Powers GPT Image 2 redesigns, remixes, and reference renders through OpenAI Codex OAuth.",
       "url": "https://platform.openai.com/api-keys",
       "required": true,
-      "capabilities": ["openai/image-generation"]
+      "capabilities": [
+        "openai/image-generation"
+      ]
     },
     {
       "key": "REMOVE_BG_API_KEY",
@@ -512,7 +596,9 @@
       "description": "Optional. Enables one-click background removal for a render.",
       "url": "https://www.remove.bg/api",
       "required": false,
-      "capabilities": ["remove-bg/background-removal"]
+      "capabilities": [
+        "remove-bg/background-removal"
+      ]
     }
   ],
   "routeName": "redecorate",

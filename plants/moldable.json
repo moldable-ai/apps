@@ -1,7 +1,10 @@
 {
   "name": "Plants",
-  "version": "0.1.4",
-  "aliases": ["houseplants", "garden"],
+  "version": "0.1.5",
+  "aliases": [
+    "houseplants",
+    "garden"
+  ],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Keep your house plants alive: identify each plant, get an AI watering schedule and care guide, and water them on time.",
@@ -12,7 +15,7 @@
   "category": "lifestyle",
   "tags": [],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.17",
+    "@moldable-ai/ui": "^0.2.18",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
@@ -65,7 +68,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -115,7 +120,9 @@
                   "type": "object"
                 }
               },
-              "required": ["commonName"]
+              "required": [
+                "commonName"
+              ]
             }
           },
           {
@@ -150,7 +157,9 @@
                         "type": "number"
                       }
                     },
-                    "required": ["name"]
+                    "required": [
+                      "name"
+                    ]
                   }
                 },
                 "heroImagePath": {
@@ -166,7 +175,9 @@
                   "type": "string"
                 }
               },
-              "required": ["commonName"]
+              "required": [
+                "commonName"
+              ]
             }
           },
           {
@@ -225,7 +236,9 @@
                   "type": "boolean"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -243,7 +256,9 @@
                   "description": "Optional ISO timestamp. Defaults to now."
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -257,7 +272,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -274,7 +291,10 @@
                   "type": "boolean"
                 }
               },
-              "required": ["id", "isFavorite"]
+              "required": [
+                "id",
+                "isFavorite"
+              ]
             }
           },
           {
@@ -288,7 +308,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           }
         ]

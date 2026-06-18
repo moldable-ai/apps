@@ -1,7 +1,10 @@
 {
   "name": "Remotion",
-  "version": "0.1.9",
-  "aliases": ["video", "render"],
+  "version": "0.1.10",
+  "aliases": [
+    "video",
+    "render"
+  ],
   "visibility": "public",
   "description": "Create programmatic videos with Remotion - manage projects, preview compositions, and render videos",
   "runtime": "vite_hono",
@@ -10,10 +13,12 @@
   "icon": "🎬",
   "iconPath": "public/icon.png",
   "category": "photo-video",
-  "skills": ["remotion-dev/skills/remotion"],
+  "skills": [
+    "remotion-dev/skills/remotion"
+  ],
   "tags": [],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.17",
+    "@moldable-ai/ui": "^0.2.18",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
@@ -53,7 +58,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -125,7 +132,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -139,7 +148,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -153,7 +164,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           }
         ]
@@ -162,7 +175,9 @@
   },
   "env": [],
   "routeName": "remotion",
-  "screenshots": ["public/screenshots/1.png"],
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
   "tagline": "Make videos by describing them, powered by code",
   "upstream": {
     "repo": "moldable-ai/apps",

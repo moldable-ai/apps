@@ -1,6 +1,8 @@
 import { generateId, readJson, safePath, writeJson } from '@moldable-ai/storage'
 import {
   type BookMeta,
+  type BookSearchResponse,
+  type BookSearchResult,
   type BookSummary,
   type ChapterContent,
   type ChapterRef,
@@ -317,6 +319,118 @@ export async function getChapter(
     html: withQuery,
     text: stored.text,
     wordCount: stored.wordCount,
+  }
+}
+
+function compactSearchText(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+function searchSnippet(text: string, index: number, queryLength: number) {
+  const beforeStart = Math.max(0, index - 120)
+  const afterEnd = Math.min(text.length, index + queryLength + 160)
+  const beforePrefix = beforeStart > 0 ? '…' : ''
+  const afterSuffix = afterEnd < text.length ? '…' : ''
+  return {
+    before: `${beforePrefix}${compactSearchText(text.slice(beforeStart, index))}`,
+    match: compactSearchText(text.slice(index, index + queryLength)),
+    after: `${compactSearchText(text.slice(index + queryLength, afterEnd))}${afterSuffix}`,
+  }
+}
+
+function normalizeForSearch(text: string): { text: string; map: number[] } {
+  let normalized = ''
+  const map: number[] = []
+  let lastWasSpace = true
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index] ?? ''
+    if (/\s/.test(char)) {
+      if (!lastWasSpace) {
+        normalized += ' '
+        map.push(index)
+        lastWasSpace = true
+      }
+      continue
+    }
+
+    normalized += char.toLocaleLowerCase()
+    map.push(index)
+    lastWasSpace = false
+  }
+
+  if (normalized.endsWith(' ')) {
+    normalized = normalized.slice(0, -1)
+    map.pop()
+  }
+
+  return { text: normalized, map }
+}
+
+export async function searchBook(
+  dataDir: string,
+  bookId: string,
+  query: string,
+  maxResults = 80,
+): Promise<BookSearchResponse> {
+  const normalizedQuery = compactSearchText(query)
+  if (normalizedQuery.length < 2) {
+    return { query: normalizedQuery, results: [], total: 0, truncated: false }
+  }
+
+  const meta = await getBookMeta(dataDir, bookId)
+  if (!meta) throw new Error('Book not found')
+
+  const needle = normalizedQuery.toLocaleLowerCase()
+  const results: BookSearchResult[] = []
+  let total = 0
+
+  for (const chapterRef of meta.chapters) {
+    const chapter = await readJson<StoredChapter | null>(
+      chapterPath(dataDir, bookId, chapterRef.index),
+      null,
+    )
+    if (!chapter?.text) continue
+
+    const normalized = normalizeForSearch(chapter.text)
+    let index = normalized.text.indexOf(needle)
+    while (index >= 0) {
+      const textStart = normalized.map[index] ?? 0
+      const textEnd =
+        normalized.map[
+          Math.min(normalized.map.length - 1, index + needle.length)
+        ] ?? textStart + normalizedQuery.length
+      const textLength = Math.max(normalizedQuery.length, textEnd - textStart)
+
+      total += 1
+      if (results.length < maxResults) {
+        const snippet = searchSnippet(chapter.text, textStart, textLength)
+        results.push({
+          id: `${bookId}:${chapter.index}:${textStart}`,
+          bookId,
+          chapterIndex: chapter.index,
+          chapterTitle: chapter.title,
+          textStart,
+          textLength,
+          position:
+            chapter.text.length > 0
+              ? Math.min(1, Math.max(0, textStart / chapter.text.length))
+              : 0,
+          ...snippet,
+        })
+      }
+      index = normalized.text.indexOf(
+        needle,
+        index + Math.max(1, needle.length),
+      )
+    }
+  }
+
+  return {
+    query: normalizedQuery,
+    results,
+    total,
+    truncated: total > results.length,
   }
 }
 

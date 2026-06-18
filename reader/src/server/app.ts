@@ -1,3 +1,4 @@
+import { readJson, safePath, writeJson } from '@moldable-ai/storage'
 import {
   addFolder,
   deleteBook,
@@ -16,6 +17,7 @@ import {
   renameFolder,
   reorderFolders,
   saveSettings,
+  searchBook,
   seedDefaultBooks,
   setProgress,
 } from './book-store'
@@ -40,6 +42,38 @@ import { basename } from 'node:path'
 export const app = new Hono()
 
 app.use('/api/*', cors())
+
+const LATEST_SPEED_READER_DEBUG_PATH = 'debug/speed-reader-latest.json'
+
+interface SpeedReaderDebugSnapshot {
+  generatedAt: string
+  [key: string]: unknown
+}
+
+function latestSpeedReaderDebugPath(dataDir: string): string {
+  return safePath(dataDir, LATEST_SPEED_READER_DEBUG_PATH)
+}
+
+async function readLatestSpeedReaderDebug(
+  dataDir: string,
+): Promise<SpeedReaderDebugSnapshot | null> {
+  return readJson<SpeedReaderDebugSnapshot | null>(
+    latestSpeedReaderDebugPath(dataDir),
+    null,
+  )
+}
+
+async function writeLatestSpeedReaderDebug(
+  dataDir: string,
+  snapshot: Record<string, unknown>,
+): Promise<SpeedReaderDebugSnapshot> {
+  const next: SpeedReaderDebugSnapshot = {
+    ...snapshot,
+    generatedAt: new Date().toISOString(),
+  }
+  await writeJson(latestSpeedReaderDebugPath(dataDir), next)
+  return next
+}
 
 // ─── Moldable lifecycle ──────────────────────────────────────────────
 
@@ -174,6 +208,9 @@ app.post('/api/moldable/rpc', async (c) => {
         }
         return c.json({ book: meta })
       }
+      case 'debug.speedReaderSnapshot': {
+        return c.json({ snapshot: await readLatestSpeedReaderDebug(dataDir) })
+      }
       default:
         return jsonError(c, `Unknown method: ${method}`, 400)
     }
@@ -245,6 +282,17 @@ app.delete('/api/books/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+app.get('/api/books/:id/search', async (c) => {
+  const dataDir = getDataDir(c)
+  const query = c.req.query('q') ?? ''
+  try {
+    return c.json(await searchBook(dataDir, c.req.param('id'), query))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Search failed'
+    return jsonError(c, message, message === 'Book not found' ? 404 : 500)
+  }
+})
+
 app.get('/api/books/:id/chapter/:index', async (c) => {
   const dataDir = getDataDir(c)
   const index = Number(c.req.param('index'))
@@ -309,6 +357,27 @@ app.put('/api/books/:id/progress', async (c) => {
     }
     throw error
   }
+})
+
+// ─── Speed reader debug snapshots ────────────────────────────────────
+
+app.get('/api/debug/speed-reader/latest', async (c) => {
+  const dataDir = getDataDir(c)
+  return c.json({ snapshot: await readLatestSpeedReaderDebug(dataDir) })
+})
+
+app.post('/api/debug/speed-reader/latest', async (c) => {
+  const dataDir = getDataDir(c)
+  const snapshot = (await c.req.json().catch(() => null)) as Record<
+    string,
+    unknown
+  > | null
+  if (!snapshot || typeof snapshot !== 'object') {
+    return jsonError(c, 'Invalid debug snapshot', 400)
+  }
+  return c.json({
+    snapshot: await writeLatestSpeedReaderDebug(dataDir, snapshot),
+  })
 })
 
 // ─── Book store ──────────────────────────────────────────────────────

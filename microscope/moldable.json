@@ -1,6 +1,6 @@
 {
   "name": "Microscope",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Explore the natural world through generated images, transparent 2D relief layers, procedural 3D models, and optional fal Hunyuan3D or Tripo renders.",
@@ -9,7 +9,13 @@
   "icon": "🔬",
   "iconPath": "public/icon.png",
   "category": "education",
-  "tags": ["science", "learning", "images", "gpt-image-2", "3d"],
+  "tags": [
+    "science",
+    "learning",
+    "images",
+    "gpt-image-2",
+    "3d"
+  ],
   "aliases": [
     "magic scope",
     "science explorer",
@@ -17,7 +23,7 @@
     "microscope"
   ],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.17",
+    "@moldable-ai/ui": "^0.2.18",
     "@moldable-ai/storage": "^0.1.6"
   },
   "env": [],
@@ -46,14 +52,22 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["medium", "high"]
+                  "enum": [
+                    "medium",
+                    "high"
+                  ]
                 },
                 "modelProvider": {
                   "type": "string",
-                  "enum": ["fal", "tripo"]
+                  "enum": [
+                    "fal",
+                    "tripo"
+                  ]
                 }
               },
-              "required": ["prompt"]
+              "required": [
+                "prompt"
+              ]
             }
           },
           {
@@ -68,14 +82,22 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["medium", "high"]
+                  "enum": [
+                    "medium",
+                    "high"
+                  ]
                 },
                 "modelProvider": {
                   "type": "string",
-                  "enum": ["fal", "tripo"]
+                  "enum": [
+                    "fal",
+                    "tripo"
+                  ]
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -90,14 +112,22 @@
                 },
                 "modelProvider": {
                   "type": "string",
-                  "enum": ["fal", "tripo"]
+                  "enum": [
+                    "fal",
+                    "tripo"
+                  ]
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["medium", "high"]
+                  "enum": [
+                    "medium",
+                    "high"
+                  ]
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -112,14 +142,22 @@
                 },
                 "modelProvider": {
                   "type": "string",
-                  "enum": ["fal", "tripo"]
+                  "enum": [
+                    "fal",
+                    "tripo"
+                  ]
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["medium", "high"]
+                  "enum": [
+                    "medium",
+                    "high"
+                  ]
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -134,14 +172,22 @@
                 },
                 "modelProvider": {
                   "type": "string",
-                  "enum": ["fal", "tripo"]
+                  "enum": [
+                    "fal",
+                    "tripo"
+                  ]
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["medium", "high"]
+                  "enum": [
+                    "medium",
+                    "high"
+                  ]
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -155,7 +201,9 @@
                   "type": "string"
                 }
               },
-              "required": ["id"]
+              "required": [
+                "id"
+              ]
             }
           },
           {
@@ -177,14 +225,23 @@
               "properties": {
                 "modelProvider": {
                   "type": "string",
-                  "enum": ["fal", "tripo"]
+                  "enum": [
+                    "fal",
+                    "tripo"
+                  ]
                 },
                 "quality": {
                   "type": "string",
-                  "enum": ["medium", "high"]
+                  "enum": [
+                    "medium",
+                    "high"
+                  ]
                 }
               },
-              "required": ["modelProvider", "quality"]
+              "required": [
+                "modelProvider",
+                "quality"
+              ]
             }
           }
         ]

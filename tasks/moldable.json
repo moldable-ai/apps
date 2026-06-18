@@ -1,6 +1,6 @@
 {
   "name": "Tasks",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Linear-style local project and task management",
@@ -10,7 +10,7 @@
   "category": "productivity",
   "tags": [],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.17",
+    "@moldable-ai/ui": "^0.2.18",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
@@ -120,11 +120,16 @@
                         "type": "string"
                       }
                     },
-                    "required": ["name", "color"]
+                    "required": [
+                      "name",
+                      "color"
+                    ]
                   }
                 }
               },
-              "required": ["name"]
+              "required": [
+                "name"
+              ]
             }
           },
           {
@@ -156,7 +161,10 @@
                   "type": "string"
                 },
                 "logoUrl": {
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "websiteUrl": {
                   "type": "string"
@@ -176,7 +184,10 @@
                         "type": "string"
                       }
                     },
-                    "required": ["name", "color"]
+                    "required": [
+                      "name",
+                      "color"
+                    ]
                   }
                 }
               }
@@ -239,7 +250,12 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": ["none", "low", "medium", "high"]
+                  "enum": [
+                    "none",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
                 },
                 "labelId": {
                   "type": "string"
@@ -286,7 +302,12 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": ["none", "low", "medium", "high"]
+                  "enum": [
+                    "none",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
                 },
                 "limit": {
                   "type": "number",
@@ -358,7 +379,12 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": ["none", "low", "medium", "high"]
+                  "enum": [
+                    "none",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
                 },
                 "labelIds": {
                   "type": "array",
@@ -387,7 +413,10 @@
                         "type": "string"
                       }
                     },
-                    "required": ["name", "color"]
+                    "required": [
+                      "name",
+                      "color"
+                    ]
                   }
                 },
                 "attachments": {
@@ -417,11 +446,16 @@
                         "type": "string"
                       }
                     },
-                    "required": ["name", "size"]
+                    "required": [
+                      "name",
+                      "size"
+                    ]
                   }
                 }
               },
-              "required": ["title"]
+              "required": [
+                "title"
+              ]
             }
           },
           {
@@ -467,7 +501,12 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": ["none", "low", "medium", "high"]
+                  "enum": [
+                    "none",
+                    "low",
+                    "medium",
+                    "high"
+                  ]
                 },
                 "completed": {
                   "type": "boolean"
@@ -499,7 +538,10 @@
                         "type": "string"
                       }
                     },
-                    "required": ["name", "color"]
+                    "required": [
+                      "name",
+                      "color"
+                    ]
                   }
                 },
                 "attachments": {
@@ -529,7 +571,10 @@
                         "type": "string"
                       }
                     },
-                    "required": ["name", "size"]
+                    "required": [
+                      "name",
+                      "size"
+                    ]
                   }
                 }
               }
@@ -609,7 +654,10 @@
                   "type": "string"
                 }
               },
-              "required": ["name", "color"]
+              "required": [
+                "name",
+                "color"
+              ]
             }
           },
           {
@@ -723,7 +771,9 @@
                   "type": "string"
                 }
               },
-              "required": ["content"]
+              "required": [
+                "content"
+              ]
             }
           },
           {
@@ -752,7 +802,10 @@
                   "type": "string"
                 }
               },
-              "required": ["commentId", "content"]
+              "required": [
+                "commentId",
+                "content"
+              ]
             }
           },
           {
@@ -778,7 +831,9 @@
                   "type": "string"
                 }
               },
-              "required": ["commentId"]
+              "required": [
+                "commentId"
+              ]
             }
           }
         ]

@@ -78,6 +78,28 @@ export interface ChapterContent {
   wordCount: number
 }
 
+export interface BookSearchResult {
+  id: string
+  bookId: string
+  chapterIndex: number
+  chapterTitle: string
+  /** Character offset in the chapter's plain text. Used as a jump target. */
+  textStart: number
+  textLength: number
+  /** 0..1 position through the chapter. */
+  position: number
+  before: string
+  match: string
+  after: string
+}
+
+export interface BookSearchResponse {
+  query: string
+  results: BookSearchResult[]
+  total: number
+  truncated: boolean
+}
+
 const COVER_HUES = [25, 55, 95, 150, 200, 240, 280, 320]
 
 /** Deterministic OKLCH color from a seed string, used for cover fallbacks. */

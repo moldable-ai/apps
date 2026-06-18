@@ -1,7 +1,10 @@
 {
   "name": "Git",
-  "version": "0.1.13",
-  "aliases": ["repo", "version-control"],
+  "version": "0.1.14",
+  "aliases": [
+    "repo",
+    "version-control"
+  ],
   "visibility": "public",
   "description": "Simple Git client for branch management, staging, and diffing",
   "runtime": "vite_hono",
@@ -12,9 +15,14 @@
   "iconPath": "public/icon.png",
   "routeName": "git-flow",
   "category": "developer-tools",
-  "tags": ["git", "version-control", "developer", "code"],
+  "tags": [
+    "git",
+    "version-control",
+    "developer",
+    "code"
+  ],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.17",
+    "@moldable-ai/ui": "^0.2.18",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
@@ -54,7 +62,9 @@
                   "type": "string"
                 }
               },
-              "required": ["path"]
+              "required": [
+                "path"
+              ]
             }
           },
           {
@@ -93,7 +103,9 @@
                   "type": "number"
                 }
               },
-              "required": ["hash"]
+              "required": [
+                "hash"
+              ]
             }
           },
           {
@@ -126,7 +138,9 @@
                   }
                 }
               },
-              "required": ["paths"]
+              "required": [
+                "paths"
+              ]
             }
           },
           {
@@ -143,7 +157,9 @@
                   }
                 }
               },
-              "required": ["paths"]
+              "required": [
+                "paths"
+              ]
             }
           },
           {
@@ -189,6 +205,8 @@
     }
   },
   "modified": false,
-  "screenshots": ["public/screenshots/1.png"],
+  "screenshots": [
+    "public/screenshots/1.png"
+  ],
   "tagline": "A clean Git client with AI commits and review, built in"
 }

@@ -1,7 +1,13 @@
 {
   "name": "Slides",
-  "version": "0.1.0",
-  "aliases": ["presentation", "deck", "slide deck", "pitch deck", "slideshow"],
+  "version": "0.1.1",
+  "aliases": [
+    "presentation",
+    "deck",
+    "slide deck",
+    "pitch deck",
+    "slideshow"
+  ],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Generate and publish beautiful, animation-rich presentations, edited entirely from chat.",
@@ -10,9 +16,16 @@
   "icon": "🎞️",
   "iconPath": "public/icon.png",
   "category": "productivity",
-  "tags": ["slides", "presentation", "deck", "pitch", "publish", "artifacts"],
+  "tags": [
+    "slides",
+    "presentation",
+    "deck",
+    "pitch",
+    "publish",
+    "artifacts"
+  ],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.17",
+    "@moldable-ai/ui": "^0.2.18",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
@@ -27,7 +40,10 @@
             "id": "slides.decks.list",
             "name": "List decks",
             "description": "List all decks with title, slide count, and publish status.",
-            "inputSchema": { "type": "object", "properties": {} }
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
           },
           {
             "id": "slides.decks.get",
@@ -35,8 +51,14 @@
             "description": "Read a full deck including theme and every slide's HTML.",
             "inputSchema": {
               "type": "object",
-              "required": ["id"],
-              "properties": { "id": { "type": "string" } }
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
             }
           },
           {
@@ -46,11 +68,25 @@
             "inputSchema": {
               "type": "object",
               "properties": {
-                "title": { "type": "string" },
-                "subtitle": { "type": "string" },
-                "density": { "type": "string", "enum": ["low", "high"] },
-                "theme": { "type": "object" },
-                "slides": { "type": "array" }
+                "title": {
+                  "type": "string"
+                },
+                "subtitle": {
+                  "type": "string"
+                },
+                "density": {
+                  "type": "string",
+                  "enum": [
+                    "low",
+                    "high"
+                  ]
+                },
+                "theme": {
+                  "type": "object"
+                },
+                "slides": {
+                  "type": "array"
+                }
               }
             }
           },
@@ -60,8 +96,14 @@
             "description": "Update a deck's title, subtitle, density, or theme.",
             "inputSchema": {
               "type": "object",
-              "required": ["id"],
-              "properties": { "id": { "type": "string" } }
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
             }
           },
           {
@@ -70,10 +112,16 @@
             "description": "Replace a deck's title/theme/slides in one call (bulk generation).",
             "inputSchema": {
               "type": "object",
-              "required": ["id"],
+              "required": [
+                "id"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "slides": { "type": "array" }
+                "id": {
+                  "type": "string"
+                },
+                "slides": {
+                  "type": "array"
+                }
               }
             }
           },
@@ -83,15 +131,24 @@
             "description": "Permanently delete a deck and its assets.",
             "inputSchema": {
               "type": "object",
-              "required": ["id"],
-              "properties": { "id": { "type": "string" } }
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
             }
           },
           {
             "id": "slides.templates.list",
             "name": "List styles",
             "description": "List the built-in style templates (id, name, audiences).",
-            "inputSchema": { "type": "object", "properties": {} }
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
           },
           {
             "id": "slides.templates.get",
@@ -99,8 +156,14 @@
             "description": "Get a style's theme, sample slides, and full coding guide.",
             "inputSchema": {
               "type": "object",
-              "required": ["templateId"],
-              "properties": { "templateId": { "type": "string" } }
+              "required": [
+                "templateId"
+              ],
+              "properties": {
+                "templateId": {
+                  "type": "string"
+                }
+              }
             }
           },
           {
@@ -109,10 +172,17 @@
             "description": "Switch a deck to a library style (re-skins vocabulary-based slides).",
             "inputSchema": {
               "type": "object",
-              "required": ["id", "templateId"],
+              "required": [
+                "id",
+                "templateId"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "templateId": { "type": "string" }
+                "id": {
+                  "type": "string"
+                },
+                "templateId": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -122,11 +192,19 @@
             "description": "Add a slide (bodyHtml authored at 1920x1080) at an optional index.",
             "inputSchema": {
               "type": "object",
-              "required": ["id"],
+              "required": [
+                "id"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "slide": { "type": "object" },
-                "index": { "type": "number" }
+                "id": {
+                  "type": "string"
+                },
+                "slide": {
+                  "type": "object"
+                },
+                "index": {
+                  "type": "number"
+                }
               }
             }
           },
@@ -136,11 +214,20 @@
             "description": "Update a slide's HTML, name, transition, or notes.",
             "inputSchema": {
               "type": "object",
-              "required": ["id", "slideId"],
+              "required": [
+                "id",
+                "slideId"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "slideId": { "type": "string" },
-                "slide": { "type": "object" }
+                "id": {
+                  "type": "string"
+                },
+                "slideId": {
+                  "type": "string"
+                },
+                "slide": {
+                  "type": "object"
+                }
               }
             }
           },
@@ -150,10 +237,17 @@
             "description": "Delete a slide from a deck.",
             "inputSchema": {
               "type": "object",
-              "required": ["id", "slideId"],
+              "required": [
+                "id",
+                "slideId"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "slideId": { "type": "string" }
+                "id": {
+                  "type": "string"
+                },
+                "slideId": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -163,10 +257,20 @@
             "description": "Reorder slides by providing an ordered array of slide ids.",
             "inputSchema": {
               "type": "object",
-              "required": ["id", "order"],
+              "required": [
+                "id",
+                "order"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "order": { "type": "array", "items": { "type": "string" } }
+                "id": {
+                  "type": "string"
+                },
+                "order": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
               }
             }
           },
@@ -176,11 +280,21 @@
             "description": "Move a single slide to a new index.",
             "inputSchema": {
               "type": "object",
-              "required": ["id", "slideId", "toIndex"],
+              "required": [
+                "id",
+                "slideId",
+                "toIndex"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "slideId": { "type": "string" },
-                "toIndex": { "type": "number" }
+                "id": {
+                  "type": "string"
+                },
+                "slideId": {
+                  "type": "string"
+                },
+                "toIndex": {
+                  "type": "number"
+                }
               }
             }
           },
@@ -190,8 +304,14 @@
             "description": "Publish the deck as a public, unlisted Moldable Artifact link.",
             "inputSchema": {
               "type": "object",
-              "required": ["id"],
-              "properties": { "id": { "type": "string" } }
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
             }
           },
           {
@@ -200,8 +320,14 @@
             "description": "Forget a deck's published link.",
             "inputSchema": {
               "type": "object",
-              "required": ["id"],
-              "properties": { "id": { "type": "string" } }
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
             }
           },
           {
@@ -211,15 +337,29 @@
             "timeoutMs": 600000,
             "inputSchema": {
               "type": "object",
-              "required": ["id", "prompt"],
+              "required": [
+                "id",
+                "prompt"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "prompt": { "type": "string" },
+                "id": {
+                  "type": "string"
+                },
+                "prompt": {
+                  "type": "string"
+                },
                 "size": {
                   "type": "string",
-                  "enum": ["landscape", "portrait", "square", "auto"]
+                  "enum": [
+                    "landscape",
+                    "portrait",
+                    "square",
+                    "auto"
+                  ]
                 },
-                "fileName": { "type": "string" }
+                "fileName": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -230,13 +370,27 @@
             "timeoutMs": 600000,
             "inputSchema": {
               "type": "object",
-              "required": ["id", "source", "prompt"],
+              "required": [
+                "id",
+                "source",
+                "prompt"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "source": { "type": "string" },
-                "prompt": { "type": "string" },
-                "size": { "type": "string" },
-                "fileName": { "type": "string" }
+                "id": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "prompt": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "string"
+                },
+                "fileName": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -246,8 +400,14 @@
             "description": "List a deck's image assets.",
             "inputSchema": {
               "type": "object",
-              "required": ["id"],
-              "properties": { "id": { "type": "string" } }
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
             }
           },
           {
@@ -256,8 +416,14 @@
             "description": "List a deck's restore points (newest first).",
             "inputSchema": {
               "type": "object",
-              "required": ["id"],
-              "properties": { "id": { "type": "string" } }
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
             }
           },
           {
@@ -266,10 +432,17 @@
             "description": "Restore a deck to a previous version (itself undoable).",
             "inputSchema": {
               "type": "object",
-              "required": ["id", "versionId"],
+              "required": [
+                "id",
+                "versionId"
+              ],
               "properties": {
-                "id": { "type": "string" },
-                "versionId": { "type": "string" }
+                "id": {
+                  "type": "string"
+                },
+                "versionId": {
+                  "type": "string"
+                }
               }
             }
           }
