@@ -77,6 +77,7 @@ const OFFICIAL_APP_IDS = new Set([
   'redecorate',
   'remotion',
   'scribo',
+  'slides',
   'tasks',
   'time-tracker',
   'todo',
