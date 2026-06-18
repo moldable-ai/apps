@@ -1,0 +1,281 @@
+{
+  "name": "Slides",
+  "version": "0.1.0",
+  "aliases": ["presentation", "deck", "slide deck", "pitch deck", "slideshow"],
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "Generate and publish beautiful, animation-rich presentations, edited entirely from chat.",
+  "author": "Moldable",
+  "license": "MIT",
+  "icon": "🎞️",
+  "iconPath": "public/icon.png",
+  "category": "productivity",
+  "tags": ["slides", "presentation", "deck", "pitch", "publish", "artifacts"],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.17",
+    "@moldable-ai/storage": "^0.1.6"
+  },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "slides.author",
+        "name": "Author slides",
+        "description": "Create, edit, reorder, and publish presentation decks in the active workspace.",
+        "scopes": [
+          {
+            "id": "slides.decks.list",
+            "name": "List decks",
+            "description": "List all decks with title, slide count, and publish status.",
+            "inputSchema": { "type": "object", "properties": {} }
+          },
+          {
+            "id": "slides.decks.get",
+            "name": "Get deck",
+            "description": "Read a full deck including theme and every slide's HTML.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": { "id": { "type": "string" } }
+            }
+          },
+          {
+            "id": "slides.decks.create",
+            "name": "Create deck",
+            "description": "Create a new deck (optionally with theme and slides).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "title": { "type": "string" },
+                "subtitle": { "type": "string" },
+                "density": { "type": "string", "enum": ["low", "high"] },
+                "theme": { "type": "object" },
+                "slides": { "type": "array" }
+              }
+            }
+          },
+          {
+            "id": "slides.decks.update",
+            "name": "Update deck",
+            "description": "Update a deck's title, subtitle, density, or theme.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": { "id": { "type": "string" } }
+            }
+          },
+          {
+            "id": "slides.decks.replace",
+            "name": "Replace deck",
+            "description": "Replace a deck's title/theme/slides in one call (bulk generation).",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": {
+                "id": { "type": "string" },
+                "slides": { "type": "array" }
+              }
+            }
+          },
+          {
+            "id": "slides.decks.delete",
+            "name": "Delete deck",
+            "description": "Permanently delete a deck and its assets.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": { "id": { "type": "string" } }
+            }
+          },
+          {
+            "id": "slides.templates.list",
+            "name": "List styles",
+            "description": "List the built-in style templates (id, name, audiences).",
+            "inputSchema": { "type": "object", "properties": {} }
+          },
+          {
+            "id": "slides.templates.get",
+            "name": "Get style guide",
+            "description": "Get a style's theme, sample slides, and full coding guide.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["templateId"],
+              "properties": { "templateId": { "type": "string" } }
+            }
+          },
+          {
+            "id": "slides.decks.applyTemplate",
+            "name": "Apply style",
+            "description": "Switch a deck to a library style (re-skins vocabulary-based slides).",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id", "templateId"],
+              "properties": {
+                "id": { "type": "string" },
+                "templateId": { "type": "string" }
+              }
+            }
+          },
+          {
+            "id": "slides.slides.add",
+            "name": "Add slide",
+            "description": "Add a slide (bodyHtml authored at 1920x1080) at an optional index.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": {
+                "id": { "type": "string" },
+                "slide": { "type": "object" },
+                "index": { "type": "number" }
+              }
+            }
+          },
+          {
+            "id": "slides.slides.update",
+            "name": "Update slide",
+            "description": "Update a slide's HTML, name, transition, or notes.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id", "slideId"],
+              "properties": {
+                "id": { "type": "string" },
+                "slideId": { "type": "string" },
+                "slide": { "type": "object" }
+              }
+            }
+          },
+          {
+            "id": "slides.slides.remove",
+            "name": "Remove slide",
+            "description": "Delete a slide from a deck.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id", "slideId"],
+              "properties": {
+                "id": { "type": "string" },
+                "slideId": { "type": "string" }
+              }
+            }
+          },
+          {
+            "id": "slides.slides.reorder",
+            "name": "Reorder slides",
+            "description": "Reorder slides by providing an ordered array of slide ids.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id", "order"],
+              "properties": {
+                "id": { "type": "string" },
+                "order": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          {
+            "id": "slides.slides.move",
+            "name": "Move slide",
+            "description": "Move a single slide to a new index.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id", "slideId", "toIndex"],
+              "properties": {
+                "id": { "type": "string" },
+                "slideId": { "type": "string" },
+                "toIndex": { "type": "number" }
+              }
+            }
+          },
+          {
+            "id": "slides.deck.publish",
+            "name": "Publish deck",
+            "description": "Publish the deck as a public, unlisted Moldable Artifact link.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": { "id": { "type": "string" } }
+            }
+          },
+          {
+            "id": "slides.deck.unpublish",
+            "name": "Unpublish deck",
+            "description": "Forget a deck's published link.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": { "id": { "type": "string" } }
+            }
+          },
+          {
+            "id": "slides.images.generate",
+            "name": "Generate image",
+            "description": "Generate an AI image and save it as a deck asset to reference from a slide. This can take several minutes; call with timeoutMs 600000 on callMoldableAppApi.",
+            "timeoutMs": 600000,
+            "inputSchema": {
+              "type": "object",
+              "required": ["id", "prompt"],
+              "properties": {
+                "id": { "type": "string" },
+                "prompt": { "type": "string" },
+                "size": {
+                  "type": "string",
+                  "enum": ["landscape", "portrait", "square", "auto"]
+                },
+                "fileName": { "type": "string" }
+              }
+            }
+          },
+          {
+            "id": "slides.images.edit",
+            "name": "Edit image",
+            "description": "Tweak an existing deck image with a prompt; saves a new asset. This can take several minutes; call with timeoutMs 600000 on callMoldableAppApi.",
+            "timeoutMs": 600000,
+            "inputSchema": {
+              "type": "object",
+              "required": ["id", "source", "prompt"],
+              "properties": {
+                "id": { "type": "string" },
+                "source": { "type": "string" },
+                "prompt": { "type": "string" },
+                "size": { "type": "string" },
+                "fileName": { "type": "string" }
+              }
+            }
+          },
+          {
+            "id": "slides.images.list",
+            "name": "List images",
+            "description": "List a deck's image assets.",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": { "id": { "type": "string" } }
+            }
+          },
+          {
+            "id": "slides.versions.list",
+            "name": "List versions",
+            "description": "List a deck's restore points (newest first).",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id"],
+              "properties": { "id": { "type": "string" } }
+            }
+          },
+          {
+            "id": "slides.deck.revert",
+            "name": "Revert deck",
+            "description": "Restore a deck to a previous version (itself undoable).",
+            "inputSchema": {
+              "type": "object",
+              "required": ["id", "versionId"],
+              "properties": {
+                "id": { "type": "string" },
+                "versionId": { "type": "string" }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "env": []
+}

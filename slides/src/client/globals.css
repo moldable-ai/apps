@@ -1,0 +1,26 @@
+@import 'tailwindcss';
+@import '@moldable-ai/ui/styles';
+@source './**/*.{js,jsx,ts,tsx}';
+
+@theme {
+  --font-sans: Inter, system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  /* Definite height so in-app panes bound their own overflow (and scroll
+     position resets on navigation) rather than scrolling the document. */
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    overflow: hidden;
+  }
+}

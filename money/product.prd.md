@@ -204,7 +204,7 @@ clean line glyphs (the heavy `bg-muted` icon chips were removed per user feedbac
 - [x] **Keyboard reorder** of pills (Arrow Left/Right) alongside drag (a11y)
 - [x] **Rename a dashboard** (edit mode → inline name input → `PATCH`)
 - [x] **Delete a dashboard** (edit mode → Delete → confirm dialog → `DELETE
-  /api/dashboards/:id`, drops it from the saved order). Confirm dialog
+/api/dashboards/:id`, drops it from the saved order). Confirm dialog
       screenshot-verified (cancelled, not run on real data).
 - [x] **Empty state** when zero dashboards installed → "Browse dashboards" CTA
       back into the install carousel
