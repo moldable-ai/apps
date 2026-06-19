@@ -116,7 +116,23 @@ export const nonprofitAppeal: Template = {
 .legend { display: flex; flex-direction: column; gap: 22px; }
 .legend-row { display: flex; align-items: center; gap: 18px; font-family: var(--body); font-size: 30px; color: var(--text); }
 .legend-dot { width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
-.legend-row .v { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }`,
+.legend-row .v { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { position: relative !important; inset: auto !important; padding: 72px var(--pad-x, 24px) !important; min-height: 300px; }
+  html.deck-can-flow .divider::before { inset: 18px !important; }
+  html.deck-can-flow .divider-title { font-size: min(47px, 13vw) !important; line-height: 1.04 !important; }
+  html.deck-can-flow .statement { font-size: min(36px, 10vw) !important; line-height: 1.12 !important; max-width: 100% !important; overflow-wrap: break-word; }
+  html.deck-can-flow .story-q { font-size: min(36px, 10vw) !important; line-height: 1.18 !important; max-width: 100% !important; overflow-wrap: break-word; }
+  html.deck-can-flow .impact { padding: 36px 26px !important; }
+  html.deck-can-flow .impact-cell { padding: 22px 0 !important; }
+  html.deck-can-flow .impact-cell + .impact-cell { border-left: 0 !important; border-top: 1px solid rgba(246,239,226,0.22); }
+  html.deck-can-flow .impact-num { font-size: min(44px, 12vw) !important; }
+  html.deck-can-flow .tcard { padding: 28px 24px 26px !important; }
+  html.deck-can-flow .tcard-amt { font-size: min(44px, 12vw) !important; }
+  html.deck-can-flow .give { padding: 18px 28px !important; font-size: min(22px, 6vw) !important; }
+  html.deck-can-flow .note { padding: 24px 26px !important; }
+}`,
   notes:
     'A complete annual fundraising appeal for a fictional community nonprofit. Bitter serif display + Inter body, warm cream #f6efe2, ink #2b2018, deep-green #14532d primary accent with earth-brown #6b4226 secondary (used for eyebrows). Open and close on the full-bleed people photography (assets/nonprofit-appeal-cover.jpg); tell the beneficiary story with the portrait split (assets/nonprofit-appeal-story.jpg) and put the shared-meal impact image on the full-bleed quote (assets/nonprofit-appeal-impact.jpg). Signature pieces: the .impact forest-green stat band for impact-this-year, .tier donor-tier cards (top-rule, mark a .feature tier), the .statement single human line for the need, the full-bleed .story-q beneficiary quote, and the .give pill CTA with .give-way pills. Use .bars for the funding gap, .donut + .legend for where gifts go, a .table for ways to give, .flow for how we work, .timeline for matching milestones. Humane and emotive, never clinical — let one photograph and one number carry each slide. Keep the .runner footer on content slides.',
   sampleSlides: [

@@ -64,7 +64,15 @@ export const seminar: Template = {
 .reflect-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }
 .flow-step .concept { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 20px; padding: 28px 26px; box-shadow: var(--card-shadow); height: 100%; }
 .concept-t { font-family: var(--display); font-weight: 600; font-size: 32px; color: var(--text); }
-.concept-d { font-family: var(--body); font-size: 22px; color: var(--muted); line-height: 1.35; margin-top: 8px; }`,
+.concept-d { font-family: var(--body); font-size: 22px; color: var(--muted); line-height: 1.35; margin-top: 8px; }
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { position: static !important; inset: auto !important; padding: 40px 22px !important; gap: 10px; min-height: 56vw; }
+  html.deck-can-flow .divider-title { font-size: min(47px, 13vw) !important; line-height: 1.04 !important; word-break: break-word; }
+  html.deck-can-flow .divider-num { font-size: min(22px, 6vw) !important; }
+  html.deck-can-flow .divider-rule { width: 80px !important; height: 5px !important; }
+  html.deck-can-flow .lede { font-size: min(36px, 10vw) !important; line-height: 1.12 !important; max-width: 100% !important; }
+  html.deck-can-flow .reflect { padding: 26px 22px !important; }
+}`,
   notes:
     'Modern, warm, design-forward. Clean General Sans, confident magenta accent with dusty-teal (.accent-2) support, very rounded cards and soft shadows. Open full-bleed on lecture-cover; use seminar-fig / seminar-section for splits. Soft-pink section dividers (.divider). Use .steps for the roadmap, .cards for objectives/concepts, the .flow arrow diagram with .concept cards for "how it fits", .donut + .reflect for the live poll, .checks for takeaways. Friendly, never stuffy.',
   sampleSlides: [

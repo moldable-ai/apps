@@ -123,7 +123,21 @@ export const isometric: Template = {
 
 /* Cost-of-status-quo callout */
 .callout { border-left: 5px solid var(--accent-2); background: rgba(6,182,212,0.07); padding: 30px 38px; border-radius: 0 14px 14px 0; }
-.callout-k { font-family: var(--mono); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }`,
+.callout-k { font-family: var(--mono); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider-title { font-size: min(50px, 14vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .band-num { font-size: min(44px, 12vw) !important; }
+  html.deck-can-flow .stack-t { font-size: min(28px, 8vw) !important; line-height: 1.1 !important; }
+  html.deck-can-flow .scard-t { font-size: min(26px, 7vw) !important; }
+  html.deck-can-flow .node { font-size: min(20px, 6vw) !important; padding: 12px 18px !important; max-width: 100% !important; }
+  html.deck-can-flow .stack { padding: 28px 24px 24px !important; }
+  html.deck-can-flow .band { padding: 28px 22px !important; }
+  html.deck-can-flow .callout { padding: 24px 22px !important; }
+  /* The connected step-flow is a horizontal flex row (~1140px); stack it on phone. */
+  html.deck-can-flow .sflow { flex-direction: column !important; gap: 14px !important; }
+  html.deck-can-flow .sflow .sstep { flex: none !important; }
+}`,
   notes:
     'A complete cloud developer-platform "how it works" deck rendered in clean isometric 3D. Space Grotesk display + Inter body + IBM Plex Mono kickers, slate ink #1e293b on off-white #f7f8fb, an indigo #4338ca primary with a cyan #06b6d4 accent, no gradients on type. Open and close on the glowing isometric data-center full-bleed (assets/isometric-cover.jpg); use the isometric product/workflow scene (assets/isometric-scene.jpg) for the product split. Signature pieces: .stackgrid/.stack layered "stack" cards (with offset shadows for isometric depth) for capabilities, .node/.nodes connector chips for integrations and inline tech tags, the .band metrics strip for scale, .sflow connected step cards for the architecture, .divider with a faint isometric grid wash. Use .bars for performance, a .table with .status pills for reliability, a pricing/comparison .table, .timeline for rollout, .callout for the cost of the status quo. Keep the chrome clean and modern; let the isometric imagery carry the medium. Tabular numbers, one idea per slide.',
   sampleSlides: [

@@ -127,10 +127,10 @@ export const brandGuidelines: Template = {
 /* ── signature 06: do / don't tinted panels ── */
 .judge { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; }
 .panel { border: 1px solid var(--text); padding: 0; overflow: hidden; display: flex; flex-direction: column; }
-.panel-media { aspect-ratio: 4 / 3; position: relative; overflow: hidden; }
+.panel-media { aspect-ratio: 16 / 9; position: relative; overflow: hidden; }
 .panel-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .panel.dont .panel-media img { filter: grayscale(1) contrast(0.7) brightness(1.18); }
-.panel-foot { display: flex; align-items: center; gap: 18px; padding: 26px 30px; }
+.panel-foot { display: flex; align-items: center; gap: 18px; padding: 18px 26px; }
 .panel-mark { flex: 0 0 auto; width: 50px; height: 50px; display: grid; place-items: center; font-family: var(--body); font-weight: 800; font-size: 30px; color: #fff; }
 .panel.do .panel-mark { background: var(--accent); }
 .panel.dont .panel-mark { background: var(--text); }
@@ -146,7 +146,47 @@ export const brandGuidelines: Template = {
 .tone-word { font-family: var(--display); font-weight: 400; font-size: 46px; text-transform: uppercase; margin-top: 6px; }
 .princ { border-left: 4px solid var(--accent); padding-left: 30px; }
 .princ-t { font-family: var(--display); font-weight: 400; font-size: 44px; text-transform: uppercase; color: var(--text); }
-.princ-d { font-family: var(--body); font-size: 26px; line-height: 1.4; color: var(--muted); margin-top: 8px; }`,
+.princ-d { font-family: var(--body); font-size: 26px; line-height: 1.4; color: var(--muted); margin-top: 8px; }
+
+/* ── phone reflow: scale bespoke decoration calibrated for the 1920px stage ── */
+@media (max-width: 640px) {
+  /* giant ghost letterform would dwarf the page */
+  html.deck-can-flow .ghost.edge { font-size: 240px !important; right: -20px; bottom: -40px; }
+  html.deck-can-flow .eyebrow { gap: 12px; }
+  html.deck-can-flow .eyebrow-num { font-size: min(22px, 6vw) !important; }
+  html.deck-can-flow .eyebrow-txt { font-size: 14px !important; letter-spacing: 0.18em; }
+
+  /* swatch chips: 4-up row clips the last two; go 2x2 with rebuilt borders */
+  html.deck-can-flow .swatches { grid-template-columns: 1fr 1fr !important; }
+  html.deck-can-flow .swatch { aspect-ratio: auto !important; min-height: 140px; padding: 18px !important; border-bottom: 1px solid var(--text); }
+  html.deck-can-flow .swatch:nth-child(2n) { border-right: 0; }
+  html.deck-can-flow .swatch:nth-last-child(-n+2) { border-bottom: 0; }
+  html.deck-can-flow .swatch-name { font-size: 22px !important; }
+
+  /* logo clearspace box: 88px wordmark + absolute caption overflow */
+  html.deck-can-flow .clearbox { aspect-ratio: auto !important; min-height: 230px; padding: 14px; }
+  html.deck-can-flow .clearbox::before { inset: 11%; }
+  html.deck-can-flow .clear-word { font-size: min(40px, 11vw) !important; }
+  html.deck-can-flow .clear-dot { width: 36px; height: 36px; }
+  html.deck-can-flow .clear-cap { position: static !important; display: block; margin-bottom: 10px; white-space: normal; font-size: 15px; }
+
+  /* type specimen: 230px label column + huge inline glyphs overflow */
+  html.deck-can-flow .spec-row { grid-template-columns: 1fr !important; gap: 10px !important; padding: 22px 0; }
+  html.deck-can-flow .spec-glyph-d { font-size: min(54px, 15vw) !important; line-height: 0.95; overflow-wrap: break-word; word-break: break-word; }
+  html.deck-can-flow .spec-sample-b { font-size: min(30px, 8vw) !important; overflow-wrap: break-word; }
+
+  /* do/don't panels: 1fr 1fr stays side-by-side and clips the second panel */
+  html.deck-can-flow .judge { grid-template-columns: 1fr !important; gap: 24px !important; }
+  html.deck-can-flow .panel-label { font-size: 22px !important; }
+
+  /* voice tone scale: flex row of four cells clips off-screen; go 2x2 */
+  html.deck-can-flow .tone { display: grid !important; grid-template-columns: 1fr 1fr !important; }
+  html.deck-can-flow .tone-cell { padding: 18px 16px; border-bottom: 1px solid var(--text); }
+  html.deck-can-flow .tone-cell:nth-child(2n) { border-right: 0; }
+  html.deck-can-flow .tone-cell:nth-last-child(-n+2) { border-bottom: 0; }
+  html.deck-can-flow .tone-word { font-size: min(32px, 9vw) !important; }
+  html.deck-can-flow .princ-t { font-size: min(34px, 9vw) !important; }
+}`,
   notes:
     'A complete brand book: massive uppercase Anton on white, clean Archivo body, ONE vivid vermilion (#ff3b1f) accent — no second hue. Type and giant letterforms carry it. Use the dark full-bleed cover/close (assets/brand-guidelines-cover.jpg) with .is-dark on the section + closing slides; the .split imagery slide uses assets/brand-guidelines-style.jpg. Signature components: .swatches/.swatch (color chips with hex + usage), .clearbox (dashed logo clearspace), .specimen/.spec-row (type ladder), .judge/.panel.do/.panel.dont (photography do & don\'t), .tone (voice scale), .princ (voice principles), .ghost (giant background letterform), .eyebrow numbered lockup. Keep it loud but disciplined — black, white, one red. Set bespoke sizes inline via style="--display-size:…" on .spec-glyph-d rows.',
   sampleSlides: [

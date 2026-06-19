@@ -104,7 +104,25 @@ export const courseCurriculum: Template = {
 .ag-t { font-family: var(--display); font-weight: 500; font-size: 40px; color: var(--text); }
 .ag-d { font-family: var(--body); font-size: 23px; color: var(--muted); margin-top: 4px; }
 
-.lede { font-family: var(--display); font-weight: 500; font-size: 58px; line-height: 1.18; letter-spacing: -0.01em; color: var(--text); max-width: 22ch; }`,
+.lede { font-family: var(--display); font-weight: 500; font-size: 58px; line-height: 1.18; letter-spacing: -0.01em; color: var(--text); max-width: 22ch; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { position: relative !important; inset: auto !important; min-height: 280px; padding: 56px 22px !important; justify-content: center; }
+  html.deck-can-flow .divider-num { font-size: 15px !important; }
+  html.deck-can-flow .divider-title { font-size: min(50px, 14vw) !important; line-height: 1.04 !important; }
+  html.deck-can-flow .divider-rule { width: 88px; height: 4px; }
+  html.deck-can-flow .modules { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .mod { padding: 26px 22px !important; }
+  html.deck-can-flow .mod-t { font-size: min(26px, 7vw) !important; }
+  html.deck-can-flow .mod-d { font-size: 17px !important; }
+  html.deck-can-flow .res { flex-wrap: wrap; padding: 20px 22px !important; }
+  html.deck-can-flow .res > div:not(.res-ic) { flex: 1 1 200px; min-width: 0; }
+  html.deck-can-flow .res-tag { margin-left: 0 !important; flex-basis: 100%; }
+  html.deck-can-flow .note { padding: 24px 24px !important; }
+  html.deck-can-flow .flow { grid-template-columns: 1fr !important; }
+  html.deck-can-flow .flow-arrow { transform: rotate(90deg); }
+  html.deck-can-flow .lede { font-size: min(34px, 9vw) !important; line-height: 1.2 !important; max-width: 100% !important; }
+}`,
   notes:
     'A complete online-course syllabus: Lora serif display + Inter body, deep forest-green (#14532d) ink on cream (#fdf6e3), ONE gold accent (#ca8a04) for eyebrows, checks, and rules. Open and close on the scholarly still-life full-bleed (assets/course-curriculum-cover.jpg); use the study-workspace figure (assets/course-curriculum-fig.jpg) for the module deep-dive split. Signature pieces: .modules numbered cards (gold ring) for the module overview, .level difficulty pills (beginner/intermediate/advanced), .reslist gold-tab resource rows, .note welcome callout, .ag agenda rows. Use .checks for learning outcomes and tools, .stats for course-at-a-glance, .timeline for the weekly schedule, .table for assessment weighting, .bars for workload, .quote for the instructor voice. Warm and structured, never busy — keep the story one module at a time.',
   sampleSlides: [

@@ -112,7 +112,38 @@ export const caseStudy: Template = {
 
 /* Soft inset note callout */
 .note { border-left: 4px solid var(--accent); background: rgba(14,165,233,0.07); padding: 30px 38px; border-radius: 0 12px 12px 0; }
-.note-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; font-size: 19px; color: var(--accent); margin-bottom: 10px; }`,
+.note-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; font-size: 19px; color: var(--accent); margin-bottom: 10px; }
+
+@media (max-width: 640px) {
+  /* Section dividers are absolute on the 1920 stage — un-absolute so they keep height in reflow */
+  html.deck-can-flow .cs-section { position: relative !important; inset: auto !important; padding: 64px 22px !important; min-height: 300px; gap: 12px; }
+  html.deck-can-flow .cs-section-title { font-size: min(60px, 16vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .cs-section-sub { font-size: min(20px, 5vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .cs-phase { font-size: min(16px, 4vw) !important; }
+
+  /* Customer logo + context card */
+  html.deck-can-flow .cust { gap: 18px; padding: 22px 22px !important; }
+  html.deck-can-flow .cust > div { min-width: 0; }
+  html.deck-can-flow .cust-mark { width: 64px; height: 64px; font-size: min(36px, 10vw) !important; border-radius: 14px; }
+  html.deck-can-flow .cust-name { font-size: min(34px, 9vw) !important; }
+  html.deck-can-flow .fact { grid-template-columns: 1fr !important; gap: 6px 0; padding: 16px 0; }
+
+  /* Before / after metric pairs — collapse 3-track row, rotate arrow */
+  html.deck-can-flow .ba { grid-template-columns: 1fr !important; gap: 14px 0; }
+  html.deck-can-flow .ba-cell { padding: 26px 22px !important; }
+  html.deck-can-flow .ba-num { font-size: min(56px, 15vw) !important; }
+  html.deck-can-flow .ba-arrow { transform: rotate(90deg); height: 30px; }
+
+  /* Results stat band — stack cells, flip left borders to top */
+  html.deck-can-flow .band { grid-template-columns: 1fr !important; padding: 28px 24px !important; gap: 0; }
+  html.deck-can-flow .band-cell { padding: 18px 0 !important; }
+  html.deck-can-flow .band-cell + .band-cell { border-left: 0; border-top: 1px solid var(--card-border); }
+  html.deck-can-flow .band-num { font-size: min(54px, 15vw) !important; }
+
+  /* Oversized pull-quote mark + note callout padding */
+  html.deck-can-flow .cs-quote::before { font-size: min(120px, 32vw) !important; }
+  html.deck-can-flow .note { padding: 24px 22px !important; }
+}`,
   notes:
     'A complete customer success case study: Instrument Serif display + Inter body, ink #26211b on warm cream #f5f1ea, ONE bright sky-blue (#0ea5e9) accent, generous whitespace, no gradients. Open and close on the warm bakery/workspace full-bleed (assets/case-study-cover.jpg); use the team-results figure (assets/case-study-fig.jpg) for the customer-voice split. Structure the narrative in three labelled acts with .cs-section (Challenge / Approach / Result). Signature pieces: .cust customer logo + context card with .fact rows for "at a glance", .ba before/after metric pairs for outcomes, the .band results stat strip, the oversized .cs-quote pull-quote, and .note for the headline insight. Use .bars for the "before" pain, .steps/.flow for what we did, .timeline for the rollout, .donut for impact mix. Warm and human, evidence-led — lead with the customer, keep numbers tabular and the story tight.',
   sampleSlides: [

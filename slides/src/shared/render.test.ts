@@ -80,6 +80,24 @@ describe('composeDeckHtml', () => {
     expect(html).not.toContain('<script>alert')
   })
 
+  it('includes the mobile/responsive scaling safeguards', () => {
+    const html = composeDeckHtml(baseDeck([]))
+    // Notch-aware viewport so the themed letterbox extends under safe areas.
+    expect(html).toContain('viewport-fit=cover')
+    // Flash-free reveal: stage hidden until the controller computes the fit.
+    expect(html).toContain('html.deck-ready .deck-stage')
+    expect(html).toContain("classList.add('deck-ready')")
+    // No-JS / print safety net so the stage is never permanently hidden.
+    expect(html).toContain(
+      '<noscript><style>.deck-stage{opacity:1}</style></noscript>',
+    )
+    // iOS Safari robustness: track the true visible box + re-fit on rotate.
+    expect(html).toContain('visualViewport')
+    expect(html).toContain('orientationchange')
+    // Touch tap-to-advance is gated to coarse pointers only.
+    expect(html).toContain('(pointer: coarse)')
+  })
+
   it('renders the seeded welcome deck without throwing', () => {
     const deck = createWelcomeDeck('w1', new Date().toISOString())
     const html = composeDeckHtml(deck)

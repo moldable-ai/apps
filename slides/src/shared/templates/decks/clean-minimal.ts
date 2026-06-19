@@ -86,7 +86,17 @@ export const cleanMinimal: Template = {
 .score::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
 .score.up::before { background: var(--accent); }
 .score.flat::before { background: #c8ccd2; }
-.score.down::before { background: #0b0b0d; opacity: 0.5; }`,
+.score.down::before { background: #0b0b0d; opacity: 0.5; }
+@media (max-width: 640px) {
+  html.deck-can-flow .mark-title { font-size: min(51px, 14vw) !important; line-height: 1.05 !important; }
+  html.deck-can-flow .idx-row { grid-template-columns: 1fr !important; gap: 6px 0 !important; padding: 18px 0 !important; }
+  html.deck-can-flow .idx-t { font-size: min(36px, 10vw) !important; line-height: 1.1 !important; }
+  html.deck-can-flow .idx-d { text-align: left !important; font-size: min(22px, 6vw) !important; }
+  html.deck-can-flow .bet { padding: 26px 22px !important; }
+  html.deck-can-flow .bet-t { font-size: min(36px, 10vw) !important; }
+  html.deck-can-flow .bet-d { font-size: min(22px, 6vw) !important; }
+  html.deck-can-flow .aside-t { font-size: min(36px, 10vw) !important; max-width: 100% !important; }
+}`,
   notes:
     'Restraint is the craft: lots of white space, ONE blue accent (#2f6df6), hairline rules, mostly left-aligned. Use .kicker.lockup for eyebrows, the .idx numbered-agenda for overviews, .mark/.mark-num/.mark-title/.mark-rule for quiet section breaks, .bet flat cards for the strategic bets, .aside for a single hairline callout, tight .table data with .score chips, and a .bars chart with the .plot baseline. Pin the .runner footer on content slides. Imagery is calm and architectural (clean-minimal-cover full-bleed, clean-minimal-fig in a split). Never add shadows beyond the subtle card/media defaults; never use gradient text or fills.',
   sampleSlides: [
@@ -278,12 +288,16 @@ export const cleanMinimal: Template = {
       bodyHtml: `<div class="pad">
   <div class="kicker lockup reveal">Subtraction is strategy</div>
   <h2 class="headline reveal" style="margin-top:6px;margin-bottom:18px">What we stop doing, starting Monday.</h2>
-  <ul class="checks reveal" style="--gap:28px;max-width:30ch">
-    <li class="check"><span>Stop <b>investing in self-serve</b> — freeze the roadmap, keep it on life support.</span></li>
-    <li class="check"><span>Stop <b>chasing every enterprise RFP</b> — one lighthouse, done right.</span></li>
-    <li class="check"><span>Stop <b>discounting on instinct</b> — the new price is the price.</span></li>
-    <li class="check"><span>Stop <b>shipping three roadmaps</b> — one queue, ruthlessly ordered.</span></li>
-  </ul>
+  <div class="two-col reveal" style="--col-gap:96px;align-items:start">
+    <ul class="checks" style="--gap:24px">
+      <li class="check"><span>Stop <b>investing in self-serve</b> — freeze the roadmap, keep it on life support.</span></li>
+      <li class="check"><span>Stop <b>chasing every enterprise RFP</b> — one lighthouse, done right.</span></li>
+    </ul>
+    <ul class="checks" style="--gap:24px">
+      <li class="check"><span>Stop <b>discounting on instinct</b> — the new price is the price.</span></li>
+      <li class="check"><span>Stop <b>shipping three roadmaps</b> — one queue, ruthlessly ordered.</span></li>
+    </ul>
+  </div>
   <div class="runner"><span class="runner-brand">Northwind</span><span class="runner-label">03 · The plan</span></div>
 </div>`,
     }),

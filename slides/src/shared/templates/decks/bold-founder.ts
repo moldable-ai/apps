@@ -84,6 +84,9 @@ export const boldFounder: Template = {
 .vcard-d { font-family: var(--body); font-size: 27px; line-height: 1.42; color: var(--muted); }
 
 /* ---- Signature: 2×2 competition matrix ---- */
+/* Wrapper carries the axis labels so they sit OUTSIDE the matrix's overflow:hidden
+   (which clips the rounded corners) and don't get clipped into the quadrants. */
+.matrix-wrap { position: relative; }
 .matrix { position: relative; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 2px; background: var(--card-border); border: 1px solid var(--card-border); border-radius: 18px; overflow: hidden; aspect-ratio: 1.55 / 1; }
 .quad { background: #0c0e13; padding: 38px 40px; display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; }
 .quad.us { background: rgba(91,140,255,0.12); }
@@ -91,8 +94,11 @@ export const boldFounder: Template = {
 .quad.us .quad-tag { color: var(--accent); }
 .quad-name { font-family: var(--display); font-weight: 600; font-size: 38px; line-height: 1.02; color: var(--text); }
 .m-axis-x { position: absolute; bottom: -52px; left: 0; right: 0; text-align: center; font-family: var(--body); font-size: 24px; letter-spacing: 0.04em; color: var(--muted); }
-.m-axis-y { position: absolute; top: 0; bottom: 0; left: -56px; display: grid; place-items: center; }
-.m-axis-y span { transform: rotate(-90deg); white-space: nowrap; font-family: var(--body); font-size: 24px; letter-spacing: 0.04em; color: var(--muted); }
+/* Vertical axis label sits entirely to the LEFT of the matrix (right:100% anchors its
+   right edge at the matrix's left edge); writing-mode keeps its box tall+narrow so it
+   can't bleed into the quadrants the way a rotate()'d wide span did. */
+.m-axis-y { position: absolute; top: 0; bottom: 0; right: 100%; margin-right: 18px; display: flex; align-items: center; }
+.m-axis-y span { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-family: var(--body); font-size: 24px; letter-spacing: 0.04em; color: var(--muted); }
 
 /* ---- Signature: funds-of-use allocation bars ---- */
 .alloc { display: flex; flex-direction: column; gap: 30px; }
@@ -107,7 +113,34 @@ export const boldFounder: Template = {
 .member { padding-top: 26px; border-top: 1px solid var(--card-border); display: flex; flex-direction: column; gap: 6px; }
 .member-name { font-family: var(--display); font-weight: 600; font-size: 40px; color: var(--text); }
 .member-role { font-family: var(--body); font-weight: 700; font-size: 24px; color: var(--accent); letter-spacing: 0.02em; }
-.member-prev { font-family: var(--body); font-size: 26px; line-height: 1.36; color: var(--muted); margin-top: 6px; }`,
+.member-prev { font-family: var(--body); font-size: 26px; line-height: 1.36; color: var(--muted); margin-top: 6px; }
+
+/* ---- Phone reflow: tame bespoke decoration sized for the 1920px stage ---- */
+@media (max-width: 640px) {
+  /* Section divider: 176px title + edge padding */
+  html.deck-can-flow .div { padding: 40px 26px !important; }
+  html.deck-can-flow .div-title { font-size: min(60px, 17vw) !important; line-height: 1.0 !important; }
+
+  /* Value cards */
+  html.deck-can-flow .vcard-t { font-size: min(32px, 9vw) !important; line-height: 1.08 !important; }
+
+  /* Competition 2x2 matrix: collapse to one column, drop fixed aspect-ratio, unhide axes */
+  html.deck-can-flow .matrix { grid-template-columns: 1fr !important; grid-template-rows: auto !important; aspect-ratio: auto !important; }
+  html.deck-can-flow .quad { padding: 22px 22px !important; justify-content: flex-start !important; }
+  html.deck-can-flow .quad-name { font-size: min(30px, 8vw) !important; line-height: 1.06 !important; }
+  html.deck-can-flow .m-axis-x { position: static !important; margin-top: 16px; text-align: left !important; }
+  html.deck-can-flow .m-axis-y { display: none !important; }
+
+  /* Use-of-funds allocation bars: fixed 290px/90px columns crush the track and clip the % */
+  html.deck-can-flow .alloc-row { grid-template-columns: 1fr auto !important; gap: 6px 16px !important; }
+  html.deck-can-flow .alloc-name { grid-column: 1 / -1 !important; font-size: min(28px, 8vw) !important; }
+  html.deck-can-flow .alloc-track { grid-column: 1 !important; }
+  html.deck-can-flow .alloc-pct { grid-column: 2 !important; font-size: min(28px, 8vw) !important; }
+
+  /* Founder/team chips: 3-up grid clips the third member at phone width */
+  html.deck-can-flow .team { grid-template-columns: 1fr !important; gap: 28px !important; }
+  html.deck-can-flow .member-name { font-size: min(32px, 9vw) !important; }
+}`,
   notes:
     'This is a Series A VC pitch deck — design it like a product, not a slideshow. Hold ONE narrative thread and let each slide advance it (problem → why now → solution → product → how it works → traction → market → model → competition → team → roadmap → ask → vision); slides should never feel interchangeable. Ruthless restraint: near-black, one electric-blue accent used sparingly (a single key word via .accent-text, the .accent-bar / .div-rule under a hero line, stat figures, chart fills), NO gradient text and NO busy backgrounds beyond the one quiet top glow. Confidence comes from scale and space — 4–8 words per headline, lots of black. Number the story in the eyebrow ("01 — The problem") and in the .div section breaks. Prefer hairline-divided columns (.stats / .vcard / .member) over heavy boxed cards. Put a .runner footer (brand left, narrative step right) on content slides for cohesion. Signature pieces: .div section dividers, .vcard rule-topped value cards, the .matrix 2×2 for competition, .alloc bars for use of funds, .team founder chips. Use the shared .bars for growth, .donut for market size, .table for the business model, .flow for how-it-works, .timeline for the roadmap. Treat images as moody, full-bleed product heroes with the dark scrim and bottom-anchored text.',
   sampleSlides: [
@@ -326,11 +359,13 @@ export const boldFounder: Template = {
       <h2 class="headline" style="margin-top:6px">The only one that's<br/><span class="accent-text">live</span> and <span class="accent-text">model-aware.</span></h2>
       <p class="lead" style="margin-top:18px">Legacy GRC tools audit on a calendar. Point evals catch issues but never prove them. We do both — continuously.</p>
     </div>
-    <div class="matrix">
-      <div class="quad"><div class="quad-tag">Manual · periodic</div><div class="quad-name">Legacy GRC</div></div>
-      <div class="quad us"><div class="quad-tag">Continuous · model-aware</div><div class="quad-name">Oath</div></div>
-      <div class="quad"><div class="quad-tag">Manual · point-in-time</div><div class="quad-name">Spreadsheets</div></div>
-      <div class="quad"><div class="quad-tag">Continuous · no proof</div><div class="quad-name">Eval tools</div></div>
+    <div class="matrix-wrap">
+      <div class="matrix">
+        <div class="quad"><div class="quad-tag">Manual · periodic</div><div class="quad-name">Legacy GRC</div></div>
+        <div class="quad us"><div class="quad-tag">Continuous · model-aware</div><div class="quad-name">Oath</div></div>
+        <div class="quad"><div class="quad-tag">Manual · point-in-time</div><div class="quad-name">Spreadsheets</div></div>
+        <div class="quad"><div class="quad-tag">Continuous · no proof</div><div class="quad-name">Eval tools</div></div>
+      </div>
       <div class="m-axis-x">Periodic &rarr; Continuous</div>
       <div class="m-axis-y"><span>Generic &rarr; Model-aware</span></div>
     </div>

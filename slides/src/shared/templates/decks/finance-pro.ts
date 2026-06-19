@@ -104,7 +104,24 @@ export const financePro: Template = {
 .rtag { font-family: var(--mono); font-weight: 500; font-size: 19px; letter-spacing: 0.08em; text-transform: uppercase; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--card-border); color: var(--muted); }
 .rtag.med { color: #9a6a00; border-color: #e6d3a8; background: #fbf4e3; }
 .rtag.high { color: var(--neg); border-color: #ecc6c0; background: #fbeae7; }
-.rcell-d { font-family: var(--body); font-size: 26px; line-height: 1.42; color: var(--muted); margin-top: 14px; }`,
+.rcell-d { font-family: var(--body); font-size: 26px; line-height: 1.42; color: var(--muted); margin-top: 14px; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .fdiv { position: relative !important; inset: auto !important; min-height: 320px; padding: 56px 22px !important; justify-content: center; }
+  html.deck-can-flow .fdiv-title { font-size: min(50px, 14vw) !important; line-height: 1.04 !important; }
+  html.deck-can-flow .fdiv-sub { font-size: min(20px, 6vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .kband { grid-template-columns: 1fr !important; }
+  html.deck-can-flow .kcell { padding: 22px 0 !important; }
+  html.deck-can-flow .kcell:first-child { padding-top: 0 !important; }
+  html.deck-can-flow .kcell + .kcell { border-left: 0 !important; border-top: 1px solid var(--card-border); }
+  html.deck-can-flow .kval { font-size: min(44px, 12vw) !important; line-height: 1.04 !important; }
+  html.deck-can-flow .rgrid { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .rcell { padding: 26px 22px !important; }
+  html.deck-can-flow .rcell-t { font-size: min(28px, 8vw) !important; }
+  html.deck-can-flow .note { padding: 24px 22px !important; }
+  html.deck-can-flow .note-b { font-size: min(22px, 6vw) !important; }
+  html.deck-can-flow .legend-row { font-size: min(22px, 6vw) !important; }
+}`,
   notes:
     'A complete CFO quarterly financial report: Fraunces serif headlines, IBM Plex body, IBM Plex Mono eyebrows, ink #0e2236 on white, ONE deep-teal accent (#0d7a6f) with a navy secondary (#123a6b). Open on the architectural full-bleed cover (assets/finance-pro-cover.jpg) and use the still-life figure (assets/finance-pro-fig.jpg) for the commentary split. Lead with .table for financials (use .num, .pos/.neg, .row-em for totals), .kband for the KPI dashboard, .bars and the multi-segment .donut for performance, .timeline for initiatives, .note for the headline read, and the .rgrid risk cells. Tabular numerics everywhere; restrained color — let the numbers carry it. Break acts with the hairline .fdiv section divider.',
   sampleSlides: [

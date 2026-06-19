@@ -116,7 +116,22 @@ export const onboarding: Template = {
 .help-d { font-family: var(--body); font-size: 24px; line-height: 1.4; color: var(--muted); margin-top: 8px; }
 
 /* Schedule table — day cell */
-.day { font-family: var(--display); font-weight: 700; color: var(--accent-2); }`,
+.day { font-family: var(--display); font-weight: 700; color: var(--accent-2); }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { position: relative !important; inset: auto !important; min-height: 340px; padding: 56px 26px !important; gap: 14px; }
+  html.deck-can-flow .divider .divider-title { font-size: min(51px, 14vw) !important; line-height: 1.04 !important; }
+  html.deck-can-flow .divider .divider-sub { font-size: min(30px, 8vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .divider .divider-num { font-size: min(15px, 4vw) !important; }
+  html.deck-can-flow .checklist { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .cl { padding: 26px 22px !important; }
+  html.deck-can-flow .tools { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .people { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .norms { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .norm { padding: 26px 24px !important; }
+  html.deck-can-flow .help { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .note { padding: 28px 24px !important; }
+}`,
   notes:
     'A complete, warm new-hire onboarding deck: rounded Quicksand display + Inter body, ink #1c1917 on white, ONE sunny-yellow (#f5b800) accent, generous whitespace, no gradients. Open on the bright-office full-bleed (assets/onboarding-cover.jpg) and use the friendly team figure (assets/onboarding-fig.jpg) for a split. Section dividers are full sunny-yellow panels (.divider). Signature pieces: .checklist cards for the first-day checklist, .tools grid for setup, the shared .timeline for the week-by-week plan, .people cards for who to meet, .norms cards for how we work, .help cards for where to get help, .note for a warm welcome callout. Use .stats for "who we are", .steps for the 30-60-90 plan, .checks for values, a centered .quote for a teammate voice. Keep it encouraging and human — speak directly to the new hire ("you", "we"), pin a .runner footer on content slides.',
   sampleSlides: [

@@ -109,6 +109,47 @@ never hardcoded. Write **bespoke CSS in `decoration`** for your signature elemen
 - Principles to internalize (pitch-deck craft): cohesive narrative, one idea per
   slide, treat the deck as a product, ruthless editing.
 
+## Mobile / responsive (non-negotiable)
+
+The published artifact is viewed on phones, so **every template must look great on
+mobile**. On a narrow viewport the renderer auto-reflows the deck: the fixed
+1920×1080 stage stops being scaled-to-fit and becomes a **tall, scrolling,
+full-width page** — each slide a section, columns stacked, type/spacing scaled down
+(driven by `@media (max-width: 640px)` + an `html.deck-can-flow` class in
+`render.ts`; **desktop/tablet/landscape are untouched**). Most of this is automatic
+**if you compose from the shared vocabulary**, so:
+
+- **Build grids with the kit** (`.two-col`, `.cols-2/3/4`, `.cards`) — they collapse
+  to one column on phones for free. For a **custom grid**, drive its columns with
+  `grid-template-columns: repeat(var(--cols, N), 1fr)` so it collapses too.
+- **Size type/spacing through tokens** (`var(--title-size)`, `var(--pad-x)`, …); the
+  reflow re-scales those. Hardcoded `font-size: NNNpx` on bespoke elements will be
+  oversized on a phone.
+- **Bespoke `decoration` MUST carry a phone override.** If your signature classes use
+  hardcoded px (big titles, custom cards, charts, dividers, horizontal flows), append
+  a block to the END of `decoration` — and keep every rule INSIDE the media query so
+  desktop is unchanged:
+  ```css
+  @media (max-width: 640px) {
+    html.deck-can-flow .bigTitle {
+      font-size: min(42px, 11vw) !important;
+    }
+    html.deck-can-flow .rowFlow {
+      flex-direction: column !important;
+    } /* stack horizontal flows */
+    html.deck-can-flow .wideThing {
+      /* shrink padding / sizes so it fits ~390px */
+    }
+  }
+  ```
+- Don't let content exceed the slide width. Wide tables already scroll horizontally.
+- **Verify at a TRUE ~390px mobile viewport** (device emulation — e.g.
+  `agent-browser set viewport 390 844`). Do **not** trust headless `--window-size=390`
+  screenshots: Chrome clamps the window to a ~500px minimum and reports
+  `innerWidth=500`, so a 390px-canvas capture shows false right-edge clipping. The
+  objective check is `document.documentElement.scrollWidth` at a real 390px viewport —
+  it should equal 390 (no horizontal page scroll).
+
 ## Generated imagery (the proxy)
 
 Generate real art — never ship placeholder boxes. Use this Node script pattern
@@ -171,6 +212,9 @@ and any density notes. ~30–60 lines. Mirror the existing guides in `guides/`.
 - `npm run check-types` passes (your module compiles).
 - No hardcoded font names / colors outside `tokens` + `decoration`.
 - Unique slide ids; 15–18 slides; every richness-bar item present.
+- **Mobile-friendly**: checked at a true ~390px viewport — slides reflow cleanly, nothing
+  clipped (`document.documentElement.scrollWidth === 390`); bespoke px decoration has a
+  `@media (max-width: 640px) { html.deck-can-flow … }` override.
 - Imagery generated, optimized, in `template-assets/`, declared in `assets:[]`.
 - Never name or reference any third-party presentation product (legal). Real-world
   subject matter (e.g. "Quarterly Business Review") is fine; product names are not.

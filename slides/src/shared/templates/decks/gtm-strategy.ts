@@ -140,7 +140,22 @@ export const gtmStrategy: Template = {
 .risk-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; font-size: 18px; color: var(--accent); margin-bottom: 10px; }
 .risk-t { font-family: var(--display); font-weight: 700; font-size: 30px; color: var(--text); line-height: 1.06; }
 .risk-d { font-family: var(--body); font-size: 22px; line-height: 1.4; color: var(--muted); margin-top: 8px; }
-.risk-d b { color: var(--text); }`,
+.risk-d b { color: var(--text); }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider .divider-title { font-size: min(49px, 14vw) !important; line-height: 1.04 !important; }
+  html.deck-can-flow .divider .divider-sub { font-size: min(30px, 8vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .fn-row { grid-template-columns: 1fr !important; gap: 6px 0 !important; }
+  html.deck-can-flow .fn-bar { padding: 16px 20px !important; }
+  html.deck-can-flow .fn-metric { font-size: min(44px, 12vw) !important; text-align: left !important; }
+  html.deck-can-flow .matrix { grid-template-columns: 1fr !important; grid-template-rows: none !important; height: auto !important; }
+  html.deck-can-flow .wedge { grid-template-columns: 1fr !important; gap: 14px !important; padding: 26px 22px !important; }
+  html.deck-can-flow .wedge-mark { font-size: min(36px, 10vw) !important; }
+  html.deck-can-flow .posbox { padding: 30px 22px !important; }
+  html.deck-can-flow .pos-line { font-size: min(30px, 8vw) !important; line-height: 1.28 !important; }
+  html.deck-can-flow .ch { padding: 22px 20px !important; }
+  html.deck-can-flow .icp { padding: 28px 24px !important; }
+}`,
   notes:
     'A complete go-to-market plan: Sora display + Inter body, ink #16121f on white, deep-purple #5b21b6 primary with electric-lime #a3e635 used only as a spark (never a wash). Open on the abstract purple-and-lime trajectory full-bleed (assets/gtm-strategy-cover.jpg); use the market-flow figure (assets/gtm-strategy-fig.jpg) for the wedge split. Break acts with the full-purple .divider (lime num + lime-bar) — one divider carries a pull-quote. Signature pieces: .funnel stacked-funnel for the GTM motion, .matrix 2x2 for segment prioritization (highlight the winning quadrant with .qd.win), .ch channel cards with .ch-tier pills, .posbox positioning statement box (wrap fill-ins in .fill / .fill.on-lime), .wedge for the unfair advantage, .icp cards for the ideal customer profile, .risk callouts for risks. Use .bars for channel economics, .donut + .stats for goals, .table for pricing, .timeline for launch, .steps for the first 90 days. Confident and strategic, restrained color, generous whitespace.',
   sampleSlides: [

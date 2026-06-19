@@ -40,3 +40,14 @@ recolor the single accent, and swap the imagery. Loud but disciplined.
   (cards) → motion+pull-quote(flow) → close.
 - Density: one idea per slide; let the giant type and one red note carry it. Keep the
   accent rare — if everything is red, nothing is.
+
+## Mobile / responsive
+
+The published deck auto-reflows on phones: the fixed 1920×1080 stage becomes a tall,
+scrolling, full-width page — columns stack, type/spacing scale down (desktop, tablet,
+and landscape are untouched). Most of this is automatic because the deck composes from
+the shared vocabulary. This template's bespoke decoration carries a
+`@media (max-width: 640px) { html.deck-can-flow … }` block that scales its
+hardcoded-px pieces (big titles, custom cards/charts/dividers) down to fit ~390px — if
+you change those bespoke sizes or layouts, update that block so the slide still looks
+great on a phone. See the Mobile / responsive section of `AUTHORING.md`.

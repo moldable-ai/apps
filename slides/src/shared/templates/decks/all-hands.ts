@@ -119,7 +119,27 @@ export const allHands: Template = {
 
 /* One-liner callout */
 .oneline { font-family: var(--display); font-weight: 500; font-size: 66px; line-height: 1.14; letter-spacing: -0.01em; color: var(--text); max-width: 20ch; }
-.oneline b { color: var(--accent); font-weight: 600; }`,
+.oneline b { color: var(--accent); font-weight: 600; }
+
+@media (max-width: 640px) {
+  /* Section divider — un-absolute + shrink the giant circled number */
+  html.deck-can-flow .numsec { position: relative !important; inset: auto !important; flex-direction: column; align-items: flex-start; gap: 22px; padding: 64px var(--pad-x, 28px); min-height: 360px; justify-content: center; }
+  html.deck-can-flow .numcircle { width: 108px !important; height: 108px !important; border-width: 3px; }
+  html.deck-can-flow .numcircle span { font-size: min(52px, 14vw) !important; }
+  html.deck-can-flow .numsec-title { font-size: min(45px, 13vw) !important; line-height: 1.02 !important; }
+  /* Win cards — bespoke grid (var(--cols)) won't auto-collapse */
+  html.deck-can-flow .wins { grid-template-columns: 1fr !important; gap: 18px; }
+  html.deck-can-flow .win { padding: 26px 24px !important; }
+  html.deck-can-flow .win-metric { font-size: min(44px, 12vw) !important; }
+  /* Team photo grid — bespoke grid (var(--cols)) won't auto-collapse */
+  html.deck-can-flow .team-grid { grid-template-columns: 1fr 1fr !important; gap: 16px; }
+  html.deck-can-flow .tcard-photo .ini { font-size: min(40px, 11vw) !important; }
+  /* Agenda timeline — fixed 88px gutter is too wide on a phone */
+  html.deck-can-flow .atl-row { grid-template-columns: 56px 1fr !important; gap: 22px; }
+  html.deck-can-flow .atl-t { font-size: min(28px, 8vw) !important; line-height: 1.06 !important; }
+  /* One-liner callout — big display body + ch cap */
+  html.deck-can-flow .oneline { font-size: min(36px, 10vw) !important; line-height: 1.16 !important; max-width: 100% !important; }
+}`,
   notes:
     'A complete Q2 company all-hands: Clash Display + Satoshi, near-black text on cream #f7f4ec, deep-teal #0f4c4c primary with warm-amber #f0a830 secondary, generous whitespace, no gradients on type. Open and close on the warm office full-bleed (assets/all-hands-cover.jpg); use the culture figure (assets/all-hands-culture.jpg) for the people split. Signature pieces: big circled section numbers (.numsec/.numcircle), .win amber-tick cards for wins, .goals progress bars for OKRs, the .team-grid photo grid for new joiners, and the .atl agenda timeline. Use .stats for headline metrics, .bars for a deep-dive, .steps for priorities, .timeline for the roadmap, .checks for values, .quote for customer love. Warm and human, never corporate-cold — celebrate the team, keep numbers tabular.',
   sampleSlides: [

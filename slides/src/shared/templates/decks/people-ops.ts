@@ -118,7 +118,25 @@ export const peopleOps: Template = {
 .note-k { font-family: var(--display); font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; font-size: 20px; color: var(--accent-2); margin-bottom: 12px; }
 
 /* Big intro lede */
-.lede { font-family: var(--display); font-weight: 500; font-size: 60px; line-height: 1.12; letter-spacing: -0.015em; color: var(--text); max-width: 22ch; }`,
+.lede { font-family: var(--display); font-weight: 500; font-size: 60px; line-height: 1.12; letter-spacing: -0.015em; color: var(--text); max-width: 22ch; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { position: relative !important; inset: auto !important; padding: 48px var(--pad-x, 22px) !important; gap: 12px !important; }
+  html.deck-can-flow .divider-title { font-size: min(48px, 13vw) !important; line-height: 1.02 !important; }
+  html.deck-can-flow .divider-sub { font-size: min(20px, 6vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .divider-num { font-size: min(16px, 4vw) !important; }
+  html.deck-can-flow .divider-rule { width: 96px !important; }
+  html.deck-can-flow .hc-num { font-size: min(52px, 14vw) !important; }
+  html.deck-can-flow .pcard { padding: 26px 24px !important; }
+  html.deck-can-flow .pcard-t { font-size: min(28px, 8vw) !important; line-height: 1.08 !important; }
+  html.deck-can-flow .voice { padding: 26px 24px !important; }
+  html.deck-can-flow .voice-q { font-size: min(22px, 6vw) !important; }
+  html.deck-can-flow .voice::before { font-size: min(64px, 18vw) !important; height: 32px !important; }
+  html.deck-can-flow .note { padding: 24px 26px !important; }
+  html.deck-can-flow .lede { font-size: min(30px, 8vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .tg-team { font-size: min(24px, 6vw) !important; }
+  html.deck-can-flow .legend-row { font-size: min(22px, 6vw) !important; }
+}`,
   notes:
     'A complete year-in-people review: Outfit display + Lora serif body, ink-sage #2c352c on cream #f7f3ec, sage-green #4d7c5f primary with a terracotta #c4623f secondary, generous whitespace, no gradients. Open and close on the warm human full-bleed (assets/people-ops-cover.jpg); use the culture figure (assets/people-ops-fig.jpg) for the .split and reused in the .teamgrid montage. Signature pieces: the .hcband headcount stat band, .donut engagement scores with a .legend, .bars for what-people-value and DEI progress, .prog program cards (soft icon chips, .warm variant for terracotta), the .voices pulse-survey quote cards, and the .teamgrid photo montage. Use .table for hiring/attrition, .steps for forward priorities, .note for the headline insight. Warm and human, never corporate — let the people lead, keep the numbers tabular.',
   sampleSlides: [

@@ -83,7 +83,7 @@ export const editorial: Template = {
 
 /* Contents list — numbered table-of-contents rows */
 .contents { display: flex; flex-direction: column; }
-.toc-row { display: grid; grid-template-columns: 92px 1fr auto; gap: 36px; align-items: baseline; padding: 26px 0; border-top: 1px solid var(--card-border); }
+.toc-row { display: grid; grid-template-columns: 92px 1fr auto; gap: 36px; align-items: baseline; padding: 17px 0; border-top: 1px solid var(--card-border); }
 .toc-row:last-child { border-bottom: 1px solid var(--card-border); }
 .toc-no { font-family: var(--display); font-weight: 500; font-size: 40px; color: var(--accent); font-variant-numeric: tabular-nums; }
 .toc-title { font-family: var(--display); font-weight: 500; font-size: 46px; letter-spacing: -0.01em; color: var(--text); }
@@ -108,7 +108,21 @@ export const editorial: Template = {
 .credits { display: grid; grid-template-columns: repeat(3, 1fr); gap: 46px 64px; }
 .credit-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; font-size: 19px; color: var(--accent); margin-bottom: 10px; }
 .credit-v { font-family: var(--display); font-weight: 500; font-size: 34px; line-height: 1.12; color: var(--text); }
-.credit-v span { display: block; font-family: var(--body); font-weight: 400; font-size: 23px; color: var(--muted); margin-top: 4px; }`,
+.credit-v span { display: block; font-family: var(--body); font-weight: 400; font-size: 23px; color: var(--muted); margin-top: 4px; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .masthead-name { font-size: min(28px, 7vw) !important; letter-spacing: 0.28em !important; }
+  html.deck-can-flow .dropcap::first-letter { font-size: min(96px, 26vw) !important; padding: 8px 14px 0 0 !important; }
+  html.deck-can-flow .toc-row { grid-template-columns: 48px 1fr auto !important; gap: 16px !important; }
+  html.deck-can-flow .toc-no { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .toc-title { font-size: min(36px, 10vw) !important; line-height: 1.05 !important; }
+  html.deck-can-flow .aside { padding: 26px 22px 24px !important; }
+  html.deck-can-flow .aside-t { font-size: min(36px, 10vw) !important; line-height: 1.06 !important; }
+  html.deck-can-flow .pullstat-n { font-size: min(64px, 17vw) !important; }
+  html.deck-can-flow .pullstat-l { max-width: 100% !important; }
+  html.deck-can-flow .credits { grid-template-columns: 1fr !important; gap: 28px 0 !important; }
+  html.deck-can-flow .credit-v { font-size: min(32px, 9vw) !important; }
+}`,
   notes:
     'A long-form magazine feature with real craft. Oversized Fraunces serif (use <em> for italic accents), tight leading, sharp 3px corners, big margins, ONE rust accent used like a signature. Lead with imagery: full-bleed cover and edge-to-edge .hero/.split spreads. Open the body with a .dropcap lede paragraph; break acts with full-bleed .section dividers carrying a .folio. Signature pieces: .masthead wordmark, .byline author line, .contents table-of-contents, .aside sidebar boxes, .pullstat serif data callouts, and the .credits colophon close. Use big .quote pull quotes, .rule as an editorial divider, and keep charts monochrome ink (bars/donut) so data reads as a quiet interlude, not a dashboard. Runner footer = magazine name left, section right.',
   sampleSlides: [
@@ -136,7 +150,7 @@ export const editorial: Template = {
       transition: 'slide',
       bodyHtml: `<div class="pad">
   <div class="kicker reveal">In this issue</div>
-  <h2 class="headline reveal" style="margin-top:6px;margin-bottom:26px">Contents.</h2>
+  <h2 class="headline reveal" style="margin-top:6px;margin-bottom:18px">Contents.</h2>
   <div class="contents reveal">
     <div class="toc-row"><span class="toc-no">01</span><span class="toc-title">The lede<span>An argument for the unhurried</span></span><span class="toc-pg">p. 03</span></div>
     <div class="toc-row"><span class="toc-no">02</span><span class="toc-title">In the workshop<span>A reported spread from the bench</span></span><span class="toc-pg">p. 07</span></div>

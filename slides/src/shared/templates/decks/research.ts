@@ -66,7 +66,14 @@ export const research: Template = {
 .mat { columns: 2; column-gap: 70px; }
 .mat .check { break-inside: avoid; }
 .finding { border-left: 5px solid var(--accent); background: rgba(79,155,46,0.08); padding: 32px 40px; border-radius: 0 14px 14px 0; }
-.finding-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }`,
+.finding-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { padding: 64px var(--pad-x) !important; justify-content: center; }
+  html.deck-can-flow .divider-title { font-size: min(47px, 13vw) !important; line-height: 1.0 !important; overflow-wrap: break-word; word-break: break-word; hyphens: auto; }
+  html.deck-can-flow .divider-num { font-size: min(26px, 7vw) !important; }
+  html.deck-can-flow .lede { font-size: min(36px, 10vw) !important; line-height: 1.1 !important; max-width: 100% !important; }
+  html.deck-can-flow .finding { padding: 24px 22px !important; }
+}`,
   notes:
     'Bright, optimistic, organized. Friendly Hanken Grotesk, green primary with a sunflower-yellow secondary; cards carry a colored top border (alternating green/yellow). Clean white section dividers (.divider). Use the geometric mosaic (experiment-cover) on the cover, research-fig for the science split, research-section as a findings hero. Use .var boxes for variables, .mat checklist for materials, .steps for procedure, .table for raw data, .bars for results, .donut + .finding for interpretation. Clear and structured, never cluttered; keep figures tabular.',
   sampleSlides: [
@@ -227,8 +234,8 @@ export const research: Template = {
       transition: 'slide',
       bodyHtml: `<div class="pad">
   <div class="kicker reveal">Results</div>
-  <h2 class="headline reveal" style="margin-top:6px;margin-bottom:16px">Final height after 4 weeks.</h2>
-  <div class="bars reveal" style="--bars-height:320px">
+  <h2 class="headline reveal" style="margin-top:6px;margin-bottom:56px">Final height after 4 weeks.</h2>
+  <div class="bars reveal" style="--bars-height:240px">
     <div class="bar" style="--h:90%"><div class="bar-fill" data-val="18cm"></div><div class="bar-label">Red</div></div>
     <div class="bar" style="--h:80%"><div class="bar-fill" data-val="16cm"></div><div class="bar-label">Blue</div></div>
     <div class="bar" style="--h:45%"><div class="bar-fill" data-val="9cm"></div><div class="bar-label">White</div></div>

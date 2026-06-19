@@ -157,7 +157,32 @@ export const strategyFramework: Template = {
 .row-rec { background: rgba(180,83,9,0.07); }
 .row-rec td { font-weight: 600; }
 .pick { display: inline-flex; align-items: center; gap: 9px; font-family: var(--body); font-weight: 700; font-size: 24px; color: var(--accent); }
-.pick::before { content: '\\2713'; font-weight: 800; }`,
+.pick::before { content: '\\2713'; font-weight: 800; }
+
+/* ===== Phone reflow — scale bespoke decoration calibrated for a 1920px stage ===== */
+@media (max-width: 640px) {
+  html.deck-can-flow .divider-title { font-size: min(51px, 14vw) !important; line-height: 1.02 !important; }
+  html.deck-can-flow .thought-t { font-size: min(36px, 10vw) !important; line-height: 1.2 !important; }
+  html.deck-can-flow .scq-text { font-size: min(30px, 8vw) !important; line-height: 1.24 !important; }
+  html.deck-can-flow .lede { font-size: min(36px, 10vw) !important; line-height: 1.18 !important; max-width: 100% !important; }
+  html.deck-can-flow .thought { padding: 32px 26px !important; }
+  html.deck-can-flow .tree-root { padding: 26px 24px !important; }
+  html.deck-can-flow .scq-row { grid-template-columns: 1fr !important; gap: 14px 0; padding: 24px 0; }
+  html.deck-can-flow .scq-tag { padding-top: 0 !important; }
+  html.deck-can-flow .tree { grid-template-columns: 1fr !important; gap: 18px 0; }
+  html.deck-can-flow .tree-elbow { display: none !important; }
+  html.deck-can-flow .tree-branches { gap: 14px; }
+  html.deck-can-flow .branch { grid-template-columns: 1fr !important; }
+  html.deck-can-flow .branch-line { display: none !important; }
+  html.deck-can-flow .matrix-wrap { display: block !important; height: auto !important; }
+  html.deck-can-flow .matrix { grid-template-columns: 1fr !important; grid-template-rows: none !important; }
+  html.deck-can-flow .matrix-yaxis, html.deck-can-flow .matrix-xaxis { display: none !important; }
+  html.deck-can-flow .quad { border-right: 0 !important; }
+  html.deck-can-flow .tier-1, html.deck-can-flow .tier-2, html.deck-can-flow .tier-3 { width: 100% !important; }
+  html.deck-can-flow .tier { padding: 22px 24px !important; }
+  html.deck-can-flow .tier-row { flex-direction: column; gap: 10px; }
+  html.deck-can-flow .hyp { padding: 28px 24px !important; }
+}`,
   notes:
     'A complete strategy-frameworks toolkit applied to one fictional problem (a regional grocer, "Meridian Grocers", deciding how to defend against online entrants). Source Serif 4 display + Inter body, charcoal #1f2937 on cream #faf8f3, ONE ochre (#b45309) accent, austere and heavily white-spaced — let the structure carry it. Open and close on the brutalist-architecture full-bleed (assets/strategy-framework-cover.jpg). Signature frameworks: the .scq situation-complication-question ladder, the bordered .thought governing statement, the .tree issue/driver tree, the 2×2 .matrix (with .quad.win highlighting the priority quadrant), value-chain .vc cards inside the shared .flow, the 3-tier .pyramid recommendation, and .hyp hypothesis cards. Use .table for scored options (.row-rec + .pick mark the recommendation), .timeline for initiatives, .bars/.stats for impact, .checks for risks/assumptions. Pin the .runner footer (brand left, framework name right) on content slides. Keep numbers tabular and every argument MECE.',
   sampleSlides: [

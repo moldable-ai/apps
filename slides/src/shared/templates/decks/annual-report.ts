@@ -119,7 +119,22 @@ export const annualReport: Template = {
 .toc-d { font-family: var(--body); font-size: 23px; color: var(--muted); margin-top: 6px; }
 
 /* Cards on cream — lift the shared card with a gold top rule */
-.card { background: var(--card-bg); box-shadow: var(--card-shadow); }`,
+.card { background: var(--card-bg); box-shadow: var(--card-shadow); }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .fdiv { position: relative !important; inset: auto !important; grid-template-columns: 1fr !important; gap: 18px 0; padding: 56px 22px !important; min-height: 300px; align-content: center; }
+  html.deck-can-flow .fdiv-num { font-size: min(143px, 40vw) !important; line-height: 0.82 !important; }
+  html.deck-can-flow .fdiv-title { font-size: min(44px, 12vw) !important; line-height: 1.04 !important; }
+  html.deck-can-flow .bignum { font-size: min(102px, 28vw) !important; line-height: 0.9 !important; }
+  html.deck-can-flow .letter-lede { font-size: min(36px, 10vw) !important; line-height: 1.18 !important; }
+  html.deck-can-flow .signature { font-size: min(36px, 10vw) !important; }
+  html.deck-can-flow .ledger { grid-template-columns: 1fr 1fr !important; gap: 28px 0; }
+  html.deck-can-flow .ledger-cell { padding: 0 20px !important; }
+  html.deck-can-flow .ledger-cell:nth-child(odd) { padding-left: 0 !important; border-left: 0 !important; }
+  html.deck-can-flow .ledger-val { font-size: min(56px, 15vw) !important; }
+  html.deck-can-flow .toc { grid-template-columns: 1fr !important; gap: 0 0; }
+  html.deck-can-flow .letter { padding-left: 18px !important; }
+}`,
   notes:
     'A complete shareholder annual report: Libre Caslon Display + Inter, deep navy #0a1e3f text on warm cream #f5f0e6, ONE antique-gold accent #b08d3a. Open and close on the stately architectural full-bleed (assets/annual-report-cover.jpg); use the community/people figure (assets/annual-report-fig.jpg) for the sustainability split. Signature pieces: .fdiv formal numbered dividers with an oversized roman-feel numeral, .bignum for the headline year/number, .letter / .letter-lede / .signature for the CEO letter, .ledger ledger-style financial figure cards, .note gold-rule callouts, .legend for the segment donut, .board leadership row, .toc contents. Use .bars for revenue trend, .table for financial highlights and segment detail, .timeline for milestones, .stats for the year at a glance and people, .checks for sustainability commitments. Keep numbers tabular, the tone formal and dignified, gravitas over decoration.',
   sampleSlides: [

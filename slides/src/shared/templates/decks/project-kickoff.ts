@@ -120,7 +120,18 @@ export const projectKickoff: Template = {
 .phase { background: rgba(13,148,136,0.06); border: 1px solid rgba(13,148,136,0.22); border-radius: 16px; padding: 30px 28px; height: 100%; }
 .phase-n { font-family: var(--body); font-weight: 700; font-size: 19px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--coral); }
 .phase-t { font-family: var(--display); font-weight: 600; font-size: 30px; color: var(--text); margin-top: 12px; }
-.phase-d { font-family: var(--body); font-size: 22px; line-height: 1.36; color: var(--muted); margin-top: 8px; }`,
+.phase-d { font-family: var(--body); font-size: 22px; line-height: 1.36; color: var(--muted); margin-top: 8px; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { position: relative !important; inset: auto !important; padding: 56px var(--pad-x, 26px) !important; min-height: 300px; }
+  html.deck-can-flow .divider-title { font-size: min(52px, 14vw) !important; line-height: 1.05 !important; }
+  html.deck-can-flow .goal-n { font-size: min(36px, 10vw) !important; }
+  html.deck-can-flow .scope { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .panel { padding: 28px 24px !important; }
+  html.deck-can-flow .panel-h { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .raci-key { flex-direction: column !important; gap: 12px; }
+  html.deck-can-flow .raci-key span { width: 100% !important; white-space: normal !important; }
+}`,
   notes:
     'A complete first-day project kickoff deck: Outfit display + Inter body, deep-teal ink (#0f2e2b) on white, ONE teal accent (#0d9488) with a coral (#f97316) secondary for energy, generous whitespace, no gradients. Open and close on the bright flat-lay full-bleed (assets/project-kickoff-cover.jpg); use the whiteboard collaboration figure (assets/project-kickoff-fig.jpg) for the ways-of-working split. Signature pieces: .goals goal cards (coral corner tab) for objectives, .scope in/out panels for what is and is not in scope, .phase pills inside the shared .flow for the approach, the RACI .table with .rc-r/.rc-a/.rc-c/.rc-i role chips for responsibilities, .cad cadence cards for rituals & tools, .risk callout + a risks .table for mitigations, .timeline for milestones, .donut/.stats for the key metric. Friendly and optimistic, never corporate — momentum over gravitas, keep dates and owners concrete.',
   sampleSlides: [

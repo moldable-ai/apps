@@ -129,7 +129,23 @@ export const teamRetrospective: Template = {
 
 /* Soft pill (warm) */
 .softchip { display: inline-flex; align-items: center; gap: 10px; padding: 12px 26px; border-radius: 999px; background: #fff; border: 1px solid var(--card-border); box-shadow: var(--card-shadow); font-family: var(--body); font-weight: 600; font-size: 25px; color: var(--text); }
-.softchip::before { content: ''; width: 13px; height: 13px; border-radius: 50%; background: var(--accent-2); }`,
+.softchip::before { content: ''; width: 13px; height: 13px; border-radius: 50%; background: var(--accent-2); }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider-title { font-size: min(51px, 14vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .mood-score { font-size: min(44px, 12vw) !important; }
+  html.deck-can-flow .notes { grid-template-columns: 1fr !important; gap: 22px; }
+  html.deck-can-flow .note, html.deck-can-flow .note:nth-child(2n), html.deck-can-flow .note:nth-child(3n) { transform: none !important; padding: 26px 22px 28px !important; }
+  html.deck-can-flow .ssc { grid-template-columns: 1fr !important; gap: 20px; }
+  html.deck-can-flow .ssc-col { padding: 26px 22px 28px !important; }
+  html.deck-can-flow .mood { padding: 28px 24px !important; }
+  html.deck-can-flow .theme { padding: 26px 22px 26px !important; }
+  html.deck-can-flow .action { flex-wrap: wrap; gap: 12px 16px; padding: 22px 22px !important; }
+  html.deck-can-flow .action-t { flex: 1 1 100% !important; order: 2; }
+  html.deck-can-flow .action-box { order: 1; }
+  html.deck-can-flow .action-owner { order: 3; }
+  html.deck-can-flow .action-due { order: 4; margin-left: auto; }
+}`,
   notes:
     'A complete, friendly sprint-retrospective workshop deck: Cabinet Grotesk display + Inter body, warm off-white #faf7f2 with ONE indigo accent (#4f46e5) and a soft coral secondary (#fb7185), rounded everything, generous whitespace, no gradients. Open and close on the soft warm collage full-bleed (assets/team-retrospective-cover.jpg); use the candid workshop photo (assets/team-retrospective-fig.jpg) for the team split. Signature pieces: tilted .note sticky cards (with .note-meta owner + auto-rotation per column) for wins and what slowed us down; the .mood meter (segmented scale + .mood-faces + .mood-score) for how the sprint felt; the start/stop/continue board (.ssc / .ssc-col.start|.stop|.cont); .vote/.vdot/.vcount tally dots on .theme cards for prioritized themes; and .action rows (.action-box check, .action-av owner avatar, .action-due) for owned action items. Use .bars for velocity/burndown, .stats for the sprint at a glance, .table for the action register, .quote for a team voice. Keep it warm and human — celebrate wins, name what slowed the team, leave with clear owners.',
   sampleSlides: [

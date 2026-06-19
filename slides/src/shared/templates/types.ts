@@ -299,7 +299,14 @@ QUOTE / SECTION / ACCENTS
 - Running footer (for a cohesive, "designed-as-a-system" deck): \`<div class="runner"><span class="runner-brand">Company</span><span class="runner-label">Section</span></div>\` — pin it on content slides; brand left, section/narrative-step right.
 - A hairline-divided value row (cleaner than boxed cards): reuse \`.stats\` with \`.stat\` containing a \`.subhead\` + \`.body\` instead of numbers.
 
-Add \`class="reveal"\` to elements that should animate in; set per-slide \`transition\` (fade/slide/zoom). Reference fonts/colors only through tokens (\`var(--display)\`, \`var(--accent)\`, …), never hardcoded. Only write bespoke CSS when a slide truly needs something outside this kit.`
+Add \`class="reveal"\` to elements that should animate in; set per-slide \`transition\` (fade/slide/zoom). Reference fonts/colors only through tokens (\`var(--display)\`, \`var(--accent)\`, …), never hardcoded. Only write bespoke CSS when a slide truly needs something outside this kit.
+
+MOBILE / RESPONSIVE — decks MUST look great on phones (the published artifact is viewed on mobile). On a narrow viewport the deck auto-reflows: the fixed 1920×1080 stage becomes a tall, scrolling, full-width page (each slide a section, columns stacked, type/spacing scaled down). This is automatic for anything built from the vocabulary above, so:
+- COMPOSE FROM THIS KIT — \`.two-col\`/\`.cols-2/3/4\`/\`.cards\` collapse to one column on phones automatically. For a CUSTOM grid, drive its columns with \`grid-template-columns: repeat(var(--cols, N), 1fr)\` so it collapses too.
+- Size type/spacing through TOKENS (\`var(--title-size)\`, \`var(--pad-x)\`, …); the reflow re-scales those. Avoid hardcoded \`font-size: NNNpx\` on custom elements — it won't shrink on a phone.
+- If you DO write bespoke decoration with hardcoded px (big custom titles, cards, charts, dividers), add a phone override at the END of the deck/template CSS so it scales down — and keep every such rule INSIDE the media query so desktop is untouched:
+  \`@media (max-width: 640px) { html.deck-can-flow .yourBigTitle { font-size: min(40px, 11vw) !important; } html.deck-can-flow .yourRowFlow { flex-direction: column !important; } }\`
+- Never let content exceed the slide width (wide tables already scroll horizontally). A slide that reads well at 1920 should reflow cleanly on a phone — verify at a true ~390px mobile viewport.`
 
 function rootCss(tokens: Record<string, string>): string {
   const entries = Object.entries(tokens)
@@ -359,5 +366,5 @@ ${tokenLines}
 ## Component vocabulary
 ${COMPONENT_VOCABULARY}
 ${template.notes ? `\n## ${template.name} specifics\n${template.notes}\n` : ''}
-This deck includes sample slides built from these components — mirror their structure and density. Keep it on-brand; only write bespoke CSS when a slide truly needs it.`
+This deck includes sample slides built from these components — mirror their structure and density. Keep it on-brand; only write bespoke CSS when a slide truly needs it. Keep it mobile-friendly (see MOBILE / RESPONSIVE above): new slides should reflow on phones — compose from the kit, drive custom grids with \`var(--cols)\`, and if you add bespoke hardcoded-px decoration, give it a matching \`@media (max-width: 640px) { html.deck-can-flow … }\` override.`
 }

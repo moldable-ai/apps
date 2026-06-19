@@ -113,7 +113,26 @@ export const flatIllustration: Template = {
 .tier-head { font-family: var(--display); font-weight: 600; }
 .tier-price { font-family: var(--display); font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
 .col-us { background: #eef0ff; }
-.yes { color: var(--accent); font-weight: 700; }`,
+.yes { color: var(--accent); font-weight: 700; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .fdiv { position: static !important; inset: auto !important; padding: 48px 22px !important; min-height: 56vh; justify-content: center; gap: 16px; }
+  html.deck-can-flow .fdiv-title { font-size: min(47px, 13vw) !important; line-height: 1.04 !important; }
+  html.deck-can-flow .fcards { grid-template-columns: 1fr !important; gap: 16px; }
+  html.deck-can-flow .fcard { padding: 30px 24px !important; }
+  html.deck-can-flow .fcard-t { font-size: min(28px, 8vw) !important; }
+  html.deck-can-flow .pills { flex-direction: column !important; gap: 16px; }
+  html.deck-can-flow .pills .pstep { flex: none !important; width: 100% !important; }
+  html.deck-can-flow .pills .flow-arrow { display: none !important; }
+  html.deck-can-flow .statband { grid-template-columns: 1fr !important; padding: 34px 26px !important; gap: 24px; }
+  html.deck-can-flow .statband-cell { padding: 0 !important; }
+  html.deck-can-flow .statband-cell + .statband-cell { border-left: 0 !important; border-top: 1px solid rgba(255,255,255,0.22); padding-top: 24px !important; }
+  html.deck-can-flow .statband-num { font-size: min(52px, 14vw) !important; }
+  html.deck-can-flow .vs { grid-template-columns: 1fr !important; gap: 16px; }
+  html.deck-can-flow .vs-card { padding: 30px 24px !important; }
+  html.deck-can-flow .vs-h { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .fcallout { padding: 26px 24px !important; }
+}`,
   notes:
     'A complete consumer money / budgeting app pitch rendered in premium FLAT GEOMETRIC VECTOR illustration. Poppins display + Inter body, ink #0f1222 on white, indigo #4f46e5 primary with warm coral #fb7185 and a soft mint accent — bright and optimistic, never corporate. Open and close on the full-bleed flat-vector hero (assets/flat-illustration-cover.jpg, diverse people + app); use the flat-vector product scene (assets/flat-illustration-scene.jpg) for the product split. Signature pieces: .fdiv friendly rounded section dividers, .fcard rounded feature cards with pastel icon chips, .pills numbered pill steps for "how it works", the colorful indigo .statband for traction, .vs old-way/new-way tiles, .fcallout coral callout. Use .bars for growth, a 3-segment .donut for market, .timeline for the roadmap, a .table for pricing (.col-us highlights the recommended plan). Keep imagery flat-vector only — never photographic. Generous whitespace, rounded everything, numbers tabular.',
   sampleSlides: [

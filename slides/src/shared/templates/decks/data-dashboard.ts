@@ -135,7 +135,24 @@ export const dataDashboard: Template = {
 .ag { display: flex; gap: 24px; align-items: baseline; padding: 22px 0; border-top: 1px solid var(--card-border); }
 .ag-n { font-family: var(--mono); font-weight: 600; font-size: 28px; color: var(--accent); flex: 0 0 auto; }
 .ag-t { font-family: var(--display); font-weight: 600; font-size: 38px; color: var(--text); }
-.ag-d { font-family: var(--body); font-size: 24px; color: var(--muted); margin-top: 3px; }`,
+.ag-d { font-family: var(--body); font-size: 24px; color: var(--muted); margin-top: 3px; }
+
+/* ---- Phone reflow: scale bespoke decoration calibrated for the 1920px stage ---- */
+@media (max-width: 640px) {
+  html.deck-can-flow .lede { font-size: min(36px, 10vw) !important; line-height: 1.1 !important; max-width: 100% !important; }
+  html.deck-can-flow .kpi-grid { grid-template-columns: 1fr 1fr !important; gap: 14px !important; }
+  html.deck-can-flow .kpi { padding: 24px 20px !important; }
+  html.deck-can-flow .kpi-val { font-size: min(44px, 12vw) !important; line-height: 1.05 !important; }
+  html.deck-can-flow .legend-row { flex-wrap: wrap; gap: 6px 14px; }
+  html.deck-can-flow .legend-row .v { margin-left: 0; flex-basis: 100%; padding-left: 30px; }
+  html.deck-can-flow .callout { padding: 24px 22px !important; }
+  html.deck-can-flow .callout-t { font-size: min(30px, 8vw) !important; line-height: 1.1 !important; }
+  html.deck-can-flow .divider { padding: 56px 28px !important; }
+  html.deck-can-flow .divider-title { font-size: min(51px, 14vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .flow-step .stage { padding: 24px 20px !important; }
+  html.deck-can-flow .stage-val { font-size: min(44px, 12vw) !important; }
+  html.deck-can-flow .ag-t { font-size: min(30px, 8vw) !important; line-height: 1.1 !important; }
+}`,
   notes:
     'A complete monthly product-metrics review for a fictional analytics product. Dark slate "instrument panel": Space Grotesk display + IBM Plex Mono eyebrows, ONE cyan accent with lime (.accent-2) as the positive/secondary data color, fuchsia (.neg) for declines. Open and close on the full-bleed network cover (assets/data-dashboard-cover.jpg). Lead with the .kpi-grid (tiles + .delta chips: up=lime, down=fuchsia). Use restyled .bars for revenue, multi-segment .donut + .legend for retention/mix, .flow with .stage cards for the activation funnel, dense .table with tabular nums and .status pills for cohorts and reliability, .stats for engagement, and .callout (default / .warn / .crit) for anomalies and risks. Add the hairline .grid-bg behind data slides and a .runner footer for cohesion. Keep numbers tabular and the palette restrained — the charts carry the deck.',
   sampleSlides: [

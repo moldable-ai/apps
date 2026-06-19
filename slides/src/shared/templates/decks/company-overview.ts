@@ -115,7 +115,28 @@ export const companyOverview: Template = {
 .legend { display: flex; flex-direction: column; gap: 18px; }
 .legend-row { display: flex; align-items: center; gap: 18px; font-family: var(--body); font-size: 28px; color: var(--text); }
 .legend-dot { width: 16px; height: 16px; border-radius: 5px; flex: 0 0 auto; }
-.legend-row .v { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); }`,
+.legend-row .v { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .statement-line { font-size: min(38px, 11vw) !important; line-height: 1.06 !important; max-width: 100% !important; }
+  html.deck-can-flow .divider-title { font-size: min(53px, 15vw) !important; line-height: 0.98 !important; }
+  html.deck-can-flow .bignums { grid-template-columns: 1fr 1fr !important; gap: 28px 24px; }
+  html.deck-can-flow .bignum { padding: 0 !important; }
+  html.deck-can-flow .bignum + .bignum { border-left: none !important; }
+  html.deck-can-flow .bignum-val { font-size: min(54px, 15vw) !important; }
+  html.deck-can-flow .dowhat { grid-template-columns: 1fr !important; gap: 20px; }
+  html.deck-can-flow .do-card { padding: 28px 22px 26px !important; }
+  html.deck-can-flow .do-t { font-size: min(28px, 8vw) !important; }
+  html.deck-can-flow .do-d { font-size: 18px !important; }
+  html.deck-can-flow .footprint { grid-template-columns: 1fr 1fr !important; gap: 28px 20px; padding: 32px 24px !important; }
+  html.deck-can-flow .foot-cell { padding: 0 !important; }
+  html.deck-can-flow .foot-cell + .foot-cell { border-left: none !important; }
+  html.deck-can-flow .foot-num { font-size: min(44px, 12vw) !important; }
+  html.deck-can-flow .team { grid-template-columns: 1fr 1fr !important; gap: 24px 18px; }
+  html.deck-can-flow .person-av { font-size: min(44px, 12vw) !important; }
+  html.deck-can-flow .person-name { font-size: min(24px, 7vw) !important; }
+  html.deck-can-flow .callout { padding: 22px 22px !important; }
+}`,
   notes:
     'A complete "who we are" company overview: Bricolage Grotesque display + Inter body, ink-navy #0b1f3a on white, ONE coral (#ff6b5e) accent, generous whitespace, no gradients. Open on the architectural full-bleed cover (assets/company-overview-cover.jpg) and use the office figure (assets/company-overview-fig.jpg) for the "who we serve" split. Signature pieces: .statement full-bleed navy mission slide, .bignum oversized key-number band for impact, .dowhat coral corner-tab cards for "what we do", the navy .footprint band plus a markets .table for where you operate, and the .team leadership row of portrait-initial cards. Use the shared .flow for "how it works", .bars for traction, .timeline for "where we are going", and a centered .quote for the founder. Break acts with the clean coral .divider. Confident and modern, never flashy — let the numbers and one architectural image carry it; keep figures tabular.',
   sampleSlides: [
@@ -309,10 +330,10 @@ export const companyOverview: Template = {
       id: 'co-markets',
       name: 'Where we operate',
       transition: 'slide',
-      bodyHtml: `<div class="pad top" style="--pad-y:96px">
+      bodyHtml: `<div class="pad top" style="--pad-y:64px">
   <div class="kicker reveal">Where we operate</div>
-  <h2 class="headline reveal" style="margin-top:8px;margin-bottom:30px">A global footprint, run locally.</h2>
-  <div class="footprint reveal" style="--cols:4;margin-bottom:38px">
+  <h2 class="headline reveal" style="margin-top:8px;margin-bottom:24px">A global footprint, run locally.</h2>
+  <div class="footprint reveal" style="--cols:4;margin-bottom:30px;padding:44px">
     <div class="foot-cell"><div class="foot-num">3<em>4</em></div><div class="foot-label">Countries served</div></div>
     <div class="foot-cell"><div class="foot-num">6</div><div class="foot-label">Regional offices</div></div>
     <div class="foot-cell"><div class="foot-num">1<em>2</em></div><div class="foot-label">Local currencies</div></div>

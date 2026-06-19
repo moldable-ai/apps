@@ -134,7 +134,19 @@ export const risograph: Template = {
 /* Numbers stay tabular and bold like a printed program */
 .stat-num, .metric { font-variant-numeric: tabular-nums; }
 .lede { font-family: var(--display); font-weight: 800; font-size: 58px; line-height: 1.06; letter-spacing: -0.02em; color: var(--text); max-width: 18ch; }
-.col-em { background: rgba(43,76,240,0.08); }`,
+.col-em { background: rgba(43,76,240,0.08); }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .duo { position: relative !important; inset: auto !important; min-height: 300px; padding: 56px 26px !important; overflow: hidden; }
+  html.deck-can-flow .duo::after { right: -22%; width: 70%; }
+  html.deck-can-flow .duo-title { font-size: min(52px, 14vw) !important; line-height: 0.95 !important; overflow-wrap: break-word; word-break: break-word; hyphens: auto; }
+  html.deck-can-flow .duo-num { font-size: min(18px, 5vw) !important; }
+  html.deck-can-flow .poster { font-size: min(45px, 13vw) !important; line-height: 0.95 !important; overflow-wrap: break-word; word-break: break-word; hyphens: auto; }
+  html.deck-can-flow .lede { font-size: min(30px, 8vw) !important; max-width: 100% !important; overflow-wrap: break-word; word-break: break-word; hyphens: auto; }
+  html.deck-can-flow .riso-card { padding: 26px 22px !important; box-shadow: 5px 5px 0 0 var(--accent); margin-right: 6px; }
+  html.deck-can-flow .riso-card.coral { box-shadow: 5px 5px 0 0 var(--accent-2); }
+  html.deck-can-flow .riso-card .rc-t { font-size: min(28px, 7vw) !important; }
+}`,
   notes:
     'A community arts-festival manifesto printed like a two-ink risograph zine: Archivo (heavy 800/900) display + Inter body, ink #16130d on warm cream #f7f1e3, riso blue #2b4cf0 + fluoro coral #ff5247 as the two spot inks. Every slide carries a faint halftone grain via .slide::before. Open and close on the full-bleed riso poster (assets/risograph-cover.jpg); use the riso bass-player illustration (assets/risograph-fig.jpg) for the featured-moment split (its --media-shadow is a hard coral offset). Signature pieces: .poster headlines (.ink / .pop spans recolour words), .chip overprint tags (misregistered second-ink shadow), .halftone-rule dotted divider, .riso-card flat panels with a hard offset overprint shadow, and the .duo duotone colour-block section breaks. Use .steps/.riso-card for the program, .stats for by-the-numbers, .timeline for the schedule, .table for ticket tiers (.col-em highlights the festival pass), .bars for the data moment. Bold, warm, hand-made — let the two inks and grain carry it; keep type heavy and copy punchy.',
   sampleSlides: [

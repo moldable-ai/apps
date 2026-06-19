@@ -100,7 +100,17 @@ export const pastelCreative: Template = {
 /* ---- Runner footer — rounded brand tile ---- */
 .runner { border-top: 1px solid var(--card-border); }
 .runner-brand::before { border-radius: 50%; background: var(--accent); }
-.runner-label { color: var(--accent-2); }`,
+.runner-label { color: var(--accent-2); }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .bloom-divider { position: relative !important; inset: auto !important; padding: 64px var(--pad-x, 26px) !important; min-height: 340px; overflow: hidden; }
+  html.deck-can-flow .bloom-divider::before { width: 320px !important; height: 320px !important; right: -120px !important; }
+  html.deck-can-flow .bloom-title { font-size: min(54px, 15vw) !important; line-height: 0.98 !important; }
+  html.deck-can-flow .bloom-sub { font-size: min(30px, 8vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .idea { font-size: min(41px, 11vw) !important; line-height: 1.02 !important; }
+  html.deck-can-flow .swatches { grid-template-columns: 1fr 1fr !important; gap: 14px; }
+  html.deck-can-flow .bloom { padding: 30px 24px !important; }
+}`,
   notes:
     'Playful and optimistic. Soft gradient washes, very rounded cards, friendly geometry, ONE pink accent (#ff5fa2) with a violet secondary (#7c5cff) — no hard edges, no third color. Open and close on the pastel abstract full-bleed (assets/pastel-creative-cover.jpg); use the dreamy concept still-life (assets/pastel-creative-fig.jpg) for the .split and .hero. Signature pieces: .bloom-divider section breaks (soft radial wash, no image), .bloom cards with emoji-glyph badges for key elements, .softchip rounded tags, .idea XXL statement for the big idea, .swatches mood row, and a pink/violet .donut + .bars for the playful data moment. Use .grad-text only on a few key words. Keep it warm and human; let whitespace and one soft image carry each slide.',
   sampleSlides: [

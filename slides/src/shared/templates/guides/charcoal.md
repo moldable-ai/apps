@@ -52,3 +52,14 @@ numbers, and the contact line to your own narrative.
   by the numbers (bars) → discipline mix (donut) → recognition (specimen cards +
   logos) → client quote → §Ahead → what's next (timeline) → engage us (table) →
   contact / CTA close on the cover drawing.
+
+## Mobile / responsive
+
+The published deck auto-reflows on phones: the fixed 1920×1080 stage becomes a tall,
+scrolling, full-width page — columns stack, type/spacing scale down (desktop, tablet,
+and landscape are untouched). Most of this is automatic because the deck composes from
+the shared vocabulary. This template's bespoke decoration carries a
+`@media (max-width: 640px) { html.deck-can-flow … }` block that scales its
+hardcoded-px pieces (big titles, custom cards/charts/dividers) down to fit ~390px — if
+you change those bespoke sizes or layouts, update that block so the slide still looks
+great on a phone. See the Mobile / responsive section of `AUTHORING.md`.

@@ -106,7 +106,20 @@ export const pricingProposal: Template = {
 
 /* Quiet callout for the headline understanding */
 .callout { border-left: 5px solid var(--accent); background: rgba(13,148,136,0.05); padding: 30px 38px; border-radius: 0 12px 12px 0; }
-.callout-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }`,
+.callout-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider-title { font-size: min(50px, 14vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .divider-sub { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .dcard-t { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .deliv { grid-template-columns: 1fr !important; gap: 16px; }
+  html.deck-can-flow .dcard { padding: 26px 22px !important; }
+  html.deck-can-flow .callout { padding: 24px 22px !important; }
+  html.deck-can-flow .terms { columns: 1 !important; column-gap: 0 !important; }
+  html.deck-can-flow .term { margin-bottom: 20px; }
+  html.deck-can-flow .signblock { grid-template-columns: 1fr !important; gap: 36px; }
+  html.deck-can-flow .sign-line { height: 48px; }
+}`,
   notes:
     'A complete client proposal / statement of work: Albert Sans display + Inter body, slate #1e293b ink on white, ONE teal (#0d9488) accent, generous whitespace, no gradients. Open and close on the calm slate-and-teal abstract full-bleed (assets/pricing-proposal-cover.jpg). Signature pieces: the .scope in/out table (included rows carry a teal left-rule + .scope-tag chips), .deliv deliverables cards (accent left-rule), the pricing .table with a recommended column highlighted via .col-rec and a .rec-badge, a .timeline of milestones, the two-column .terms fine-print block, and the .signblock signature lines. Use .flow for the phased approach, .stats for team & roles, .checks + .quote for why-us, .callout for the headline understanding. Professional and trustworthy, never flashy — keep figures tabular and the language client-ready.',
   sampleSlides: [

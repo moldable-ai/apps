@@ -113,7 +113,25 @@ export const campaignBrief: Template = {
 
 /* Magenta callout — the brief in one line and key claims */
 .callout { border-left: 6px solid var(--accent); background: rgba(219,39,119,0.08); padding: 32px 40px; border-radius: 0 14px 14px 0; }
-.callout-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }`,
+.callout-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .brief-div { padding: 48px 26px !important; }
+  html.deck-can-flow .brief-div-title { font-size: min(57px, 16vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .brief-div-ghost { display: none !important; }
+  html.deck-can-flow .idea { font-size: min(67px, 19vw) !important; line-height: 0.95 !important; }
+  html.deck-can-flow .ii { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .ii-cell { padding: 28px 24px !important; }
+  html.deck-can-flow .ii-t { font-size: min(30px, 8vw) !important; line-height: 1.1 !important; }
+  html.deck-can-flow .chan { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .ch { padding: 30px 24px 28px !important; }
+  html.deck-can-flow .ch-name { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .persona { padding: 30px 24px !important; }
+  html.deck-can-flow .persona-name { font-size: min(36px, 10vw) !important; line-height: 1.04 !important; }
+  html.deck-can-flow .kpi-chip { padding: 18px 26px 18px 20px !important; }
+  html.deck-can-flow .kpi-chip .kv { font-size: min(36px, 10vw) !important; }
+  html.deck-can-flow .callout { padding: 24px 22px !important; max-width: 100% !important; }
+}`,
   notes:
     'A complete creative campaign brief: Clash Display + Inter, ink-black on warm cream, ONE hot-magenta accent, loud but disciplined. Open and close on the magenta key-visual full-bleed (assets/campaign-brief-cover.jpg); reveal sample executions on the OOH mockup full-bleed (assets/campaign-brief-mockup.jpg). Signature pieces: the giant .idea statement for the big idea, the .ii insight-to-idea flow plates, .chan channel-mix cards (corner tab + role weight), .kpi-chip target chips with a conic ring, a dark .persona audience card, magenta .brief-div section breaks with an oversized ghost numeral, and a .callout for the one-line brief. Use .stats for audience size, .steps for content & assets, .timeline for flighting, .bars/.donut + .table for KPIs and budget. Keep the type huge and the palette to magenta, black, cream — no gradients.',
   sampleSlides: [
@@ -331,9 +349,9 @@ export const campaignBrief: Template = {
       <div class="kicker">KPIs &amp; targets</div>
       <h2 class="headline" style="margin-top:8px;margin-bottom:30px">What success looks like.</h2>
       <div class="kpis">
-        <div class="kpi-chip"><span class="kpi-ring" style="--p:82"></span><span><span class="kv">+18pt</span><span class="kl">Prompted awareness</span></span></div>
-        <div class="kpi-chip"><span class="kpi-ring" style="--p:64"></span><span><span class="kv">120K</span><span class="kl">First-time buyers</span></span></div>
-        <div class="kpi-chip"><span class="kpi-ring" style="--p:48"></span><span><span class="kv">3.2x</span><span class="kl">Earned-to-paid reach</span></span></div>
+        <div class="kpi-chip"><span class="kpi-ring" style="--p:82"></span><span style="display:flex;flex-direction:column"><span class="kv">+18pt</span><span class="kl">Prompted awareness</span></span></div>
+        <div class="kpi-chip"><span class="kpi-ring" style="--p:64"></span><span style="display:flex;flex-direction:column"><span class="kv">120K</span><span class="kl">First-time buyers</span></span></div>
+        <div class="kpi-chip"><span class="kpi-ring" style="--p:48"></span><span style="display:flex;flex-direction:column"><span class="kv">3.2x</span><span class="kl">Earned-to-paid reach</span></span></div>
       </div>
     </div>
     <div class="bars" style="--bars-height:360px">

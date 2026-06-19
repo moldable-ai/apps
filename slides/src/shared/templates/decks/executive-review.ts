@@ -82,7 +82,18 @@ export const executiveReview: Template = {
 .legend { display: flex; flex-direction: column; gap: 20px; }
 .legend-row { display: flex; align-items: center; gap: 18px; font-family: var(--body); font-size: 30px; color: var(--text); }
 .legend-dot { width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
-.legend-row .v { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); }`,
+.legend-row .v { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--muted); }
+@media (max-width: 640px) {
+  html.deck-can-flow .lede { font-size: min(42px, 12vw) !important; line-height: 1.12 !important; max-width: 100% !important; }
+  html.deck-can-flow .ag-t { font-size: min(30px, 8vw) !important; line-height: 1.1 !important; }
+  html.deck-can-flow .ag-n { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .kpi-grid { grid-template-columns: 1fr !important; }
+  html.deck-can-flow .kpi { padding: 22px 0 0 !important; }
+  html.deck-can-flow .kpi:first-child { padding-top: 0 !important; }
+  html.deck-can-flow .kpi + .kpi { border-left: none !important; border-top: 1px solid var(--card-border) !important; }
+  html.deck-can-flow .kpi-val { font-size: min(52px, 14vw) !important; }
+  html.deck-can-flow .callout { padding: 26px 22px !important; }
+}`,
   notes:
     'A complete board-review deck: open and close on the carved-wood full-bleed (assets/qbr-cover.jpg), break acts with the marble section divider (assets/exec-section.jpg), and use the portrait silk (assets/exec-team.jpg) for the team split. Lead with .kpi-grid dashboards, .bars and multi-segment .donut for performance, .table scorecards with .status pills, .timeline for the roadmap, .callout for the headline insight. Refined Fraunces serif on near-black, ONE crimson accent, gravitas over decoration. Keep the numbers tabular and the story tight.',
   sampleSlides: [

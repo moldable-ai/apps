@@ -106,7 +106,26 @@ export const classroom: Template = {
 .qcard { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 26px; box-shadow: var(--card-shadow); padding: 36px 38px; }
 .qnum { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: #fff; font-family: var(--display); font-weight: 700; font-size: 26px; }
 .qq { font-family: var(--display); font-weight: 600; font-size: 32px; line-height: 1.2; color: var(--text); margin-top: 18px; }
-.qa { display: inline-block; margin-top: 18px; padding: 10px 22px; border-radius: 999px; background: #ecf7f5; color: var(--accent-2); font-family: var(--display); font-weight: 700; font-size: 24px; }`,
+.qa { display: inline-block; margin-top: 18px; padding: 10px 22px; border-radius: 999px; background: #ecf7f5; color: var(--accent-2); font-family: var(--display); font-weight: 700; font-size: 24px; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { position: relative !important; inset: auto !important; min-height: 280px; padding: 56px var(--pad-x, 22px) !important; gap: 14px; }
+  html.deck-can-flow .divider-title { font-size: min(48px, 13vw) !important; line-height: 1.02 !important; }
+  html.deck-can-flow .divider-num { font-size: min(18px, 5vw) !important; }
+  html.deck-can-flow .bigq { font-size: min(39px, 11vw) !important; line-height: 1.06 !important; }
+  html.deck-can-flow .vocab { grid-template-columns: 1fr !important; gap: 16px; }
+  html.deck-can-flow .quiz { grid-template-columns: 1fr !important; gap: 16px; }
+  html.deck-can-flow .vcard { padding: 24px 22px !important; gap: 18px; }
+  html.deck-can-flow .vterm { font-size: min(26px, 7vw) !important; }
+  html.deck-can-flow .vchip { width: 56px !important; height: 56px !important; font-size: 30px !important; }
+  html.deck-can-flow .qcard { padding: 26px 22px !important; }
+  html.deck-can-flow .qq { font-size: min(24px, 6vw) !important; }
+  html.deck-can-flow .callout { padding: 24px 22px !important; border-radius: 0 16px 16px 0 !important; }
+  html.deck-can-flow .callout .subhead { font-size: min(26px, 7vw) !important; line-height: 1.18 !important; }
+  html.deck-can-flow .trophic { padding: 22px 18px !important; }
+  html.deck-can-flow .trophic .emoji { font-size: 44px !important; }
+  html.deck-can-flow .trophic .t-name { font-size: min(24px, 6vw) !important; }
+}`,
   notes:
     'A complete, friendly K-12 science lesson on ecosystems & food webs — retitle the unit, objectives, vocabulary, and numbers for any subject and grade. Warm cream paper, rounded everything, soft shadows, ONE coral accent with a teal (--accent-2) secondary, big legible Lexend type, one idea per slide. Open and close on the woodland-meadow full-bleed (assets/classroom-cover.jpg); use the labelled tree/soil figure (assets/classroom-fig.jpg) for the .split diagram. Signature pieces: .divider section breaks, .bigq lesson hook, .vcard vocabulary cards, .trophic chips inside the shared .flow for the food chain, .callout for think-pair-share, .quiz cards for the check, and .checks for objectives and takeaways. Use .bars for population data, .steps for the hands-on activity, .table for the quiz key. Keep a .runner footer ("Mr. Rivera · Grade 5 Science" left, lesson step right) on content slides. Split dense content across more slides — never crowd a slide.',
   sampleSlides: [

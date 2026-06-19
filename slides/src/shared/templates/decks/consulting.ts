@@ -73,7 +73,19 @@ export const consulting: Template = {
 .gov-item { display: flex; gap: 22px; align-items: flex-start; }
 .gov-ic { flex: 0 0 auto; width: 58px; height: 58px; border-radius: 12px; background: rgba(61,90,64,0.1); display: grid; place-items: center; color: var(--accent); font-family: var(--display); font-weight: 600; font-size: 28px; }
 .gov-t { font-family: var(--display); font-weight: 500; font-size: 34px; color: var(--text); }
-.gov-d { font-family: var(--body); font-size: 24px; color: var(--muted); line-height: 1.35; margin-top: 4px; }`,
+.gov-d { font-family: var(--body); font-size: 24px; color: var(--muted); line-height: 1.35; margin-top: 4px; }
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { position: relative !important; inset: auto !important; padding: 56px var(--pad-x, 22px) !important; min-height: 280px; justify-content: center; }
+  html.deck-can-flow .divider-title { font-size: min(50px, 14vw) !important; line-height: 1.02 !important; }
+  html.deck-can-flow .divider-num { font-size: min(18px, 5vw) !important; }
+  html.deck-can-flow .lede { font-size: min(30px, 8vw) !important; line-height: 1.2 !important; max-width: 100% !important; }
+  html.deck-can-flow .gov { grid-template-columns: 1fr !important; gap: 24px 0 !important; }
+  html.deck-can-flow .gov-t { font-size: min(30px, 8vw) !important; line-height: 1.1 !important; }
+  html.deck-can-flow .ag-t { font-size: min(30px, 8vw) !important; line-height: 1.1 !important; }
+  html.deck-can-flow .ag-n { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .phase-t { font-size: min(30px, 8vw) !important; line-height: 1.1 !important; }
+  html.deck-can-flow .note { padding: 24px 22px !important; }
+}`,
   notes:
     'A complete client-kickoff deck: editorial Newsreader serif on warm cream, forest-green primary with a gold (.accent-2) eyebrow. Clean cream section dividers (.divider/.divider-title/.divider-rule); soft imagery (engage-cover on the cover/hero, consult-section + consult-team for splits). Use the .flow arrow diagram with .phase cards for methodology, .timeline for the workplan, .gov grid for governance, .donut for effort mix, .table for risks, .stats for KPIs, .note for the key callout. Quietly confident — never loud.',
   sampleSlides: [

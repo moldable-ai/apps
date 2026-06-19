@@ -64,7 +64,19 @@ export const literary: Template = {
 .prose.dropcap::first-letter { float: left; font-family: var(--display); font-weight: 700; font-size: 150px; line-height: 0.72; color: var(--accent); margin: 10px 22px -6px 0; }
 .rating { font-family: var(--display); font-size: 76px; color: var(--accent); letter-spacing: 10px; }
 .note { border-left: 4px solid var(--accent); background: rgba(192,99,58,0.08); padding: 30px 38px; border-radius: 0 12px 12px 0; }
-.note-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }`,
+.note-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }
+@media (max-width: 640px) {
+  html.deck-can-flow .chapter { position: relative !important; inset: auto !important; padding: 64px var(--pad-x, 24px) !important; min-height: 300px; justify-content: center; }
+  html.deck-can-flow .chapter-title { font-size: min(56px, 15vw) !important; line-height: 1.02 !important; overflow-wrap: break-word; word-break: break-word; }
+  html.deck-can-flow .chapter-num { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .fact { flex-direction: column !important; gap: 4px; align-items: flex-start; padding: 14px 0; }
+  html.deck-can-flow .fact-k { flex: 0 0 auto !important; font-size: min(15px, 4vw) !important; }
+  html.deck-can-flow .fact-v { font-size: min(26px, 7vw) !important; max-width: 100% !important; overflow-wrap: break-word; }
+  html.deck-can-flow .prose { font-size: min(22px, 6vw) !important; line-height: 1.55 !important; max-width: 100% !important; overflow-wrap: break-word; }
+  html.deck-can-flow .prose.dropcap::first-letter { font-size: min(76px, 20vw) !important; margin: 4px 12px -2px 0 !important; }
+  html.deck-can-flow .rating { font-size: min(44px, 12vw) !important; letter-spacing: 4px !important; overflow-wrap: anywhere; }
+  html.deck-can-flow .note { padding: 26px 22px !important; }
+}`,
   notes:
     'Warm, elegant, literary. Playfair Display serif (use <em> for italic accents) on cream, terracotta accent, watercolour imagery (book-cover on the cover/split, book-fig for "meet the book", book-scene for setting). Chapter dividers (.chapter/.chapter-num roman numerals/.chapter-title/.chapter-rule). Use .facts factsheet, .prose.dropcap for set-the-scene narrative, big .quote pull-quotes, .cards for characters/themes, .steps for plot, .rating + .note for the verdict. Cozy and considered.',
   sampleSlides: [

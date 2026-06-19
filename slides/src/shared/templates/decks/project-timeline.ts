@@ -66,8 +66,11 @@ export const projectTimeline: Template = {
 .flow-arrow::after { border-color: var(--accent-2); }
 .tl-when { color: var(--accent); font-family: var(--mono); font-size: 30px; font-weight: 600; }
 
-/* Blueprint grid wash — faint cyan drafting grid on every content slide */
-.grid-slide { position: relative; }
+/* Blueprint grid wash — faint cyan drafting grid on every content slide.
+   NOTE: do not set position:relative here — .grid-slide is always paired with .pad
+   (position:absolute; inset:0), which is the full-slide positioning context. Setting
+   position:relative would override .pad and collapse the box to content height, dropping
+   the absolutely-positioned .runner into mid-frame. */
 .grid-slide::before {
   content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0;
   background-image:
@@ -76,6 +79,9 @@ export const projectTimeline: Template = {
   background-size: 64px 64px;
 }
 .grid-slide > * { position: relative; z-index: 1; }
+/* The blanket rule above declasses the base .runner (position:absolute); re-pin it
+   so the footer stays at the frame bottom instead of flowing into the content. */
+.grid-slide > .runner { position: absolute; z-index: 1; }
 
 /* Section divider — blueprint navy field with cyan ticks */
 .bp-divider { position: absolute; inset: 0; background: var(--accent); color: #fff; padding: var(--pad-y, 110px) var(--pad-x, 130px); display: flex; flex-direction: column; justify-content: center; gap: 20px; overflow: hidden; }
@@ -113,8 +119,8 @@ export const projectTimeline: Template = {
 .gantt-fill span { font-family: var(--mono); font-weight: 500; font-size: 18px; color: #fff; white-space: nowrap; letter-spacing: 0.03em; }
 
 /* Swimlanes — workstream rows with chips */
-.lanes { display: flex; flex-direction: column; gap: 18px; }
-.lane { display: grid; grid-template-columns: 280px 1fr; gap: 30px; align-items: center; padding: 22px 0; border-top: 1px solid var(--card-border); }
+.lanes { display: flex; flex-direction: column; gap: 12px; }
+.lane { display: grid; grid-template-columns: 280px 1fr; gap: 30px; align-items: center; padding: 16px 0; border-top: 1px solid var(--card-border); }
 .lane:last-child { border-bottom: 1px solid var(--card-border); }
 .lane-name { display: flex; align-items: center; gap: 16px; font-family: var(--display); font-weight: 600; font-size: 30px; color: var(--text); }
 .lane-name::before { content: ''; width: 14px; height: 14px; border-radius: 4px; background: var(--accent); flex: 0 0 auto; }
@@ -141,7 +147,32 @@ export const projectTimeline: Template = {
 /* Status pills for the milestone table */
 .status { display: inline-flex; align-items: center; gap: 10px; font-family: var(--body); font-weight: 600; font-size: 25px; }
 .status::before { content: ''; width: 11px; height: 11px; border-radius: 50%; background: var(--muted); }
-.status.done::before { background: var(--pos); } .status.now::before { background: var(--accent-2); } .status.next::before { background: var(--muted); }`,
+.status.done::before { background: var(--pos); } .status.now::before { background: var(--accent-2); } .status.next::before { background: var(--muted); }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .bp-title { font-size: min(51px, 14vw) !important; line-height: 1.02 !important; }
+  html.deck-can-flow .bp-lead { font-size: min(30px, 8vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .rm-name { font-size: min(30px, 8vw) !important; line-height: 1.06 !important; }
+  html.deck-can-flow .fnode-t { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .lane-name { font-size: min(30px, 8vw) !important; }
+
+  html.deck-can-flow .roadmap-phases { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .roadmap { padding: 8px 0 !important; }
+  html.deck-can-flow .roadmap-track { display: none !important; }
+  html.deck-can-flow .rm-phase { padding-top: 0 !important; }
+  html.deck-can-flow .rm-dot { display: none !important; }
+
+  html.deck-can-flow .gantt-head { grid-template-columns: 1fr !important; gap: 6px 0; padding-bottom: 8px; }
+  html.deck-can-flow .gantt-row { grid-template-columns: 1fr !important; gap: 10px 0; }
+  html.deck-can-flow .gantt-lane { width: 100% !important; }
+  html.deck-can-flow .gantt-fill { position: relative !important; left: 0 !important; width: 100% !important; }
+
+  html.deck-can-flow .lane { grid-template-columns: 1fr !important; gap: 12px 0; align-items: start; }
+  html.deck-can-flow .lane-chips { gap: 10px; }
+
+  html.deck-can-flow .note { padding: 26px 22px !important; }
+  html.deck-can-flow .fnode { padding: 26px 22px !important; }
+}`,
   notes:
     'A complete product-roadmap deck: Sora display + Inter body, IBM Plex Mono for dates/labels, ink navy #0f1c3f on white, ONE blueprint-blue accent (#1e3a8a) with a cyan secondary (#0ea5e9) for grid lines and milestones. Open and close on the blueprint-grid full-bleed (assets/project-timeline-cover.jpg); break acts with the navy .bp-divider. Signature pieces: the horizontal .roadmap phase timeline (dots + bands, add .cyan to alternate), .gantt rows for phase-level scheduling (--start/--len position the fill), .lanes swimlanes for workstreams, .flow + .fnode cards for dependencies, .note callouts for risks/buffers (add .risk), and .status pills (done/now/next) in the milestone .table. Add class="grid-slide" to content .pad wrappers for the faint drafting grid. Keep dates in mono, the story phase-ordered, and the plan honest about buffers.',
   sampleSlides: [
@@ -342,9 +373,9 @@ export const projectTimeline: Template = {
       id: 'pt-lanes',
       name: 'Workstreams',
       transition: 'slide',
-      bodyHtml: `<div class="pad grid-slide top" style="--pad-y:96px">
+      bodyHtml: `<div class="pad grid-slide top" style="--pad-y:84px">
   <div class="kicker reveal">Workstreams</div>
-  <h2 class="headline reveal" style="margin-top:8px;margin-bottom:22px">Five swimlanes, one schedule.</h2>
+  <h2 class="headline reveal" style="margin-top:8px;margin-bottom:18px">Five swimlanes, one schedule.</h2>
   <div class="lanes reveal">
     <div class="lane"><div class="lane-name">Backend &amp; data</div><div class="lane-chips"><span class="chip">Schema</span><span class="chip">APIs</span><span class="chip">Migrations</span></div></div>
     <div class="lane cyan"><div class="lane-name">Platform</div><div class="lane-chips"><span class="chip">Auth</span><span class="chip">Permissions</span><span class="chip">Integrations</span></div></div>
@@ -359,7 +390,7 @@ export const projectTimeline: Template = {
       id: 'pt-resourcing',
       name: 'Resourcing',
       transition: 'slide',
-      bodyHtml: `<div class="pad grid-slide">
+      bodyHtml: `<div class="pad grid-slide center" style="--pad-y:130px">
   <div class="kicker reveal">Resourcing</div>
   <h2 class="headline reveal" style="margin-top:8px;margin-bottom:34px">The team behind the plan.</h2>
   <div class="stats reveal">
@@ -413,9 +444,9 @@ export const projectTimeline: Template = {
       id: 'pt-quote',
       name: 'Pull quote',
       transition: 'fade',
-      bodyHtml: `<div class="pad grid-slide center">
+      bodyHtml: `<div class="pad grid-slide center" style="--pad-y:150px">
   <blockquote class="quote reveal" style="--quote-size:76px">"A roadmap isn't a promise of dates. It's a shared bet on the order of the work."</blockquote>
-  <div class="cite reveal"><span class="cite-dot"></span><span class="cite-name">Priya Nadkarni</span><span class="cite-role">Head of Product, Atlas Platform</span></div>
+  <div class="cite reveal" style="margin-bottom:36px"><span class="cite-dot"></span><span class="cite-name">Priya Nadkarni</span><span class="cite-role">Head of Product, Atlas Platform</span></div>
   <div class="runner reveal"><span class="runner-brand">Atlas Platform</span><span class="runner-label">Why this plan</span></div>
 </div>`,
     }),

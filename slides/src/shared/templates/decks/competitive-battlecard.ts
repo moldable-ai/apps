@@ -136,7 +136,26 @@ export const competitiveBattlecard: Template = {
 .cheat-v { font-family: var(--body); font-size: 27px; line-height: 1.32; color: var(--text); }
 .cheat-v b { font-weight: 700; }
 
-.lede { font-family: var(--display); font-weight: 700; font-size: 58px; line-height: 1.08; letter-spacing: -0.02em; color: var(--text); max-width: 20ch; }`,
+.lede { font-family: var(--display); font-weight: 700; font-size: 58px; line-height: 1.08; letter-spacing: -0.02em; color: var(--text); max-width: 20ch; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { padding: 40px 28px !important; }
+  html.deck-can-flow .divider .divider-title { font-size: min(52px, 14vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .divider .divider-sub { font-size: min(30px, 8vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .divider .divider-rule { width: 96px !important; }
+  html.deck-can-flow .lede { font-size: min(36px, 10vw) !important; line-height: 1.1 !important; max-width: 100% !important; }
+  html.deck-can-flow .vs { grid-template-columns: 1fr !important; gap: 14px 0 !important; }
+  html.deck-can-flow .vs-col { padding: 26px 22px !important; }
+  html.deck-can-flow .vs-name { font-size: min(36px, 10vw) !important; }
+  html.deck-can-flow .vs-badge { width: 56px !important; height: 56px !important; font-size: min(24px, 7vw) !important; }
+  html.deck-can-flow .obj { padding: 24px 22px 26px !important; min-width: 0 !important; }
+  html.deck-can-flow .obj-q .obj-text, html.deck-can-flow .obj-a .obj-text { overflow-wrap: break-word !important; }
+  html.deck-can-flow .mine { padding: 24px 22px 26px !important; min-width: 0 !important; }
+  html.deck-can-flow .mine-t, html.deck-can-flow .mine-d { overflow-wrap: break-word !important; }
+  html.deck-can-flow .cheat { grid-template-columns: 1fr !important; gap: 18px 0 !important; }
+  html.deck-can-flow .chips { flex-direction: column !important; align-items: stretch !important; }
+  html.deck-can-flow .chip { width: 100% !important; justify-content: space-between !important; min-width: 0 !important; }
+}`,
   notes:
     'A complete competitive sales-enablement battlecard set: Archivo display + Inter body + IBM Plex Mono eyebrows, ink #0f172a on white, red #dc2626 as the decisive accent with green #16a34a for "where we win". Sharp and confrontational, never decorative. Open and close on the high-contrast diagonal cover (assets/competitive-battlecard-cover.jpg); break acts with hard ink .divider slabs. Signature pieces: .vs vs-columns (.us vs .them) for head-to-head positioning, ✓/✕ tables (.tick/.cross/.partial + .col-us) for feature and pricing comparison, .obj objection→response cards, .chip win/loss reason chips, .mine "landmine" warning callouts to plant doubt, and a .cheat quick-reference grid. Use .steps for discovery questions, .checks for walk-away signals, .bars + .quote for proof. Keep claims specific and defensible — a rep should be able to read a card aloud in a live deal.',
   sampleSlides: [

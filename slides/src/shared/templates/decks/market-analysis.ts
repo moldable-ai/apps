@@ -124,7 +124,29 @@ export const marketAnalysis: Template = {
 .callout-k { font-family: var(--mono); font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 12px; }
 
 /* Where-to-play cards with mono rank */
-.play-rank { font-family: var(--mono); font-weight: 500; font-size: 24px; color: var(--accent); letter-spacing: 0.08em; }`,
+.play-rank { font-family: var(--mono); font-weight: 500; font-size: 24px; color: var(--accent); letter-spacing: 0.08em; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { padding: 64px var(--pad-x, 28px) !important; gap: 14px; }
+  html.deck-can-flow .divider-title { font-size: min(51px, 14vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .divider-sub { font-size: min(30px, 8vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .divider-rule { width: 88px; }
+  html.deck-can-flow .tss { width: min(540px, 84vw) !important; height: min(540px, 84vw) !important; }
+  html.deck-can-flow .tss-val { font-size: min(28px, 7vw) !important; }
+  html.deck-can-flow .tss-cap { font-size: min(16px, 4vw) !important; }
+  html.deck-can-flow .fcol { padding: 26px 22px 28px !important; }
+  html.deck-can-flow .fcol-k { font-size: 16px !important; margin-bottom: 16px; }
+  html.deck-can-flow .fitem { font-size: min(22px, 6vw) !important; gap: 12px; padding: 14px 0; }
+  html.deck-can-flow .callout { padding: 24px 22px !important; }
+  html.deck-can-flow .matrix { aspect-ratio: 1 / 1 !important; }
+  html.deck-can-flow .matrix-lab { font-size: 16px !important; }
+  html.deck-can-flow .axis-cap { font-size: 14px !important; }
+  html.deck-can-flow .legend-row { font-size: min(22px, 6vw) !important; }
+  /* Competitor/economics tables: shrink so they fit the phone width instead of
+     overflowing (the shared scroll fallback still applies if a row is very wide). */
+  html.deck-can-flow .table { font-size: 13px !important; }
+  html.deck-can-flow .table th, html.deck-can-flow .table td { padding: 9px 7px !important; }
+}`,
   notes:
     'A complete market-analysis study: IBM Plex Sans + IBM Plex Mono, deep navy #0c2340 with ONE amber #f59e0b accent, generous whitespace, no gradients. Open and close on the abstract navy data-grid full-bleed (assets/market-analysis-cover.jpg). Signature pieces: the .tss concentric TAM/SAM/SOM rings (nested circles) for market sizing, .fcol drivers-vs-headwinds columns, the .matrix 2×2 positioning map (use --top/--left inline % on .matrix-pt to place players, add .us for the subject), .legend rows beside .bars and .donut, .callout for the headline read. Use .table for competitor landscape and segment economics, .flow for the value chain. Mono for indices, kickers, and figures; keep numbers tabular. Analytic and evidence-led — every claim earns its place.',
   sampleSlides: [

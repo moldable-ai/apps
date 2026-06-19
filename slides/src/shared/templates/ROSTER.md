@@ -2,7 +2,9 @@
 
 Target: a comprehensive library of 40+ studio-grade templates across every
 category. Each is a complete, fully-filled-in presentation (15–18 slides, its own
-design language, generated imagery, charts/diagrams, a clear story). See
+design language, generated imagery, charts/diagrams, a clear story) that **looks
+great on desktop, tablet, and mobile** (the published artifact auto-reflows on
+phones — see the Mobile / responsive section of `AUTHORING.md`). See
 `AUTHORING.md` for the contract. Status legend: ✅ done · ♻️ rework (exists but
 basic — enrich to the bar + clearer story) · 🆕 new · ⏳ in progress.
 

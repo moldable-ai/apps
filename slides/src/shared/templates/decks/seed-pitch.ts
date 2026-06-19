@@ -115,7 +115,23 @@ export const seedPitch: Template = {
 .unlock { display: flex; flex-direction: column; gap: 22px; margin: 0; padding: 0; list-style: none; }
 .unlock-item { display: flex; gap: 22px; align-items: flex-start; font-family: var(--body); font-size: 31px; line-height: 1.32; color: #fff8f0; }
 .unlock-item::before { content: '\\2192'; flex: none; color: var(--accent); font-weight: 700; }
-.unlock-item b { color: #fff8f0; font-weight: 700; }`,
+.unlock-item b { color: #fff8f0; font-weight: 700; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider-title { font-size: min(51px, 14vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .divider-sub { font-size: min(30px, 8vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .bigstate { font-size: min(39px, 11vw) !important; line-height: 1.06 !important; max-width: 100% !important; }
+  html.deck-can-flow .bigstate-foot { max-width: 100% !important; }
+  html.deck-can-flow .why { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .why-card { padding: 26px 22px !important; }
+  html.deck-can-flow .why-t { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .team { grid-template-columns: 1fr 1fr !important; gap: 20px; }
+  html.deck-can-flow .face { font-size: min(44px, 12vw) !important; }
+  html.deck-can-flow .fnote { padding: 24px 24px !important; }
+  html.deck-can-flow .tbars { padding: 28px 22px !important; }
+  html.deck-can-flow .ask { grid-template-columns: 1fr !important; gap: 28px; padding: 32px 24px !important; }
+  html.deck-can-flow .ask-amt { font-size: min(45px, 13vw) !important; line-height: 1.0 !important; }
+}`,
   notes:
     'A complete, warm seed-stage pitch told personally by the founder: Sentient serif display + Satoshi body, ink #1c1917 on cream #fff8f0, ONE sunrise-orange (#f97316) accent with a single teal (#14b8a6) for positives. Open and close on the warm sunrise full-bleed (assets/seed-pitch-cover.jpg); use the sunlit founding-team figure (assets/seed-pitch-fig.jpg) for the founder "why" full-bleed and the product split. Signature pieces: the oversized .bigstate problem line (one orange word), the .fnote founder note for personal voice, .why-card "why now" tiles, .tbars traction bars, the market .donut + .legend, the .team headshots row (.face A/B/C/D), and the dark .ask callout (.ask-amt + .unlock list). Restraint above all — generous cream whitespace, no gradients, optimistic and human. Keep numbers tabular and the founder voice in first person.',
   sampleSlides: [

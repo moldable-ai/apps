@@ -131,7 +131,29 @@ export const moodboard: Template = {
 /* Lede */
 .lede { font-family: var(--display); font-weight: 500; font-size: 60px; line-height: 1.14; letter-spacing: -0.01em; color: var(--text); max-width: 20ch; text-wrap: balance; }
 
-.runner-brand::before { background: var(--accent); border-radius: 999px; }`,
+.runner-brand::before { background: var(--accent); border-radius: 999px; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { position: relative !important; inset: auto !important; padding: 56px var(--pad-x, 24px) 48px !important; gap: 12px; }
+  html.deck-can-flow .divider-title { font-size: min(48px, 13vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .divider-num { font-size: min(14px, 4vw) !important; }
+  html.deck-can-flow .collage { position: relative !important; inset: auto !important; grid-template-columns: 1fr !important; grid-template-rows: none !important; grid-template-areas: none !important; gap: 12px; padding: var(--pad-y, 40px) var(--pad-x, 24px) !important; }
+  html.deck-can-flow .collage .tile { grid-area: auto !important; aspect-ratio: 4 / 3; }
+  html.deck-can-flow .collage .tile.swatch { aspect-ratio: 16 / 9; }
+  html.deck-can-flow .colorstory { flex-direction: column !important; }
+  html.deck-can-flow .cchip { min-height: 120px !important; padding: 22px 22px !important; }
+  html.deck-can-flow .cchip-name { font-size: min(28px, 8vw) !important; }
+  html.deck-can-flow .swatches { grid-template-columns: 1fr 1fr !important; gap: 16px; }
+  html.deck-can-flow .matchip { height: 150px !important; }
+  html.deck-can-flow .mat-name { font-size: min(24px, 7vw) !important; }
+  html.deck-can-flow .keyword { font-size: min(24px, 7vw) !important; padding: 10px 18px !important; }
+  html.deck-can-flow .direction { padding: 8px 0 8px 22px !important; }
+  html.deck-can-flow .direction-t { font-size: min(30px, 8vw) !important; line-height: 1.14 !important; }
+  html.deck-can-flow .specimen { padding: 30px 26px !important; }
+  html.deck-can-flow .spec-big { font-size: min(96px, 26vw) !important; }
+  html.deck-can-flow .spec-weight { font-size: min(28px, 8vw) !important; }
+  html.deck-can-flow .lede { font-size: min(30px, 8vw) !important; line-height: 1.18 !important; max-width: 100% !important; }
+}`,
   notes:
     'A complete art-direction moodboard for a brand campaign (the sample campaign is a warm artisanal homeware brand, "Maren & Field"). Spectral serif (with italic accents) on warm bone #efe9e0, ONE clay accent #b85c38 with a sage #7d8471 secondary, generous negative space, no gradients. Open and close on the bone still-life full-bleed (assets/moodboard-cover.jpg); use the material macro (assets/moodboard-mood1.jpg) and the light-and-curtain study (assets/moodboard-mood2.jpg) across the collage, swatches, and photography split. Signature pieces: the asymmetric .collage offset image grid, the .colorstory chip row (set each .cchip background + text color inline), .swatches material chips, .keywords pill tags (mix default/.fill/.sage/.ital), the .direction statement block, plus the type .specimen and do/don\'t .dd cards. The whole thing is feeling-first — keep copy evocative and short, let imagery and one serif line carry each slide.',
   sampleSlides: [

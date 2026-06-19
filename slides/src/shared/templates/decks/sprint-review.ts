@@ -124,7 +124,19 @@ export const sprintReview: Template = {
 /* Status pill for tables */
 .status { display: inline-flex; align-items: center; gap: 10px; font-family: var(--body); font-weight: 600; font-size: 25px; }
 .status::before { content: ''; width: 11px; height: 11px; border-radius: 50%; background: var(--muted); }
-.status.on::before { background: var(--accent); } .status.warn::before { background: #e0b341; } .status.off::before { background: var(--neg); }`,
+.status.on::before { background: var(--accent); } .status.warn::before { background: #e0b341; } .status.off::before { background: var(--neg); }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { padding: 40px 24px !important; }
+  html.deck-can-flow .divider-title { font-size: min(51px, 14vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .shiplist { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .ship { padding: 22px 20px !important; gap: 16px; }
+  html.deck-can-flow .dtile { padding: 26px 22px !important; }
+  html.deck-can-flow .dtile-num { font-size: min(44px, 12vw) !important; }
+  html.deck-can-flow .callout { padding: 22px 24px !important; }
+  html.deck-can-flow .risk { padding: 22px 22px !important; }
+  html.deck-can-flow .frame-bar { padding: 12px 16px !important; gap: 12px; }
+}`,
   notes:
     'A complete product sprint demo/review: Sora display + Inter body + JetBrains Mono accents, near-black #0c0c0d, ONE lime accent #84cc16, generous whitespace, no gradients. Open on the dark product-UI full-bleed (assets/sprint-review-cover.jpg); demo Feature A inside the .frame browser/app chrome mock and Feature B with the product .split (assets/sprint-review-product.jpg). Signature pieces: .frame screenshot chrome, .chip up/down/flat delta chips, .shiplist boxed shipped checklist, .verdict goal banner, .dtile metric tiles, .risk blocker callouts. Use .bars for burndown/velocity, .table for quality (bugs/coverage) with .status pills, .flow or cards for carry-over, .steps for the next-sprint plan. Pin the .runner footer (squad left, sprint section right). Keep numbers tabular and mono, the story tight, ship/cut decisions explicit.',
   sampleSlides: [

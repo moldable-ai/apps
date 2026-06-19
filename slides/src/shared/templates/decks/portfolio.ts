@@ -108,7 +108,23 @@ export const portfolio: Template = {
 .plate-rule { width: 96px; height: 1px; background: var(--text); margin-top: 8px; }
 
 /* Stat row, gallery-style hairline labels */
-.stat-num { font-weight: 500; }`,
+.stat-num { font-weight: 500; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .lockup-name { font-size: min(60px, 16vw) !important; line-height: 0.94 !important; }
+  html.deck-can-flow .lockup-rule { margin: 18px 0 !important; }
+  html.deck-can-flow .plate { position: relative !important; inset: auto !important; min-height: 0 !important; justify-content: flex-start !important; padding: var(--pad-y) var(--pad-x) !important; }
+  html.deck-can-flow .plate > * { max-width: 100% !important; }
+  html.deck-can-flow .plate-title { font-size: min(56px, 15vw) !important; line-height: 0.96 !important; }
+  html.deck-can-flow .idx-row { grid-template-columns: 1fr !important; gap: 6px 0 !important; padding: 18px 0 !important; }
+  html.deck-can-flow .idx-title { font-size: min(34px, 9vw) !important; line-height: 1.04 !important; }
+  html.deck-can-flow .idx-tag { white-space: normal !important; justify-self: start !important; }
+  html.deck-can-flow .credits { grid-template-columns: 1fr !important; }
+  html.deck-can-flow .credit { padding: 22px 0 0 0 !important; }
+  html.deck-can-flow .credit + .credit { padding-left: 0 !important; border-left: 0 !important; border-top: 1px solid var(--card-border); }
+  html.deck-can-flow .credit-v { font-size: min(30px, 8vw) !important; line-height: 1.08 !important; }
+  html.deck-can-flow .shot-cap { flex-direction: column !important; gap: 6px !important; }
+}`,
   notes:
     'A designer’s selected-work portfolio. Cormorant Garamond display (use the italic <em> for one or two words per heading) on gallery white, calm Inter body, ONE near-black charcoal (#161616) used sparingly — let the work images carry the deck. Open on the gallery full-bleed (assets/portfolio-cover.jpg); the two project shots are assets/portfolio-work1.jpg (product/identity still life) and assets/portfolio-work2.jpg (spatial/architectural). Signature pieces: the .lockup-name title lockup, the numbered .index project list, full-bleed work shots with thin .shot-cap hairline captions, and the labelled .credits role row. Use .split/.hero/.full-bleed generously, .steps for a process moment, a .stats row for results, .quote for the testimonial. Keep chrome near-zero: hairline rules over boxes, vast whitespace, no shadows, no gradients. Captions are quiet and factual (medium, year, role).',
   sampleSlides: [
@@ -232,7 +248,7 @@ export const portfolio: Template = {
       bodyHtml: `<div class="pad">
   <div class="kicker reveal">How the studio works</div>
   <h2 class="headline reveal" style="margin-top:12px;margin-bottom:30px">Four <em style="font-style:italic;font-weight:400">movements</em>.</h2>
-  <ol class="steps reveal" style="--gap:30px;max-width:34ch">
+  <ol class="steps reveal" style="--gap:22px;max-width:52ch">
     <li class="step"><span><b>Listen</b> — material, history, and the smallest true detail.</span></li>
     <li class="step"><span><b>Reduce</b> — strip until only the necessary marks remain.</span></li>
     <li class="step"><span><b>Make</b> — prototype in the real medium: paper, clay, wall.</span></li>

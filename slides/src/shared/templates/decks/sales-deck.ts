@@ -103,7 +103,25 @@ export const salesDeck: Template = {
 
 /* Cost-of-status-quo callout */
 .callout { border-left: 5px solid var(--accent); background: rgba(29,78,216,0.05); padding: 30px 38px; border-radius: 0 12px 12px 0; }
-.callout-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }`,
+.callout-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { position: relative; inset: auto; padding: 64px 22px !important; min-height: 280px; }
+  html.deck-can-flow .divider-title { font-size: min(51px, 14vw) !important; line-height: 1.04 !important; }
+  html.deck-can-flow .divider-rule { width: 88px; }
+  html.deck-can-flow .proof { grid-template-columns: 1fr !important; padding: 28px 22px !important; }
+  html.deck-can-flow .proof-cell { padding: 16px 0 !important; }
+  html.deck-can-flow .proof-cell + .proof-cell { border-left: 0; border-top: 1px solid #dbe3f0; }
+  html.deck-can-flow .proof-num { font-size: min(44px, 12vw) !important; }
+  html.deck-can-flow .vp { padding: 28px 22px 26px !important; }
+  html.deck-can-flow .pflow { flex-direction: column; align-items: stretch; gap: 14px; }
+  html.deck-can-flow .pflow .pstep { flex: none; width: 100%; }
+  html.deck-can-flow .pflow .flow-arrow { width: 100%; height: 28px; transform: rotate(90deg); }
+  html.deck-can-flow .pcard { padding: 24px 22px !important; }
+  html.deck-can-flow .logostrip { flex-wrap: wrap; justify-content: center; gap: 16px 26px; padding: 24px 20px !important; }
+  html.deck-can-flow .logostrip .logo { font-size: min(28px, 8vw) !important; }
+  html.deck-can-flow .callout { padding: 24px 22px !important; }
+}`,
   notes:
     'A complete enterprise B2B SaaS sales pitch: Space Grotesk display + Inter body, ink #0f172a on white, ONE royal-blue (#1d4ed8) accent, generous whitespace, no gradients. Open and close on the blue glass-architecture full-bleed (assets/sales-deck-cover.jpg); use the translucent-glass dashboard (assets/sales-deck-product.jpg) for the product split. Signature pieces: .vprop value-prop cards (accent top-rule) for capabilities, the .proof tinted metric band for results, .pflow numbered pill steps for "how it works", a .logostrip for social proof, and tables for the competitive comparison (.yes/.no + .col-us) and pricing tiers (.tier-price). Use .bars for results, .timeline for implementation, .callout for the cost of the status quo. Confident and corporate, never flashy — sell the outcome, keep numbers tabular.',
   sampleSlides: [

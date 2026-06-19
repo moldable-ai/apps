@@ -144,7 +144,45 @@ export const investorUpdate: Template = {
 
 /* Signature lettered card / signoff for the founder note */
 .signoff { font-family: var(--display); font-weight: 500; font-size: 38px; color: var(--text); margin-top: 40px; }
-.signoff span { color: var(--muted); font-size: 28px; display: block; margin-top: 6px; font-weight: 400; }`,
+.signoff span { color: var(--muted); font-size: 28px; display: block; margin-top: 6px; font-weight: 400; }
+
+@media (max-width: 640px) {
+  /* Section dividers are absolutely positioned and not in the shared un-absolute list — un-absolute so they don't collapse to zero height, and shrink the oversized title */
+  html.deck-can-flow .divider { position: relative !important; inset: auto !important; min-height: 280px; padding: 56px var(--pad-x, 28px) !important; justify-content: center; }
+  html.deck-can-flow .divider::before { left: var(--pad-x, 28px); height: 120px; }
+  html.deck-can-flow .divider-inner { padding-left: 26px !important; }
+  html.deck-can-flow .divider-title { font-size: min(45px, 12vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .divider-sub { font-size: min(30px, 8vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .divider-num { font-size: 16px !important; }
+  /* Memo opener — fixed 60px/1fr grid + 44px text overflow the phone */
+  html.deck-can-flow .tldr-row { grid-template-columns: 34px 1fr !important; gap: 0 16px; padding: 18px 0; }
+  html.deck-can-flow .tldr-txt { font-size: min(19px, 5vw) !important; }
+  html.deck-can-flow .tldr-mk { font-size: 15px !important; }
+  /* Metric dashboard — bespoke cell padding/borders and 84px values */
+  html.deck-can-flow .dash-cell { padding: 0 !important; }
+  html.deck-can-flow .dash-cell + .dash-cell { border-left: 0 !important; }
+  html.deck-can-flow .dash-val { font-size: min(40px, 11vw) !important; }
+  html.deck-can-flow .dash-label { font-size: 13px !important; }
+  /* Highlights/lowlights item text */
+  html.deck-can-flow .hl-item { font-size: min(20px, 5vw) !important; }
+  /* Navy callout — large horizontal padding and 30px body */
+  html.deck-can-flow .note { padding: 22px 22px !important; }
+  html.deck-can-flow .note p { font-size: min(20px, 5vw) !important; }
+  /* Update cards — large padding and 38px titles */
+  html.deck-can-flow .ucard { padding: 26px 22px !important; }
+  html.deck-can-flow .ucard-t { font-size: min(25px, 7vw) !important; }
+  html.deck-can-flow .ucard-d { font-size: min(18px, 5vw) !important; }
+  /* Runway gauge cap */
+  html.deck-can-flow .gauge-cap { font-size: min(28px, 8vw) !important; }
+  /* Numbered asks — fixed 84px/1fr grid + 40px titles */
+  html.deck-can-flow .ask { grid-template-columns: 38px 1fr !important; gap: 0 16px; padding: 20px 0; }
+  html.deck-can-flow .ask-n { font-size: 20px !important; }
+  html.deck-can-flow .ask-t { font-size: min(23px, 6vw) !important; }
+  html.deck-can-flow .ask-d { font-size: min(18px, 5vw) !important; }
+  /* Founder signoff */
+  html.deck-can-flow .signoff { font-size: min(26px, 7vw) !important; }
+  html.deck-can-flow .signoff span { font-size: min(19px, 5vw) !important; }
+}`,
   notes:
     'A complete monthly investor update written as a letter: Source Serif 4 throughout with Inter for mono labels/eyebrows, ink #1c1a17 on warm off-white #fbfaf8, ONE navy accent (#1e3a5f), tabular numbers, generous whitespace, zero gradients. Open and close on the quiet navy-on-paper full-bleed (assets/investor-update-cover.jpg); break the three acts (Progress / Business / How you can help) with the ruled .divider (no image). Signature pieces: .tldr three-line memo opener, the .dash hairline metric dashboard with .delta arrows, .hlcols highlights/lowlights two-column, the .note navy callout for what is hard, .gauge runway bar, .ucards flat update cards, and .asks numbered ledger for requests. Use .bars for the growth chart, the .table as the KPI table, .donut for burn split, .stats for team & hiring, and .quote for the founder note. Honest, calm, and specific — keep it letter-like, never salesy.',
   sampleSlides: [

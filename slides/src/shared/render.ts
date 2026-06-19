@@ -30,7 +30,12 @@ html, body {
   overflow: hidden;
   transform-origin: 0 0;
   background: var(--slide-bg, #fff);
+  /* Hidden until the controller computes the fit transform, so mobile never
+     flashes an unscaled 1920px stage before scaling. Revealed via .deck-ready
+     (set in CONTROLLER_JS after the first fitStage); <noscript> + print restore it. */
+  opacity: 0; transition: opacity 0.18s ease;
 }
+html.deck-ready .deck-stage { opacity: 1; }
 .slide {
   position: absolute; inset: 0;
   width: 1920px; height: 1080px;
@@ -46,7 +51,7 @@ img, video, canvas, svg { max-width: 100%; max-height: 100%; }
 @media print {
   html, body { width: 1920px; height: auto; overflow: visible; background: #fff; }
   .deck-viewport { position: static; overflow: visible; background: #fff; }
-  .deck-stage { position: static; width: auto; height: auto; transform: none !important; background: none; }
+  .deck-stage { position: static; width: auto; height: auto; transform: none !important; background: none; opacity: 1 !important; }
   .slide {
     position: relative; display: block !important;
     visibility: visible !important; opacity: 1 !important; pointer-events: auto !important;
@@ -135,6 +140,192 @@ body.thumb .deck-notes { display: none; }
 `.trim()
 
 /**
+ * Phone-portrait reflow — the "slides behave like a responsive web page" layer.
+ *
+ * On a narrow viewport the fixed 1920×1080 stage stops being scaled-to-fit (which
+ * makes each slide a tiny letterboxed card) and instead becomes a full-width,
+ * vertically-scrolling document: every slide is a section, columns collapse to one,
+ * type/spacing tokens drop to a phone scale, and absolute layout primitives flow.
+ *
+ * Gated by BOTH a width media query AND `html.deck-can-flow` (added by the controller
+ * only for the standalone artifact — never for thumbnails or the in-app editor canvas,
+ * which must keep the true scaled stage). So desktop, tablet, and landscape phones are
+ * completely untouched; only a phone in portrait viewing the published artifact reflows.
+ *
+ * Token overrides are set on `.slide` (specificity beats `:root` tokens regardless of
+ * source order) so the shared component vocabulary re-scales automatically.
+ */
+export const RESPONSIVE_MOBILE_CSS = `
+@media (max-width: 640px) {
+  /* Hard width containment at every level. Without this, ONE over-wide child (a flex
+     bar-chart or wide table that won't shrink below its content) stretches the whole
+     document past the screen, and then EVERY slide renders in an over-wide canvas and
+     clips at the right edge. max-width:100vw + overflow-x:hidden caps the document, and
+     min-width:0 on descendants lets flex/grid items shrink below their intrinsic
+     content width (the classic min-content overflow). This is the structural fix. */
+  html.deck-can-flow, html.deck-can-flow body {
+    height: auto; overflow-x: hidden; overflow-y: visible;
+    max-width: 100vw; background: var(--slide-bg, #fff);
+  }
+  html.deck-can-flow .deck-viewport { position: static; overflow-x: hidden; height: auto; max-width: 100vw; }
+  html.deck-can-flow .deck-stage {
+    position: static; width: 100%; max-width: 100vw; height: auto; overflow-x: hidden;
+    transform: none !important; opacity: 1 !important;
+  }
+  html.deck-can-flow .slide * { min-width: 0; }
+  html.deck-can-flow .slide {
+    position: relative; inset: auto;
+    width: 100%; max-width: 100vw; height: auto; min-height: 0;
+    display: block; overflow: hidden;
+    visibility: visible !important; opacity: 1 !important; pointer-events: auto !important;
+    animation: none !important;
+  }
+  html.deck-can-flow .slide + .slide { border-top: 1px solid var(--card-border, rgba(0,0,0,0.10)); }
+  /* No per-slide active state in scroll mode — reveal everything. */
+  html.deck-can-flow .reveal { opacity: 1 !important; transform: none !important; }
+  /* Present-mode chrome is meaningless in a scrolling document. */
+  html.deck-can-flow .deck-chrome, html.deck-can-flow .deck-notes { display: none !important; }
+
+  /* Re-scale the token system for a ~390px canvas (cascades to every component). */
+  html.deck-can-flow .slide {
+    --pad-x: 26px; --pad-y: 46px;
+    --display-size: min(42px, 11.5vw); --title-size: min(38px, 10vw); --headline-size: min(29px, 8vw); --subhead-size: 24px;
+    --section-size: min(42px, 11.5vw); --lead-size: 19px; --body-size: 18px; --bullet-size: 18px;
+    --fine-size: 15px; --kicker-size: 13px; --kicker-tracking: 0.18em;
+    --metric-size: min(52px, 14vw); --stat-size: min(44px, 12vw); --quote-size: min(28px, 7.5vw);
+    --card-title-size: 23px; --card-body-size: 16px; --table-size: 15px;
+    --col-gap: 26px; --card-gap: 16px; --stack: 18px; --gap: 18px;
+    --bars-height: 200px; --donut-size: 168px; --donut-label-size: 36px;
+    --cols: 1; /* collapses any bespoke grid that reads repeat(var(--cols),1fr) */
+  }
+
+  /* Direct fluid font-size caps for the shared type classes. These override the
+     font-size PROPERTY with !important, so they beat per-element inline token
+     overrides (e.g. style="--display-size:148px") that the token block above cannot.
+     min(px, vw) keeps them at the cap on a normal phone and shrinks them on small ones. */
+  html.deck-can-flow .display { font-size: min(42px, 11.5vw) !important; line-height: 1.04 !important; }
+  html.deck-can-flow .title { font-size: min(38px, 10vw) !important; line-height: 1.05 !important; }
+  html.deck-can-flow .headline { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .subhead { font-size: min(25px, 6.6vw) !important; }
+  html.deck-can-flow .section-title { font-size: min(44px, 12vw) !important; line-height: 1.02 !important; }
+  html.deck-can-flow .lead { font-size: min(20px, 5.2vw) !important; }
+  html.deck-can-flow .quote { font-size: min(29px, 7.8vw) !important; }
+  html.deck-can-flow .metric { font-size: min(54px, 14.5vw) !important; }
+  html.deck-can-flow .stat-num { font-size: min(46px, 12.5vw) !important; }
+  html.deck-can-flow .donut-label { font-size: min(36px, 9vw) !important; }
+
+  /* Un-absolute the layout primitives so content flows top-to-bottom. */
+  html.deck-can-flow .pad,
+  html.deck-can-flow .section,
+  html.deck-can-flow .split,
+  html.deck-can-flow .hero,
+  html.deck-can-flow .full-bleed { position: relative; inset: auto; }
+  html.deck-can-flow .pad { min-height: 0; justify-content: flex-start; padding: var(--pad-y) var(--pad-x); }
+  html.deck-can-flow .pad.center, html.deck-can-flow .pad.end { justify-content: flex-start; }
+
+  /* Collapse every multi-column layout to a single column. */
+  html.deck-can-flow .two-col,
+  html.deck-can-flow .cols-2,
+  html.deck-can-flow .cols-3,
+  html.deck-can-flow .cols-4,
+  html.deck-can-flow .cards { grid-template-columns: 1fr !important; gap: var(--card-gap); }
+  html.deck-can-flow .row { flex-wrap: wrap; }
+  /* Collapse every BESPOKE grid too: nearly all custom card/photo/number grids are
+     repeat(var(--cols,N),1fr) with --cols set inline — one rule flattens them all. */
+  html.deck-can-flow [style*="--cols"] { grid-template-columns: 1fr !important; }
+
+  /* Un-absolute every top-level slide block. Bespoke section dividers and hero
+     blocks use position:absolute;inset:0 and would otherwise drop out of flow and
+     collapse the slide to ~0 height (divider vanishes). This brings them back. */
+  html.deck-can-flow .slide > * { position: relative; inset: auto; }
+  /* Give un-absoluted dividers/short blocks real presence instead of a thin seam. */
+  html.deck-can-flow .slide { min-height: 200px; }
+
+  /* Long words anywhere in a slide wrap instead of clipping at the narrow width. */
+  html.deck-can-flow .slide :is(p, h1, h2, h3, h4, li, blockquote, figcaption,
+    .display, .title, .headline, .subhead, .lead, .body, .card-title, .card-body,
+    .quote, .metric, .stat-num) { overflow-wrap: break-word; }
+
+  /* Split / hero: stack text and media vertically. */
+  html.deck-can-flow .split, html.deck-can-flow .hero {
+    display: flex; flex-direction: column; gap: var(--stack); padding: var(--pad-y) var(--pad-x);
+  }
+  html.deck-can-flow .split.reverse .split-text, html.deck-can-flow .hero.reverse .hero-text { order: 0; }
+  html.deck-can-flow .split .media, html.deck-can-flow .hero .media, html.deck-can-flow .hero .bleed {
+    height: auto; width: 100%; aspect-ratio: 16 / 10; border-radius: var(--radius, 16px);
+  }
+  html.deck-can-flow .hero-text { padding: 0; }
+
+  /* Full-bleed cover: a real hero with image behind bottom-anchored text.
+     (Fixed px, not vh — vh depends on the live viewport and is unreliable.) */
+  html.deck-can-flow .full-bleed { min-height: 560px; display: flex; }
+  html.deck-can-flow .full-bleed > .bleed { position: absolute; inset: 0; height: 100%; }
+  html.deck-can-flow .full-bleed > .scrim { position: absolute; inset: 0; }
+  html.deck-can-flow .full-bleed > .pad { position: relative; width: 100%; min-height: 560px; justify-content: flex-end; }
+
+  /* Section dividers get vertical breathing room. */
+  html.deck-can-flow .section { min-height: 380px; justify-content: center; padding: 72px var(--pad-x); }
+
+  /* Stat rows stack with hairline separators. */
+  html.deck-can-flow .stats { flex-direction: column; }
+  html.deck-can-flow .stat { padding: 16px 0 !important; }
+  html.deck-can-flow .stat:first-child { padding-top: 0 !important; }
+  html.deck-can-flow .stat + .stat { border-left: 0; border-top: 1px solid var(--card-border, rgba(0,0,0,0.12)); }
+
+  /* Arrow-flow stacks; rotate the connector to point down. */
+  html.deck-can-flow .flow { flex-direction: column; align-items: stretch; }
+  html.deck-can-flow .flow-arrow { width: 100%; height: 38px; transform: rotate(90deg); }
+
+  /* Timeline rows stack label over text. */
+  html.deck-can-flow .tl-row { grid-template-columns: 1fr; gap: 6px; }
+
+  /* The running footer flows at the end of each slide, and wraps (brand + section
+     label) instead of pushing the right-hand label off the screen edge. */
+  html.deck-can-flow .runner { position: relative !important; left: auto; right: auto; bottom: auto; margin-top: 30px; flex-wrap: wrap; gap: 6px 14px; }
+  html.deck-can-flow .runner-label { white-space: normal; overflow-wrap: anywhere; }
+
+  /* Long words in big type wrap (at the word, no ugly mid-word hyphenation) rather
+     than clip at phone width. */
+  html.deck-can-flow .display, html.deck-can-flow .title, html.deck-can-flow .headline,
+  html.deck-can-flow .subhead, html.deck-can-flow .section-title, html.deck-can-flow .quote,
+  html.deck-can-flow .lead, html.deck-can-flow .metric, html.deck-can-flow .stat-num {
+    overflow-wrap: break-word;
+  }
+  /* .lead/.body are capped at ~26-34ch for desktop measure; let them use full width. */
+  html.deck-can-flow .lead, html.deck-can-flow .body { max-width: 100%; }
+
+  /* Wide multi-column tables become a horizontally-scrollable block so NO column or
+     header label is ever clipped/lost. Keeping the table's native layout (we do NOT
+     force thead/tbody to width:100%, which would squish + truncate) plus nowrap cells
+     means a too-wide table scrolls sideways; a table that fits just fills the width. */
+  html.deck-can-flow .table {
+    display: block; max-width: 100%;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  html.deck-can-flow .table th, html.deck-can-flow .table td { white-space: nowrap; padding: 11px 12px; }
+  html.deck-can-flow .table th { font-size: 12px; letter-spacing: 0.04em; }
+
+  /* CSS bar charts shrink to fit the width (tiny gaps, no min bar width, small labels)
+     so the last bar + its value never run off the right edge. */
+  html.deck-can-flow .bars { gap: 8px !important; --bar-gap: 8px !important; width: 100% !important; max-width: 100% !important; box-sizing: border-box; overflow: visible; }
+  html.deck-can-flow .bars .bar { min-width: 0 !important; flex: 1 1 0 !important; }
+  html.deck-can-flow .bar-fill::before { font-size: 15px !important; }
+  html.deck-can-flow .bar-label { font-size: 13px !important; }
+
+  /* Hard guarantee: headings wrap (break a word as a last resort) and nothing forces
+     the page wider than the screen; stray overflow is clipped at the slide edge. */
+  html.deck-can-flow .display, html.deck-can-flow .title, html.deck-can-flow .headline,
+  html.deck-can-flow .section-title, html.deck-can-flow .subhead, html.deck-can-flow .quote {
+    max-width: calc(100vw - 44px) !important;
+    white-space: normal !important; overflow-wrap: break-word !important; text-wrap: wrap !important;
+  }
+  html.deck-can-flow .pad > *, html.deck-can-flow .split > *, html.deck-can-flow .hero > * { max-width: 100%; }
+  html.deck-can-flow .media { width: 100%; }
+  html.deck-can-flow .slide { overflow-x: hidden; }
+}
+`.trim()
+
+/**
  * Deck controller. Plain browser JS as a string (no inner template literals so
  * the outer template stays clean). Reads `?thumb`, `?active`, `?present` and the
  * URL hash. Handles stage scaling, keyboard/wheel/touch nav, reveal animations,
@@ -155,6 +346,13 @@ export const CONTROLLER_JS = `
   if (isThumb) document.body.classList.add('thumb');
   var isEdit = params.has('edit'); // only the in-app editor canvas passes this
 
+  // Phone-portrait artifacts reflow into a scrolling document (see RESPONSIVE_MOBILE_CSS).
+  // Never for thumbnails or the editor canvas, which must keep the true scaled stage.
+  var canFlow = !isThumb && !isEdit;
+  var flowMQ = (canFlow && window.matchMedia) ? window.matchMedia('(max-width: 640px)') : null;
+  function flowing() { return !!(flowMQ && flowMQ.matches); }
+  if (canFlow) document.documentElement.classList.add('deck-can-flow');
+
   function clamp(i) { return Math.max(0, Math.min(i, slides.length - 1)); }
 
   function startIndex() {
@@ -167,11 +365,35 @@ export const CONTROLLER_JS = `
 
   var current = startIndex();
 
+  function viewportSize() {
+    // visualViewport tracks the true visible box on mobile Safari as the URL bar
+    // shows/hides; innerWidth/innerHeight are the desktop + fallback path.
+    var vv = window.visualViewport;
+    return {
+      w: (vv && vv.width) || window.innerWidth || document.documentElement.clientWidth,
+      h: (vv && vv.height) || window.innerHeight || document.documentElement.clientHeight,
+    };
+  }
+
   function fitStage() {
-    var f = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
-    var x = (window.innerWidth - 1920 * f) / 2;
-    var y = (window.innerHeight - 1080 * f) / 2;
+    document.documentElement.classList.add('deck-ready');
+    if (flowing()) {
+      // Reflow mode: CSS lays slides out as a scrolling document; no stage transform.
+      stage.style.transform = '';
+      return;
+    }
+    var vp = viewportSize();
+    var f = Math.min(vp.w / 1920, vp.h / 1080);
+    var x = (vp.w - 1920 * f) / 2;
+    var y = (vp.h - 1080 * f) / 2;
     stage.style.transform = 'translate(' + x + 'px, ' + y + 'px) scale(' + f + ')';
+  }
+
+  // Re-fit on viewport change; when crossing OUT of reflow mode (e.g. rotate to
+  // landscape) restore the single active slide that scroll mode left all-visible.
+  function relayout() {
+    fitStage();
+    if (!flowing()) show(current);
   }
 
   function renderNotes() {
@@ -258,7 +480,19 @@ export const CONTROLLER_JS = `
   }
 
   fitStage();
-  window.addEventListener('resize', fitStage);
+  window.addEventListener('resize', relayout);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', relayout);
+    window.visualViewport.addEventListener('scroll', fitStage);
+  }
+  window.addEventListener('orientationchange', function () {
+    relayout();
+    // iOS reports stale viewport dimensions immediately after a rotate — re-fit.
+    setTimeout(relayout, 120);
+    setTimeout(relayout, 350);
+  });
+  // Crossing the phone-width breakpoint switches between scaled-stage and reflow.
+  if (flowMQ && flowMQ.addEventListener) flowMQ.addEventListener('change', relayout);
   show(current);
 
   if (isThumb) return; // thumbnails are static, no interaction
@@ -364,6 +598,7 @@ export const CONTROLLER_JS = `
   }
 
   document.addEventListener('keydown', function (e) {
+    if (flowing()) return; // let arrows/space scroll the document natively
     if (e.target && (e.target.isContentEditable ||
         /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || ''))) return;
     if (handleShortcutKey(e.key)) e.preventDefault();
@@ -372,6 +607,7 @@ export const CONTROLLER_JS = `
   // Mouse wheel (debounced) navigation.
   var wheelLock = false;
   window.addEventListener('wheel', function (e) {
+    if (flowing()) return; // native scroll in reflow mode
     if (Math.abs(e.deltaY) < 24) return;
     if (wheelLock) return;
     wheelLock = true;
@@ -385,6 +621,7 @@ export const CONTROLLER_JS = `
     sx = e.changedTouches[0].clientX; sy = e.changedTouches[0].clientY;
   }, { passive: true });
   window.addEventListener('touchend', function (e) {
+    if (flowing()) return; // native vertical scroll in reflow mode
     var dx = e.changedTouches[0].clientX - sx;
     var dy = e.changedTouches[0].clientY - sy;
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
@@ -392,11 +629,17 @@ export const CONTROLLER_JS = `
     }
   }, { passive: true });
 
-  // Tap right/left thirds to navigate (touch only).
-  window.addEventListener('click', function (e) {
-    if (e.target && e.target.closest && e.target.closest('a,button,[contenteditable],input,textarea')) return;
-    // ignore; click-nav can fight inline links, so left to keys/swipe
-  });
+  // Tap left/right thirds to navigate. Touch (coarse-pointer) devices only, so it
+  // never fights desktop clicks or inline links. A real swipe moves the finger and
+  // is handled by touchend above; a stationary tap falls through to this click.
+  var coarsePointer = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+  if (coarsePointer) {
+    window.addEventListener('click', function (e) {
+      if (flowing()) return; // taps don't navigate in a scrolling document
+      if (e.target && e.target.closest && e.target.closest('a,button,[contenteditable],input,textarea')) return;
+      if (e.clientX < viewportSize().w * 0.33) prev(); else next();
+    });
+  }
 })();
 `.trim()
 
@@ -492,7 +735,7 @@ export function composeDeckHtml(
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: https:; script-src 'nonce-${nonce}'; connect-src 'none'; style-src 'self' 'unsafe-inline' https:; img-src http: https: data: blob:; font-src data: https:; media-src http: https: data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>${escapeHtml(deck.title || 'Presentation')}</title>
 ${fontLinks}
@@ -505,7 +748,10 @@ ${VIEWPORT_BASE_CSS}
 ${DECK_BASE_CSS}
     /* ===== DECK THEME ===== */
 ${deck.theme.css ?? ''}
+    /* ===== RESPONSIVE (phone-portrait artifact reflow) — must come last to win ===== */
+${RESPONSIVE_MOBILE_CSS}
   </style>
+  <noscript><style>.deck-stage{opacity:1}</style></noscript>
 </head>
 <body>
   <div class="deck-viewport">

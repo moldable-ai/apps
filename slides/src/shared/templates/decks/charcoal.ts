@@ -112,7 +112,22 @@ export const charcoal: Template = {
 .lede { font-family: var(--display); font-weight: 400; font-style: italic; font-size: 62px; line-height: 1.16; letter-spacing: -0.01em; color: var(--text); max-width: 21ch; text-wrap: balance; }
 
 /* Runner footer tuned to the studio mark */
-.runner-brand::before { border-radius: 0; }`,
+.runner-brand::before { border-radius: 0; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .plate { position: relative !important; inset: auto !important; padding: 64px var(--pad-x, 32px) !important; gap: 16px !important; }
+  html.deck-can-flow .plate-title { font-size: min(51px, 14vw) !important; line-height: 0.98 !important; }
+  html.deck-can-flow .dropcap { font-size: min(28px, 7vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .dropcap::first-letter { font-size: min(72px, 20vw) !important; line-height: 0.8 !important; margin: 6px 14px 0 0 !important; }
+  html.deck-can-flow .lede { font-size: min(40px, 11vw) !important; line-height: 1.18 !important; max-width: 100% !important; }
+  html.deck-can-flow .idx-row { grid-template-columns: auto 1fr !important; gap: 4px 16px !important; padding: 18px 0 !important; }
+  html.deck-can-flow .idx-name { grid-column: 2 !important; font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .idx-meta { grid-column: 2 !important; }
+  html.deck-can-flow .idx-year { grid-column: 2 !important; text-align: left !important; }
+  html.deck-can-flow .spec { min-width: 0 !important; max-width: 100% !important; padding: 26px 22px !important; }
+  html.deck-can-flow .spec-t { font-size: min(28px, 7vw) !important; }
+  html.deck-can-flow .flow-step { min-width: 0 !important; }
+}`,
   notes:
     'A complete architecture-and-design studio deck — philosophy then portfolio — rendered in charcoal/graphite. Fraunces serif (use italics for warmth via .lede, .plate-title, idx-name em) + Inter body; warm paper #f4f0e8, charcoal ink #1c1a17, ONE restrained ember accent #b4541f used sparingly. Open and close on the charcoal cover drawing (assets/charcoal-cover.jpg, a dramatic structure); use the charcoal interior sketch (assets/charcoal-fig.jpg) inside the .sketch frame for the selected-work .split and the featured-project .hero. Signature pieces: .plate section dividers (italic display + ember number), the .dropcap philosophy statement, .sketch double-hairline figure frames, the .index portfolio register (no/name/type/year), .spec specimen cards for recognition, .hair / .hair-short graphite rules. Keep charts monochrome graphite (--bar-fill, --track) so data reads as a quiet interlude; reserve ember for kickers, numbers, the drop cap, and corner ticks. Artisanal and monochrome — let the serif, one charcoal drawing, and whitespace carry it. Runner = studio name left, section right.',
   sampleSlides: [

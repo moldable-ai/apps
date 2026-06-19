@@ -58,3 +58,14 @@ flat-vector art — let one image and a confident Poppins line carry each visual
 slide. Pin the `.runner` footer (brand left, section right) on every content
 slide; covers and dividers skip it. Headlines are sentence case and warm — sell
 the feeling of calm, not a feature list.
+
+## Mobile / responsive
+
+The published deck auto-reflows on phones: the fixed 1920×1080 stage becomes a tall,
+scrolling, full-width page — columns stack, type/spacing scale down (desktop, tablet,
+and landscape are untouched). Most of this is automatic because the deck composes from
+the shared vocabulary. This template's bespoke decoration carries a
+`@media (max-width: 640px) { html.deck-can-flow … }` block that scales its
+hardcoded-px pieces (big titles, custom cards/charts/dividers) down to fit ~390px — if
+you change those bespoke sizes or layouts, update that block so the slide still looks
+great on a phone. See the Mobile / responsive section of `AUTHORING.md`.

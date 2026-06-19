@@ -130,7 +130,27 @@ export const okrReview: Template = {
 .callout { border-left: 5px solid var(--accent); background: rgba(67,56,202,0.05); padding: 30px 38px; border-radius: 0 14px 14px 0; }
 .callout.warn { border-left-color: #f59e0b; background: rgba(245,158,11,0.07); }
 .callout-k { font-family: var(--body); font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; font-size: 20px; color: var(--accent); margin-bottom: 10px; }
-.callout.warn .callout-k { color: #b8770a; }`,
+.callout.warn .callout-k { color: #b8770a; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider-title { font-size: min(50px, 14vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .obj-title { font-size: min(36px, 10vw) !important; line-height: 1.08 !important; }
+  html.deck-can-flow .scalecard-range { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .scalecard-name { font-size: min(28px, 8vw) !important; }
+  html.deck-can-flow .pcard-t { font-size: min(28px, 8vw) !important; line-height: 1.12 !important; }
+  html.deck-can-flow .obj-head { grid-template-columns: 1fr !important; gap: 24px 0; }
+  html.deck-can-flow .obj-donut { justify-self: start; }
+  html.deck-can-flow .kr { grid-template-columns: 1fr auto !important; gap: 10px 14px; }
+  html.deck-can-flow .kr .kr-label { grid-column: 1 / -1; }
+  html.deck-can-flow .kr .kr-track { grid-column: 1; min-width: 0; }
+  html.deck-can-flow .kr .kr-val { grid-column: 2; }
+  html.deck-can-flow .scaleband { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .prop { grid-template-columns: 1fr !important; gap: 18px 0; }
+  html.deck-can-flow .obj { padding: 28px 22px !important; }
+  html.deck-can-flow .scalecard { padding: 26px 24px !important; }
+  html.deck-can-flow .pcard { padding: 28px 24px !important; }
+  html.deck-can-flow .callout { padding: 24px 22px !important; }
+}`,
   notes:
     'A complete quarterly OKR review: Plus Jakarta Sans display + Inter body, JetBrains Mono for every score and range, indigo #4338ca on white with ONE amber #f59e0b accent reserved for at-risk/milestone marks. Open and close on the abstract indigo goals full-bleed (assets/okr-review-cover.jpg); break acts with the clean .divider. Signature pieces: .obj objective cards (header = .obj-title + .obj-donut, body = .krs key-result rows with .kr-track/.kr-fill progress bars, recolor .kr-fill.amber/.red when off track); .rag green/amber/red status pills; the .scale 0.0–1.0 scoring chip and .scaleband legend cards for "how to read this"; .conf confidence chips; .prop/.pcard proposed-objective cards for next quarter. Use .stats for the quarter at a glance, .bars for cross-cutting progress, .checks for learnings, .steps for focus/bets, .callout (add .warn for amber) for risks. Keep every numeric grade in the 0.0–1.0 OKR convention and tabular. Honest over rosy — show the amber and red.',
   sampleSlides: [

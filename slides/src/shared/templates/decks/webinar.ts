@@ -121,7 +121,31 @@ export const webinar: Template = {
 .res-ic { width: 56px; height: 56px; border-radius: 16px; background: rgba(37,99,235,0.1); display: grid; place-items: center; color: var(--accent); font-family: var(--display); font-weight: 800; font-size: 24px; }
 .res-t { font-family: var(--display); font-weight: 700; font-size: 34px; color: var(--text); }
 .res-d { font-family: var(--body); font-size: 25px; color: var(--muted); margin-top: 4px; }
-.res-tag { font-family: var(--body); font-weight: 600; font-size: 24px; color: var(--accent); }`,
+.res-tag { font-family: var(--body); font-weight: 600; font-size: 24px; color: var(--accent); }
+
+/* Phone reflow: scale bespoke decoration calibrated for the 1920px stage */
+@media (max-width: 640px) {
+  html.deck-can-flow .hook { font-size: min(40px, 11vw) !important; line-height: 1.04 !important; }
+  html.deck-can-flow .divider { position: static !important; inset: auto !important; padding: 32px 22px !important; }
+  html.deck-can-flow .divider-title { font-size: min(50px, 14vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .divider-num { font-size: min(18px, 5vw) !important; }
+  html.deck-can-flow .speaker { grid-template-columns: 1fr !important; gap: 24px 0 !important; }
+  html.deck-can-flow .speaker-photo { aspect-ratio: 4 / 3 !important; max-width: 320px !important; }
+  html.deck-can-flow .speaker-name { font-size: min(36px, 10vw) !important; line-height: 1.05 !important; }
+  html.deck-can-flow .speaker-bio { max-width: 100% !important; }
+  html.deck-can-flow .take { padding: 26px 22px !important; }
+  html.deck-can-flow .take-t { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .callout { padding: 26px 22px !important; }
+  html.deck-can-flow .poll-row { grid-template-columns: 1fr !important; gap: 8px 0 !important; }
+  html.deck-can-flow .poll-bar { height: auto !important; min-height: 52px !important; }
+  html.deck-can-flow .poll-name { position: static !important; padding: 12px 18px !important; }
+  html.deck-can-flow .poll-pct { text-align: left !important; min-width: 0 !important; font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .cta { padding: 26px 24px !important; }
+  html.deck-can-flow .cta-line { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .res { grid-template-columns: 56px 1fr !important; gap: 12px 16px !important; }
+  html.deck-can-flow .res-t { font-size: min(28px, 7vw) !important; }
+  html.deck-can-flow .res-tag { grid-column: 2 !important; justify-self: start !important; margin-top: 4px !important; }
+}`,
   notes:
     'A complete friendly live-webinar deck: Plus Jakarta Sans display + Inter body, cobalt #2563eb on white/soft-cream #f6f7fb, ONE warm-blue accent, rounded corners, generous whitespace, no gradients. Open and close on the friendly abstract full-bleed (assets/webinar-cover.jpg); use the speaker/studio figure (assets/webinar-fig.jpg) in the .speaker card and a key-concept .split. Signature pieces: the oversized .hook welcome line, the .speaker card (photo + bio + .socials), .steps for the agenda and the framework, .takes key-takeaway cards, .callout + .poll for live poll/Q&A moments, .reslist resources, and the .cta invitation card on the close. Use .stats for the problem, .flow for a concept walkthrough, .bars/.donut for the data point, .quote for a real example. Warm and welcoming, speaker-led, never corporate — write like you are talking to the room.',
   sampleSlides: [

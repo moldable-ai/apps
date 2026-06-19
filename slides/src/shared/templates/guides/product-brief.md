@@ -29,3 +29,14 @@ feature, owner, metrics, scope, and risks to your own.
 - Density: reading-first. Keep numbers tabular, mono labels short and uppercase, one
   idea per slide, generous whitespace. Pin the `.runner` (brand left, section right)
   on every content slide for system cohesion.
+
+## Mobile / responsive
+
+The published deck auto-reflows on phones: the fixed 1920×1080 stage becomes a tall,
+scrolling, full-width page — columns stack, type/spacing scale down (desktop, tablet,
+and landscape are untouched). Most of this is automatic because the deck composes from
+the shared vocabulary. This template's bespoke decoration carries a
+`@media (max-width: 640px) { html.deck-can-flow … }` block that scales its
+hardcoded-px pieces (big titles, custom cards/charts/dividers) down to fit ~390px — if
+you change those bespoke sizes or layouts, update that block so the slide still looks
+great on a phone. See the Mobile / responsive section of `AUTHORING.md`.

@@ -110,7 +110,18 @@ export const darkTech: Template = {
 
 /* One-more-thing accent badge */
 .omt { display: inline-flex; align-items: center; gap: 14px; font-family: var(--mono); font-size: 26px; letter-spacing: 0.08em; color: var(--accent); }
-.omt::before { content: ''; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 6px rgba(74,222,128,0.18); }`,
+.omt::before { content: ''; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 6px rgba(74,222,128,0.18); }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .act { position: relative !important; inset: auto !important; padding: 64px var(--pad-x, 22px) !important; min-height: 340px; justify-content: center; gap: 16px; }
+  html.deck-can-flow .act-title { font-size: min(54px, 15vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .act-num { font-size: min(18px, 5vw) !important; }
+  html.deck-can-flow .spec { grid-template-columns: 1fr !important; gap: 14px; }
+  html.deck-can-flow .spec-cell { padding: 26px 22px !important; }
+  html.deck-can-flow .spec-val { font-size: min(44px, 12vw) !important; }
+  html.deck-can-flow .term { overflow-x: hidden; }
+  html.deck-can-flow .term-body { font-size: min(16px, 4.2vw) !important; padding: 20px 18px !important; line-height: 1.55 !important; overflow-wrap: anywhere; word-break: break-word; }
+}`,
   notes:
     'A complete product-launch keynote: cinematic near-black (#0a0d13) with a faint blue dot-grid, ONE terminal-green (#4ade80) accent + an electric-blue (#60a5fa) secondary, Space Grotesk display/body and JetBrains Mono for eyebrows, commands and console panels. Open on the dark device-silhouette full-bleed (assets/dark-tech-cover.jpg); reveal the product on a full-bleed and again in a .split (assets/dark-tech-product.jpg). Signature pieces: .act terminal section dividers, .spec cards for the specs row, the .term console block for "how it works", .fstrip labelled hairline rows in the feature split, .col-us to highlight the recommended tier, and the .omt "one more thing" badge. Use .flow for the pipeline, .bars for benchmarks, .table for the lineup and .timeline for availability. Terse, technical, confident copy; keep numbers tabular and mono.',
   sampleSlides: [

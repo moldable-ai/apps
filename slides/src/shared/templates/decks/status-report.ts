@@ -141,7 +141,25 @@ export const statusReport: Template = {
 .milestone-flag { font-family: var(--mono); font-size: 21px; font-weight: 500; padding: 4px 12px; border-radius: 6px; }
 .milestone-flag.done { color: var(--green); background: var(--green-bg); }
 .milestone-flag.now { color: #b45309; background: var(--amber-bg); }
-.milestone-flag.next { color: var(--muted); background: #f3f4f6; }`,
+.milestone-flag.next { color: var(--muted); background: #f3f4f6; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .ragbanner { grid-template-columns: 1fr !important; gap: 22px 0 !important; padding: 26px 22px !important; justify-items: start; }
+  html.deck-can-flow .rag-orb { width: 108px !important; height: 108px !important; font-size: 20px !important; box-shadow: none !important; }
+  html.deck-can-flow .rag-label { font-size: min(36px, 10vw) !important; line-height: 1.05 !important; }
+  html.deck-can-flow .rag-line { font-size: min(22px, 6vw) !important; max-width: 100% !important; }
+  html.deck-can-flow .risk { padding: 22px 20px !important; }
+  html.deck-can-flow .risk-top { flex-wrap: wrap; gap: 8px 10px; }
+  html.deck-can-flow .risk-sev { margin-left: 0 !important; font-size: 15px !important; padding: 4px 10px !important; }
+  html.deck-can-flow .risk-title { font-size: min(26px, 7vw) !important; line-height: 1.1 !important; }
+  html.deck-can-flow .risk-body { font-size: min(22px, 6vw) !important; }
+  html.deck-can-flow .risk-mit { font-size: min(22px, 6vw) !important; }
+  html.deck-can-flow .decision { grid-template-columns: 1fr !important; gap: 10px 0 !important; }
+  html.deck-can-flow .decision::before { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .dec-ask { font-size: min(30px, 8vw) !important; line-height: 1.14 !important; }
+  html.deck-can-flow .divider-title { font-size: min(50px, 14vw) !important; line-height: 0.98 !important; }
+  html.deck-can-flow .divider-sub { font-size: min(22px, 6vw) !important; max-width: 100% !important; }
+}`,
   notes:
     "A complete executive program-status report in the RAG idiom: Inter throughout (tight 800 display weight), IBM Plex Mono for eyebrows/codes/dates, neutral slate #1f2937 ink on white, and the three status colors — red #dc2626, amber #f59e0b, green #16a34a — as the deck's entire signal vocabulary. Open and close on the calm slate architectural full-bleed (assets/status-report-cover.jpg); break acts with the dark slate .divider (with RAG dots). Cornerstone pieces: the big .ragbanner (set .is-red/.is-amber/.is-green) for overall status, the .table of workstreams with .pill-rag status pills and .trend arrows, .risk red/amber callout cards for the risk register, the numbered .decisions list with owner/by-when .dec-chip metadata, and the shared .timeline for milestones (tag rows with .milestone-flag done/now/next). Use .stats for the executive summary, .bars for budget/scope, .flow for dependencies, .checks for next-period focus. Keep it honest and tabular — colors mean status, never decoration.",
   sampleSlides: [

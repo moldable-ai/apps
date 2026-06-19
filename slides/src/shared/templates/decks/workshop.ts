@@ -73,8 +73,8 @@ export const workshop: Template = {
 /* Signature: numbered exercise badge (big circular marker) */
 .exbadge { display: inline-flex; align-items: center; gap: 22px; }
 .exbadge-n { width: 92px; height: 92px; flex: 0 0 auto; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 46px; box-shadow: 0 14px 30px -10px rgba(234,88,12,0.6); }
-.exbadge-k { font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.16em; font-size: 22px; color: var(--accent); }
-.exbadge-t { font-family: var(--display); font-weight: 700; font-size: 56px; line-height: 1.0; letter-spacing: -0.02em; color: var(--text); margin-top: 4px; }
+.exbadge-k { display: block; font-family: var(--display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.16em; font-size: 22px; color: var(--accent); }
+.exbadge-t { display: block; font-family: var(--display); font-weight: 700; font-size: 56px; line-height: 1.0; letter-spacing: -0.02em; color: var(--text); margin-top: 4px; }
 
 /* Signature: timer / duration chip */
 .chip { display: inline-flex; align-items: center; gap: 12px; padding: 12px 24px 12px 20px; border-radius: 999px; background: var(--chip-bg); border: 1px solid #f6d8c1; font-family: var(--display); font-weight: 600; font-size: 26px; color: #9a3412; }
@@ -105,7 +105,25 @@ export const workshop: Template = {
 .actcard { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 18px; padding: 38px 36px; box-shadow: var(--card-shadow); border-top: 6px solid var(--accent); }
 .actcard-n { font-family: var(--display); font-weight: 700; font-size: 26px; color: var(--accent); }
 .actcard-t { font-family: var(--display); font-weight: 600; font-size: 34px; line-height: 1.06; color: var(--text); margin-top: 14px; }
-.actcard-d { font-family: var(--body); font-size: 24px; line-height: 1.4; color: var(--muted); margin-top: 10px; }`,
+.actcard-d { font-family: var(--body); font-size: 24px; line-height: 1.4; color: var(--muted); margin-top: 10px; }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { position: static !important; padding: 0 !important; }
+  html.deck-can-flow .divider-title { font-size: min(52px, 14vw) !important; line-height: 1.02 !important; }
+  html.deck-can-flow .exbadge { flex-wrap: wrap !important; gap: 16px !important; }
+  html.deck-can-flow .exbadge > span:last-child { flex: 1 1 100% !important; min-width: 0 !important; }
+  html.deck-can-flow .exbadge-n { width: 64px !important; height: 64px !important; font-size: min(34px, 9vw) !important; }
+  html.deck-can-flow .exbadge-t { font-size: min(36px, 10vw) !important; line-height: 1.05 !important; }
+  html.deck-can-flow .yourturn { flex-direction: column !important; align-items: flex-start !important; gap: 18px !important; padding: 28px 24px !important; }
+  html.deck-can-flow .yourturn-text { min-width: 0 !important; font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .ag-row { grid-template-columns: auto 1fr !important; gap: 6px 18px !important; align-items: baseline !important; }
+  html.deck-can-flow .ag-row > .chip { grid-column: 1 / -1 !important; justify-self: start !important; margin-top: 8px !important; }
+  html.deck-can-flow .ag-name { font-size: min(30px, 8vw) !important; }
+  html.deck-can-flow .chiprow { width: 100% !important; }
+  html.deck-can-flow .chip { max-width: 100% !important; white-space: normal !important; box-sizing: border-box !important; }
+  html.deck-can-flow .actcard { max-width: 100% !important; min-width: 0 !important; box-sizing: border-box !important; padding: 28px 24px !important; }
+  html.deck-can-flow .flow-step { min-width: 0 !important; }
+}`,
   notes:
     'A complete hands-on design-thinking workshop run-of-show: Space Grotesk display + Inter body, charcoal #1c1917 on warm paper #fffdf7, ONE electric-orange (#ea580c) accent, lots of whitespace, no gradients. Open and close on the overhead-hands full-bleed (assets/workshop-cover.jpg); use the activity figure (assets/workshop-fig.jpg) for an exercise split. Signature pieces: .exbadge numbered exercise badges, .chip timer/duration chips (.chip.solid for the active timer), .materials boxed checklist, .yourturn dashed callout for prompts, and the .agenda timeline with duration chips. Use .steps for exercise instructions, .checks for ground rules and takeaways, .bars for the reflection data, .actcard cards for share-back, .quote for the participant voice. Keep energy high and timing explicit — every exercise gets a badge and a timer chip.',
   sampleSlides: [

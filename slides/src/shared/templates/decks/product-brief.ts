@@ -114,7 +114,17 @@ export const productBrief: Template = {
 .legend { display: flex; flex-direction: column; gap: 20px; }
 .legend-row { display: flex; align-items: center; gap: 16px; font-family: var(--body); font-size: 29px; color: var(--text); }
 .legend-dot { width: 16px; height: 16px; border-radius: 5px; flex: 0 0 auto; }
-.legend-row .v { margin-left: auto; font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }`,
+.legend-row .v { margin-left: auto; font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .divider { padding: 0 !important; }
+  html.deck-can-flow .divider-title { font-size: min(51px, 14vw) !important; line-height: 1.0 !important; }
+  html.deck-can-flow .spec { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .colpair { grid-template-columns: 1fr !important; gap: 32px 0; }
+  html.deck-can-flow .scard { padding: 26px 22px !important; }
+  html.deck-can-flow .scard-t { font-size: min(30px, 8vw) !important; line-height: 1.1 !important; }
+  html.deck-can-flow .callout { padding: 24px 22px !important; }
+}`,
   notes:
     'A complete PRD for a new feature: General Sans display + body, Space Mono eyebrows/labels, ink #0d0f15 on near-white #fafafb, ONE precise indigo (#5b5bd6) accent with a sky-blue (#0ea5e9) secondary, generous whitespace, no gradients. Open and close on the frosted-glass full-bleed (assets/product-brief-cover.jpg); use the concept mock (assets/product-brief-fig.jpg) for the solution split. Signature pieces: the .meta mono document line on the cover, numbered .divider section slabs, .spec cards (mono tag header) for requirements/scope, the .colpair goals vs non-goals split with mono .colhd headers, .prio P0/P1/P2 chips and .pillv in/out/later status pills in tables, the indigo .callout for the headline insight, and a .legend beside the .donut. Use .stats and .bars for evidence, .flow for the user journey, .timeline for milestones, a .table for scope and risks. Mono labels everywhere; keep numbers tabular and the story crisp.',
   sampleSlides: [

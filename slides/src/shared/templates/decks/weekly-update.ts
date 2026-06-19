@@ -136,7 +136,21 @@ export const weeklyUpdate: Template = {
 .tldr-row { display: flex; gap: 30px; align-items: baseline; padding-bottom: 30px; border-bottom: 1px solid var(--card-border); }
 .tldr-row:last-child { border-bottom: 0; }
 .tldr-n { font-family: var(--mono); font-weight: 700; font-size: 28px; color: var(--accent); flex: 0 0 auto; padding-top: 6px; }
-.tldr-t { font-family: var(--display); font-weight: 600; font-size: 44px; line-height: 1.16; letter-spacing: -0.01em; color: var(--text); }`,
+.tldr-t { font-family: var(--display); font-weight: 600; font-size: 44px; line-height: 1.16; letter-spacing: -0.01em; color: var(--text); }
+
+@media (max-width: 640px) {
+  html.deck-can-flow .wdiv { position: relative !important; inset: auto !important; min-height: 280px; padding: 64px var(--pad-x); }
+  html.deck-can-flow .wdiv-title { font-size: min(40px, 11vw) !important; line-height: 1.05 !important; }
+  html.deck-can-flow .board { grid-template-columns: 1fr !important; gap: 16px 0; }
+  html.deck-can-flow .bcol { padding: 26px 24px !important; }
+  html.deck-can-flow .mcell { padding: 26px 24px !important; }
+  html.deck-can-flow .mcell + .mcell { border-left: 0 !important; border-top: 1px solid var(--card-border); }
+  html.deck-can-flow .mcell-v { font-size: min(44px, 12vw) !important; }
+  html.deck-can-flow .bnote { padding: 26px 24px !important; }
+  html.deck-can-flow .bnote-t { font-size: min(30px, 8vw) !important; line-height: 1.1 !important; }
+  html.deck-can-flow .bnote-d { max-width: 100% !important; }
+  html.deck-can-flow .tldr-t { font-size: min(30px, 8vw) !important; line-height: 1.15 !important; }
+}`,
   notes:
     'A complete weekly team update: Inter throughout with JetBrains Mono for labels, deltas, and metrics; near-white #fafafa, slate #334155 text, ONE green #16a34a accent (muted red #b91c1c for blockers only). Open on the calm minimal full-bleed cover (assets/weekly-update-cover.jpg). Anchor content slides with the mono .mlabel eyebrow + a .runner footer. Signature pieces: status pills (.spill on/risk/blocked), the compact .mrow metric strip with .mdelta arrows, the shipped/in-flight/next .board (.bcol shipped/flight/next), tiny .spark inline bars, and .bnote block/ask callouts. Use .checks for what shipped, a .table with .spill pills for in-flight, .bars for the small trend, .steps for next week, .quote for the notable mention. Keep it dense, scannable, and quiet — restraint over decoration, numbers tabular.',
   sampleSlides: [
