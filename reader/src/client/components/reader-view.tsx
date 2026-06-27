@@ -177,6 +177,21 @@ interface RenderedWordCapture {
   }
 }
 
+interface SpeedReaderPageTextDebug {
+  pageIndex: number
+  wordStartIndex: number | null
+  wordEndIndexExclusive: number | null
+  renderedWords: string[]
+  renderedText: string
+  speedReaderWords: string[]
+  speedReaderText: string
+  firstMismatch: {
+    wordOffset: number
+    renderedWord: string | null
+    speedReaderWord: string | null
+  } | null
+}
+
 function roundRect(rect: DOMRect): RenderedWordDebug['rect'] {
   return {
     top: Math.round(rect.top),
@@ -353,6 +368,175 @@ function captureVisibleWordsInRenderedText(
     visibleWordsInVisualOrder,
     viewport: roundRect(viewportRect),
   }
+}
+
+function normalizeForAlignment(text: string): string {
+  return text.normalize('NFKC').replace(/\s+/g, '').toLocaleLowerCase()
+}
+
+function commonPrefixLength(a: string, b: string): number {
+  const length = Math.min(a.length, b.length)
+  for (let index = 0; index < length; index += 1) {
+    if (a[index] !== b[index]) return index
+  }
+  return length
+}
+
+function resolveSpeedWordIndexFromRenderedWords(
+  renderedWords: string[],
+  speedWords: string[],
+  estimatedIndex: number,
+): number | null {
+  if (renderedWords.length === 0 || speedWords.length === 0) return null
+
+  // Compare normalized character streams instead of raw word positions. EPUBs
+  // often split visual words across inline markup/drop caps (`On` => `O` + `n`)
+  // or isolate punctuation (`Pharaon ,`). Counting DOM words directly makes the
+  // speed-reader index drift from the plain-text token array.
+  const renderedNeedle = normalizeForAlignment(
+    renderedWords.slice(0, 36).join(' '),
+  )
+  if (!renderedNeedle) return null
+
+  const center = Math.min(
+    Math.max(0, Math.round(estimatedIndex)),
+    Math.max(0, speedWords.length - 1),
+  )
+  const searchStart = Math.max(0, center - 48)
+  const searchEnd = Math.min(speedWords.length - 1, center + 48)
+  let bestIndex: number | null = null
+  let bestScore = -1
+
+  for (let candidate = searchStart; candidate <= searchEnd; candidate += 1) {
+    const candidateText = normalizeForAlignment(
+      speedWords.slice(candidate, candidate + 48).join(' '),
+    )
+    const score = commonPrefixLength(renderedNeedle, candidateText)
+    if (score > bestScore) {
+      bestScore = score
+      bestIndex = candidate
+    }
+  }
+
+  return bestScore >= Math.min(8, renderedNeedle.length) ? bestIndex : center
+}
+
+function findFirstWordMismatch(
+  renderedWords: string[],
+  speedReaderWords: string[],
+): SpeedReaderPageTextDebug['firstMismatch'] {
+  const renderedText = normalizeForAlignment(renderedWords.join(' '))
+  const speedReaderText = normalizeForAlignment(speedReaderWords.join(' '))
+  if (renderedText === speedReaderText) return null
+
+  const length = Math.max(renderedWords.length, speedReaderWords.length)
+  for (let index = 0; index < length; index += 1) {
+    const renderedWord = renderedWords[index] ?? null
+    const speedReaderWord = speedReaderWords[index] ?? null
+    if (
+      normalizeForAlignment(renderedWord ?? '') !==
+      normalizeForAlignment(speedReaderWord ?? '')
+    ) {
+      return { wordOffset: index, renderedWord, speedReaderWord }
+    }
+  }
+  return {
+    wordOffset: 0,
+    renderedWord: renderedWords[0] ?? null,
+    speedReaderWord: speedReaderWords[0] ?? null,
+  }
+}
+
+function captureSpeedReaderTextByPage(
+  root: HTMLElement,
+  pageCount: number,
+  pageWidth: number,
+  columnGap: number,
+  speedWords: string[],
+): SpeedReaderPageTextDebug[] | null {
+  const safePageCount = Math.max(1, Math.round(pageCount))
+  const safePageWidth = Math.round(pageWidth)
+  if (safePageWidth <= 0) return null
+
+  const step = safePageWidth + columnGap
+  if (step <= 0) return null
+
+  const contentRect = root.getBoundingClientRect()
+  const pages = Array.from({ length: safePageCount }, (_, pageIndex) => ({
+    pageIndex,
+    wordStartIndex: null as number | null,
+    wordEndIndexExclusive: null as number | null,
+    renderedWords: [] as string[],
+  }))
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  let wordIndex = 0
+
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text
+    const parent = node.parentElement
+    if (parent?.closest('script, style')) continue
+
+    const text = node.nodeValue ?? ''
+    if (!text.trim()) continue
+
+    for (const word of wordMatches(text)) {
+      const start = word.index ?? 0
+      const end = start + word[0].length
+      const range = document.createRange()
+      range.setStart(node, start)
+      range.setEnd(node, end)
+      const rect = Array.from(range.getClientRects()).find(
+        (candidate) => candidate.width > 0 && candidate.height > 0,
+      )
+      range.detach()
+
+      if (rect) {
+        const x = rect.left - contentRect.left + 1
+        const pageIndex = Math.floor(x / step)
+        const page = pages[pageIndex]
+        if (page) {
+          page.wordStartIndex ??= wordIndex
+          page.wordEndIndexExclusive = wordIndex + 1
+          page.renderedWords.push(word[0])
+        }
+      }
+
+      wordIndex += 1
+    }
+  }
+
+  const resolvedStarts = pages.map((page) =>
+    page.wordStartIndex === null
+      ? null
+      : resolveSpeedWordIndexFromRenderedWords(
+          page.renderedWords,
+          speedWords,
+          page.wordStartIndex,
+        ),
+  )
+
+  return pages.map((page, index) => {
+    const start = resolvedStarts[index]
+    const nextStart = resolvedStarts
+      .slice(index + 1)
+      .find((value) => value !== null)
+    const end = nextStart ?? (start === null ? null : speedWords.length)
+    const speedReaderWords =
+      start === null || end === null ? [] : speedWords.slice(start, end)
+    return {
+      ...page,
+      wordStartIndex: start,
+      wordEndIndexExclusive: end,
+      renderedText: page.renderedWords.join(' '),
+      speedReaderWords,
+      speedReaderText: speedReaderWords.join(' '),
+      firstMismatch: findFirstWordMismatch(
+        page.renderedWords,
+        speedReaderWords,
+      ),
+    }
+  })
 }
 
 export function ReaderView({ bookId, onClose }: ReaderViewProps) {
@@ -1234,6 +1418,23 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
       return captureVisibleWordsInRenderedText(root, viewport)
     }, [settings.layout])
 
+  const currentSpeedReaderTextByPage = useCallback(():
+    | SpeedReaderPageTextDebug[]
+    | null => {
+    if (settings.layout !== 'paginated') return null
+    const root = paginatedContentRef.current
+    const viewport = pageViewportRef.current
+    if (!root || !viewport) return null
+    const width = pageWidth > 0 ? pageWidth : viewport.clientWidth
+    return captureSpeedReaderTextByPage(
+      root,
+      pageCount,
+      width,
+      columnGap,
+      speedWords,
+    )
+  }, [columnGap, pageCount, pageWidth, settings.layout, speedWords])
+
   const saveSpeedReaderDebugSnapshot = useCallback(
     (
       reason: string,
@@ -1265,6 +1466,7 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
         },
         renderedPage: capture,
         speedReaderTokensAroundStart: wordWindow(speedWords, startIndex),
+        speedReaderTextByPage: currentSpeedReaderTextByPage(),
       }
 
       void fetchWithWorkspace('/api/debug/speed-reader/latest', {
@@ -1279,6 +1481,7 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
       book,
       chapter,
       chapterIndex,
+      currentSpeedReaderTextByPage,
       fetchWithWorkspace,
       pageCount,
       pageIndex,
@@ -1291,8 +1494,16 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
   const handleOpenSpeedReader = useCallback(() => {
     const capture = currentRenderedWordCapture()
     const renderedStartIndex = capture?.firstVisibleWordIndex ?? null
+    const alignedStartIndex =
+      capture && renderedStartIndex !== null
+        ? resolveSpeedWordIndexFromRenderedWords(
+            capture.visibleWordsInVisualOrder.map((word) => word.text),
+            speedWords,
+            renderedStartIndex,
+          )
+        : null
     const startIndex =
-      renderedStartIndex === null ? speedStartIndex : renderedStartIndex
+      alignedStartIndex ?? renderedStartIndex ?? speedStartIndex
     resumeSpeedWordIndexRef.current = startIndex
     saveSpeedReaderDebugSnapshot('open-speed-reader', startIndex, capture)
     setSpeedAutoResume(false)
@@ -1303,6 +1514,7 @@ export function ReaderView({ bookId, onClose }: ReaderViewProps) {
     save,
     saveSpeedReaderDebugSnapshot,
     speedStartIndex,
+    speedWords,
   ])
 
   const handleSpeedChapterComplete = useCallback(

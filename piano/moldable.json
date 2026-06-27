@@ -1,6 +1,6 @@
 {
   "name": "Piano",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "A local-first piano song library with 88-key playback and falling-note practice visualization.",

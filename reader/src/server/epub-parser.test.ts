@@ -1,4 +1,4 @@
-import { parseEbook } from './epub-parser'
+import { htmlToText, parseEbook } from './epub-parser'
 import { strToU8, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 
@@ -36,6 +36,7 @@ function buildEpub(): Uint8Array {
 <head><title>Chapter One</title></head>
 <body>
   <h1>Chapter One</h1>
+  <p class="pfirst"><span class="dropcap">O</span>n the <i>Pharaon</i>, all was well.</p>
   <p>The quick brown fox jumps over the lazy dog.</p>
 </body>
 </html>`
@@ -76,6 +77,16 @@ function buildEpub(): Uint8Array {
   })
 }
 
+describe('htmlToText', () => {
+  it('preserves inline word boundaries for drop caps and emphasis', () => {
+    expect(
+      htmlToText(
+        '<p><span class="dropcap">O</span>n the <i>Pharaon</i>, from Smyrna.</p><p>Next line.</p>',
+      ),
+    ).toBe('On the Pharaon, from Smyrna.\n\nNext line.')
+  })
+})
+
 describe('parseEbook', () => {
   it('parses a minimal EPUB', async () => {
     const book = await parseEbook('test.epub', buildEpub())
@@ -87,6 +98,9 @@ describe('parseEbook', () => {
 
     expect(book.chapters).toHaveLength(2)
     expect(book.chapters[0]?.title).toBe('Chapter One')
+    expect(book.chapters[0]?.text).toContain('On the Pharaon, all was well.')
+    expect(book.chapters[0]?.text).not.toContain('O n')
+    expect(book.chapters[0]?.text).not.toContain('Pharaon ,')
     expect(book.chapters[0]?.text).toContain('quick brown fox')
     expect(book.chapters[0]?.text).not.toContain('Chapter One\n\nChapter One')
     expect(book.chapters[0]?.html).not.toContain('<title>')

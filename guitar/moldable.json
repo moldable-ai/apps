@@ -1,6 +1,6 @@
 {
   "name": "Guitar",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "A local-first guitar song library with 88-key playback and falling-note practice visualization.",

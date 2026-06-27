@@ -1,6 +1,6 @@
 {
   "name": "Reader",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "A local-first ebook reader. Open EPUB and text files, organize a library into folders, read with fully configurable typography and themes, or speed-read with an RSVP word-by-word mode.",
@@ -116,6 +116,15 @@
             "id": "debug.speedReaderSnapshot",
             "name": "Latest speed reader debug snapshot",
             "description": "Return the latest browser-captured Speed Read debug snapshot for comparing rendered page words with speed-reader token order.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          {
+            "id": "debug.speedReaderTextByPage",
+            "name": "Speed reader text by page",
+            "description": "Return the latest browser-captured paginated page map, including rendered page words and the matching speed-reader tokens for each page.",
             "inputSchema": {
               "type": "object",
               "properties": {}

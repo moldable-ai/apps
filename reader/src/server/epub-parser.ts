@@ -92,21 +92,32 @@ function dirname(path: string): string {
   return idx < 0 ? '' : path.slice(0, idx)
 }
 
-/** Remove tags, decode common entities, collapse whitespace into plain text. */
-function stripHtml(html: string): string {
+const BLOCK_TAG_NAMES =
+  'address|article|aside|blockquote|body|dd|details|dialog|div|dl|dt|fieldset|figcaption|figure|footer|form|h[1-6]|header|hr|li|main|nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul'
+const BLOCK_TAG = new RegExp(
+  `<\\s*\\/?\\s*(?:${BLOCK_TAG_NAMES})(?:\\s+[^>]*)?\\/?\\s*>`,
+  'gi',
+)
+
+/**
+ * Convert readable/sanitized HTML to plain text while preserving rendered word
+ * boundaries. Block elements produce line breaks; inline elements (span, em,
+ * a, etc.) do not introduce artificial spaces, so EPUB drop caps like
+ * `<span class="dropcap">O</span>n` become `On`, not `O n`.
+ */
+export function htmlToText(html: string): string {
   if (!html) return ''
   let text = html
-    .replace(/<\s*(script|style)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, ' ')
-    .replace(
-      /<\/\s*(p|div|h[1-6]|li|blockquote|tr|br|hr|figcaption|pre|section|article)\s*>/gi,
-      '\n',
-    )
+    .replace(/<\s*(script|style)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, '\n')
     .replace(/<\s*br\s*\/?\s*>/gi, '\n')
-    .replace(/<[^>]+>/g, ' ')
+    .replace(/<\s*img\b[^>]*>/gi, '\n')
+    .replace(BLOCK_TAG, '\n')
+    .replace(/<[^>]+>/g, '')
 
   text = decodeEntities(text)
 
   return text
+    .replace(/\u00a0/g, ' ')
     .replace(/[ \t\f\v]+/g, ' ')
     .replace(/ *\n */g, '\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -279,21 +290,22 @@ async function parseEpub(
   // 2. Metadata
   const metadata = getChild(pkg, 'metadata')
   const title =
-    collapseInlineWhitespace(stripHtml(firstMetaText(metadata, 'title'))) ||
+    collapseInlineWhitespace(htmlToText(firstMetaText(metadata, 'title'))) ||
     prettifyFilename(filename)
   const author =
-    collapseInlineWhitespace(stripHtml(firstMetaText(metadata, 'creator'))) ||
+    collapseInlineWhitespace(htmlToText(firstMetaText(metadata, 'creator'))) ||
     null
   const language =
-    collapseInlineWhitespace(stripHtml(firstMetaText(metadata, 'language'))) ||
+    collapseInlineWhitespace(htmlToText(firstMetaText(metadata, 'language'))) ||
     null
   const description =
     collapseInlineWhitespace(
-      stripHtml(firstMetaText(metadata, 'description')),
+      htmlToText(firstMetaText(metadata, 'description')),
     ) || null
   const publisher =
-    collapseInlineWhitespace(stripHtml(firstMetaText(metadata, 'publisher'))) ||
-    null
+    collapseInlineWhitespace(
+      htmlToText(firstMetaText(metadata, 'publisher')),
+    ) || null
 
   // 3. Manifest + spine
   const manifestNode = getChild(pkg, 'manifest')
@@ -357,7 +369,7 @@ async function parseEpub(
     const rawHtml = strFromU8(bytes)
     const chapterDir = dirname(item.path)
     const html = sanitizeChapterHtml(rawHtml, chapterDir, addResource)
-    const text = stripHtml(html)
+    const text = htmlToText(html)
 
     // 7. Skip spine items that are empty after stripping.
     if (!text.trim()) continue
@@ -381,7 +393,7 @@ async function parseEpub(
       const rawHtml = strFromU8(bytes)
       const chapterDir = dirname(item.path)
       const html = sanitizeChapterHtml(rawHtml, chapterDir, addResource)
-      const text = stripHtml(html)
+      const text = htmlToText(html)
       if (!text.trim() && !html.trim()) continue
       const title = titleByPath.get(item.path) ?? firstHeading(rawHtml) ?? ''
       chapters.push({
@@ -506,7 +518,7 @@ function sanitizeChapterHtml(
 function firstHeading(rawHtml: string): string | undefined {
   const match = rawHtml.match(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/i)
   if (!match) return undefined
-  const text = collapseInlineWhitespace(stripHtml(match[1] ?? ''))
+  const text = collapseInlineWhitespace(htmlToText(match[1] ?? ''))
   return text || undefined
 }
 
@@ -570,7 +582,7 @@ function parseNavDocument(
   let match: RegExpExecArray | null
   while ((match = anchorRe.exec(html)) !== null) {
     const href = match[2] ?? match[3] ?? ''
-    const label = collapseInlineWhitespace(stripHtml(match[4] ?? ''))
+    const label = collapseInlineWhitespace(htmlToText(match[4] ?? ''))
     if (!href || !label) continue
     const path = resolveRelative(navDir, href)
     if (path && !map.has(path)) {
@@ -599,7 +611,7 @@ function walkNavPoints(
   for (const point of asArray(node)) {
     const navLabel = getChild(point, 'navLabel')
     const label = collapseInlineWhitespace(
-      stripHtml(nodeText(getChild(navLabel, 'text'))),
+      htmlToText(nodeText(getChild(navLabel, 'text'))),
     )
     const content = getChild(point, 'content')
     const src = getAttr(content, 'src')

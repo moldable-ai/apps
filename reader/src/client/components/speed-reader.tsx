@@ -179,54 +179,42 @@ export function SpeedReader(props: SpeedReaderProps) {
     [settings.wpm, settings.punctuationPause, chunkSize, words, total],
   )
 
-  // Timing engine: setTimeout recursion so each delay can vary.
+  // Timing engine: one timeout per displayed chunk so each delay can vary.
   useEffect(() => {
     if (!open || !playing) return
     if (total <= 0) {
       setPlaying(false)
       return
     }
-    if (indexRef.current >= total) {
+    if (index >= total) {
       setPlaying(false)
       setFinished(true)
       return
     }
 
-    let cancelled = false
+    timerRef.current = setTimeout(() => {
+      const current = clampProgressIndex(indexRef.current, total)
+      const next = Math.min(current + chunkSize, total)
+      setIndex(next)
+      reportProgress(next)
 
-    const tick = () => {
-      const current = indexRef.current
-      const delay = dwellFor(current)
-      timerRef.current = setTimeout(() => {
-        if (cancelled) return
-        const next = current + chunkSize
-        if (next >= total) {
-          setIndex(total)
-          reportProgress(total)
-          if (hasNextChapter && onChapterComplete) {
-            setFinished(false)
-            onChapterComplete(total)
-            return
-          }
-          setPlaying(false)
-          setFinished(true)
-          return
-        }
-        setIndex(next)
-        reportProgress(next)
-        tick()
-      }, delay)
-    }
+      if (next < total) return
 
-    tick()
+      if (hasNextChapter && onChapterComplete) {
+        setFinished(false)
+        onChapterComplete(total)
+        return
+      }
 
-    return () => {
-      cancelled = true
-      clearTimer()
-    }
+      setPlaying(false)
+      setFinished(true)
+    }, dwellFor(index))
+
+    return () => clearTimer()
   }, [
     open,
     playing,
+    index,
     chunkSize,
     dwellFor,
     total,

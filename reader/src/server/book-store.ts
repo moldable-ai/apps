@@ -21,7 +21,7 @@ import {
   normalizeReaderSettings,
 } from '../shared/reader-settings'
 import { DEFAULT_BOOKS } from './default-books'
-import { parseEbook } from './epub-parser'
+import { htmlToText, parseEbook } from './epub-parser'
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 
@@ -84,29 +84,6 @@ function seedMarkerPath(dataDir: string) {
 
 // ─── Helpers ─────────────────────────────────────────────────────────
 
-const BLOCK_TAG = /<\/(p|div|h[1-6]|li|br|section|article|blockquote|tr)>/gi
-
-export function htmlToText(html: string): string {
-  return html
-    .replace(/<\s*(script|style)[^>]*>[\s\S]*?<\/\s*\1\s*>/gi, ' ')
-    .replace(BLOCK_TAG, '\n')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&#39;|&apos;/gi, "'")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#8217;|&rsquo;/gi, '’')
-    .replace(/&#8216;|&lsquo;/gi, '‘')
-    .replace(/&#8220;|&ldquo;/gi, '“')
-    .replace(/&#8221;|&rdquo;/gi, '”')
-    .replace(/&mdash;|&#8212;/gi, '—')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
 function slugify(value: string): string {
   return value
     .normalize('NFKD')
@@ -145,6 +122,10 @@ async function pathExists(path: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+function storedChapterText(chapter: StoredChapter): string {
+  return chapter.html ? htmlToText(chapter.html) : chapter.text
 }
 
 async function listBookIds(dataDir: string): Promise<string[]> {
@@ -300,6 +281,7 @@ export async function getChapter(
     null,
   )
   if (!stored) return null
+  const text = storedChapterText(stored)
   const resourcePrefix = `/api/books/${encodeURIComponent(bookId)}/resource/`
   const withQuery = stored.html.replace(
     /__RES__\/([^"'<>\n\r]+)/g,
@@ -317,8 +299,8 @@ export async function getChapter(
     index: stored.index,
     title: stored.title,
     html: withQuery,
-    text: stored.text,
-    wordCount: stored.wordCount,
+    text,
+    wordCount: countWords(text),
   }
 }
 
@@ -390,9 +372,11 @@ export async function searchBook(
       chapterPath(dataDir, bookId, chapterRef.index),
       null,
     )
-    if (!chapter?.text) continue
+    if (!chapter) continue
+    const text = storedChapterText(chapter)
+    if (!text) continue
 
-    const normalized = normalizeForSearch(chapter.text)
+    const normalized = normalizeForSearch(text)
     let index = normalized.text.indexOf(needle)
     while (index >= 0) {
       const textStart = normalized.map[index] ?? 0
@@ -404,7 +388,7 @@ export async function searchBook(
 
       total += 1
       if (results.length < maxResults) {
-        const snippet = searchSnippet(chapter.text, textStart, textLength)
+        const snippet = searchSnippet(text, textStart, textLength)
         results.push({
           id: `${bookId}:${chapter.index}:${textStart}`,
           bookId,
@@ -413,8 +397,8 @@ export async function searchBook(
           textStart,
           textLength,
           position:
-            chapter.text.length > 0
-              ? Math.min(1, Math.max(0, textStart / chapter.text.length))
+            text.length > 0
+              ? Math.min(1, Math.max(0, textStart / text.length))
               : 0,
           ...snippet,
         })

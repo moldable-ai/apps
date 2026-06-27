@@ -1,6 +1,6 @@
 {
   "name": "Tasks",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Linear-style local project and task management",
