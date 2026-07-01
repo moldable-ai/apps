@@ -14,6 +14,8 @@ export type AivaultSecretMeta = {
 export type AivaultCredentialMeta = {
   id: string
   provider: string
+  groupId?: string | null
+  group_id?: string | null
   workspaceId?: string | null
   workspace_id?: string | null
 }
@@ -190,21 +192,31 @@ export async function listCredentials(
 ): Promise<AivaultCredentialMeta[]> {
   const output = await runAivaultJson<
     AivaultCredentialMeta[] | { credentials?: AivaultCredentialMeta[] }
-  >(['credential', 'list', '--verbose', ...aivaultContextArgs(workspaceId)])
+  >(['credential', 'list', '--verbose'])
 
-  return Array.isArray(output) ? output : (output.credentials ?? [])
+  const credentials = Array.isArray(output)
+    ? output
+    : (output.credentials ?? [])
+  const id = workspaceId?.trim()
+  if (!id) return credentials
+
+  const groupId =
+    process.env.MOLDABLE_GROUP_ID?.trim() ||
+    process.env.AIVAULT_GROUP_ID?.trim() ||
+    null
+
+  return credentials.filter((credential) => {
+    const credentialWorkspaceId =
+      credential.workspaceId ?? credential.workspace_id ?? null
+    if (credentialWorkspaceId !== id) return false
+
+    const credentialGroupId = credential.groupId ?? credential.group_id ?? null
+    return groupId ? credentialGroupId === groupId : !credentialGroupId
+  })
 }
 
-export async function deleteCredential(
-  id: string,
-  workspaceId?: string,
-): Promise<void> {
-  await runAivault([
-    'credential',
-    'delete',
-    id,
-    ...aivaultContextArgs(workspaceId),
-  ])
+export async function deleteCredential(id: string): Promise<void> {
+  await runAivault(['credential', 'delete', id])
 }
 
 export async function deleteCredentialIfExists(
@@ -213,7 +225,7 @@ export async function deleteCredentialIfExists(
 ): Promise<void> {
   const credentials = await listCredentials(workspaceId)
   if (!credentials.some((credential) => credential.id === id)) return
-  await deleteCredential(id, workspaceId)
+  await deleteCredential(id)
 }
 
 async function createPostgresCredential({

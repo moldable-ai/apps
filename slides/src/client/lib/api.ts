@@ -36,6 +36,33 @@ export interface SlideImageResult {
   fileName: string
 }
 
+export type TextReplaceTarget =
+  | { kind: 'deck'; field: 'title' | 'subtitle' | 'imageStyle' }
+  | {
+      kind: 'slide'
+      field: 'name' | 'bodyHtml' | 'slideClass' | 'notes'
+      slideId: string
+    }
+  | { kind: 'theme'; field: 'css' | 'stageBg' }
+
+export interface TextReplaceInput {
+  target?: TextReplaceTarget
+  kind?: TextReplaceTarget['kind']
+  field?: string
+  slideId?: string
+  oldString: string
+  newString: string
+  replaceAll?: boolean
+}
+
+export interface TextReplaceResult {
+  deck: Deck
+  slide?: Slide
+  target?: TextReplaceTarget
+  targets: TextReplaceTarget[]
+  replacements: number
+}
+
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let message = `Request failed (${res.status})`
@@ -70,6 +97,10 @@ export function createApi(fetchWithWorkspace: Fetcher) {
       post('/api/decks', input ?? {}).then((r) => json<Deck>(r)),
     updateDeck: (id: string, patch: Partial<Deck>) =>
       post(`/api/decks/${id}`, patch, 'PATCH').then((r) => json<Deck>(r)),
+    replaceText: (id: string, input: TextReplaceInput) =>
+      post(`/api/decks/${id}/text-replace`, input).then((r) =>
+        json<TextReplaceResult>(r),
+      ),
     setImageStyle: (id: string, input: { style?: string; presetId?: string }) =>
       post(`/api/decks/${id}/image-style`, input).then((r) => json<Deck>(r)),
     deleteDeck: (id: string) =>

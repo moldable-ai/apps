@@ -21,8 +21,48 @@ import {
   saveDeckRaw,
   snapshotDeck,
 } from './store'
+import { replaceExactText } from './text-replace'
 
 const EMPTY_THEME: DeckTheme = { fontLinks: [], css: '', stageBg: undefined }
+const DECK_TEXT_FIELDS = ['title', 'subtitle', 'imageStyle'] as const
+const SLIDE_TEXT_FIELDS = ['name', 'bodyHtml', 'slideClass', 'notes'] as const
+const THEME_TEXT_FIELDS = ['css', 'stageBg'] as const
+const ALL_TEXT_FIELDS = [
+  ...DECK_TEXT_FIELDS,
+  ...SLIDE_TEXT_FIELDS,
+  ...THEME_TEXT_FIELDS,
+] as const
+
+type DeckTextField = (typeof DECK_TEXT_FIELDS)[number]
+type SlideTextField = (typeof SLIDE_TEXT_FIELDS)[number]
+type ThemeTextField = (typeof THEME_TEXT_FIELDS)[number]
+type TextTargetKind = 'deck' | 'slide' | 'theme'
+
+type TextEditTarget =
+  | { kind: 'deck'; field: DeckTextField }
+  | { kind: 'slide'; field: SlideTextField; slideId: string }
+  | { kind: 'theme'; field: ThemeTextField }
+
+interface TextEditFilter {
+  kind?: TextTargetKind
+  field?: string
+  slideId?: string
+}
+
+interface TextCandidate {
+  target: TextEditTarget
+  get(): string
+  set(value: string): void
+  slideIndex?: number
+}
+
+export interface DeckTextReplaceResult {
+  deck: Deck
+  slide?: Slide
+  target?: TextEditTarget
+  targets: TextEditTarget[]
+  replacements: number
+}
 
 function cloneSampleSlides(slides: Slide[]): Slide[] {
   return slides.map((slide) => ({ ...slide, id: newSlideId() }))
@@ -42,6 +82,115 @@ const TRANSITIONS: SlideTransition[] = ['fade', 'slide', 'zoom', 'none']
 
 function str(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
+function isOneOf<T extends readonly string[]>(
+  options: T,
+  value: unknown,
+): value is T[number] {
+  return typeof value === 'string' && options.includes(value)
+}
+
+function isTextKind(value: unknown): value is TextTargetKind {
+  return value === 'deck' || value === 'slide' || value === 'theme'
+}
+
+function validateTextField(kind: TextTargetKind | undefined, field: string) {
+  if (kind === 'deck' && !isOneOf(DECK_TEXT_FIELDS, field)) {
+    throw new OperationError(
+      'invalid_text_field',
+      `deck text field must be one of: ${DECK_TEXT_FIELDS.join(', ')}`,
+    )
+  }
+  if (kind === 'slide' && !isOneOf(SLIDE_TEXT_FIELDS, field)) {
+    throw new OperationError(
+      'invalid_text_field',
+      `slide text field must be one of: ${SLIDE_TEXT_FIELDS.join(', ')}`,
+    )
+  }
+  if (kind === 'theme' && !isOneOf(THEME_TEXT_FIELDS, field)) {
+    throw new OperationError(
+      'invalid_text_field',
+      `theme text field must be one of: ${THEME_TEXT_FIELDS.join(', ')}`,
+    )
+  }
+  if (!kind && !isOneOf(ALL_TEXT_FIELDS, field)) {
+    throw new OperationError(
+      'invalid_text_field',
+      `text field must be one of: ${[...new Set(ALL_TEXT_FIELDS)].join(', ')}`,
+    )
+  }
+}
+
+function textFilter(
+  input: unknown,
+  defaults: { kind?: string; field?: string; slideId?: string } = {},
+): TextEditFilter {
+  const v = record(input)
+  const target = record(v.target)
+  const rawKind =
+    str(target.kind) ??
+    str(target.scope) ??
+    str(v.kind) ??
+    str(v.scope) ??
+    defaults.kind
+  const field = str(target.field) ?? str(v.field) ?? defaults.field
+  const slideId = str(target.slideId) ?? str(v.slideId) ?? defaults.slideId
+
+  let kind: TextTargetKind | undefined
+  if (rawKind) {
+    if (!isTextKind(rawKind)) {
+      throw new OperationError(
+        'invalid_text_target',
+        'text edit target kind must be deck, slide, or theme',
+      )
+    }
+    kind = rawKind
+  }
+  if (field) validateTextField(kind, field)
+  if (slideId && kind && kind !== 'slide') {
+    throw new OperationError(
+      'invalid_text_target',
+      'slideId can only be used with slide text edits',
+    )
+  }
+
+  return { kind, field, slideId }
+}
+
+function textPatch(input: unknown): {
+  oldString: string
+  newString: string
+  replaceAll: boolean
+} {
+  const v = record(input)
+  const oldString = str(v.oldString)
+  const newString = str(v.newString)
+  if (oldString === undefined) {
+    throw new OperationError('missing_old_string', 'oldString is required')
+  }
+  if (!oldString) {
+    throw new OperationError('old_string_empty', 'oldString cannot be empty')
+  }
+  if (newString === undefined) {
+    throw new OperationError('missing_new_string', 'newString is required')
+  }
+  return { oldString, newString, replaceAll: v.replaceAll === true }
+}
+
+function describeTextTarget(target: TextEditTarget): string {
+  if (target.kind === 'slide') return `slide(${target.slideId}).${target.field}`
+  return `${target.kind}.${target.field}`
+}
+
+function countOccurrences(value: string, oldString: string): number {
+  return value.split(oldString).length - 1
 }
 
 function coerceTransition(value: unknown): SlideTransition | undefined {
@@ -89,6 +238,66 @@ async function mustGet(
   return deck
 }
 
+function textCandidates(deck: Deck, filter: TextEditFilter): TextCandidate[] {
+  const candidates: TextCandidate[] = []
+  const include = (kind: TextTargetKind, field: string) =>
+    (!filter.kind || filter.kind === kind) &&
+    (!filter.field || filter.field === field)
+
+  for (const field of DECK_TEXT_FIELDS) {
+    if (!include('deck', field)) continue
+    candidates.push({
+      target: { kind: 'deck', field },
+      get: () => (field === 'imageStyle' ? deck.imageStyle : deck[field]) ?? '',
+      set: (value) => {
+        deck[field] = value
+      },
+    })
+  }
+
+  for (const field of THEME_TEXT_FIELDS) {
+    if (!include('theme', field)) continue
+    candidates.push({
+      target: { kind: 'theme', field },
+      get: () => deck.theme[field] ?? '',
+      set: (value) => {
+        deck.theme = { ...deck.theme, [field]: value }
+      },
+    })
+  }
+
+  for (let slideIndex = 0; slideIndex < deck.slides.length; slideIndex += 1) {
+    const slide = deck.slides[slideIndex]
+    if (filter.slideId && filter.slideId !== slide.id) continue
+    for (const field of SLIDE_TEXT_FIELDS) {
+      if (!include('slide', field)) continue
+      candidates.push({
+        target: { kind: 'slide', field, slideId: slide.id },
+        slideIndex,
+        get: () => deck.slides[slideIndex]?.[field] ?? '',
+        set: (value) => {
+          const current = deck.slides[slideIndex]
+          if (!current) return
+          deck.slides[slideIndex] = { ...current, [field]: value }
+        },
+      })
+    }
+  }
+
+  if (
+    filter.slideId &&
+    !candidates.some((item) => item.target.kind === 'slide')
+  ) {
+    throw new OperationError(
+      'slide_not_found',
+      `No slide: ${filter.slideId}`,
+      404,
+    )
+  }
+
+  return candidates
+}
+
 // ---- Deck-level ----------------------------------------------------------
 
 export async function createDeck(
@@ -113,7 +322,7 @@ export async function createDeck(
 
   const deck: Deck = {
     id: newDeckId(),
-    title: str(v.title) || 'Untitled deck',
+    title: str(v.title) || template?.name || 'Untitled deck',
     subtitle: str(v.subtitle) ?? '',
     density: v.density === 'high' ? 'high' : 'low',
     templateId: template?.id,
@@ -189,6 +398,78 @@ export async function updateDeck(
     theme: coerceTheme(v.theme, deck.theme),
   }
   return saveDeck(workspaceId, next, 'Edit deck')
+}
+
+export async function replaceDeckText(
+  workspaceId: string | undefined,
+  id: string,
+  input: unknown,
+  defaults?: { kind?: string; field?: string; slideId?: string },
+): Promise<DeckTextReplaceResult> {
+  const deck = await mustGet(workspaceId, id)
+  const filter = textFilter(input, defaults)
+  const patch = textPatch(input)
+  const candidates = textCandidates(deck, filter)
+  const matches = candidates
+    .map((candidate) => ({
+      candidate,
+      occurrences: countOccurrences(candidate.get(), patch.oldString),
+    }))
+    .filter((match) => match.occurrences > 0)
+  const totalOccurrences = matches.reduce(
+    (total, match) => total + match.occurrences,
+    0,
+  )
+
+  if (totalOccurrences === 0) {
+    throw new OperationError('old_string_not_found', 'oldString not found')
+  }
+  if (!patch.replaceAll && totalOccurrences > 1) {
+    const locations = matches
+      .map(
+        (match) =>
+          `${describeTextTarget(match.candidate.target)} (${match.occurrences})`,
+      )
+      .join(', ')
+    throw new OperationError(
+      'old_string_not_unique',
+      `oldString found ${totalOccurrences} times across ${locations} - must be unique or use replaceAll`,
+    )
+  }
+
+  let replacements = 0
+  let changedSlide: Slide | undefined
+  const changedTargets: TextEditTarget[] = []
+
+  for (const { candidate } of matches) {
+    const result = replaceExactText({
+      value: candidate.get(),
+      oldString: patch.oldString,
+      newString: patch.newString,
+      replaceAll: patch.replaceAll,
+    })
+    candidate.set(result.value)
+    replacements += result.replacements
+    changedTargets.push(candidate.target)
+    if (candidate.slideIndex !== undefined && !changedSlide) {
+      changedSlide = deck.slides[candidate.slideIndex]
+    }
+  }
+
+  const saved = await saveDeck(
+    workspaceId,
+    deck,
+    changedTargets.length === 1
+      ? `Edit ${describeTextTarget(changedTargets[0])}`
+      : 'Edit deck text',
+  )
+  return {
+    deck: saved,
+    slide: changedSlide,
+    target: changedTargets[0],
+    targets: changedTargets,
+    replacements,
+  }
 }
 
 /**

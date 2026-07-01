@@ -25,6 +25,7 @@ import {
   removeSlide,
   reorderSlides,
   replaceDeck,
+  replaceDeckText,
   requestPublish,
   revertDeck,
   setImageStyle,
@@ -184,6 +185,14 @@ app.get('/api/decks/:id', async (c) => {
 app.patch('/api/decks/:id', async (c) => {
   const body = await c.req.json().catch(() => ({}))
   return run(c, () => updateDeck(getWorkspaceId(c), c.req.param('id'), body))
+})
+
+// Surgical exact-string edits across deck, theme, and slide text fields.
+app.post('/api/decks/:id/text-replace', async (c) => {
+  const body = await c.req.json().catch(() => ({}))
+  return run(c, () =>
+    replaceDeckText(getWorkspaceId(c), c.req.param('id'), body),
+  )
 })
 
 // Image-style recipe + active preset — saved without bumping updatedAt (no canvas reload).
@@ -693,6 +702,10 @@ async function dispatch(
       return updateDeck(workspaceId, needDeck(), p)
     case 'slides.decks.replace':
       return replaceDeck(workspaceId, needDeck(), p)
+    case 'slides.text.replace':
+      return replaceDeckText(workspaceId, needDeck(), p)
+    case 'slides.decks.text.replace':
+      return replaceDeckText(workspaceId, needDeck(), p, { kind: 'deck' })
     case 'slides.decks.delete':
       await removeDeck(workspaceId, needDeck())
       return { ok: true }
@@ -706,6 +719,11 @@ async function dispatch(
       )
     case 'slides.slides.update':
       return updateSlide(workspaceId, needDeck(), needSlide(), p.slide ?? p)
+    case 'slides.slides.text.replace':
+      return replaceDeckText(workspaceId, needDeck(), p, {
+        kind: 'slide',
+        slideId,
+      })
     case 'slides.slides.remove':
       return removeSlide(workspaceId, needDeck(), needSlide())
     case 'slides.slides.reorder':

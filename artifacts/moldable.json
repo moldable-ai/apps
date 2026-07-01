@@ -1,0 +1,608 @@
+{
+  "name": "Artifacts",
+  "version": "0.1.1",
+  "aliases": [
+    "artifact",
+    "dashboard",
+    "landing page",
+    "web page",
+    "data story",
+    "product spec",
+    "microsite"
+  ],
+  "runtime": "vite_hono",
+  "visibility": "public",
+  "description": "Turn a chat into a beautiful, self-contained, publishable web page or slide deck — dashboards, landing pages, specs, charts, data stories, games, and 3D scenes.",
+  "author": "Moldable",
+  "license": "MIT",
+  "icon": "🎨",
+  "iconPath": "public/app-icon=artifacts.png",
+  "category": "productivity",
+  "tags": [
+    "artifacts",
+    "page",
+    "dashboard",
+    "landing",
+    "spec",
+    "chart",
+    "publish",
+    "slides"
+  ],
+  "moldableDependencies": {
+    "@moldable-ai/ui": "^0.2.18",
+    "@moldable-ai/storage": "^0.1.6"
+  },
+  "appApi": {
+    "version": 1,
+    "capabilities": [
+      {
+        "id": "artifacts.author",
+        "name": "Author artifacts",
+        "description": "Create, edit, and publish web-page and slide-deck artifacts in the active workspace.",
+        "scopes": [
+          {
+            "id": "artifacts.list",
+            "name": "List artifacts",
+            "description": "List all artifacts with title, kind, and publish status.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          {
+            "id": "artifacts.get",
+            "name": "Get artifact",
+            "description": "Read a full artifact (a deck's slides + theme, or a page's html/css/js).",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.create",
+            "name": "Create artifact",
+            "description": "Create a new artifact. Pass kind ('page' or 'deck') and/or a templateId to clone a sample.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "page",
+                    "deck"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "subtitle": {
+                  "type": "string"
+                },
+                "templateId": {
+                  "type": "string"
+                },
+                "page": {
+                  "type": "object"
+                },
+                "slides": {
+                  "type": "array"
+                },
+                "theme": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.update",
+            "name": "Update artifact",
+            "description": "Update an artifact's title, subtitle, density, or theme.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.replace",
+            "name": "Replace artifact",
+            "description": "Replace an artifact's content in one call (a page's html/css/js, or a deck's slides).",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.text.replace",
+            "name": "Replace artifact text",
+            "description": "Surgically replace exact text across an artifact's editable text as a virtual document. oldString must be unique unless replaceAll is true. Optionally pass target to narrow the search.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "oldString",
+                "newString"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "artifact",
+                        "page",
+                        "slide",
+                        "theme"
+                      ]
+                    },
+                    "field": {
+                      "type": "string"
+                    },
+                    "slideId": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "oldString": {
+                  "type": "string"
+                },
+                "newString": {
+                  "type": "string"
+                },
+                "replaceAll": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.delete",
+            "name": "Delete artifact",
+            "description": "Permanently delete an artifact and its assets.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.page.set",
+            "name": "Set page document",
+            "description": "Update a page artifact's html, css, js, fontLinks, libs, or background. Each provided field replaces that part; omit to leave unchanged.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "html": {
+                  "type": "string"
+                },
+                "css": {
+                  "type": "string"
+                },
+                "js": {
+                  "type": "string"
+                },
+                "fontLinks": {
+                  "type": "array"
+                },
+                "libs": {
+                  "type": "array"
+                },
+                "background": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.page.text.replace",
+            "name": "Replace page text",
+            "description": "Surgically replace exact text across a page document. oldString must be unique unless replaceAll is true. Optionally pass field to narrow the search.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "oldString",
+                "newString"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "html",
+                    "css",
+                    "js",
+                    "background"
+                  ]
+                },
+                "oldString": {
+                  "type": "string"
+                },
+                "newString": {
+                  "type": "string"
+                },
+                "replaceAll": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.slides.add",
+            "name": "Add slide",
+            "description": "Add a slide to a deck artifact.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "slide": {
+                  "type": "object"
+                },
+                "index": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.slides.update",
+            "name": "Update slide",
+            "description": "Update a slide's bodyHtml, name, class, transition, or notes.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "slideId"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "slideId": {
+                  "type": "string"
+                },
+                "slide": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.slides.text.replace",
+            "name": "Replace slide text",
+            "description": "Surgically replace exact text across deck slides. oldString must be unique unless replaceAll is true. Optionally pass slideId or field to narrow the search.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "oldString",
+                "newString"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "slideId": {
+                  "type": "string"
+                },
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "bodyHtml",
+                    "notes",
+                    "name",
+                    "slideClass"
+                  ]
+                },
+                "oldString": {
+                  "type": "string"
+                },
+                "newString": {
+                  "type": "string"
+                },
+                "replaceAll": {
+                  "type": "boolean"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.slides.remove",
+            "name": "Remove slide",
+            "description": "Remove a slide from a deck artifact.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "slideId"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "slideId": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.slides.reorder",
+            "name": "Reorder slides",
+            "description": "Reorder a deck's slides by an array of slide ids.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "order"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "order": {
+                  "type": "array"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.slides.move",
+            "name": "Move slide",
+            "description": "Move a slide to a new index.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "slideId",
+                "toIndex"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "slideId": {
+                  "type": "string"
+                },
+                "toIndex": {
+                  "type": "number"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.templates.list",
+            "name": "List templates",
+            "description": "List the template library (page + deck templates) with kind and categories.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {}
+            }
+          },
+          {
+            "id": "artifacts.templates.get",
+            "name": "Get template",
+            "description": "Read a template's full detail (sample + coding guide).",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "templateId"
+              ],
+              "properties": {
+                "templateId": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.applyTemplate",
+            "name": "Apply template",
+            "description": "Switch an artifact to a library template.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "templateId"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "templateId": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.images.list",
+            "name": "List images",
+            "description": "List an artifact's generated image assets.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.images.generate",
+            "name": "Generate image",
+            "description": "Generate an image and save it as an artifact asset (reference as assets/<file>).",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "prompt"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "prompt": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "string"
+                },
+                "fileName": {
+                  "type": "string"
+                },
+                "styleRef": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.images.edit",
+            "name": "Edit image",
+            "description": "Remix an existing artifact image (image-to-image) and save the result.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "source",
+                "prompt"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "source": {
+                  "type": "string"
+                },
+                "prompt": {
+                  "type": "string"
+                },
+                "size": {
+                  "type": "string"
+                },
+                "fileName": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.versions.list",
+            "name": "List versions",
+            "description": "List an artifact's restore points.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.revert",
+            "name": "Revert artifact",
+            "description": "Restore an artifact to a previous version (undoable).",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "versionId"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "versionId": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.publish",
+            "name": "Publish artifact",
+            "description": "Publish an artifact to a public, shareable Moldable Artifacts link.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "id": "artifacts.unpublish",
+            "name": "Unpublish artifact",
+            "description": "Remove an artifact's public link.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

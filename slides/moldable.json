@@ -1,6 +1,6 @@
 {
   "name": "Slides",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "aliases": [
     "presentation",
     "deck",
@@ -126,6 +126,93 @@
             }
           },
           {
+            "id": "slides.text.replace",
+            "name": "Replace deck text",
+            "description": "Surgically replace exact text across a deck's editable text as one virtual document. oldString must be unique unless replaceAll is true. Optionally pass field, slideId, or target to narrow the search.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "oldString",
+                "newString"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "oldString": {
+                  "type": "string"
+                },
+                "newString": {
+                  "type": "string"
+                },
+                "replaceAll": {
+                  "type": "boolean"
+                },
+                "field": {
+                  "type": "string"
+                },
+                "slideId": {
+                  "type": "string"
+                },
+                "target": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "deck",
+                        "slide",
+                        "theme"
+                      ]
+                    },
+                    "field": {
+                      "type": "string"
+                    },
+                    "slideId": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "id": "slides.decks.text.replace",
+            "name": "Replace deck metadata text",
+            "description": "Surgically replace exact text in deck-level fields: title, subtitle, or imageStyle.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "oldString",
+                "newString"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "oldString": {
+                  "type": "string"
+                },
+                "newString": {
+                  "type": "string"
+                },
+                "replaceAll": {
+                  "type": "boolean"
+                },
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "title",
+                    "subtitle",
+                    "imageStyle"
+                  ]
+                }
+              }
+            }
+          },
+          {
             "id": "slides.decks.delete",
             "name": "Delete deck",
             "description": "Permanently delete a deck and its assets.",
@@ -227,6 +314,45 @@
                 },
                 "slide": {
                   "type": "object"
+                }
+              }
+            }
+          },
+          {
+            "id": "slides.slides.text.replace",
+            "name": "Replace slide text",
+            "description": "Surgically replace exact text in slide fields: name, bodyHtml, slideClass, or notes. Pass slideId to target one slide, or omit it to search all slides.",
+            "inputSchema": {
+              "type": "object",
+              "required": [
+                "id",
+                "oldString",
+                "newString"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "slideId": {
+                  "type": "string"
+                },
+                "oldString": {
+                  "type": "string"
+                },
+                "newString": {
+                  "type": "string"
+                },
+                "replaceAll": {
+                  "type": "boolean"
+                },
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "name",
+                    "bodyHtml",
+                    "slideClass",
+                    "notes"
+                  ]
                 }
               }
             }

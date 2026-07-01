@@ -338,6 +338,13 @@ function formatGitFailure(args: string[], stdout: string, stderr: string) {
   return output ? `${prefix}\n\n${output}` : prefix
 }
 
+function isStalePathspecError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+  return (
+    message.includes('pathspec') && message.includes('did not match any files')
+  )
+}
+
 function getImageMimeType(filePath: string) {
   return IMAGE_MIME_TYPES[path.extname(filePath).toLowerCase()]
 }
@@ -1496,6 +1503,52 @@ async function reconcileSelectedPathsIndex(repoPath: string, paths: string[]) {
   }
 }
 
+function buildSelectedCommitArgs(
+  summary: string,
+  description: string,
+  paths: string[],
+) {
+  const commitArgs = ['commit', '--only', '-m', summary]
+  if (description) {
+    commitArgs.push('-m', description)
+  }
+  commitArgs.push('--', ...paths)
+  return commitArgs
+}
+
+async function stageAndCommitSelectedPaths(
+  requestedPaths: string[],
+  summary: string,
+  description: string,
+  repoPath: string,
+) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const activePaths = await resolveCommitPaths(requestedPaths, repoPath)
+
+    try {
+      await runGit(['add', '--', ...activePaths], repoPath, null)
+      try {
+        await runGit(
+          buildSelectedCommitArgs(summary, description, activePaths),
+          repoPath,
+          null,
+        )
+      } finally {
+        await reconcileSelectedPathsIndex(repoPath, activePaths)
+      }
+      return
+    } catch (error) {
+      if (!isStalePathspecError(error) || attempt > 0) {
+        throw error
+      }
+
+      console.info(
+        '[git-flow] Refreshing selected paths after stale pathspec during commit.',
+      )
+    }
+  }
+}
+
 export async function commitFiles(
   paths: string[],
   summary: string,
@@ -1509,25 +1562,7 @@ export async function commitFiles(
   )
 
   try {
-    const activePaths = await resolveCommitPaths(paths, pathToUse)
-
-    // 1. Stage only the selected files that are still present in git status.
-    // Large commits and pre-commit hooks can legitimately take a long time, so
-    // commit workflows intentionally do not impose a fixed timeout.
-    await runGit(['add', '--', ...activePaths], pathToUse, null)
-
-    // 2. Commit only the selected paths. A plain `git commit` would also
-    // include unrelated files that happened to be staged before Git Flow ran.
-    const commitArgs = ['commit', '--only', '-m', summary]
-    if (description) {
-      commitArgs.push('-m', description)
-    }
-    commitArgs.push('--', ...activePaths)
-    try {
-      await runGit(commitArgs, pathToUse, null)
-    } finally {
-      await reconcileSelectedPathsIndex(pathToUse, activePaths)
-    }
+    await stageAndCommitSelectedPaths(paths, summary, description, pathToUse)
     const result = await runGit(['rev-parse', 'HEAD'], pathToUse)
 
     return { success: true, commit: result.stdout.trim() }
@@ -1552,12 +1587,28 @@ export async function commitAllFiles(
   )
 
   try {
-    const activePaths = await resolveCommitPaths(paths, pathToUse)
+    const requestedPathCount = normalizeCommitPaths(paths, pathToUse).length
+    if (requestedPathCount === 0) {
+      throw new Error('At least one selected file is required.')
+    }
+
+    const currentStatus = await simpleGit(pathToUse).status()
+    if (currentStatus.files.length === 0) {
+      throw new Error('No current changes remain to commit.')
+    }
+
+    if (currentStatus.files.length !== requestedPathCount) {
+      console.info(
+        `[git-flow] All-changes commit refreshed from ${requestedPathCount} requested path(s) to ${currentStatus.files.length} current changed path(s).`,
+      )
+    }
 
     // Quick ship is explicitly an all-current-changes workflow. Use the normal
     // commit index instead of `git commit --only` so repo hooks that format and
-    // `git add -u` tracked files can be swept into the same commit.
-    await runGit(['add', '-A', '--', ...activePaths], pathToUse, null)
+    // `git add -u` tracked files can be swept into the same commit. Avoid a
+    // pathspec here: commit generation may take long enough for files to be
+    // renamed or deleted after the quick-ship snapshot was taken.
+    await runGit(['add', '-A'], pathToUse, null)
 
     const commitArgs = ['commit', '-m', summary]
     if (description) {

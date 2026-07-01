@@ -223,9 +223,7 @@ export function App() {
       setCreating(true)
       try {
         const deck = await api.createDeck(
-          templateId
-            ? { title: 'Untitled deck', templateId }
-            : { title: 'Untitled deck' },
+          templateId ? { templateId } : { title: 'Untitled deck' },
         )
         invalidate()
         setPicking(false)
