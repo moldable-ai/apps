@@ -3,7 +3,7 @@ import type { Template } from '../types'
 // A polished, genuinely playable neon Snake game on a single <canvas>. The board
 // lives in a glowing rounded frame with a subtle grid; the snake is a smooth,
 // rounded gradient body (not raw squares) and the food glows + pulses. HUD shows
-// live score, best (persisted in localStorage), and run length. Controls: arrow
+// live score, durable best score, and run length. Controls: arrow
 // keys + WASD + an on-screen D-pad for touch. Crisp fixed-timestep loop, DPR-aware
 // canvas, resize-safe, speeds up as you grow, can't reverse into itself, and a
 // start + game-over overlay. Pure JS/canvas — no libraries, no image assets.
@@ -368,9 +368,12 @@ const JS = `
 
   // ---- game state ----
   var snake, dir, nextDir, food, score, alive, started, lastFood;
-  var bestKey = 'neon-snake-best';
+  var bestStore = window.moldableState('neon-snake:v1');
   var best = 0;
-  try { best = parseInt(localStorage.getItem(bestKey) || '0', 10) || 0; } catch (e) { best = 0; }
+  bestStore.get({ best: 0 }).then(function (saved) {
+    best = Number(saved && saved.best) || 0;
+    if (elBest) elBest.textContent = String(best);
+  }, function () {});
 
   var elScore = document.getElementById('score');
   var elBest = document.getElementById('best');
@@ -542,7 +545,7 @@ const JS = `
     alive = false;
     if (score > best) {
       best = score;
-      try { localStorage.setItem(bestKey, String(best)); } catch (e) {}
+      bestStore.set({ best: best }).catch(function () {});
     }
     updateHud();
     if (elFinal) elFinal.textContent = String(score);
@@ -794,7 +797,7 @@ export const snake: Template = {
   categories: ['Games'],
   audiences: ['game', 'fun', 'interactive'],
   description:
-    'A genuinely playable neon Snake game on a single canvas: a glowing rounded board with a subtle grid, a smooth rounded gradient snake with eyes, and a pulsing pink food orb. It speeds up as you grow, persists your best score in localStorage, and plays with arrow keys, WASD, an on-screen D-pad, or swipes. Pure JS/canvas with a crisp fixed-timestep loop — no libraries, no images.',
+    'A genuinely playable neon Snake game on a single canvas: a glowing rounded board with a subtle grid, a smooth rounded gradient snake with eyes, and a pulsing pink food orb. It speeds up as you grow, persists your best score through Moldable runtime state, and plays with arrow keys, WASD, an on-screen D-pad, or swipes. Pure JS/canvas with a crisp fixed-timestep loop — no libraries, no images.',
   fonts: {
     display: 'Space Grotesk',
     body: 'Inter',
@@ -804,7 +807,7 @@ export const snake: Template = {
   },
   stageBg: '#07080d',
   notes:
-    'The whole game lives in page.js (no libraries). Tune gameplay via the knobs near the top: GRID (cells per side), START_LEN, BASE_STEP (ms per move — lower is faster), MIN_STEP (speed cap), and SPEEDUP (ms shaved off per food eaten). Colors are read from the CSS variables, so recoloring is just a CSS edit: --c1/--c2/--c3 are the snake head→mid→tail gradient, --food/--food-2 are the orb, and --grad drives the brand mark, buttons, and HUD accents. The board is a fixed square (aspect-ratio:1) inside a glowing .board frame; the canvas is DPR-aware and resize-safe. High score persists under localStorage key "neon-snake-best". Motion (food pulse, glow) is dialed back under prefers-reduced-motion. To change difficulty curve, edit stepMs(). The snake is drawn as connected rounded segments (not raw squares) in drawSnake(); the food orb + glow is in drawFood().',
+    "The whole game lives in page.js (no libraries). Tune gameplay via the knobs near the top: GRID (cells per side), START_LEN, BASE_STEP (ms per move — lower is faster), MIN_STEP (speed cap), and SPEEDUP (ms shaved off per food eaten). Colors are read from the CSS variables, so recoloring is just a CSS edit: --c1/--c2/--c3 are the snake head→mid→tail gradient, --food/--food-2 are the orb, and --grad drives the brand mark, buttons, and HUD accents. The board is a fixed square (aspect-ratio:1) inside a glowing .board frame; the canvas is DPR-aware and resize-safe. High score uses window.moldableState('neon-snake:v1'). Motion (food pulse, glow) is dialed back under prefers-reduced-motion. To change difficulty curve, edit stepMs(). The snake is drawn as connected rounded segments (not raw squares) in drawSnake(); the food orb + glow is in drawFood().",
   samplePage: {
     fontLinks: [
       'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap',

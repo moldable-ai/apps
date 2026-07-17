@@ -1,10 +1,7 @@
 {
   "name": "Todo",
   "version": "0.1.11",
-  "aliases": [
-    "tasks",
-    "checklist"
-  ],
+  "aliases": ["tasks", "checklist"],
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "Simple task management with quick add and completion tracking",
@@ -14,12 +11,7 @@
   "icon": "✅",
   "iconPath": "public/icon.png",
   "category": "productivity",
-  "tags": [
-    "tasks",
-    "todo",
-    "checklist",
-    "productivity"
-  ],
+  "tags": ["tasks", "todo", "checklist", "productivity"],
   "moldableDependencies": {
     "@moldable-ai/ui": "^0.2.18",
     "@moldable-ai/storage": "^0.1.6"
@@ -47,11 +39,7 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": [
-                    "low",
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["low", "medium", "high"]
                 },
                 "dueBefore": {
                   "type": "string",
@@ -84,11 +72,7 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": [
-                    "low",
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["low", "medium", "high"]
                 },
                 "limit": {
                   "type": "number",
@@ -109,9 +93,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -126,26 +108,17 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": [
-                    "low",
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["low", "medium", "high"]
                 },
                 "dueDate": {
-                  "type": [
-                    "string",
-                    "null"
-                  ],
+                  "type": ["string", "null"],
                   "description": "ISO date or datetime."
                 },
                 "completed": {
                   "type": "boolean"
                 }
               },
-              "required": [
-                "title"
-              ]
+              "required": ["title"]
             }
           },
           {
@@ -166,22 +139,13 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": [
-                    "low",
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["low", "medium", "high"]
                 },
                 "dueDate": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
+                  "type": ["string", "null"]
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -198,10 +162,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "id",
-                "completed"
-              ]
+              "required": ["id", "completed"]
             }
           },
           {
@@ -215,9 +176,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           }
         ]
@@ -263,8 +222,6 @@
   },
   "modified": false,
   "routeName": "todo",
-  "screenshots": [
-    "public/screenshots/1.png"
-  ],
+  "screenshots": ["public/screenshots/1.png"],
   "tagline": "Keyboard-fast task management that lives on your machine"
 }

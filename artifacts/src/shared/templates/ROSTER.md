@@ -94,10 +94,13 @@ Games · 3D · Decks** — a template's first `categories` entry is its primary 
 
 ## Deck templates (carried from Slides)
 
-| id               | name           | what it is                                        |
-| ---------------- | -------------- | ------------------------------------------------- |
-| `bold-founder`   | Bold Founder   | A restrained, narrative VC pitch deck.            |
-| `editorial`      | Editorial      | A magazine-grade editorial/brand deck.            |
-| `dark-tech`      | Dark Tech      | A developer/technical product deck on near-black. |
-| `finance-pro`    | Finance Pro    | A board/finance review deck with charts + tables. |
-| `data-dashboard` | Data Dashboard | A dark instrument-panel metrics-review deck.      |
+| id                  | name              | what it is                                                                                                        |
+| ------------------- | ----------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `bold-founder`      | Bold Founder      | A restrained, narrative VC pitch deck.                                                                            |
+| `editorial`         | Editorial         | A magazine-grade editorial/brand deck.                                                                            |
+| `dark-tech`         | Dark Tech         | A developer/technical product deck on near-black.                                                                 |
+| `finance-pro`       | Finance Pro       | A board/finance review deck with charts + tables.                                                                 |
+| `data-dashboard`    | Data Dashboard    | A dark instrument-panel metrics-review deck — interactive: filterable chart, sortable table, scenario sliders.    |
+| `open-house`        | Open House        | Quiet-luxury listing pitch — interactive: floor-plan explorer, payment calculator, neighborhood map layers.       |
+| `working-session`   | Working Session   | Facilitation deck that becomes the whiteboard — interactive: sticky wall, tap poll, dot vote, 2×2 board, timer.   |
+| `security-training` | Security Training | Field-manual training drills — interactive: find-the-phish game, branching scenario, crack-time lab, scored quiz. |

@@ -240,8 +240,12 @@ const JS = `
   var STATE = { START: 0, PLAY: 1, LEVELCLR: 2, OVER: 3, PAUSE: 4 };
   var state = STATE.START;
   var score = 0, lives = 3, level = 1;
+  var bestStore = window.moldableState('prism-breaker:v1');
   var best = 0;
-  try { best = parseInt(localStorage.getItem('prismbreaker.best') || '0', 10) || 0; } catch (e) { best = 0; }
+  bestStore.get({ best: 0 }).then(function (saved) {
+    best = Number(saved && saved.best) || 0;
+    if (elBest) elBest.textContent = 'best ' + best;
+  }, function () {});
   var baseSpeed = 6.2;       // ball speed in CSS px / step at level 1
   var SPEED_CAP = 13.5;
 
@@ -405,7 +409,7 @@ const JS = `
     var isNew = score > best;
     if (isNew) {
       best = score;
-      try { localStorage.setItem('prismbreaker.best', String(best)); } catch (e) {}
+      bestStore.set({ best: best }).catch(function () {});
     }
     if (elBest) elBest.textContent = 'best ' + best;
     setText('ovOverScore', score);
@@ -779,7 +783,7 @@ export const breakout: Template = {
   },
   stageBg: '#07060f',
   notes:
-    'Pure canvas-2D game in samplePage.js — no libraries, no image assets. Tuning knobs live near the top of the JS: `baseSpeed` (ball speed at level 1), `SPEED_CAP` (max speed), and per-row brick colors in `ROWCOLORS` (top→bottom; these mirror the --c1..--c6 CSS tokens). Level layouts come from `cellOn()` (patterns: 0 solid, 1 checker, 2 diamond, 3 pyramid, 4 frame — cycled by level); `buildLevel()` controls columns, rows, and which top rows are 2-hit bricks. Paddle width auto-scales with the board (clamped in `layoutPaddle`); paddle reflection angle is governed by `maxBounce` in `ballPaddle()`. The stage is a CSS aspect-ratio box, so the canvas is fully responsive and DPR-aware; recolor the chrome (HUD, overlays, glow) via the --c1..--c6 and --bg tokens. Particle counts and screen shake auto-reduce under prefers-reduced-motion. High score persists in localStorage under `prismbreaker.best`.',
+    "Pure canvas-2D game in samplePage.js — no libraries, no image assets. Tuning knobs live near the top of the JS: `baseSpeed` (ball speed at level 1), `SPEED_CAP` (max speed), and per-row brick colors in `ROWCOLORS` (top→bottom; these mirror the --c1..--c6 CSS tokens). Level layouts come from `cellOn()` (patterns: 0 solid, 1 checker, 2 diamond, 3 pyramid, 4 frame — cycled by level); `buildLevel()` controls columns, rows, and which top rows are 2-hit bricks. Paddle width auto-scales with the board (clamped in `layoutPaddle`); paddle reflection angle is governed by `maxBounce` in `ballPaddle()`. The stage is a CSS aspect-ratio box, so the canvas is fully responsive and DPR-aware; recolor the chrome (HUD, overlays, glow) via the --c1..--c6 and --bg tokens. Particle counts and screen shake auto-reduce under prefers-reduced-motion. High score uses window.moldableState('prism-breaker:v1').",
   samplePage: {
     fontLinks: [
       'https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&display=swap',

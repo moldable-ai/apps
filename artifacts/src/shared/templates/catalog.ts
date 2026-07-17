@@ -10,6 +10,9 @@ import { darkTech } from './decks/dark-tech'
 import { dataDashboard } from './decks/data-dashboard'
 import { editorial } from './decks/editorial'
 import { financePro } from './decks/finance-pro'
+import { openHouse } from './decks/open-house'
+import { securityTraining } from './decks/security-training'
+import { workingSession } from './decks/working-session'
 import { game2048 } from './pages/2048'
 import { agency } from './pages/agency'
 import { analyticsDashboard } from './pages/analytics-dashboard'
@@ -94,4 +97,7 @@ export const TEMPLATES: Template[] = [
   darkTech,
   financePro,
   dataDashboard,
+  openHouse,
+  workingSession,
+  securityTraining,
 ]

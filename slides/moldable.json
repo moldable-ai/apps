@@ -1,6 +1,6 @@
 {
   "name": "Slides",
-  "version": "0.1.5",
+  "version": "0.1.7",
   "aliases": [
     "presentation",
     "deck",
@@ -64,7 +64,7 @@
           {
             "id": "slides.decks.create",
             "name": "Create deck",
-            "description": "Create a new deck (optionally with theme and slides).",
+            "description": "Create a new deck (optionally with a template, theme, slides, and an interactive runtime).",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -84,6 +84,10 @@
                 "theme": {
                   "type": "object"
                 },
+                "runtime": {
+                  "type": "object",
+                  "description": "Optional deck-wide behavior: { libs, js, connectOrigins, frameOrigins }."
+                },
                 "slides": {
                   "type": "array"
                 }
@@ -93,7 +97,7 @@
           {
             "id": "slides.decks.update",
             "name": "Update deck",
-            "description": "Update a deck's title, subtitle, density, or theme.",
+            "description": "Update a deck's title, subtitle, density, theme, or optional interactive runtime.",
             "inputSchema": {
               "type": "object",
               "required": [
@@ -102,6 +106,10 @@
               "properties": {
                 "id": {
                   "type": "string"
+                },
+                "runtime": {
+                  "type": "object",
+                  "description": "Optional deck-wide behavior: { libs, js, connectOrigins, frameOrigins }."
                 }
               }
             }
@@ -109,7 +117,7 @@
           {
             "id": "slides.decks.replace",
             "name": "Replace deck",
-            "description": "Replace a deck's title/theme/slides in one call (bulk generation).",
+            "description": "Replace a deck's title/theme/slides/runtime in one call (bulk generation).",
             "inputSchema": {
               "type": "object",
               "required": [
@@ -121,6 +129,10 @@
                 },
                 "slides": {
                   "type": "array"
+                },
+                "runtime": {
+                  "type": "object",
+                  "description": "Optional deck-wide behavior: { libs, js, connectOrigins, frameOrigins }."
                 }
               }
             }

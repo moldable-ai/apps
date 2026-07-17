@@ -36,6 +36,7 @@ describe('composeDeckHtml', () => {
     expect(html).toContain('class="deck-stage"')
     expect(html).toContain('deckFade') // base animations injected
     expect(html).toContain('fitStage') // controller injected
+    expect(html).toContain('window.moldableState') // durable runtime state API
     expect(html).toContain('focusDeck') // published decks focus for keyboard nav
     expect(html).toContain('https://fonts.example/x.css') // font link
     expect(html).toContain('--stage-bg: #111') // stage background
@@ -94,8 +95,39 @@ describe('composeDeckHtml', () => {
     // iOS Safari robustness: track the true visible box + re-fit on rotate.
     expect(html).toContain('visualViewport')
     expect(html).toContain('orientationchange')
+    expect(html).toContain('html.deck-can-flow [data-build]')
     // Touch tap-to-advance is gated to coarse pointers only.
     expect(html).toContain('(pointer: coarse)')
+  })
+
+  it('includes an optional authored runtime with scoped CSP permissions', () => {
+    const deck = baseDeck([
+      {
+        id: 's1',
+        name: 'Interactive',
+        bodyHtml:
+          '<button data-deck-interactive>Recalculate</button><p data-build="1">Result</p>',
+      },
+    ])
+    deck.runtime = {
+      libs: ['https://cdn.example/widget.js', 'http://insecure.example/no.js'],
+      js: 'document.body.dataset.runtime = "ready"',
+      connectOrigins: ['https://api.example'],
+      frameOrigins: ['https://tour.example'],
+    }
+    const html = composeDeckHtml(deck)
+    expect(html).toContain('https://cdn.example/widget.js')
+    expect(html).not.toContain('http://insecure.example/no.js')
+    expect(html).toContain("connect-src 'self' https://api.example")
+    expect(html).toContain("frame-src 'self' https://tour.example")
+    expect(html).toContain('document.body.dataset.runtime = "ready"')
+    expect(html.indexOf('window.moldableState')).toBeLessThan(
+      html.indexOf('document.body.dataset.runtime = "ready"'),
+    )
+    expect(html).toContain('[data-build]')
+    expect(html).toContain('deck:slidechange')
+    expect(html).toContain('data-deck-interactive')
+    expect(html).toContain('[data-deck-advance]')
   })
 
   it('renders the seeded welcome deck without throwing', () => {

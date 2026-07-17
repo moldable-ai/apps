@@ -51,6 +51,22 @@ export interface DeckTheme {
   stageBg?: string
 }
 
+/** Optional, presentation-scoped web runtime for interactive decks. */
+export interface DeckRuntime {
+  /** Pinned HTTPS script URLs loaded before `js`. */
+  libs: string[]
+  /** Deck-wide JavaScript. Prefer event delegation so live slide patches keep working. */
+  js: string
+  /** HTTPS origins the runtime may fetch from. Empty permits same-origin only. */
+  connectOrigins: string[]
+  /** HTTPS origins slides may embed in iframes. Empty disables frames for runtime decks. */
+  frameOrigins: string[]
+}
+
+export function emptyRuntime(): DeckRuntime {
+  return { libs: [], js: '', connectOrigins: [], frameOrigins: [] }
+}
+
 /**
  * A full-page artifact's document. Rendered as a normal, scrolling,
  * fully-responsive web page — the author owns the entire design.
@@ -106,6 +122,8 @@ export interface Artifact {
   imagePresetId?: string
   /** Deck-mode theme + slides (present for kind === 'deck'; slides is [] for pages). */
   theme: DeckTheme
+  /** Opt-in authored behavior for deck artifacts. Pages use `page.js` instead. */
+  runtime?: DeckRuntime
   slides: Slide[]
   /** Page-mode document (present for kind === 'page'). */
   page?: PageDoc

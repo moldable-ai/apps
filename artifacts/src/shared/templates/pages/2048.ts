@@ -3,7 +3,7 @@ import type { Template } from '../types'
 // A fully-playable 2048 sliding-tile puzzle — pure JS/DOM, zero libraries.
 // Tiles are absolutely positioned over a 4x4 grid and CSS-transition their
 // transform between board states (tracked by tile id) for smooth slide+merge.
-// Warm canonical 2048 color ramp, score + best (localStorage), undo + new game.
+// Warm canonical 2048 color ramp, score + durable best, undo + new game.
 // Move with Arrow keys, WASD, or swipe. Pure CSS art — no imagery needed.
 
 const CSS = `
@@ -230,7 +230,7 @@ const JS = `
 (function () {
   var SIZE = 4;
   var WIN = 2048;
-  var KEY = 'artifact-2048-best';
+  var bestStore = window.moldableState('game-2048:v1');
 
   var boardEl = document.getElementById('board');
   var cellsEl = document.getElementById('cells');
@@ -257,7 +257,10 @@ const JS = `
   var prevState = null;    // single-step undo snapshot
   var els = {};            // tileId -> DOM element
 
-  try { best = parseInt(localStorage.getItem(KEY) || '0', 10) || 0; } catch (e) { best = 0; }
+  bestStore.get({ best: 0 }).then(function (saved) {
+    best = Number(saved && saved.best) || 0;
+    syncScore();
+  }, function () {});
 
   // ---- grid helpers ----
   function emptyGrid() {
@@ -485,7 +488,7 @@ const JS = `
     bestEl.textContent = best;
   }
   function persistBest() {
-    try { localStorage.setItem(KEY, '' + best); } catch (e) {}
+    bestStore.set({ best: best }).catch(function () {});
   }
 
   // ---- win / lose detection ----
@@ -649,7 +652,7 @@ export const game2048: Template = {
   categories: ['Games'],
   audiences: ['game', 'puzzle', 'fun'],
   description:
-    'A fully-playable 2048: a warm 4×4 sliding-tile puzzle with the canonical color ramp, smooth slide-and-pop animation, score plus a localStorage best, one-step undo, and win/keep-going detection. Move with Arrow keys, WASD, or swipe. Pure JS/DOM and CSS — no libraries, no network.',
+    'A fully-playable 2048: a warm 4×4 sliding-tile puzzle with the canonical color ramp, smooth slide-and-pop animation, score plus a durable Moldable runtime-state best, one-step undo, and win/keep-going detection. Move with Arrow keys, WASD, or swipe. Pure JS/DOM and CSS — no libraries, no network.',
   fonts: {
     display: 'Plus Jakarta Sans',
     body: 'Inter',
@@ -659,7 +662,7 @@ export const game2048: Template = {
   },
   stageBg: '#faf8ef',
   notes:
-    'Pure JS/DOM 2048 — no libraries. Tweak the **tile color ramp** via the `--t2`…`--t2048` (background) and matching `--t…-ink` (text) CSS variables in `:root`; the page bg is `--bg`, the board is `--board`, button color is `--btn`. The `--accent` token tints the win overlay and score pop. To change the board size, edit `SIZE` in the JS (the grid, positioning and font-scaling all key off it) and the win target via `WIN`. Movement is the canonical traversal-from-the-far-edge algorithm with a per-move `merged` flag so no tile double-merges. Tiles are absolutely positioned and CSS-transition their `--x`/`--y` transforms; new tiles use the `.new` (appear) animation and merges use `.merged` (pop). Best score persists under the `KEY` localStorage key. Undo keeps a single-step snapshot.',
+    "Pure JS/DOM 2048 — no libraries. Tweak the **tile color ramp** via the `--t2`…`--t2048` (background) and matching `--t…-ink` (text) CSS variables in `:root`; the page bg is `--bg`, the board is `--board`, button color is `--btn`. The `--accent` token tints the win overlay and score pop. To change the board size, edit `SIZE` in the JS (the grid, positioning and font-scaling all key off it) and the win target via `WIN`. Movement is the canonical traversal-from-the-far-edge algorithm with a per-move `merged` flag so no tile double-merges. Tiles are absolutely positioned and CSS-transition their `--x`/`--y` transforms; new tiles use the `.new` (appear) animation and merges use `.merged` (pop). Best score uses window.moldableState('game-2048:v1'). Undo keeps a single-step snapshot.",
   samplePage: {
     fontLinks: [
       'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700;800&family=Inter:wght@400;500;600;700&display=swap',

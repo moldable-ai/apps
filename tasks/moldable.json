@@ -120,16 +120,11 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "name",
-                      "color"
-                    ]
+                    "required": ["name", "color"]
                   }
                 }
               },
-              "required": [
-                "name"
-              ]
+              "required": ["name"]
             }
           },
           {
@@ -161,10 +156,7 @@
                   "type": "string"
                 },
                 "logoUrl": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
+                  "type": ["string", "null"]
                 },
                 "websiteUrl": {
                   "type": "string"
@@ -184,10 +176,7 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "name",
-                      "color"
-                    ]
+                    "required": ["name", "color"]
                   }
                 }
               }
@@ -250,12 +239,7 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": [
-                    "none",
-                    "low",
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["none", "low", "medium", "high"]
                 },
                 "labelId": {
                   "type": "string"
@@ -302,12 +286,7 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": [
-                    "none",
-                    "low",
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["none", "low", "medium", "high"]
                 },
                 "limit": {
                   "type": "number",
@@ -379,12 +358,7 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": [
-                    "none",
-                    "low",
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["none", "low", "medium", "high"]
                 },
                 "labelIds": {
                   "type": "array",
@@ -413,10 +387,7 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "name",
-                      "color"
-                    ]
+                    "required": ["name", "color"]
                   }
                 },
                 "attachments": {
@@ -446,16 +417,11 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "name",
-                      "size"
-                    ]
+                    "required": ["name", "size"]
                   }
                 }
               },
-              "required": [
-                "title"
-              ]
+              "required": ["title"]
             }
           },
           {
@@ -501,12 +467,7 @@
                 },
                 "priority": {
                   "type": "string",
-                  "enum": [
-                    "none",
-                    "low",
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["none", "low", "medium", "high"]
                 },
                 "completed": {
                   "type": "boolean"
@@ -538,10 +499,7 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "name",
-                      "color"
-                    ]
+                    "required": ["name", "color"]
                   }
                 },
                 "attachments": {
@@ -571,10 +529,7 @@
                         "type": "string"
                       }
                     },
-                    "required": [
-                      "name",
-                      "size"
-                    ]
+                    "required": ["name", "size"]
                   }
                 }
               }
@@ -654,10 +609,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "name",
-                "color"
-              ]
+              "required": ["name", "color"]
             }
           },
           {
@@ -771,9 +723,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "content"
-              ]
+              "required": ["content"]
             }
           },
           {
@@ -802,10 +752,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "commentId",
-                "content"
-              ]
+              "required": ["commentId", "content"]
             }
           },
           {
@@ -831,9 +778,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "commentId"
-              ]
+              "required": ["commentId"]
             }
           }
         ]

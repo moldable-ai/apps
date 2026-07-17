@@ -1,5 +1,9 @@
 import { composeDeckHtml, escapeHtml } from '../shared/render'
 import {
+  MAX_RUNTIME_STATE_BYTES,
+  isValidRuntimeStateNamespace,
+} from '../shared/runtime-state'
+import {
   getTemplate,
   getTemplateDetail,
   listTemplates,
@@ -34,17 +38,20 @@ import {
   updateSlide,
 } from './operations'
 import {
+  deleteRuntimeState,
   getDeck,
   listAssets,
   listDecks,
   listVersions,
   readAsset,
+  readRuntimeState,
   readTemplateAsset,
   readTemplateThumb,
   stageAsset,
   stageIndexHtml,
   summarize,
   writeAsset,
+  writeRuntimeState,
 } from './store'
 import { Hono } from 'hono'
 import type { Context } from 'hono'
@@ -298,6 +305,81 @@ app.post('/api/decks/:id/assets', async (c) => {
 
 // ---- Preview (same bytes as the published artifact) ----------------------
 
+app.get('/api/runtime-state/:workspace/:id/:namespace', async (c) => {
+  const workspace = c.req.param('workspace')
+  const namespace = c.req.param('namespace')
+  if (!isValidWorkspaceId(workspace)) {
+    return jsonError(c, 'Invalid workspace id', 400)
+  }
+  if (!isValidRuntimeStateNamespace(namespace)) {
+    return jsonError(c, 'Invalid runtime state namespace', 400)
+  }
+  if (!(await getDeck(workspace, c.req.param('id')))) {
+    return jsonError(c, 'Deck not found', 404)
+  }
+  return c.json({
+    value: await readRuntimeState(workspace, c.req.param('id'), namespace),
+  })
+})
+
+app.put('/api/runtime-state/:workspace/:id/:namespace', async (c) => {
+  const workspace = c.req.param('workspace')
+  const namespace = c.req.param('namespace')
+  if (!isValidWorkspaceId(workspace)) {
+    return jsonError(c, 'Invalid workspace id', 400)
+  }
+  if (!isValidRuntimeStateNamespace(namespace)) {
+    return jsonError(c, 'Invalid runtime state namespace', 400)
+  }
+  if (!(await getDeck(workspace, c.req.param('id')))) {
+    return jsonError(c, 'Deck not found', 404)
+  }
+
+  const contentLength = Number(c.req.header('content-length') ?? '0')
+  if (
+    Number.isFinite(contentLength) &&
+    contentLength > MAX_RUNTIME_STATE_BYTES
+  ) {
+    return c.json({ error: 'Runtime state exceeds the 512 KB limit' }, 413)
+  }
+  const raw = await c.req.text()
+  if (new TextEncoder().encode(raw).byteLength > MAX_RUNTIME_STATE_BYTES) {
+    return c.json({ error: 'Runtime state exceeds the 512 KB limit' }, 413)
+  }
+  let body: unknown
+  try {
+    body = JSON.parse(raw)
+  } catch {
+    return jsonError(c, 'Invalid runtime state JSON', 400)
+  }
+  if (
+    !body ||
+    typeof body !== 'object' ||
+    !Object.prototype.hasOwnProperty.call(body, 'value')
+  ) {
+    return jsonError(c, 'Runtime state value is required', 400)
+  }
+  const value = (body as { value: unknown }).value
+  await writeRuntimeState(workspace, c.req.param('id'), namespace, value)
+  return c.json({ ok: true })
+})
+
+app.delete('/api/runtime-state/:workspace/:id/:namespace', async (c) => {
+  const workspace = c.req.param('workspace')
+  const namespace = c.req.param('namespace')
+  if (!isValidWorkspaceId(workspace)) {
+    return jsonError(c, 'Invalid workspace id', 400)
+  }
+  if (!isValidRuntimeStateNamespace(namespace)) {
+    return jsonError(c, 'Invalid runtime state namespace', 400)
+  }
+  if (!(await getDeck(workspace, c.req.param('id')))) {
+    return jsonError(c, 'Deck not found', 404)
+  }
+  await deleteRuntimeState(workspace, c.req.param('id'), namespace)
+  return c.json({ ok: true })
+})
+
 app.get('/api/decks/:id/preview', async (c) => {
   const deck = await getDeck(getWorkspaceId(c), c.req.param('id'))
   if (!deck) return c.text('Deck not found', 404)
@@ -449,6 +531,7 @@ app.get('/api/templates/:id/preview/index.html', (c) => {
     density: 'low',
     templateId: template.id,
     theme: templateTheme(template),
+    runtime: template.runtime,
     slides: template.sampleSlides,
     published: null,
     publishPending: false,

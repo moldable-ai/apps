@@ -12,11 +12,7 @@
     "@moldable-ai/ui": "^0.2.18"
   },
   "name": "Hello Moldables",
-  "tags": [
-    "tutorial",
-    "welcome",
-    "getting-started"
-  ],
+  "tags": ["tutorial", "welcome", "getting-started"],
   "upstream": {
     "repo": "moldable-ai/apps",
     "path": "hello-moldables",
@@ -42,10 +38,7 @@
     }
   },
   "version": "0.1.10",
-  "aliases": [
-    "welcome",
-    "tutorial"
-  ],
+  "aliases": ["welcome", "tutorial"],
   "visibility": "public",
   "routeName": "hello-moldables",
   "tagline": "Your first step into building software with AI"

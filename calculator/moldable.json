@@ -1,89 +1,51 @@
 {
-  "name": "Calculator",
-  "version": "0.1.7",
   "aliases": [
     "calc",
     "convert",
     "converter"
   ],
-  "runtime": "vite_hono",
-  "visibility": "public",
-  "description": "Everyday, scientific, and unit/currency calculator with history",
-  "author": "Moldable",
-  "license": "FSL-1.1-ALv2",
-  "repository": "moldable-ai/apps",
-  "icon": "🧮",
-  "iconPath": "public/icon.png",
-  "category": "utilities",
-  "tags": [
-    "calculator",
-    "math",
-    "scientific",
-    "convert",
-    "currency",
-    "units"
-  ],
-  "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.18",
-    "@moldable-ai/storage": "^0.1.6"
-  },
   "appApi": {
-    "version": 1,
     "capabilities": [
       {
+        "description": "Allow approved apps to evaluate math expressions and convert units or currency using Calculator.",
         "id": "calculator.compute",
         "name": "Calculator compute",
-        "description": "Allow approved apps to evaluate math expressions and convert units or currency using Calculator.",
         "scopes": [
           {
-            "id": "compute.evaluate",
-            "name": "Evaluate an expression",
             "description": "Evaluate an arithmetic or scientific math expression and return the numeric result. Records the calculation to history.",
+            "id": "compute.evaluate",
             "inputSchema": {
-              "type": "object",
               "properties": {
-                "expression": {
-                  "type": "string",
-                  "description": "Math expression, e.g. \"2 * (3 + 4)\" or \"sin(45) + sqrt(2)\"."
-                },
                 "angleMode": {
-                  "type": "string",
+                  "description": "Angle unit for trigonometric functions. Defaults to deg.",
                   "enum": [
                     "deg",
                     "rad"
                   ],
-                  "description": "Angle unit for trigonometric functions. Defaults to deg."
+                  "type": "string"
+                },
+                "expression": {
+                  "description": "Math expression, e.g. \"2 * (3 + 4)\" or \"sin(45) + sqrt(2)\".",
+                  "type": "string"
                 },
                 "record": {
-                  "type": "boolean",
-                  "description": "Whether to save this calculation to history. Defaults to true."
+                  "description": "Whether to save this calculation to history. Defaults to true.",
+                  "type": "boolean"
                 }
               },
               "required": [
                 "expression"
-              ]
-            }
+              ],
+              "type": "object"
+            },
+            "name": "Evaluate an expression"
           },
           {
-            "id": "convert.units",
-            "name": "Convert units or currency",
             "description": "Convert a value between units in a category (length, mass, temperature, volume, area, speed, data, time) or between currencies.",
+            "id": "convert.units",
             "inputSchema": {
-              "type": "object",
               "properties": {
-                "value": {
-                  "type": "number"
-                },
-                "from": {
-                  "type": "string",
-                  "description": "Source unit/currency code, e.g. \"km\" or \"USD\"."
-                },
-                "to": {
-                  "type": "string",
-                  "description": "Target unit/currency code, e.g. \"mi\" or \"EUR\"."
-                },
                 "category": {
-                  "type": "string",
                   "description": "Optional conversion category. Inferred from the units when omitted.",
                   "enum": [
                     "length",
@@ -95,77 +57,150 @@
                     "data",
                     "time",
                     "currency"
-                  ]
+                  ],
+                  "type": "string"
+                },
+                "from": {
+                  "description": "Source unit/currency code, e.g. \"km\" or \"USD\".",
+                  "type": "string"
                 },
                 "record": {
-                  "type": "boolean",
-                  "description": "Whether to save this conversion to history. Defaults to true."
+                  "description": "Whether to save this conversion to history. Defaults to true.",
+                  "type": "boolean"
+                },
+                "to": {
+                  "description": "Target unit/currency code, e.g. \"mi\" or \"EUR\".",
+                  "type": "string"
+                },
+                "value": {
+                  "type": "number"
                 }
               },
               "required": [
                 "value",
                 "from",
                 "to"
-              ]
-            }
+              ],
+              "type": "object"
+            },
+            "name": "Convert units or currency"
           }
         ]
       },
       {
+        "description": "Allow approved apps to read and search past calculations in this workspace.",
         "id": "calculator.history",
         "name": "Calculator history",
-        "description": "Allow approved apps to read and search past calculations in this workspace.",
         "scopes": [
           {
-            "id": "history.recent",
-            "name": "Recent calculations",
             "description": "Read the most recent calculations and conversions for this workspace.",
+            "id": "history.recent",
             "inputSchema": {
-              "type": "object",
               "properties": {
                 "limit": {
-                  "type": "number",
+                  "maximum": 500,
                   "minimum": 1,
-                  "maximum": 500
+                  "type": "number"
                 }
-              }
-            }
+              },
+              "type": "object"
+            },
+            "name": "Recent calculations"
           },
           {
-            "id": "history.search",
-            "name": "Search calculations",
             "description": "Search past calculations and conversions by expression or result.",
+            "id": "history.search",
             "inputSchema": {
-              "type": "object",
               "properties": {
+                "limit": {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "number"
+                },
                 "query": {
                   "type": "string"
-                },
-                "limit": {
-                  "type": "number",
-                  "minimum": 1,
-                  "maximum": 500
                 }
               },
               "required": [
                 "query"
-              ]
-            }
+              ],
+              "type": "object"
+            },
+            "name": "Search calculations"
           },
           {
-            "id": "history.clear",
-            "name": "Clear calculation history",
             "description": "Delete all saved calculations and conversions for this workspace.",
+            "id": "history.clear",
             "inputSchema": {
-              "type": "object",
-              "properties": {}
-            }
+              "properties": {},
+              "type": "object"
+            },
+            "name": "Clear calculation history"
           }
         ]
       }
-    ]
+    ],
+    "version": 1
   },
+  "author": "Moldable",
+  "category": "utilities",
+  "description": "Everyday, scientific, and unit/currency calculator with history",
   "env": [],
+  "icon": "🧮",
+  "iconPath": "public/icon.png",
+  "license": "FSL-1.1-ALv2",
+  "modified": false,
+  "moldableDependencies": {
+    "@moldable-ai/storage": "^0.1.6",
+    "@moldable-ai/ui": "^0.2.18"
+  },
+  "name": "Calculator",
+  "repository": "moldable-ai/apps",
   "routeName": "calculator",
-  "tagline": "Everyday, scientific, and unit/currency math — with history"
+  "runtime": "vite_hono",
+  "tagline": "Everyday, scientific, and unit/currency math — with history",
+  "tags": [
+    "calculator",
+    "math",
+    "scientific",
+    "convert",
+    "currency",
+    "units"
+  ],
+  "upstream": {
+    "fileHashes": {
+      ".gitignore": "0a17fbecdb9290b71a9b29be1143f028d2e346639b978ae2358279eadfa5a92b",
+      "STORE.md": "3617985458600b4f1399275b1b537a09acac5f1bdb9ea4b2b37e768b91889795",
+      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
+      "index.html": "b8a9a29d76206f2201dc23b9c5c3d9a74d49de04ad62734fe2d37f3b45b14e5c",
+      "package.json": "b82c45aa615e51d823ae47adaa5efdc96c8b8c75983ac345694546b68bf57078",
+      "pnpm-lock.yaml": "491fa8c9235f3512018fb40d4e55f2b7f144561142ec11f960133457a760a79f",
+      "public/icon.png": "d28940d48ba3e5200a824a6181b3b36458ad68ed8e11c9be653a64523c2a2483",
+      "scripts/moldable-dev.mjs": "9a3368f901b6a700d76ac868b9d2b8b4a5241ee518a9fd6ce06fd9dead94e392",
+      "src/calculator.test.ts": "c5310f3c588207a1cfbef7e89359becf1bf8641ff5432659a300a48b5663125a",
+      "src/client/app.tsx": "e053a1dcc95e795426c4038119f5f482bea103d7c9989d7634b67457f846c22a",
+      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
+      "src/client/globals.css": "819ca61782197b98e03b5f3277b66edb73284cf06ff1bbc69c4ad17d36f4b24b",
+      "src/client/lib/keypad.ts": "04981624148f15d60f32834d890accaef71125efd0d62c38dc51903be5422d32",
+      "src/client/main.tsx": "5fc7174a7040b84fc99e6c902a3d3fc36ccecd57e9ee7f967fa3ec72e7a48e8e",
+      "src/client/moldable-chat-safe-area.ts": "ba17b1892444e18a4fc3b487685598110c5506cc56f12e6c90a82cbadad1477e",
+      "src/client/query-provider.tsx": "4db1cf96ab6b4e4f4807f37f551fc67143d32f89f409f296d2bb3acb79465c81",
+      "src/lib/calc.ts": "6da364916b94ac5982561a580ff11f58f5c220be57fea6f3ace0314145e880ad",
+      "src/lib/history.ts": "633cc34fcc37ce15ac22a51fc602478fe5081ef6c2da8d87c19047e21403bc28",
+      "src/lib/units.ts": "82aa337e6ae289ed41db365f1f83ec46f8f6993b6ba8da71db90d562a4239445",
+      "src/lib/utils.ts": "746e4d9beb1a5b6f0e047ec19d5f1c542c9f8117f4ea7c80d7b9bd0fe2128e91",
+      "src/server/app.ts": "1d9799b60c6ef094f8ffbcec72ee08ae51c956c4794b95c68adc54d543588681",
+      "src/server/index.ts": "2b4321ea70f006d83b6b826f64cc11828e9e43f65377b95c99b897041ba089a0",
+      "src/server/rates.ts": "07d4f1190d746eef0defd962d9cc1976c0534e483264ffb5b3ad976473260ab4",
+      "tsconfig.json": "8620106457d6cd46b27459d6cff4d46fab0fdecf59987484fba00494c6575249",
+      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
+    },
+    "installedAt": "2026-07-11T00:28:46.054129+00:00",
+    "installedCommit": "15806254ad5b92d6006750a0ec2414d695b20000",
+    "installedVersion": "0.1.7",
+    "path": "calculator",
+    "repo": "moldable-ai/apps"
+  },
+  "version": "0.1.8",
+  "visibility": "public"
 }

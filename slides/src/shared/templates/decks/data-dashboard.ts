@@ -5,6 +5,93 @@ const s = (slide: Slide): Slide => slide
 
 const COVER = 'assets/data-dashboard-cover.jpg'
 
+const RUNTIME_JS = `
+(function () {
+  var revenue = {
+    '6m': { total: '$1.84M', insight: 'Expansion supplied 63% of MRR growth.', values: [54,62,70,78,88,97], labels: ['$1.38M','$1.49M','$1.58M','$1.66M','$1.73M','$1.84M'] },
+    '12m': { total: '$1.84M', insight: 'MRR grew 58% across the trailing year.', values: [34,47,64,76,91,97], labels: ['$1.16M','$1.31M','$1.48M','$1.61M','$1.78M','$1.84M'] },
+    plan: { total: '104%', insight: 'May closed four points above operating plan.', values: [82,86,89,93,98,104], labels: ['82%','86%','89%','93%','98%','104%'] }
+  };
+
+  function renderRevenue(root, key) {
+    var data = revenue[key] || revenue['6m'];
+    var bars = root.querySelectorAll('[data-revenue-bar]');
+    bars.forEach(function (bar, index) {
+      var value = data.values[index % data.values.length];
+      var label = data.labels[index % data.labels.length];
+      bar.style.setProperty('--h', value + '%');
+      var fill = bar.querySelector('.bar-fill');
+      if (fill) fill.setAttribute('data-val', label);
+    });
+    var total = root.querySelector('[data-revenue-total]');
+    var insight = root.querySelector('[data-revenue-insight]');
+    if (total) total.textContent = data.total;
+    if (insight) insight.textContent = data.insight;
+    root.querySelectorAll('[data-revenue-period]').forEach(function (button) {
+      button.classList.toggle('on', button.getAttribute('data-revenue-period') === key);
+    });
+  }
+
+  function renderScenario(root) {
+    var leads = Number(root.querySelector('[name="leads"]')?.value || 1800);
+    var conversion = Number(root.querySelector('[name="conversion"]')?.value || 7.5);
+    var arpa = Number(root.querySelector('[name="arpa"]')?.value || 420);
+    var customers = leads * conversion / 100;
+    var newMrr = customers * arpa;
+    var payback = customers > 0 ? 120000 / customers / arpa : 0;
+    var set = function (name, value) {
+      var el = root.querySelector('[data-output="' + name + '"]');
+      if (el) el.textContent = value;
+    };
+    set('leads', leads.toLocaleString('en-US'));
+    set('conversion', conversion.toFixed(1) + '%');
+    set('arpa', '$' + arpa.toLocaleString('en-US'));
+    set('customers', Math.round(customers).toLocaleString('en-US'));
+    set('mrr', '$' + Math.round(newMrr).toLocaleString('en-US'));
+    set('payback', payback.toFixed(1) + ' mo');
+  }
+
+  document.addEventListener('click', function (event) {
+    var period = event.target.closest('[data-revenue-period]');
+    if (period) {
+      renderRevenue(period.closest('.slide'), period.getAttribute('data-revenue-period'));
+      return;
+    }
+    var sort = event.target.closest('[data-sort-column]');
+    if (sort) {
+      var table = sort.closest('table');
+      var body = table && table.querySelector('tbody');
+      if (!body) return;
+      var column = Number(sort.getAttribute('data-sort-column'));
+      var direction = sort.getAttribute('data-direction') === 'desc' ? 'asc' : 'desc';
+      sort.setAttribute('data-direction', direction);
+      var rows = Array.prototype.slice.call(body.rows);
+      rows.sort(function (a, b) {
+        var av = parseFloat((a.cells[column]?.textContent || '').replace(/[^0-9.-]/g, '')) || 0;
+        var bv = parseFloat((b.cells[column]?.textContent || '').replace(/[^0-9.-]/g, '')) || 0;
+        return direction === 'asc' ? av - bv : bv - av;
+      });
+      rows.forEach(function (row) { body.appendChild(row); });
+    }
+  });
+
+  document.addEventListener('input', function (event) {
+    var lab = event.target.closest('[data-scenario-lab]');
+    if (lab) renderScenario(lab.closest('.slide'));
+  });
+
+  function init() {
+    document.querySelectorAll('[data-revenue-chart]').forEach(function (root) {
+      if (!root.dataset.ready) { root.dataset.ready = '1'; renderRevenue(root.closest('.slide'), '6m'); }
+    });
+    document.querySelectorAll('[data-scenario-lab]').forEach(function (root) { renderScenario(root.closest('.slide')); });
+  }
+  document.addEventListener('deck:slidechange', init);
+  document.addEventListener('deck:slidepatch', init);
+  init();
+})();
+`.trim()
+
 export const dataDashboard: Template = {
   id: 'data-dashboard',
   categories: ['Reporting'],
@@ -131,6 +218,25 @@ export const dataDashboard: Template = {
 .stage-pct { font-family: var(--mono); font-size: 20px; color: var(--muted); margin-top: 4px; }
 .flow-arrow::after { border-color: var(--accent); }
 
+/* ---- Live controls (the deck runtime owns these interactions) ---- */
+.control-row { display: flex; gap: 10px; align-items: center; margin-bottom: 24px; }
+.control-row button { appearance: none; border: 1px solid var(--card-border); background: var(--card-bg); color: var(--muted); font: 600 20px var(--mono); padding: 10px 18px; border-radius: 999px; cursor: pointer; }
+.control-row button.on, .control-row button:hover { color: #071018; background: var(--accent); border-color: var(--accent); }
+.live-total { margin-left: auto; font: 600 32px var(--display); color: var(--text); }
+.sort-button { appearance: none; border: 0; background: transparent; color: inherit; font: inherit; text-transform: inherit; letter-spacing: inherit; cursor: pointer; }
+.sort-button::after { content: ' ↕'; color: var(--accent); }
+.scenario-lab { display: grid; grid-template-columns: 1.15fr .85fr; gap: 52px; align-items: stretch; }
+.scenario-controls, .scenario-output { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 18px; padding: 36px 40px; }
+.range-row { display: grid; grid-template-columns: 180px 1fr 110px; gap: 22px; align-items: center; padding: 20px 0; border-bottom: 1px solid var(--card-border); }
+.range-row:last-child { border-bottom: 0; }
+.range-row label { font: 500 24px var(--body); color: var(--text); }
+.range-row output { text-align: right; font: 600 24px var(--mono); color: var(--accent); }
+.range-row input { width: 100%; accent-color: var(--accent); cursor: ew-resize; }
+.scenario-output { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.scenario-metric { padding: 24px; border: 1px solid var(--card-border); border-radius: 14px; }
+.scenario-metric b { display: block; font: 600 48px var(--display); color: var(--accent); font-variant-numeric: tabular-nums; }
+.scenario-metric span { display: block; margin-top: 8px; font: 500 18px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+
 /* ---- Agenda rows ---- */
 .ag { display: flex; gap: 24px; align-items: baseline; padding: 22px 0; border-top: 1px solid var(--card-border); }
 .ag-n { font-family: var(--mono); font-weight: 600; font-size: 28px; color: var(--accent); flex: 0 0 auto; }
@@ -152,9 +258,22 @@ export const dataDashboard: Template = {
   html.deck-can-flow .flow-step .stage { padding: 24px 20px !important; }
   html.deck-can-flow .stage-val { font-size: min(44px, 12vw) !important; }
   html.deck-can-flow .ag-t { font-size: min(30px, 8vw) !important; line-height: 1.1 !important; }
+  html.deck-can-flow .control-row { flex-wrap: wrap; }
+  html.deck-can-flow .live-total { margin-left: 0; flex-basis: 100%; }
+  html.deck-can-flow .scenario-lab { grid-template-columns: 1fr !important; gap: 16px !important; }
+  html.deck-can-flow .scenario-controls, html.deck-can-flow .scenario-output { padding: 22px 18px !important; }
+  html.deck-can-flow .range-row { grid-template-columns: 1fr !important; gap: 8px !important; }
+  html.deck-can-flow .range-row output { text-align: left; }
+  html.deck-can-flow .scenario-metric b { font-size: 34px !important; }
 }`,
+  runtime: {
+    libs: [],
+    js: RUNTIME_JS,
+    connectOrigins: [],
+    frameOrigins: [],
+  },
   notes:
-    'A complete monthly product-metrics review for a fictional analytics product. Dark slate "instrument panel": Space Grotesk display + IBM Plex Mono eyebrows, ONE cyan accent with lime (.accent-2) as the positive/secondary data color, fuchsia (.neg) for declines. Open and close on the full-bleed network cover (assets/data-dashboard-cover.jpg). Lead with the .kpi-grid (tiles + .delta chips: up=lime, down=fuchsia). Use restyled .bars for revenue, multi-segment .donut + .legend for retention/mix, .flow with .stage cards for the activation funnel, dense .table with tabular nums and .status pills for cohorts and reliability, .stats for engagement, and .callout (default / .warn / .crit) for anomalies and risks. Add the hairline .grid-bg behind data slides and a .runner footer for cohesion. Keep numbers tabular and the palette restrained — the charts carry the deck.',
+    'A complete monthly product-metrics review for a fictional analytics product. It includes working runtime examples: a period-filtered revenue chart, sortable cohort columns, a live growth-scenario calculator, and click-build content. Preserve data-deck-interactive around controls, use delegated listeners in runtime.js, and keep authored behavior scoped to the current slide. Dark slate "instrument panel": Space Grotesk display + IBM Plex Mono eyebrows, ONE cyan accent with lime (.accent-2) as the positive/secondary data color, fuchsia (.neg) for declines.',
   sampleSlides: [
     s({
       id: 'dd-cover',
@@ -263,13 +382,17 @@ export const dataDashboard: Template = {
         <div class="callout-d">Net-new from existing accounts was <b>63%</b> of MRR growth this month.</div>
       </div>
     </div>
-    <div class="bars" style="--bars-height:380px;--bar-gap:26px">
-      <div class="bar" style="--h:54%"><div class="bar-fill" data-val="$1.38M"></div><div class="bar-label">Dec</div></div>
-      <div class="bar" style="--h:62%"><div class="bar-fill" data-val="$1.49M"></div><div class="bar-label">Jan</div></div>
-      <div class="bar" style="--h:70%"><div class="bar-fill" data-val="$1.58M"></div><div class="bar-label">Feb</div></div>
-      <div class="bar" style="--h:78%"><div class="bar-fill" data-val="$1.66M"></div><div class="bar-label">Mar</div></div>
-      <div class="bar" style="--h:88%"><div class="bar-fill" data-val="$1.73M"></div><div class="bar-label">Apr</div></div>
-      <div class="bar" style="--h:97%"><div class="bar-fill" data-val="$1.84M" style="background:var(--accent-2)"></div><div class="bar-label">May</div></div>
+    <div data-revenue-chart data-deck-interactive>
+      <div class="control-row"><button class="on" data-revenue-period="6m">6 months</button><button data-revenue-period="12m">12 months</button><button data-revenue-period="plan">vs plan</button><span class="live-total" data-revenue-total>$1.84M</span></div>
+      <div class="bars" style="--bars-height:330px;--bar-gap:26px">
+        <div class="bar" data-revenue-bar style="--h:54%"><div class="bar-fill" data-val="$1.38M"></div><div class="bar-label">Dec</div></div>
+        <div class="bar" data-revenue-bar style="--h:62%"><div class="bar-fill" data-val="$1.49M"></div><div class="bar-label">Jan</div></div>
+        <div class="bar" data-revenue-bar style="--h:70%"><div class="bar-fill" data-val="$1.58M"></div><div class="bar-label">Feb</div></div>
+        <div class="bar" data-revenue-bar style="--h:78%"><div class="bar-fill" data-val="$1.66M"></div><div class="bar-label">Mar</div></div>
+        <div class="bar" data-revenue-bar style="--h:88%"><div class="bar-fill" data-val="$1.73M"></div><div class="bar-label">Apr</div></div>
+        <div class="bar" data-revenue-bar style="--h:97%"><div class="bar-fill" data-val="$1.84M" style="background:var(--accent-2)"></div><div class="bar-label">May</div></div>
+      </div>
+      <p class="fine" data-revenue-insight style="margin-top:18px">Expansion supplied 63% of MRR growth.</p>
     </div>
   </div>
   <div class="runner reveal"><span class="runner-brand">Halo Analytics</span><span class="runner-label">Growth · Revenue</span></div>
@@ -331,7 +454,7 @@ export const dataDashboard: Template = {
   <div class="kicker reveal">Cohort retention</div>
   <h2 class="headline reveal" style="margin-top:8px;margin-bottom:8px">How each month is aging.</h2>
   <table class="table reveal" style="margin-top:8px">
-    <thead><tr><th>Signup cohort</th><th class="num">M1</th><th class="num">M3</th><th class="num">M6</th><th class="num">M12</th><th>Trend</th></tr></thead>
+    <thead><tr><th>Signup cohort</th><th class="num"><button class="sort-button" data-sort-column="1">M1</button></th><th class="num"><button class="sort-button" data-sort-column="2">M3</button></th><th class="num"><button class="sort-button" data-sort-column="3">M6</button></th><th class="num"><button class="sort-button" data-sort-column="4">M12</button></th><th>Trend</th></tr></thead>
     <tbody>
       <tr><td>Dec 2025</td><td class="num">88%</td><td class="num">79%</td><td class="num">71%</td><td class="num">66%</td><td><span class="spark"><i style="height:60%"></i><i style="height:78%"></i><i style="height:70%"></i><i style="height:66%"></i></span></td></tr>
       <tr><td>Jan 2026</td><td class="num">90%</td><td class="num">82%</td><td class="num">74%</td><td class="num pos">—</td><td><span class="spark"><i style="height:64%"></i><i style="height:82%"></i><i style="height:74%"></i><i style="height:74%"></i></span></td></tr>
@@ -450,6 +573,30 @@ export const dataDashboard: Template = {
     <div class="callout"><div class="callout-k">Opportunity</div><div class="callout-t">EMEA outpacing plan</div><div class="callout-d">EMEA grew 19% MoM, well ahead of plan — a case for earlier regional investment.</div></div>
   </div>
   <div class="runner reveal"><span class="runner-brand">Halo Analytics</span><span class="runner-label">Health · Anomalies</span></div>
+</div>`,
+    }),
+    s({
+      id: 'dd-scenario',
+      name: 'Interactive scenario lab',
+      transition: 'slide',
+      bodyHtml: `<div class="grid-bg"></div>
+<div class="pad">
+  <div class="control-row reveal"><div class="kicker">Scenario lab · drag the assumptions</div><button data-deck-advance style="margin-left:auto">Reveal analysis →</button></div>
+  <h2 class="headline reveal" style="margin-top:8px;margin-bottom:24px">What would move June?</h2>
+  <div class="scenario-lab reveal" data-scenario-lab data-deck-interactive>
+    <div class="scenario-controls">
+      <div class="range-row"><label for="leads">Qualified leads</label><input id="leads" name="leads" type="range" min="400" max="4000" step="50" value="1800"><output data-output="leads">1,800</output></div>
+      <div class="range-row"><label for="conversion">Conversion</label><input id="conversion" name="conversion" type="range" min="2" max="18" step="0.5" value="7.5"><output data-output="conversion">7.5%</output></div>
+      <div class="range-row"><label for="arpa">New ARPA</label><input id="arpa" name="arpa" type="range" min="100" max="900" step="10" value="420"><output data-output="arpa">$420</output></div>
+    </div>
+    <div class="scenario-output">
+      <div class="scenario-metric"><b data-output="customers">135</b><span>New customers</span></div>
+      <div class="scenario-metric"><b data-output="mrr">$56,700</b><span>New MRR</span></div>
+      <div class="scenario-metric" data-build="1"><b data-output="payback">2.1 mo</b><span>Payback</span></div>
+      <div class="scenario-metric" data-build="2"><b>+3.1%</b><span>Portfolio lift</span></div>
+    </div>
+  </div>
+  <div class="runner reveal"><span class="runner-brand">Halo Analytics</span><span class="runner-label">Interactive scenario</span></div>
 </div>`,
     }),
     s({

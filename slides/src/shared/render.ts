@@ -10,6 +10,7 @@
 // is active, thumbnail mode, present mode) is driven entirely by URL params read
 // by the controller, so the same bytes work as preview, thumbnail, and the
 // public artifact.
+import { RUNTIME_STATE_CLIENT_JS } from './runtime-state'
 import type { Deck, Slide, SlideTransition } from './types'
 
 /** Mandatory fixed 16:9 stage base CSS — included verbatim in every deck. */
@@ -95,6 +96,19 @@ export const DECK_BASE_CSS = `
 .slide.visible .reveal:nth-child(6) { transition-delay: 0.50s; }
 .slide.visible .reveal:nth-child(7) { transition-delay: 0.58s; }
 .slide.visible .reveal:nth-child(8) { transition-delay: 0.66s; }
+
+/* === CLICK BUILDS ===
+   data-build="N" reveals on the Nth advance before the deck moves on. */
+[data-build] {
+  opacity: 0 !important; transform: translateY(22px); pointer-events: none !important;
+  transition: opacity 0.45s cubic-bezier(0.16,1,0.3,1), transform 0.45s cubic-bezier(0.16,1,0.3,1);
+}
+[data-build].is-built { opacity: 1 !important; transform: none; pointer-events: auto !important; }
+body.thumb [data-build] { opacity: 1 !important; transform: none; }
+@media print {
+  [data-build] { opacity: 1 !important; transform: none !important; }
+  [data-deck-advance] { display: none !important; }
+}
 
 /* === DECK CHROME (progress + counter, outside the slide design) === */
 .deck-chrome {
@@ -182,7 +196,9 @@ export const RESPONSIVE_MOBILE_CSS = `
   }
   html.deck-can-flow .slide + .slide { border-top: 1px solid var(--card-border, rgba(0,0,0,0.10)); }
   /* No per-slide active state in scroll mode — reveal everything. */
-  html.deck-can-flow .reveal { opacity: 1 !important; transform: none !important; }
+  html.deck-can-flow .reveal,
+  html.deck-can-flow [data-build] { opacity: 1 !important; transform: none !important; pointer-events: auto !important; }
+  html.deck-can-flow [data-deck-advance] { display: none !important; }
   /* Present-mode chrome is meaningless in a scrolling document. */
   html.deck-can-flow .deck-chrome, html.deck-can-flow .deck-notes { display: none !important; }
 
@@ -364,6 +380,7 @@ export const CONTROLLER_JS = `
   }
 
   var current = startIndex();
+  var buildState = {};
 
   function viewportSize() {
     // visualViewport tracks the true visible box on mobile Safari as the URL bar
@@ -403,8 +420,39 @@ export const CONTROLLER_JS = `
     notesEl.style.display = note ? '' : 'none';
   }
 
-  function show(index) {
+  function buildElements(index) {
+    return Array.prototype.slice.call(slides[index].querySelectorAll('[data-build]'));
+  }
+
+  function maxBuild(index) {
+    return buildElements(index).reduce(function (max, el) {
+      var step = parseInt(el.getAttribute('data-build') || '1', 10);
+      return Math.max(max, isNaN(step) ? 1 : step);
+    }, 0);
+  }
+
+  function renderBuilds(index) {
+    var step = isThumb ? Number.MAX_SAFE_INTEGER : (buildState[index] || 0);
+    buildElements(index).forEach(function (el) {
+      var at = parseInt(el.getAttribute('data-build') || '1', 10);
+      var shown = step >= (isNaN(at) ? 1 : at);
+      el.classList.toggle('is-built', shown);
+      el.setAttribute('aria-hidden', shown ? 'false' : 'true');
+    });
+  }
+
+  function emitSlideChange() {
+    try {
+      document.dispatchEvent(new CustomEvent('deck:slidechange', {
+        detail: { index: current, slideId: slides[current].getAttribute('data-slide-id') || '', build: buildState[current] || 0 }
+      }));
+    } catch (e) {}
+  }
+
+  function show(index, requestedBuild) {
     current = clamp(index);
+    if (typeof requestedBuild === 'number') buildState[current] = requestedBuild;
+    if (typeof buildState[current] !== 'number') buildState[current] = 0;
     for (var i = 0; i < slides.length; i++) {
       var on = i === current;
       // Re-trigger the enter animation by toggling the class off then on.
@@ -418,6 +466,7 @@ export const CONTROLLER_JS = `
         slides[i].classList.remove('visible');
       }
     }
+    renderBuilds(current);
     if (progress) progress.style.width = ((current + 1) / slides.length * 100) + '%';
     if (counter) counter.textContent = (current + 1) + ' / ' + slides.length;
     if (!isThumb) {
@@ -426,10 +475,24 @@ export const CONTROLLER_JS = `
       try { window.parent.postMessage({ type: 'deck:slide', index: current, total: slides.length }, '*'); } catch (e) {}
     }
     renderNotes();
+    emitSlideChange();
   }
 
-  function next() { if (current < slides.length - 1) show(current + 1); }
-  function prev() { if (current > 0) show(current - 1); }
+  function next() {
+    var max = maxBuild(current);
+    if ((buildState[current] || 0) < max) {
+      buildState[current] = (buildState[current] || 0) + 1;
+      renderBuilds(current); emitSlideChange(); return;
+    }
+    if (current < slides.length - 1) show(current + 1, 0);
+  }
+  function prev() {
+    if ((buildState[current] || 0) > 0) {
+      buildState[current] -= 1;
+      renderBuilds(current); emitSlideChange(); return;
+    }
+    if (current > 0) show(current - 1, maxBuild(current - 1));
+  }
 
   function toggleNotes() {
     if (!notesEl) return;
@@ -531,6 +594,12 @@ export const CONTROLLER_JS = `
     }
   }
 
+  function ownsInteraction(target) {
+    return !!(target && target.closest && target.closest(
+      'a,button,input,textarea,select,[contenteditable],[data-deck-interactive]'
+    ));
+  }
+
   window.addEventListener('message', function (e) {
     var d = e.data || {};
     if (d && d.type === 'deck:goto' && typeof d.index === 'number') show(d.index);
@@ -557,8 +626,10 @@ export const CONTROLLER_JS = `
       else slide.removeAttribute('data-notes');
       if (typeof d.bodyHtml === 'string') slide.innerHTML = d.bodyHtml;
       slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+      renderBuilds(current);
       fitStage();
       renderNotes();
+      try { document.dispatchEvent(new CustomEvent('deck:slidepatch', { detail: { slideId: d.slideId } })); } catch (e) {}
     }
   });
 
@@ -599,15 +670,24 @@ export const CONTROLLER_JS = `
 
   document.addEventListener('keydown', function (e) {
     if (flowing()) return; // let arrows/space scroll the document natively
-    if (e.target && (e.target.isContentEditable ||
-        /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName || ''))) return;
+    if (ownsInteraction(e.target)) return;
     if (handleShortcutKey(e.key)) e.preventDefault();
+  });
+
+  // Authored, explicit desktop advance control (useful for build reveals). This
+  // keeps the rest of the slide click-safe for charts, links, inputs, and embeds.
+  document.addEventListener('click', function (e) {
+    var trigger = e.target && e.target.closest && e.target.closest('[data-deck-advance]');
+    if (!trigger || flowing()) return;
+    e.preventDefault();
+    next();
   });
 
   // Mouse wheel (debounced) navigation.
   var wheelLock = false;
   window.addEventListener('wheel', function (e) {
     if (flowing()) return; // native scroll in reflow mode
+    if (ownsInteraction(e.target)) return;
     if (Math.abs(e.deltaY) < 24) return;
     if (wheelLock) return;
     wheelLock = true;
@@ -616,12 +696,14 @@ export const CONTROLLER_JS = `
   }, { passive: true });
 
   // Touch swipe.
-  var sx = 0, sy = 0;
+  var sx = 0, sy = 0, touchOwned = false;
   window.addEventListener('touchstart', function (e) {
+    touchOwned = ownsInteraction(e.target);
     sx = e.changedTouches[0].clientX; sy = e.changedTouches[0].clientY;
   }, { passive: true });
   window.addEventListener('touchend', function (e) {
     if (flowing()) return; // native vertical scroll in reflow mode
+    if (touchOwned) return;
     var dx = e.changedTouches[0].clientX - sx;
     var dy = e.changedTouches[0].clientY - sy;
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
@@ -636,7 +718,7 @@ export const CONTROLLER_JS = `
   if (coarsePointer) {
     window.addEventListener('click', function (e) {
       if (flowing()) return; // taps don't navigate in a scrolling document
-      if (e.target && e.target.closest && e.target.closest('a,button,[contenteditable],input,textarea')) return;
+      if (ownsInteraction(e.target)) return;
       if (e.clientX < viewportSize().w * 0.33) prev(); else next();
     });
   }
@@ -697,6 +779,23 @@ function createNonce(): string {
   )
 }
 
+function httpsOrigins(values: string[] | undefined): string[] {
+  const origins = new Set<string>()
+  for (const value of values ?? []) {
+    try {
+      const url = new URL(value)
+      if (url.protocol === 'https:') origins.add(url.origin)
+    } catch {
+      // Ignore malformed capability declarations.
+    }
+  }
+  return [...origins]
+}
+
+function inlineScript(value: string | undefined): string {
+  return (value ?? '').replace(/<\/script/gi, '<\\/script')
+}
+
 export interface ComposeOptions {
   /** Which slide is marked active in the static HTML (avoids first-paint flash). */
   activeIndex?: number
@@ -721,6 +820,25 @@ export function composeDeckHtml(
     .map((href) => `  <link rel="stylesheet" href="${escapeAttr(href)}">`)
     .join('\n')
 
+  const runtimeLibs = (deck.runtime?.libs ?? [])
+    .filter((src) => typeof src === 'string' && /^https:\/\//.test(src))
+    .map(
+      (src) => `  <script nonce="${nonce}" src="${escapeAttr(src)}"></script>`,
+    )
+    .join('\n')
+  const connectSrc = httpsOrigins(deck.runtime?.connectOrigins)
+  const frameSrc = httpsOrigins(deck.runtime?.frameOrigins)
+  const connectPolicy = deck.runtime
+    ? ["'self'", ...connectSrc].join(' ')
+    : "'none'"
+  // Preserve legacy HTTPS embeds for static decks. Runtime decks declare their
+  // iframe capability explicitly, so an empty list means no frames.
+  const framePolicy = deck.runtime
+    ? frameSrc.length
+      ? `'self' ${frameSrc.join(' ')}`
+      : "'none'"
+    : 'https:'
+
   const stageBgRule = deck.theme.stageBg
     ? `:root { --stage-bg: ${escapeHtml(deck.theme.stageBg)}; }`
     : ''
@@ -736,7 +854,7 @@ export function composeDeckHtml(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: https:; script-src 'nonce-${nonce}'; connect-src 'none'; style-src 'self' 'unsafe-inline' https:; img-src http: https: data: blob:; font-src data: https:; media-src http: https: data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: https:; script-src 'nonce-${nonce}'; connect-src ${connectPolicy}; frame-src ${framePolicy}; style-src 'self' 'unsafe-inline' https:; img-src http: https: data: blob:; font-src data: https:; media-src http: https: data: blob:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>${escapeHtml(deck.title || 'Presentation')}</title>
 ${fontLinks}
   <style>
@@ -769,6 +887,13 @@ ${slidesHtml}
   </aside>
   <script nonce="${nonce}">
 ${CONTROLLER_JS}
+  </script>
+  <script nonce="${nonce}">
+${RUNTIME_STATE_CLIENT_JS}
+  </script>
+${runtimeLibs}
+  <script nonce="${nonce}">
+${inlineScript(deck.runtime?.js)}
   </script>
 </body>
 </html>`

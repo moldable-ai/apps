@@ -61,6 +61,7 @@ describe('composeDeckHtml', () => {
     expect(html).toContain('class="deck-stage"')
     expect(html).toContain('deckFade')
     expect(html).toContain('fitStage')
+    expect(html).toContain('window.moldableState')
     expect(html).toContain('https://fonts.example/x.css')
     expect(html).toContain('--stage-bg: #111')
   })
@@ -94,6 +95,37 @@ describe('composeDeckHtml', () => {
     )
     expect(html).toContain('visualViewport')
     expect(html).toContain('(pointer: coarse)')
+    expect(html).toContain('html.deck-can-flow [data-build]')
+  })
+
+  it('includes an optional authored runtime with scoped CSP permissions', () => {
+    const artifact = baseDeck([
+      {
+        id: 's1',
+        name: 'Interactive',
+        bodyHtml:
+          '<button data-deck-interactive>Recalculate</button><p data-build="1">Result</p>',
+      },
+    ])
+    artifact.runtime = {
+      libs: ['https://cdn.example/widget.js', 'http://insecure.example/no.js'],
+      js: 'document.body.dataset.runtime = "ready"',
+      connectOrigins: ['https://api.example'],
+      frameOrigins: ['https://tour.example'],
+    }
+    const html = composeDeckHtml(artifact)
+    expect(html).toContain('https://cdn.example/widget.js')
+    expect(html).not.toContain('http://insecure.example/no.js')
+    expect(html).toContain("connect-src 'self' https://api.example")
+    expect(html).toContain("frame-src 'self' https://tour.example")
+    expect(html).toContain('document.body.dataset.runtime = "ready"')
+    expect(html.indexOf('window.moldableState')).toBeLessThan(
+      html.indexOf('document.body.dataset.runtime = "ready"'),
+    )
+    expect(html).toContain('[data-build]')
+    expect(html).toContain('deck:slidechange')
+    expect(html).toContain('data-deck-interactive')
+    expect(html).toContain('[data-deck-advance]')
   })
 })
 
@@ -104,6 +136,10 @@ describe('composePageHtml', () => {
     expect(html).toContain('<main class="hero">Hi</main>')
     expect(html).toContain('.hero{color:red}')
     expect(html).toContain('console.log("ready")')
+    expect(html).toContain('window.moldableState')
+    expect(html.indexOf('window.moldableState')).toBeLessThan(
+      html.indexOf('console.log("ready")'),
+    )
     expect(html).toContain('https://fonts.example/p.css') // font link
     expect(html).toContain('https://cdn.example/three.min.js') // lib script
     expect(html).toContain('--page-bg: #101018') // background var

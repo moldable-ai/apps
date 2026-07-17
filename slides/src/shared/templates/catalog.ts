@@ -34,6 +34,7 @@ import { moodboard } from './decks/moodboard'
 import { nonprofitAppeal } from './decks/nonprofit-appeal'
 import { okrReview } from './decks/okr-review'
 import { onboarding } from './decks/onboarding'
+import { openHouse } from './decks/open-house'
 import { pastelCreative } from './decks/pastel-creative'
 import { peopleOps } from './decks/people-ops'
 import { portfolio } from './decks/portfolio'
@@ -44,6 +45,7 @@ import { projectTimeline } from './decks/project-timeline'
 import { research } from './decks/research'
 import { risograph } from './decks/risograph'
 import { salesDeck } from './decks/sales-deck'
+import { securityTraining } from './decks/security-training'
 import { seedPitch } from './decks/seed-pitch'
 import { seminar } from './decks/seminar'
 import { sprintReview } from './decks/sprint-review'
@@ -52,6 +54,7 @@ import { strategyFramework } from './decks/strategy-framework'
 import { teamRetrospective } from './decks/team-retrospective'
 import { webinar } from './decks/webinar'
 import { weeklyUpdate } from './decks/weekly-update'
+import { workingSession } from './decks/working-session'
 import { workshop } from './decks/workshop'
 import type { Template } from './types'
 
@@ -95,6 +98,7 @@ export const TEMPLATES: Template[] = [
   pricingProposal,
   flatIllustration,
   isometric,
+  openHouse,
   gtmStrategy,
   campaignBrief,
   marketAnalysis,
@@ -103,4 +107,6 @@ export const TEMPLATES: Template[] = [
   strategyFramework,
   peopleOps,
   onboarding,
+  workingSession,
+  securityTraining,
 ]

@@ -4,11 +4,13 @@
 import { getTemplate, templateTheme } from '../shared/templates'
 import type {
   Deck,
+  DeckRuntime,
   DeckTheme,
   PublishedInfo,
   Slide,
   SlideTransition,
 } from '../shared/types'
+import { emptyRuntime } from '../shared/types'
 import {
   copyTemplateAssets,
   deleteDeck,
@@ -217,6 +219,40 @@ function coerceTheme(value: unknown, base: DeckTheme): DeckTheme {
   }
 }
 
+function strArray(value: unknown, base: string[]): string[] {
+  return Array.isArray(value)
+    ? value.filter((x): x is string => typeof x === 'string')
+    : base
+}
+
+function coerceRuntime(
+  value: unknown,
+  base: DeckRuntime = emptyRuntime(),
+): DeckRuntime | undefined {
+  if (value === null) return undefined
+  if (!value || typeof value !== 'object') return base
+  const v = value as Record<string, unknown>
+  return {
+    libs: strArray(v.libs, base.libs),
+    js: typeof v.js === 'string' ? v.js : base.js,
+    connectOrigins: strArray(v.connectOrigins, base.connectOrigins),
+    frameOrigins: strArray(v.frameOrigins, base.frameOrigins),
+  }
+}
+
+function cloneRuntime(
+  runtime: DeckRuntime | undefined,
+): DeckRuntime | undefined {
+  return runtime
+    ? {
+        ...runtime,
+        libs: [...runtime.libs],
+        connectOrigins: [...runtime.connectOrigins],
+        frameOrigins: [...runtime.frameOrigins],
+      }
+    : undefined
+}
+
 function coerceSlide(value: unknown): Slide {
   const v = (value ?? {}) as Record<string, unknown>
   return {
@@ -319,6 +355,8 @@ export async function createDeck(
     : template
       ? templateTheme(template)
       : EMPTY_THEME
+  const runtime =
+    'runtime' in v ? coerceRuntime(v.runtime) : cloneRuntime(template?.runtime)
 
   const deck: Deck = {
     id: newDeckId(),
@@ -327,6 +365,7 @@ export async function createDeck(
     density: v.density === 'high' ? 'high' : 'low',
     templateId: template?.id,
     theme,
+    runtime,
     slides,
     published: null,
     publishPending: false,
@@ -364,6 +403,7 @@ export async function applyTemplate(
     ...deck,
     templateId: template.id,
     theme: templateTheme(template),
+    runtime: cloneRuntime(template.runtime),
     slides:
       deck.slides.length === 0
         ? cloneSampleSlides(template.sampleSlides)
@@ -396,6 +436,8 @@ export async function updateDeck(
     imageStyle:
       'imageStyle' in v ? (str(v.imageStyle) ?? undefined) : deck.imageStyle,
     theme: coerceTheme(v.theme, deck.theme),
+    runtime:
+      'runtime' in v ? coerceRuntime(v.runtime, deck.runtime) : deck.runtime,
   }
   return saveDeck(workspaceId, next, 'Edit deck')
 }
@@ -508,6 +550,8 @@ export async function replaceDeck(
           ? 'low'
           : deck.density,
     theme: coerceTheme(v.theme, deck.theme),
+    runtime:
+      'runtime' in v ? coerceRuntime(v.runtime, deck.runtime) : deck.runtime,
     slides: Array.isArray(v.slides) ? v.slides.map(coerceSlide) : deck.slides,
   }
   return saveDeck(workspaceId, next, 'Replace deck')

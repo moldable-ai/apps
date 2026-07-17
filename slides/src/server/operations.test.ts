@@ -42,4 +42,14 @@ describe('createDeck', () => {
 
     expect(deck.title).toBe('Custom deck title')
   })
+
+  it('clones the interactive runtime from a template', async () => {
+    const template = getTemplate('data-dashboard')
+    const deck = await createDeck('test', { templateId: 'data-dashboard' })
+
+    expect(template?.runtime?.js).toContain('data-scenario-lab')
+    expect(deck.runtime).toEqual(template?.runtime)
+    expect(deck.runtime).not.toBe(template?.runtime)
+    expect(deck.runtime?.libs).not.toBe(template?.runtime?.libs)
+  })
 })

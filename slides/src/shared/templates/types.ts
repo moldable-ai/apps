@@ -6,7 +6,7 @@
 // The agent learns the vocabulary once; each template "skins" it. A template =
 // tokens + fonts + signature decoration + a rich sample deck. The deck theme and
 // the coding guide handed to the chat agent are both derived from this data.
-import type { DeckTheme, Slide } from '../types'
+import type { DeckRuntime, DeckTheme, Slide } from '../types'
 
 export interface TemplateFonts {
   display: string
@@ -33,6 +33,8 @@ export interface Template {
   stageBg: string
   /** Signature decoration CSS (slide background, flourishes, per-style tweaks). */
   decoration?: string
+  /** Optional working behavior included with the sample deck. */
+  runtime?: DeckRuntime
   /** Template-specific guidance appended to the coding guide (markdown). */
   notes?: string
   /** Bundled image asset filenames the sample slides reference (under template-assets/). */
@@ -308,6 +310,15 @@ MOBILE / RESPONSIVE — decks MUST look great on phones (the published artifact 
   \`@media (max-width: 640px) { html.deck-can-flow .yourBigTitle { font-size: min(40px, 11vw) !important; } html.deck-can-flow .yourRowFlow { flex-direction: column !important; } }\`
 - Never let content exceed the slide width (wide tables already scroll horizontally). A slide that reads well at 1920 should reflow cleanly on a phone — verify at a true ~390px mobile viewport.`
 
+/** Optional behavior contract for decks that should act like small web apps. */
+export const DECK_RUNTIME_AUTHORING = `INTERACTIVE DECKS (opt in only when the content benefits):
+- Put shared authored JavaScript in \`runtime.js\`; it runs after the deck controller and any HTTPS \`runtime.libs\` have loaded. Keep behavior data-driven and use delegated listeners so live slide edits continue to work.
+- Mark any interactive region with \`data-deck-interactive\`. Links, buttons, inputs, selects, textareas, and contenteditable elements are protected automatically. Keyboard, wheel, swipe, and tap events inside these regions belong to the interaction instead of slide navigation.
+- Listen for \`deck:slidechange\` when a slide becomes active and \`deck:slidepatch\` after the live editor replaces slide HTML. Re-initialize idempotently.
+- Use \`data-build="1"\`, \`data-build="2"\`, … for staged reveals. Next/Space reveals the next build before advancing; Previous rewinds builds first. Add \`data-deck-advance\` to an explicit button when the slide should offer a click-to-reveal control.
+- Add only the minimum CSP permissions needed: HTTPS origins in \`runtime.connectOrigins\` for fetch/WebSocket endpoints and \`runtime.frameOrigins\` for embeds. Leave both empty for local calculations, filters, charts, tables, and games.
+- Static decks need no runtime. Prefer semantic HTML and CSS when JavaScript adds no real audience value.`
+
 function rootCss(tokens: Record<string, string>): string {
   const entries = Object.entries(tokens)
   return `:root {\n${entries.map(([k, v]) => `  ${k}: ${v};`).join('\n')}\n}`
@@ -365,6 +376,9 @@ ${tokenLines}
 
 ## Component vocabulary
 ${COMPONENT_VOCABULARY}
+
+## Optional deck runtime
+${DECK_RUNTIME_AUTHORING}
 ${template.notes ? `\n## ${template.name} specifics\n${template.notes}\n` : ''}
 This deck includes sample slides built from these components — mirror their structure and density. Keep it on-brand; only write bespoke CSS when a slide truly needs it. Keep it mobile-friendly (see MOBILE / RESPONSIVE above): new slides should reflow on phones — compose from the kit, drive custom grids with \`var(--cols)\`, and if you add bespoke hardcoded-px decoration, give it a matching \`@media (max-width: 640px) { html.deck-can-flow … }\` override.`
 }

@@ -4,6 +4,7 @@
 //   - artifact open: the artifact's template coding guide so edits stay on-brand.
 // Template data is server-owned so the client does not bundle every sample just
 // to build chat context.
+import { DECK_RUNTIME_AUTHORING } from '../../shared/templates/types'
 import type { Artifact, ArtifactKind } from '../../shared/types'
 
 interface TemplateMeta {
@@ -53,7 +54,7 @@ export async function gridChatInstructions(): Promise<string> {
   return `The user is in the Artifacts app (the gallery). Artifacts turns a chat into a beautiful, self-contained, *publishable* web page (or slide deck). There are two kinds:
 
 - **page** — ONE full, scrolling, responsive web page you fully control (HTML + CSS + JS): dashboards, charts, landing pages, product specs, data stories, games, 3D scenes. This is the primary kind.
-- **deck** — a slide deck (fixed 16:9 stage, navigated like a presentation).
+- **deck** — a slide deck (fixed 16:9 stage, navigated like a presentation) with an optional runtime for calculators, filters, live charts, sortable data, games, and embeds.
 
 To CREATE, pick a template that fits, then build on it. Call \`artifacts.templates.list\` for the live list, or use these:
 
@@ -110,12 +111,15 @@ ${template.guide}`
     `Edit it with the artifacts RPC (POST /api/moldable/rpc): ${DECK_METHODS}. ` +
     `Use \`artifacts.slides.text.replace { oldString, newString }\` for small exact-string edits across deck slides; \`oldString\` must be unique unless \`replaceAll: true\`. Add \`slideId\` or \`field\` only to disambiguate. ` +
     `Each slide's bodyHtml is the inner HTML of a fixed 1920×1080 stage that auto-reflows into a tall, scrolling, full-width page on phones — keep new/edited slides mobile-friendly. Add class="reveal" for staggered entrances and set per-slide transition (fade/slide/zoom). ${imageHelp} ` +
+    `For purposeful interactivity, use the deck's optional runtime (runtime.js/libs/connectOrigins/frameOrigins), mark interaction surfaces with data-deck-interactive, and use data-build="N" for click-to-reveal steps. Static decks need no runtime. ` +
     `To place an image, set it as a full-bleed background (<div class="full-bleed"><img class="bleed" src="assets/<file>"><div class="scrim"></div></div>) or a .media/.split/.hero figure in the target slide's bodyHtml.`
 
   if (!template) {
     return `${header}
 
-This deck has no library style. To adopt a polished look, call \`artifacts.applyTemplate { templateId }\` (see \`artifacts.templates.list\`).`
+This deck has no library style. To adopt a polished look, call \`artifacts.applyTemplate { templateId }\` (see \`artifacts.templates.list\`).
+
+${DECK_RUNTIME_AUTHORING}`
   }
 
   return `${header}

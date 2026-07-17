@@ -44,4 +44,17 @@ describe('createArtifact', () => {
 
     expect(artifact.title).toBe('Custom launch page')
   })
+
+  it('clones the interactive runtime from a deck template', async () => {
+    const template = getTemplate('data-dashboard')
+    const artifact = await createArtifact('test', {
+      templateId: 'data-dashboard',
+    })
+
+    expect(artifact.kind).toBe('deck')
+    expect(template?.runtime?.js).toContain('data-scenario-lab')
+    expect(artifact.runtime).toEqual(template?.runtime)
+    expect(artifact.runtime).not.toBe(template?.runtime)
+    expect(artifact.runtime?.libs).not.toBe(template?.runtime?.libs)
+  })
 })

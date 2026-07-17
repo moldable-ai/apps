@@ -5,12 +5,14 @@ import { getTemplate, templateTheme } from '../shared/templates'
 import {
   type Artifact,
   type ArtifactKind,
+  type DeckRuntime,
   type DeckTheme,
   type PageDoc,
   type PublishedInfo,
   type Slide,
   type SlideTransition,
   emptyPage,
+  emptyRuntime,
   emptyTheme,
 } from '../shared/types'
 import {
@@ -124,6 +126,34 @@ function strArray(value: unknown, base: string[]): string[] {
   return Array.isArray(value)
     ? value.filter((x): x is string => typeof x === 'string')
     : base
+}
+
+function coerceRuntime(
+  value: unknown,
+  base: DeckRuntime = emptyRuntime(),
+): DeckRuntime | undefined {
+  if (value === null) return undefined
+  if (!value || typeof value !== 'object') return base
+  const v = value as Record<string, unknown>
+  return {
+    libs: strArray(v.libs, base.libs),
+    js: typeof v.js === 'string' ? v.js : base.js,
+    connectOrigins: strArray(v.connectOrigins, base.connectOrigins),
+    frameOrigins: strArray(v.frameOrigins, base.frameOrigins),
+  }
+}
+
+function cloneRuntime(
+  runtime: DeckRuntime | undefined,
+): DeckRuntime | undefined {
+  return runtime
+    ? {
+        ...runtime,
+        libs: [...runtime.libs],
+        connectOrigins: [...runtime.connectOrigins],
+        frameOrigins: [...runtime.frameOrigins],
+      }
+    : undefined
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -405,6 +435,7 @@ export async function createArtifact(
   const kind: ArtifactKind = coerceKind(v.kind) ?? template?.kind ?? 'deck'
 
   let theme: DeckTheme
+  let runtime: DeckRuntime | undefined
   let slides: Slide[] = []
   let page: PageDoc | undefined
 
@@ -430,6 +461,10 @@ export async function createArtifact(
       : template
         ? templateTheme(template)
         : EMPTY_THEME
+    runtime =
+      'runtime' in v
+        ? coerceRuntime(v.runtime)
+        : cloneRuntime(template?.runtime)
   }
 
   const artifact: Artifact = {
@@ -443,6 +478,7 @@ export async function createArtifact(
     density: v.density === 'high' ? 'high' : 'low',
     templateId: template?.id,
     theme,
+    runtime,
     slides,
     page,
     published: null,
@@ -487,6 +523,7 @@ export async function applyTemplate(
       kind: 'page',
       templateId: template.id,
       theme: templateTheme(template),
+      runtime: undefined,
       slides: [],
       page: template.samplePage
         ? { ...template.samplePage }
@@ -498,6 +535,7 @@ export async function applyTemplate(
       kind: 'deck',
       templateId: template.id,
       theme: templateTheme(template),
+      runtime: cloneRuntime(template.runtime),
       page: undefined,
       slides:
         artifact.slides.length === 0 && template.sampleSlides
@@ -534,6 +572,10 @@ export async function updateArtifact(
         ? (str(v.imageStyle) ?? undefined)
         : artifact.imageStyle,
     theme: coerceTheme(v.theme, artifact.theme),
+    runtime:
+      artifact.kind === 'deck' && 'runtime' in v
+        ? coerceRuntime(v.runtime, artifact.runtime)
+        : artifact.runtime,
   }
   return saveArtifact(workspaceId, next, 'Edit artifact')
 }
@@ -664,6 +706,12 @@ export async function replaceArtifact(
           ? 'low'
           : artifact.density,
     theme: coerceTheme(v.theme, artifact.theme),
+    runtime:
+      kind === 'deck'
+        ? 'runtime' in v
+          ? coerceRuntime(v.runtime, artifact.runtime)
+          : artifact.runtime
+        : undefined,
     slides:
       kind === 'deck' && Array.isArray(v.slides)
         ? v.slides.map(coerceSlide)

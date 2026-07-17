@@ -66,6 +66,9 @@ const ORDER = [
   'dark-tech',
   'finance-pro',
   'data-dashboard',
+  'open-house',
+  'working-session',
+  'security-training',
 ]
 
 const mods = []

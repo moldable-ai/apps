@@ -166,7 +166,11 @@ const JS = `
   var particles = [];      // flap puffs + death burst
   var clouds = [];         // parallax background clouds
   var score = 0;
-  var best = loadBest();
+  var bestStore = window.moldableState('moldable-bird:v1');
+  var best = 0;
+  bestStore.get({ best: 0 }).then(function (saved) {
+    best = Number(saved && saved.best) || 0;
+  }, function () {});
   var spawnTimer = 0;
   var shake = 0;           // screen-shake magnitude (death)
   var flashAlpha = 0;      // white impact flash
@@ -176,15 +180,8 @@ const JS = `
   var deadAt = 0;          // timestamp of death (for overlay fade-in)
   var startedOnce = false;
 
-  function loadBest() {
-    try {
-      var v = window.localStorage ? window.localStorage.getItem('moldablebird.best') : null;
-      var n = parseInt(v || '0', 10);
-      return isNaN(n) ? 0 : n;
-    } catch (e) { return 0; }
-  }
   function saveBest() {
-    try { if (window.localStorage) window.localStorage.setItem('moldablebird.best', String(best)); } catch (e) {}
+    bestStore.set({ best: best }).catch(function () {});
   }
 
   // Difficulty curve: gap narrows + speed rises gently with score, then plateaus.
@@ -833,7 +830,7 @@ export const moldableBird: Template = {
   categories: ['Games'],
   audiences: ['everyone', 'developers', 'creative'],
   description:
-    'A complete, playable Flappy-Bird-style arcade game on a single full-viewport <canvas>. Flap with tap / click / Spacebar / ArrowUp to fly a hand-drawn bird (flapping wing, beak, glinting eye) through rounded gradient pipes. Features a subtly shifting gradient sky, parallax hills + drifting clouds, flap particle puffs, a death screen-shake, a scrolling ground stripe, live score, and a game-over card with best score persisted in localStorage. Difficulty ramps gently as you score. 60fps requestAnimationFrame loop, devicePixelRatio-aware, fully responsive from phones to desktop. All game state lives in page.js — tweak gravity, gap, speed, the palette, or the bird drawing to make it yours.',
+    'A complete, playable Flappy-Bird-style arcade game on a single full-viewport <canvas>. Flap with tap / click / Spacebar / ArrowUp to fly a hand-drawn bird (flapping wing, beak, glinting eye) through rounded gradient pipes. Features a subtly shifting gradient sky, parallax hills + drifting clouds, flap particle puffs, a death screen-shake, a scrolling ground stripe, live score, and a game-over card with a durable Moldable runtime-state best. Difficulty ramps gently as you score. 60fps requestAnimationFrame loop, devicePixelRatio-aware, fully responsive from phones to desktop. All game state lives in page.js — tweak gravity, gap, speed, the palette, or the bird drawing to make it yours.',
   fonts: {
     display: 'Space Grotesk',
     body: 'Inter',
@@ -843,7 +840,7 @@ export const moldableBird: Template = {
   },
   stageBg: '#0a0a14',
   notes:
-    'Single full-viewport canvas game; all logic is in page.js (string concatenation, no template literals). Tune the feel via the layout() function: `gravity`, `flapV`, `GAP`, `PIPE_W`, `baseSpeed`. Difficulty curve lives in curGap()/curSpeed()/pipeInterval(). The bird, pipes, sky, hills, clouds, ground, particles, and HUD are all hand-drawn canvas primitives — recolor the bird body gradient in drawBird(), the pipes in drawPipe(), and the sky in drawSky(). Best score persists to localStorage key `moldablebird.best`. Input (flap) is bound to pointerdown + keydown(Space/ArrowUp); page scroll/zoom on touch is prevented. The canvas resizes to the window and respects devicePixelRatio.',
+    "Single full-viewport canvas game; all logic is in page.js (string concatenation, no template literals). Tune the feel via the layout() function: `gravity`, `flapV`, `GAP`, `PIPE_W`, `baseSpeed`. Difficulty curve lives in curGap()/curSpeed()/pipeInterval(). The bird, pipes, sky, hills, clouds, ground, particles, and HUD are all hand-drawn canvas primitives — recolor the bird body gradient in drawBird(), the pipes in drawPipe(), and the sky in drawSky(). Best score uses window.moldableState('moldable-bird:v1'). Input (flap) is bound to pointerdown + keydown(Space/ArrowUp); page scroll/zoom on touch is prevented. The canvas resizes to the window and respects devicePixelRatio.",
   samplePage: {
     fontLinks: [
       'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap',

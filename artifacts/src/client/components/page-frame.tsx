@@ -5,6 +5,7 @@
 //   thumbnail shows the real desktop design (not a cramped mobile crop).
 // - interactive mode: the live, scrollable canvas at the real viewport width.
 import { useEffect, useRef, useState } from 'react'
+import { useRuntimeStateBridge } from '../lib/runtime-state-bridge'
 
 interface PageFrameProps {
   workspaceId?: string
@@ -28,10 +29,21 @@ export function PageFrame({
   title = 'Page preview',
 }: PageFrameProps) {
   const ws = workspaceId || 'default'
-  const src = `/api/preview/${encodeURIComponent(ws)}/${encodeURIComponent(artifactId)}/index.html?v=${encodeURIComponent(String(version))}`
+  const params = new URLSearchParams({ v: String(version) })
+  if (thumb) params.set('thumb', '1')
+  const src = `/api/preview/${encodeURIComponent(ws)}/${encodeURIComponent(artifactId)}/index.html?${params.toString()}`
 
   const boxRef = useRef<HTMLDivElement>(null)
+  const frameRef = useRef<HTMLIFrameElement>(null)
   const [scale, setScale] = useState(0.3)
+
+  useRuntimeStateBridge({
+    frameRef,
+    workspaceId: ws,
+    artifactId,
+    clientHeader: 'x-artifacts-client',
+    enabled: !thumb,
+  })
 
   useEffect(() => {
     if (!thumb) return
@@ -70,6 +82,7 @@ export function PageFrame({
 
   return (
     <iframe
+      ref={frameRef}
       src={src}
       title={title}
       className={className}

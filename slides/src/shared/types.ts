@@ -42,6 +42,22 @@ export interface DeckTheme {
   stageBg?: string
 }
 
+/** Optional, presentation-scoped web runtime for interactive decks. */
+export interface DeckRuntime {
+  /** Pinned HTTPS script URLs loaded before `js`. */
+  libs: string[]
+  /** Deck-wide JavaScript. Prefer event delegation so live slide patches keep working. */
+  js: string
+  /** HTTPS origins the runtime may fetch from. Empty permits same-origin only. */
+  connectOrigins: string[]
+  /** HTTPS origins slides may embed in iframes. Empty disables frames for runtime decks. */
+  frameOrigins: string[]
+}
+
+export function emptyRuntime(): DeckRuntime {
+  return { libs: [], js: '', connectOrigins: [], frameOrigins: [] }
+}
+
 export interface PublishedInfo {
   url: string
   slug: string
@@ -64,6 +80,8 @@ export interface Deck {
    * image-to-image style source. Defaults to the deck's own templateId. */
   imagePresetId?: string
   theme: DeckTheme
+  /** Opt-in authored behavior. Ordinary decks omit this and remain HTML/CSS-only. */
+  runtime?: DeckRuntime
   slides: Slide[]
   published?: PublishedInfo | null
   /** Set by the `deck.publish` RPC; the open client picks it up and publishes. */

@@ -51,13 +51,14 @@ basic — enrich to the bar + clearer story) · 🆕 new · ⏳ in progress.
 
 ## Project Management
 
-| id                 | name            | status | story                                              |
-| ------------------ | --------------- | ------ | -------------------------------------------------- |
-| `product-brief`    | Product Brief   | ✅     | Product spec — problem, solution, scope            |
-| `project-timeline` | Project Roadmap | ✅     | Phased roadmap & milestones with timeline          |
-| `project-kickoff`  | Project Kickoff | ✅     | Kickoff: goals, scope, roles, plan, risks          |
-| `sprint-review`    | Sprint Review   | ✅     | Sprint demo: what shipped, metrics, next           |
-| `status-report`    | Program Status  | ✅     | RAG status report: health, risks, decisions needed |
+| id                 | name            | status | story                                                                                     |
+| ------------------ | --------------- | ------ | ----------------------------------------------------------------------------------------- |
+| `product-brief`    | Product Brief   | ✅     | Product spec — problem, solution, scope                                                   |
+| `project-timeline` | Project Roadmap | ✅     | Phased roadmap & milestones with timeline                                                 |
+| `project-kickoff`  | Project Kickoff | ✅     | Kickoff: goals, scope, roles, plan, risks                                                 |
+| `sprint-review`    | Sprint Review   | ✅     | Sprint demo: what shipped, metrics, next                                                  |
+| `status-report`    | Program Status  | ✅     | RAG status report: health, risks, decisions needed                                        |
+| `working-session`  | Working Session | ✅     | The deck that becomes the whiteboard: sticky wall, poll, dot vote, 2×2, timer (18 slides) |
 
 ## Fundraising
 
@@ -70,13 +71,14 @@ basic — enrich to the bar + clearer story) · 🆕 new · ⏳ in progress.
 
 ## Sales
 
-| id                       | name        | status | story                                                       |
-| ------------------------ | ----------- | ------ | ----------------------------------------------------------- |
-| `dark-tech`              | Dark Tech   | ✅     | Product launch keynote — dark, cinematic                    |
-| `sales-deck`             | Sales Deck  | ✅     | B2B value pitch: pain, solution, proof, pricing (17 slides) |
-| `competitive-battlecard` | Battlecards | ✅     | Us-vs-them comparison, objection handling                   |
-| `case-study`             | Case Study  | ✅     | Customer story: challenge, approach, results                |
-| `pricing-proposal`       | Proposal    | ✅     | Client proposal / SOW: scope, plan, pricing, terms          |
+| id                       | name        | status | story                                                                                      |
+| ------------------------ | ----------- | ------ | ------------------------------------------------------------------------------------------ |
+| `dark-tech`              | Dark Tech   | ✅     | Product launch keynote — dark, cinematic                                                   |
+| `sales-deck`             | Sales Deck  | ✅     | B2B value pitch: pain, solution, proof, pricing (17 slides)                                |
+| `competitive-battlecard` | Battlecards | ✅     | Us-vs-them comparison, objection handling                                                  |
+| `case-study`             | Case Study  | ✅     | Customer story: challenge, approach, results                                               |
+| `pricing-proposal`       | Proposal    | ✅     | Client proposal / SOW: scope, plan, pricing, terms                                         |
+| `open-house`             | Open House  | ✅     | Interactive listing pitch: floor-plan explorer, payment calculator, map layers (18 slides) |
 
 ## Marketing
 
@@ -96,14 +98,18 @@ basic — enrich to the bar + clearer story) · 🆕 new · ⏳ in progress.
 
 ## People
 
-| id           | name             | status | story                                              |
-| ------------ | ---------------- | ------ | -------------------------------------------------- |
-| `people-ops` | People & Culture | ✅     | HR review: headcount, engagement, DEI, programs    |
-| `onboarding` | Onboarding       | ✅     | New-hire welcome: first week, tools, people, norms |
+| id                  | name              | status | story                                                                                      |
+| ------------------- | ----------------- | ------ | ------------------------------------------------------------------------------------------ |
+| `people-ops`        | People & Culture  | ✅     | HR review: headcount, engagement, DEI, programs                                            |
+| `onboarding`        | Onboarding        | ✅     | New-hire welcome: first week, tools, people, norms                                         |
+| `security-training` | Security Training | ✅     | Interactive drills: find-the-phish game, scenario, crack-time lab, scored quiz (18 slides) |
 
 ---
 
-**Counts: all 43 complete ✅** (5 reference + 8 reworked originals + 30 new), across 11 categories.
+**Counts: all 46 complete ✅** (5 reference + 8 reworked originals + 33 new), across 11 categories.
+Four templates (`data-dashboard`, `open-house`, `working-session`, `security-training`)
+ship a working deck **runtime** — see the Optional deck runtime section of `AUTHORING.md`
+and each guide for the widget contracts.
 
 Each `🆕`/`♻️` row must reach the `AUTHORING.md` richness bar before it flips to ✅.
 Distinctness rule: no two templates should read as re-skins — different fonts,

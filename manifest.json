@@ -1,13 +1,13 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-07-01T20:47:24.742Z",
+  "generatedAt": "2026-07-17T01:40:44.247Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
       "id": "artifacts",
       "name": "Artifacts",
-      "version": "0.1.1",
+      "version": "0.1.3",
       "description": "Turn a chat into a beautiful, self-contained, publishable web page or slide deck — dashboards, landing pages, specs, charts, data stories, games, and 3D scenes.",
       "tagline": "Turn a chat into a beautiful, self-contained, publishable web page or slide deck — dashboards, landing pages, specs, charts, data stories, games, and 3D scenes.",
       "author": "Moldable",
@@ -15,7 +15,7 @@
       "icon": "🎨",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/artifacts/public/app-icon=artifacts.png",
       "screenshots": [],
-      "about": "Turn a chat into something worth publishing. Artifacts lets you generate beautiful, self-contained web pages and slide decks — dashboards, landing pages, product specs, charts, data stories, games, 3D scenes, and presentations — entirely from chat, then share them with a single public link.\n\n**Highlights**\n\n- Two kinds of artifact, one canvas: a **page** (a full, scrolling, responsive web page you fully control with HTML/CSS/JS) or a **deck** (a 16:9 slide presentation with smooth motion).\n- Chat-first authoring: ask the assistant to create, surgically edit, restyle, or rebuild an artifact and it drives everything through the app's rich RPC — exact string edits via `artifacts.page.text.replace { oldString, newString }` / `artifacts.slides.text.replace { oldString, newString }`, whole-field page updates via `artifacts.page.set`, and deck structure via slide operations.\n- A studio-grade template library to start from: a live analytics dashboard, a financial report, a SaaS landing page, a product spec, a startup one-pager, a visual case study, a generative 3D scene, an arcade game, plus carried-over presentation decks.\n- Hand-rolled, library-free visuals: SVG and canvas charts with tabular numerals, scroll-reveal animation, parallax, and a `--scroll` progress variable for scroll-driven effects.\n- Built-in image generation: create on-brand imagery from a prompt (or remix an existing image) and drop it straight into your artifact.\n- One-click publish to a public, unlisted Moldable Artifacts link — a self-contained static page (HTML/CSS/JS + images) that works on any device, with republish, unpublish, and version history.\n- Fully local: each artifact is plain data in your workspace, cleanly keyed so it's easy to manage and delete; nothing leaves your machine until you choose to publish.\n\nInstall it to turn a prompt into a polished, shareable creation.",
+      "about": "Turn a chat into something worth publishing. Artifacts lets you generate beautiful, self-contained web pages and slide decks — dashboards, landing pages, product specs, charts, data stories, games, 3D scenes, and presentations — entirely from chat, then share them with a single public link.\n\n**Highlights**\n\n- Two kinds of artifact, one canvas: a **page** (a full, scrolling, responsive web page you fully control with HTML/CSS/JS) or a **deck** (a 16:9 slide presentation with smooth motion and an optional app-like runtime).\n- Interactive decks without extra UX: calculators, filters, sortable tables, live charts, games, embeds, and click-to-build sequences work inside ordinary slides; static decks remain the default.\n- Chat-first authoring: ask the assistant to create, surgically edit, restyle, or rebuild an artifact and it drives everything through the app's rich RPC — exact string edits via `artifacts.page.text.replace { oldString, newString }` / `artifacts.slides.text.replace { oldString, newString }`, whole-field page updates via `artifacts.page.set`, and deck structure via slide operations.\n- A studio-grade template library to start from: a live analytics dashboard, a financial report, a SaaS landing page, a product spec, a startup one-pager, a visual case study, a generative 3D scene, an arcade game, plus carried-over presentation decks.\n- Hand-rolled, library-free visuals: SVG and canvas charts with tabular numerals, scroll-reveal animation, parallax, and a `--scroll` progress variable for scroll-driven effects.\n- Built-in image generation: create on-brand imagery from a prompt (or remix an existing image) and drop it straight into your artifact.\n- One-click publish to a public, unlisted Moldable Artifacts link — a self-contained static page (HTML/CSS/JS + images) that works on any device, with republish, unpublish, and version history.\n- Fully local: each artifact is plain data in your workspace, cleanly keyed so it's easy to manage and delete; nothing leaves your machine until you choose to publish.\n\nInstall it to turn a prompt into a polished, shareable creation.",
       "category": "productivity",
       "tags": [
         "artifacts",
@@ -34,12 +34,12 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "calculator",
       "name": "Calculator",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "description": "Everyday, scientific, and unit/currency calculator with history",
       "tagline": "Everyday, scientific, and unit/currency math — with history",
       "author": "Moldable",
@@ -61,10 +61,10 @@
       "requiredEnv": [],
       "credentials": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.18",
-        "@moldable-ai/storage": "^0.1.6"
+        "@moldable-ai/storage": "^0.1.6",
+        "@moldable-ai/ui": "^0.2.18"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "calendar",
@@ -94,12 +94,12 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "clock",
       "name": "Clock",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "description": "Alarms, multiple timers, a stopwatch, and world clocks — all local.",
       "tagline": "Alarms, timers, stopwatch, and world clocks — local-first",
       "author": "Moldable",
@@ -121,10 +121,10 @@
       "requiredEnv": [],
       "credentials": [],
       "moldableDependencies": {
-        "@moldable-ai/ui": "^0.2.18",
-        "@moldable-ai/storage": "^0.1.6"
+        "@moldable-ai/storage": "^0.1.6",
+        "@moldable-ai/ui": "^0.2.18"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "code-editor",
@@ -149,7 +149,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "affirmations",
@@ -174,7 +174,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "db-browser",
@@ -199,7 +199,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "git-flow",
@@ -229,7 +229,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "guitar",
@@ -252,7 +252,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "hello-moldables",
@@ -278,7 +278,7 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.18"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "images",
@@ -315,7 +315,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "mail",
@@ -345,7 +345,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "meetings",
@@ -385,7 +385,7 @@
         "@moldable-ai/storage": "^0.1.6",
         "@moldable-ai/ui": "^0.2.18"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "microscope",
@@ -414,7 +414,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "notes",
@@ -445,7 +445,7 @@
         "@moldable-ai/editor": "^0.1.17",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "piano",
@@ -468,7 +468,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "plants",
@@ -491,7 +491,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "reader",
@@ -519,7 +519,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "recipes-app",
@@ -541,7 +541,7 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.18"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "redecorate",
@@ -583,7 +583,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "remotion",
@@ -608,7 +608,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "scribo",
@@ -648,12 +648,12 @@
         "@moldable-ai/editor": "^0.1.17",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "slides",
       "name": "Slides",
-      "version": "0.1.5",
+      "version": "0.1.7",
       "description": "Generate and publish beautiful, animation-rich presentations, edited entirely from chat.",
       "tagline": "Generate and publish beautiful, animation-rich presentations, edited entirely from chat.",
       "author": "Moldable",
@@ -661,7 +661,7 @@
       "icon": "🎞️",
       "iconUrl": "https://raw.githubusercontent.com/moldable-ai/apps/main/slides/public/icon.png",
       "screenshots": [],
-      "about": "Generate beautiful, animation-rich presentations from chat — then present them fullscreen or publish them as a shareable link. Slides renders every deck on a fixed 16:9 stage with smooth entrances and keyboard, wheel, and touch navigation, all living in your workspace.\n\n**Highlights**\n\n- Chat-first authoring: ask the assistant to create, edit, restyle, reorder, or delete slides and it drives the deck for you through the app's slide RPC.\n- Surgical chat edits: agents can call `slides.text.replace` to patch exact text anywhere in a deck without rewriting the whole deck or slide.\n- Real 16:9 stage with rich motion — per-slide fade/slide/zoom entrances and staggered content reveals, scaled to fit any screen; on phones the published deck auto-reflows into a clean, scrolling, full-width page so it reads great on mobile.\n- Live editor: a slide rail of real thumbnails, a large interactive canvas, drag-free reorder, and instant preview of every change.\n- Present mode with fullscreen, arrow/space/wheel/swipe navigation, a progress bar, and a slide counter.\n- One-click publish to a public, unlisted Moldable Artifacts link — a self-contained static deck (HTML/CSS/JS + images) that works on any device, with republish and unpublish.\n- Distinctive, non-generic design system (Fontshare/Google fonts, committed palettes, CSS-generated visuals) tuned to avoid cookie-cutter \"AI slop\" decks.\n- Fully local: decks are plain JSON in your workspace; no accounts and no external services until you choose to publish.\n\nInstall it to turn a prompt into a polished, shareable presentation.",
+      "about": "Generate beautiful, animation-rich presentations from chat — then present them fullscreen or publish them as a shareable link. Slides renders every deck on a fixed 16:9 stage with smooth entrances and keyboard, wheel, and touch navigation, all living in your workspace.\n\n**Highlights**\n\n- Chat-first authoring: ask the assistant to create, edit, restyle, reorder, or delete slides and it drives the deck for you through the app's slide RPC.\n- Surgical chat edits: agents can call `slides.text.replace` to patch exact text anywhere in a deck without rewriting the whole deck or slide.\n- Real 16:9 stage with rich motion — per-slide fade/slide/zoom entrances, click-to-build sequences, and staggered content reveals, scaled to fit any screen; on phones the published deck auto-reflows into a clean, scrolling, full-width page so it reads great on mobile.\n- Optional app-like deck runtime: calculators, filters, sortable tables, live charts, games, and embeds work directly inside a slide while ordinary decks stay simple and static by default.\n- Live editor: a slide rail of real thumbnails, a large interactive canvas, drag-free reorder, and instant preview of every change.\n- Present mode with fullscreen, arrow/space/wheel/swipe navigation, a progress bar, and a slide counter.\n- One-click publish to a public, unlisted Moldable Artifacts link — a self-contained static deck (HTML/CSS/JS + images) that works on any device, with republish and unpublish.\n- Distinctive, non-generic design system (Fontshare/Google fonts, committed palettes, CSS-generated visuals) tuned to avoid cookie-cutter \"AI slop\" decks.\n- Fully local: decks are plain JSON in your workspace; no accounts and no external services until you choose to publish.\n\nInstall it to turn a prompt into a polished, shareable presentation.",
       "category": "productivity",
       "tags": [
         "slides",
@@ -678,7 +678,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "tasks",
@@ -701,7 +701,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "time-tracker",
@@ -726,7 +726,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "todo",
@@ -756,7 +756,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "translate",
@@ -793,7 +793,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "weather",
@@ -820,7 +820,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     },
     {
       "id": "wiki",
@@ -849,7 +849,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "15806254ad5b92d6006750a0ec2414d695b20000"
+      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
     }
   ],
   "categories": [

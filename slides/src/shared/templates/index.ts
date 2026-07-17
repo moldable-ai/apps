@@ -58,6 +58,7 @@ export function getTemplateDetail(id: string) {
   return {
     ...templateMeta(template),
     theme: templateTheme(template),
+    runtime: template.runtime ?? null,
     guide: templateGuide(template),
     sampleSlides: template.sampleSlides,
   }

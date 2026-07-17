@@ -58,6 +58,7 @@ const ORDER = [
   'pricing-proposal',
   'flat-illustration',
   'isometric',
+  'open-house',
   // Marketing
   'gtm-strategy',
   'campaign-brief',
@@ -69,6 +70,8 @@ const ORDER = [
   // People
   'people-ops',
   'onboarding',
+  'working-session',
+  'security-training',
 ]
 
 const files = fs.readdirSync(decksDir).filter((f) => f.endsWith('.ts'))

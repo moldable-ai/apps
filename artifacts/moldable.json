@@ -1,6 +1,6 @@
 {
   "name": "Artifacts",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "aliases": [
     "artifact",
     "dashboard",
@@ -68,7 +68,7 @@
           {
             "id": "artifacts.create",
             "name": "Create artifact",
-            "description": "Create a new artifact. Pass kind ('page' or 'deck') and/or a templateId to clone a sample.",
+            "description": "Create a new artifact. Pass kind ('page' or 'deck') and/or a templateId to clone a sample; decks may include an optional interactive runtime.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -96,6 +96,10 @@
                 },
                 "theme": {
                   "type": "object"
+                },
+                "runtime": {
+                  "type": "object",
+                  "description": "For decks only: { libs, js, connectOrigins, frameOrigins }."
                 }
               }
             }
@@ -103,7 +107,7 @@
           {
             "id": "artifacts.update",
             "name": "Update artifact",
-            "description": "Update an artifact's title, subtitle, density, or theme.",
+            "description": "Update an artifact's title, subtitle, density, theme, or deck runtime.",
             "inputSchema": {
               "type": "object",
               "required": [
@@ -112,6 +116,10 @@
               "properties": {
                 "id": {
                   "type": "string"
+                },
+                "runtime": {
+                  "type": "object",
+                  "description": "For decks only: { libs, js, connectOrigins, frameOrigins }."
                 }
               }
             }
@@ -119,7 +127,7 @@
           {
             "id": "artifacts.replace",
             "name": "Replace artifact",
-            "description": "Replace an artifact's content in one call (a page's html/css/js, or a deck's slides).",
+            "description": "Replace an artifact's content in one call (a page's html/css/js, or a deck's slides/runtime).",
             "inputSchema": {
               "type": "object",
               "required": [
@@ -128,6 +136,10 @@
               "properties": {
                 "id": {
                   "type": "string"
+                },
+                "runtime": {
+                  "type": "object",
+                  "description": "For decks only: { libs, js, connectOrigins, frameOrigins }."
                 }
               }
             }

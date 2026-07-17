@@ -9,13 +9,7 @@
   "icon": "🔬",
   "iconPath": "public/icon.png",
   "category": "education",
-  "tags": [
-    "science",
-    "learning",
-    "images",
-    "gpt-image-2",
-    "3d"
-  ],
+  "tags": ["science", "learning", "images", "gpt-image-2", "3d"],
   "aliases": [
     "magic scope",
     "science explorer",
@@ -52,22 +46,14 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": [
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["medium", "high"]
                 },
                 "modelProvider": {
                   "type": "string",
-                  "enum": [
-                    "fal",
-                    "tripo"
-                  ]
+                  "enum": ["fal", "tripo"]
                 }
               },
-              "required": [
-                "prompt"
-              ]
+              "required": ["prompt"]
             }
           },
           {
@@ -82,22 +68,14 @@
                 },
                 "quality": {
                   "type": "string",
-                  "enum": [
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["medium", "high"]
                 },
                 "modelProvider": {
                   "type": "string",
-                  "enum": [
-                    "fal",
-                    "tripo"
-                  ]
+                  "enum": ["fal", "tripo"]
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -112,22 +90,14 @@
                 },
                 "modelProvider": {
                   "type": "string",
-                  "enum": [
-                    "fal",
-                    "tripo"
-                  ]
+                  "enum": ["fal", "tripo"]
                 },
                 "quality": {
                   "type": "string",
-                  "enum": [
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["medium", "high"]
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -142,22 +112,14 @@
                 },
                 "modelProvider": {
                   "type": "string",
-                  "enum": [
-                    "fal",
-                    "tripo"
-                  ]
+                  "enum": ["fal", "tripo"]
                 },
                 "quality": {
                   "type": "string",
-                  "enum": [
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["medium", "high"]
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -172,22 +134,14 @@
                 },
                 "modelProvider": {
                   "type": "string",
-                  "enum": [
-                    "fal",
-                    "tripo"
-                  ]
+                  "enum": ["fal", "tripo"]
                 },
                 "quality": {
                   "type": "string",
-                  "enum": [
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["medium", "high"]
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -201,9 +155,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -225,23 +177,14 @@
               "properties": {
                 "modelProvider": {
                   "type": "string",
-                  "enum": [
-                    "fal",
-                    "tripo"
-                  ]
+                  "enum": ["fal", "tripo"]
                 },
                 "quality": {
                   "type": "string",
-                  "enum": [
-                    "medium",
-                    "high"
-                  ]
+                  "enum": ["medium", "high"]
                 }
               },
-              "required": [
-                "modelProvider",
-                "quality"
-              ]
+              "required": ["modelProvider", "quality"]
             }
           }
         ]

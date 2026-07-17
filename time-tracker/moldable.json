@@ -1,10 +1,7 @@
 {
   "name": "Time Tracker",
   "version": "0.1.11",
-  "aliases": [
-    "timer",
-    "timesheet"
-  ],
+  "aliases": ["timer", "timesheet"],
   "visibility": "public",
   "description": "Track time for work projects with weekly views and export",
   "runtime": "vite_hono",
@@ -61,9 +58,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "name"
-              ]
+              "required": ["name"]
             }
           },
           {
@@ -86,9 +81,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -146,10 +139,7 @@
                   "description": "Duration in seconds."
                 }
               },
-              "required": [
-                "projectId",
-                "startTime"
-              ]
+              "required": ["projectId", "startTime"]
             }
           },
           {
@@ -178,9 +168,7 @@
                   "type": "number"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -194,9 +182,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ]
+              "required": ["id"]
             }
           },
           {
@@ -218,9 +204,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "projectId"
-              ]
+              "required": ["projectId"]
             }
           },
           {
@@ -271,9 +255,7 @@
   },
   "env": [],
   "routeName": "time-tracker",
-  "screenshots": [
-    "public/screenshots/1.png"
-  ],
+  "screenshots": ["public/screenshots/1.png"],
   "tagline": "One-click time tracking with weekly views and export",
   "upstream": {
     "repo": "moldable-ai/apps",

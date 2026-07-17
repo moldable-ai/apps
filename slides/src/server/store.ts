@@ -10,6 +10,7 @@ import {
   safePath,
   writeJson,
 } from '@moldable-ai/storage'
+import { isValidRuntimeStateNamespace } from '../shared/runtime-state'
 import { createWelcomeDeck } from '../shared/sample'
 import type { Deck, DeckSummary, Slide } from '../shared/types'
 import { randomUUID } from 'node:crypto'
@@ -45,6 +46,24 @@ export function assetPath(
 
 function publishStageDir(workspaceId: string | undefined, id: string): string {
   return safePath(baseDir(workspaceId), 'publish', sanitizeId(id))
+}
+
+function runtimeStateDir(workspaceId: string | undefined, id: string): string {
+  return safePath(baseDir(workspaceId), 'runtime-state', sanitizeId(id))
+}
+
+function runtimeStatePath(
+  workspaceId: string | undefined,
+  id: string,
+  namespace: string,
+): string {
+  if (!isValidRuntimeStateNamespace(namespace)) {
+    throw new Error('Invalid runtime state namespace')
+  }
+  return safePath(
+    runtimeStateDir(workspaceId, id),
+    `${encodeURIComponent(namespace)}.json`,
+  )
 }
 
 /**
@@ -204,7 +223,36 @@ export async function deleteDeck(
   await rm(path, { force: true })
   await rm(assetsDir(workspaceId, id), { recursive: true, force: true })
   await rm(versionsPath(workspaceId, id), { force: true })
+  await rm(runtimeStateDir(workspaceId, id), { recursive: true, force: true })
   return true
+}
+
+export async function readRuntimeState(
+  workspaceId: string | undefined,
+  id: string,
+  namespace: string,
+): Promise<unknown | null> {
+  const path = runtimeStatePath(workspaceId, id, namespace)
+  if (!existsSync(path)) return null
+  return readJson<unknown | null>(path, null)
+}
+
+export async function writeRuntimeState(
+  workspaceId: string | undefined,
+  id: string,
+  namespace: string,
+  value: unknown,
+): Promise<void> {
+  await ensureDir(runtimeStateDir(workspaceId, id))
+  await writeJson(runtimeStatePath(workspaceId, id, namespace), value)
+}
+
+export async function deleteRuntimeState(
+  workspaceId: string | undefined,
+  id: string,
+  namespace: string,
+): Promise<void> {
+  await rm(runtimeStatePath(workspaceId, id, namespace), { force: true })
 }
 
 // ---- Version history -----------------------------------------------------

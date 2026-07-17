@@ -5,6 +5,7 @@
 // - interactive mode: the live canvas; selection is driven via postMessage
 //   (`deck:goto`) and the deck reports its current slide back (`deck:slide`).
 import { useEffect, useRef } from 'react'
+import { useRuntimeStateBridge } from '../lib/runtime-state-bridge'
 import type { Slide } from '../../shared/types'
 
 export interface SlideFramePatch {
@@ -47,6 +48,14 @@ export function SlideFrame({
 }: SlideFrameProps) {
   const ref = useRef<HTMLIFrameElement>(null)
   const ws = workspaceId || 'default'
+
+  useRuntimeStateBridge({
+    frameRef: ref,
+    workspaceId: ws,
+    artifactId: deckId,
+    clientHeader: 'x-artifacts-client',
+    enabled: !thumb,
+  })
 
   const params = new URLSearchParams()
   if (thumb) {
