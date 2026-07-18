@@ -1,7 +1,7 @@
 {
   "$schema": "https://moldable.sh/schemas/manifest.json",
   "version": "1",
-  "generatedAt": "2026-07-17T01:40:44.247Z",
+  "generatedAt": "2026-07-18T23:15:31.268Z",
   "registry": "moldable-ai/apps",
   "apps": [
     {
@@ -34,7 +34,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "calculator",
@@ -64,7 +64,7 @@
         "@moldable-ai/storage": "^0.1.6",
         "@moldable-ai/ui": "^0.2.18"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "calendar",
@@ -94,7 +94,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "clock",
@@ -124,7 +124,7 @@
         "@moldable-ai/storage": "^0.1.6",
         "@moldable-ai/ui": "^0.2.18"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "code-editor",
@@ -149,7 +149,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "affirmations",
@@ -174,7 +174,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "db-browser",
@@ -199,7 +199,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "git-flow",
@@ -229,12 +229,12 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "guitar",
       "name": "Guitar",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "description": "A local-first guitar song library with 88-key playback and falling-note practice visualization.",
       "tagline": "Practice guitar with falling notes and a full 88-key library",
       "author": "Moldable",
@@ -252,7 +252,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "hello-moldables",
@@ -278,7 +278,7 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.18"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "images",
@@ -315,7 +315,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "mail",
@@ -345,7 +345,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "meetings",
@@ -385,7 +385,7 @@
         "@moldable-ai/storage": "^0.1.6",
         "@moldable-ai/ui": "^0.2.18"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "microscope",
@@ -414,7 +414,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "notes",
@@ -445,12 +445,12 @@
         "@moldable-ai/editor": "^0.1.17",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "piano",
       "name": "Piano",
-      "version": "0.1.10",
+      "version": "0.1.11",
       "description": "A local-first piano song library with 88-key playback and falling-note practice visualization.",
       "tagline": "Practice piano with falling notes and a full 88-key library",
       "author": "Moldable",
@@ -468,7 +468,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "plants",
@@ -491,7 +491,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "reader",
@@ -519,7 +519,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "recipes-app",
@@ -541,12 +541,12 @@
       "moldableDependencies": {
         "@moldable-ai/ui": "^0.2.18"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "redecorate",
       "name": "Redecorate",
-      "version": "0.1.10",
+      "version": "0.1.11",
       "description": "Reimagine your home, inside and out — a folder-based playground for AI room, exterior, backyard, and floorplan redesigns.",
       "tagline": "Reimagine every room, facade, and backyard — in one tap",
       "author": "Moldable",
@@ -583,7 +583,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "remotion",
@@ -608,7 +608,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "scribo",
@@ -648,7 +648,7 @@
         "@moldable-ai/editor": "^0.1.17",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "slides",
@@ -678,7 +678,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "tasks",
@@ -701,7 +701,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "time-tracker",
@@ -726,7 +726,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "todo",
@@ -756,7 +756,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "translate",
@@ -793,7 +793,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "weather",
@@ -820,12 +820,12 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     },
     {
       "id": "wiki",
       "name": "Wiki",
-      "version": "0.1.10",
+      "version": "0.1.11",
       "description": "Create, edit, and organize a Markdown knowledge base.",
       "tagline": "A linked, local-first Markdown knowledge base",
       "author": "Moldable",
@@ -849,7 +849,7 @@
         "@moldable-ai/ui": "^0.2.18",
         "@moldable-ai/storage": "^0.1.6"
       },
-      "commit": "d59dae8d2ddacd8158ea4dfdc94d5cd75edf4400"
+      "commit": "208b9d7e4e9a4809a7b75ebdc8ac5f6a9010d04c"
     }
   ],
   "categories": [

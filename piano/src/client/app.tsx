@@ -71,7 +71,7 @@ function isPianoPresetId(value: string | undefined): value is PianoPresetId {
   return Boolean(value && PIANO_PRESETS.some((preset) => preset.id === value))
 }
 
-const APP_SOURCE_PATH = '/Users/rob/.moldable/shared/apps/piano'
+const APP_SOURCE_PATH = '~/.moldable/shared/apps/piano'
 const INSTRUMENTS_STORAGE_PATH =
   '~/.moldable/workspaces/{workspace-id}/apps/piano/data/instruments'
 const AUDIO_MODEL_PATH = `${APP_SOURCE_PATH}/src/shared/audio.ts`

@@ -64,7 +64,7 @@ function isGuitarPresetId(value: string | undefined): value is GuitarPresetId {
   return Boolean(value && GUITAR_PRESETS.some((preset) => preset.id === value))
 }
 
-const APP_SOURCE_PATH = '/Users/rob/.moldable/shared/apps/guitar'
+const APP_SOURCE_PATH = '~/.moldable/shared/apps/guitar'
 const INSTRUMENTS_STORAGE_PATH =
   '~/.moldable/workspaces/{workspace-id}/apps/guitar/data/instruments'
 const AUDIO_MODEL_PATH = `${APP_SOURCE_PATH}/src/shared/audio.ts`

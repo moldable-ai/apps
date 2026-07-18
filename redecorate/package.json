@@ -13,7 +13,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@moldable-ai/editor": "link:/Users/rob/moldable/packages/editor",
+    "@moldable-ai/editor": "^0.1.17",
     "@hono/node-server": "^1.19.14",
     "@moldable-ai/storage": "^0.1.6",
     "@moldable-ai/ui": "^0.2.18",
