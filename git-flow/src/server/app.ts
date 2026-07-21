@@ -28,6 +28,7 @@ import {
   getStatus,
   openFileInEditor,
   pushCommits,
+  removeRepo,
   resolveKnownRepoPath,
   sanitizeBranchName,
   setPreferredCommitAction,
@@ -1135,6 +1136,13 @@ app.post('/api/git', async (c) => {
       return c.json(result)
     }
 
+    if (body.action === 'removeRepo') {
+      if (!body.path) {
+        return c.json({ error: 'Repository path is required.' }, 400)
+      }
+      return c.json(await removeRepo(body.path, workspaceId))
+    }
+
     const status = await addRepo(body.path ?? '', workspaceId)
     const [diff, repos] = await Promise.all([
       getDiff(body.path, undefined, workspaceId),
@@ -1188,6 +1196,15 @@ app.post('/api/moldable/rpc', async (c) => {
       }
       const status = await addRepo(path, workspaceId)
       return c.json({ ok: true, result: status })
+    }
+
+    if (method === 'git.repo.remove') {
+      const path = stringParam(params, 'path')
+      if (!path) {
+        const error = rpcError('invalid_params', 'path is required')
+        return c.json(error.body, error.status)
+      }
+      return c.json({ ok: true, result: await removeRepo(path, workspaceId) })
     }
 
     if (method === 'git.diff') {

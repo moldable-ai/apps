@@ -1,6 +1,6 @@
 {
   "name": "Git",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "aliases": ["repo", "version-control"],
   "visibility": "public",
   "description": "Simple Git client for branch management, staging, and diffing",
@@ -14,7 +14,7 @@
   "category": "developer-tools",
   "tags": ["git", "version-control", "developer", "code"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.18",
+    "@moldable-ai/ui": "^0.2.19",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
@@ -47,6 +47,20 @@
             "id": "git.repo.set",
             "name": "Set current repository",
             "description": "Set the Git app current repository.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": ["path"]
+            }
+          },
+          {
+            "id": "git.repo.remove",
+            "name": "Remove tracked repository",
+            "description": "Forget a repository in the active workspace without deleting or modifying its files.",
             "inputSchema": {
               "type": "object",
               "properties": {

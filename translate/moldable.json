@@ -1,6 +1,6 @@
 {
   "name": "Translate",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "aliases": ["translation", "translator"],
   "visibility": "public",
   "description": "Fast, private text translation across dozens of languages",
@@ -13,7 +13,7 @@
   "category": "productivity",
   "tags": ["translate", "translation", "languages", "essentials"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.18",
+    "@moldable-ai/ui": "^0.2.19",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {

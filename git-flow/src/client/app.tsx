@@ -978,6 +978,35 @@ export default function GitFlowPage() {
     },
   })
 
+  const removeRepoMutation = useMutation({
+    mutationFn: async (repoPath: string) => {
+      const res = await fetchWithWorkspace('/api/git', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'removeRepo', path: repoPath }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Failed to remove repository')
+      return json as GitData & { removedPath: string }
+    },
+    onSuccess: (json) => {
+      queryClient.setQueryData<GitData>(['git-status', workspaceId], json)
+      const changedPaths = json.files?.map((file) => file.path) ?? []
+      const firstFile = changedPaths[0] ?? null
+      initializedSelectionRepoRef.current = json.repoPath
+      setSelectedFile(firstFile)
+      setSelectedCommit(null)
+      setSelectedCommitFile(null)
+      setSelectedFiles(new Set(changedPaths))
+      setSelectedActionFiles(firstFile ? new Set([firstFile]) : new Set())
+      selectionAnchorRef.current = firstFile
+      queryClient.invalidateQueries({ queryKey: ['git-history', workspaceId] })
+    },
+    onError: (err: Error) => {
+      setError(err.message)
+    },
+  })
+
   const branchMutation = useMutation({
     mutationFn: async (branch: string) => {
       const res = await fetchWithWorkspace('/api/git', {
@@ -1028,6 +1057,7 @@ export default function GitFlowPage() {
     openPullRequestMutation.isPending ||
     undoMutation.isPending ||
     repoMutation.isPending ||
+    removeRepoMutation.isPending ||
     branchMutation.isPending
 
   const discardChangesMutation = useMutation({
@@ -2582,43 +2612,63 @@ export default function GitFlowPage() {
                           repo.isDirty && (repo.changedCount ?? 0) > 0
                         const aheadCount = repo.ahead ?? 0
                         return (
-                          <button
+                          <div
                             key={repo.path}
-                            onClick={() => handleRepoChange(repo.path)}
-                            disabled={isShippingAll}
-                            className="hover:bg-accent/40 flex w-full cursor-pointer items-center gap-3 px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                            className="hover:bg-accent/40 group flex items-center transition-colors"
                           >
-                            <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
-                              <FolderGit className="size-4" />
-                            </span>
-                            <span className="truncate text-[13px] font-medium">
-                              {repo.name}
-                            </span>
-                            {repo.branch && (
-                              <span className="text-muted-foreground hidden shrink-0 items-center gap-1 text-[11px] sm:inline-flex">
-                                <GitBranch className="size-2.5" />
-                                {repo.branch}
+                            <button
+                              onClick={() => handleRepoChange(repo.path)}
+                              disabled={
+                                isShippingAll || removeRepoMutation.isPending
+                              }
+                              className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-3 py-2.5 text-left disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+                                <FolderGit className="size-4" />
                               </span>
-                            )}
-                            <span className="ml-auto shrink-0 text-[11px] font-medium">
-                              {repoDirty ? (
-                                <span className="text-primary">
-                                  {repo.changedCount}{' '}
-                                  {repo.changedCount === 1
-                                    ? 'change'
-                                    : 'changes'}
-                                </span>
-                              ) : aheadCount > 0 ? (
-                                <span className="text-primary">
-                                  {aheadCount} unpushed
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground/50">
-                                  clean
+                              <span className="truncate text-[13px] font-medium">
+                                {repo.name}
+                              </span>
+                              {repo.branch && (
+                                <span className="text-muted-foreground hidden shrink-0 items-center gap-1 text-[11px] sm:inline-flex">
+                                  <GitBranch className="size-2.5" />
+                                  {repo.branch}
                                 </span>
                               )}
-                            </span>
-                          </button>
+                              <span className="ml-auto shrink-0 text-[11px] font-medium">
+                                {repoDirty ? (
+                                  <span className="text-primary">
+                                    {repo.changedCount}{' '}
+                                    {repo.changedCount === 1
+                                      ? 'change'
+                                      : 'changes'}
+                                  </span>
+                                ) : aheadCount > 0 ? (
+                                  <span className="text-primary">
+                                    {aheadCount} unpushed
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground/50">
+                                    clean
+                                  </span>
+                                )}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                removeRepoMutation.mutate(repo.path)
+                              }
+                              disabled={
+                                isShippingAll || removeRepoMutation.isPending
+                              }
+                              title={`Remove ${repo.name} from Git`}
+                              aria-label={`Remove ${repo.name} from Git`}
+                              className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive mr-2 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md opacity-0 transition-all focus:opacity-100 disabled:cursor-not-allowed disabled:opacity-40 group-hover:opacity-100"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </div>
                         )
                       })}
                     </div>

@@ -1,6 +1,6 @@
 {
   "name": "Guitar",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "runtime": "vite_hono",
   "visibility": "public",
   "description": "A local-first guitar song library with 88-key playback and falling-note practice visualization.",
@@ -11,7 +11,7 @@
   "category": "music",
   "tags": [],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.18",
+    "@moldable-ai/ui": "^0.2.19",
     "@moldable-ai/storage": "^0.1.6"
   },
   "env": [],
@@ -44,9 +44,7 @@
                   "pattern": "^[a-z0-9-]+$"
                 }
               },
-              "required": [
-                "songId"
-              ]
+              "required": ["songId"]
             }
           },
           {
@@ -61,9 +59,7 @@
                   "pattern": "^[a-z0-9-]+$"
                 }
               },
-              "required": [
-                "songId"
-              ]
+              "required": ["songId"]
             }
           },
           {
@@ -78,10 +74,7 @@
                   "pattern": "^[a-z0-9-]+$"
                 },
                 "suggested": {
-                  "type": [
-                    "object",
-                    "null"
-                  ],
+                  "type": ["object", "null"],
                   "properties": {
                     "presetId": {
                       "type": "string"
@@ -95,10 +88,7 @@
                   }
                 },
                 "override": {
-                  "type": [
-                    "object",
-                    "null"
-                  ],
+                  "type": ["object", "null"],
                   "properties": {
                     "presetId": {
                       "type": "string"
@@ -112,9 +102,7 @@
                   }
                 }
               },
-              "required": [
-                "songId"
-              ]
+              "required": ["songId"]
             }
           },
           {
@@ -175,9 +163,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "filePath"
-              ]
+              "required": ["filePath"]
             }
           },
           {
@@ -216,9 +202,7 @@
                   "description": "Optional suggested/override sound settings for the song."
                 }
               },
-              "required": [
-                "song"
-              ]
+              "required": ["song"]
             }
           },
           {
@@ -261,9 +245,7 @@
                   "description": "Optional suggested/override sound settings. Overrides the file envelope."
                 }
               },
-              "required": [
-                "filePath"
-              ]
+              "required": ["filePath"]
             }
           },
           {
@@ -310,10 +292,7 @@
                   "description": "Optional suggested/override sound settings for the song."
                 }
               },
-              "required": [
-                "songId",
-                "noteOperations"
-              ]
+              "required": ["songId", "noteOperations"]
             }
           },
           {
@@ -361,9 +340,7 @@
                   "description": "Optional suggested/override sound settings. Overrides the file envelope."
                 }
               },
-              "required": [
-                "filePath"
-              ]
+              "required": ["filePath"]
             }
           },
           {

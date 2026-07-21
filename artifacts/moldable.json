@@ -1,6 +1,6 @@
 {
   "name": "Artifacts",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "aliases": [
     "artifact",
     "dashboard",
@@ -29,7 +29,7 @@
     "slides"
   ],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.18",
+    "@moldable-ai/ui": "^0.2.19",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {
@@ -55,9 +55,7 @@
             "description": "Read a full artifact (a deck's slides + theme, or a page's html/css/js).",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -74,10 +72,7 @@
               "properties": {
                 "kind": {
                   "type": "string",
-                  "enum": [
-                    "page",
-                    "deck"
-                  ]
+                  "enum": ["page", "deck"]
                 },
                 "title": {
                   "type": "string"
@@ -110,9 +105,7 @@
             "description": "Update an artifact's title, subtitle, density, theme, or deck runtime.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -130,9 +123,7 @@
             "description": "Replace an artifact's content in one call (a page's html/css/js, or a deck's slides/runtime).",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -150,11 +141,7 @@
             "description": "Surgically replace exact text across an artifact's editable text as a virtual document. oldString must be unique unless replaceAll is true. Optionally pass target to narrow the search.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id",
-                "oldString",
-                "newString"
-              ],
+              "required": ["id", "oldString", "newString"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -164,12 +151,7 @@
                   "properties": {
                     "kind": {
                       "type": "string",
-                      "enum": [
-                        "artifact",
-                        "page",
-                        "slide",
-                        "theme"
-                      ]
+                      "enum": ["artifact", "page", "slide", "theme"]
                     },
                     "field": {
                       "type": "string"
@@ -197,9 +179,7 @@
             "description": "Permanently delete an artifact and its assets.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -213,9 +193,7 @@
             "description": "Update a page artifact's html, css, js, fontLinks, libs, or background. Each provided field replaces that part; omit to leave unchanged.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -247,23 +225,14 @@
             "description": "Surgically replace exact text across a page document. oldString must be unique unless replaceAll is true. Optionally pass field to narrow the search.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id",
-                "oldString",
-                "newString"
-              ],
+              "required": ["id", "oldString", "newString"],
               "properties": {
                 "id": {
                   "type": "string"
                 },
                 "field": {
                   "type": "string",
-                  "enum": [
-                    "html",
-                    "css",
-                    "js",
-                    "background"
-                  ]
+                  "enum": ["html", "css", "js", "background"]
                 },
                 "oldString": {
                   "type": "string"
@@ -283,9 +252,7 @@
             "description": "Add a slide to a deck artifact.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -305,10 +272,7 @@
             "description": "Update a slide's bodyHtml, name, class, transition, or notes.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id",
-                "slideId"
-              ],
+              "required": ["id", "slideId"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -328,11 +292,7 @@
             "description": "Surgically replace exact text across deck slides. oldString must be unique unless replaceAll is true. Optionally pass slideId or field to narrow the search.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id",
-                "oldString",
-                "newString"
-              ],
+              "required": ["id", "oldString", "newString"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -342,12 +302,7 @@
                 },
                 "field": {
                   "type": "string",
-                  "enum": [
-                    "bodyHtml",
-                    "notes",
-                    "name",
-                    "slideClass"
-                  ]
+                  "enum": ["bodyHtml", "notes", "name", "slideClass"]
                 },
                 "oldString": {
                   "type": "string"
@@ -367,10 +322,7 @@
             "description": "Remove a slide from a deck artifact.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id",
-                "slideId"
-              ],
+              "required": ["id", "slideId"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -387,10 +339,7 @@
             "description": "Reorder a deck's slides by an array of slide ids.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id",
-                "order"
-              ],
+              "required": ["id", "order"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -407,11 +356,7 @@
             "description": "Move a slide to a new index.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id",
-                "slideId",
-                "toIndex"
-              ],
+              "required": ["id", "slideId", "toIndex"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -440,9 +385,7 @@
             "description": "Read a template's full detail (sample + coding guide).",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "templateId"
-              ],
+              "required": ["templateId"],
               "properties": {
                 "templateId": {
                   "type": "string"
@@ -456,10 +399,7 @@
             "description": "Switch an artifact to a library template.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id",
-                "templateId"
-              ],
+              "required": ["id", "templateId"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -476,9 +416,7 @@
             "description": "List an artifact's generated image assets.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -492,10 +430,7 @@
             "description": "Generate an image and save it as an artifact asset (reference as assets/<file>).",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id",
-                "prompt"
-              ],
+              "required": ["id", "prompt"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -521,11 +456,7 @@
             "description": "Remix an existing artifact image (image-to-image) and save the result.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id",
-                "source",
-                "prompt"
-              ],
+              "required": ["id", "source", "prompt"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -551,9 +482,7 @@
             "description": "List an artifact's restore points.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -567,10 +496,7 @@
             "description": "Restore an artifact to a previous version (undoable).",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id",
-                "versionId"
-              ],
+              "required": ["id", "versionId"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -587,9 +513,7 @@
             "description": "Publish an artifact to a public, shareable Moldable Artifacts link.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "properties": {
                 "id": {
                   "type": "string"
@@ -603,9 +527,7 @@
             "description": "Remove an artifact's public link.",
             "inputSchema": {
               "type": "object",
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "properties": {
                 "id": {
                   "type": "string"

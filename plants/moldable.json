@@ -1,6 +1,6 @@
 {
   "name": "Plants",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "aliases": ["houseplants", "garden"],
   "runtime": "vite_hono",
   "visibility": "public",
@@ -12,7 +12,7 @@
   "category": "lifestyle",
   "tags": [],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.18",
+    "@moldable-ai/ui": "^0.2.19",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {

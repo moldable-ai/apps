@@ -1,6 +1,6 @@
 {
   "name": "DB Browser",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "aliases": ["database", "postgres"],
   "runtime": "vite_hono",
   "visibility": "public",
@@ -12,7 +12,7 @@
   "category": "developer-tools",
   "tags": [],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.18",
+    "@moldable-ai/ui": "^0.2.19",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {

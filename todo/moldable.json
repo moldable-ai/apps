@@ -1,6 +1,6 @@
 {
   "name": "Todo",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "aliases": ["tasks", "checklist"],
   "runtime": "vite_hono",
   "visibility": "public",
@@ -13,7 +13,7 @@
   "category": "productivity",
   "tags": ["tasks", "todo", "checklist", "productivity"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.18",
+    "@moldable-ai/ui": "^0.2.19",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {

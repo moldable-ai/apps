@@ -1,6 +1,6 @@
 {
   "name": "Calendar",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "aliases": ["schedule", "events"],
   "runtime": "vite_hono",
   "visibility": "public",
@@ -13,7 +13,7 @@
   "category": "productivity",
   "tags": ["calendar", "schedule", "events", "google"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.18",
+    "@moldable-ai/ui": "^0.2.19",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {

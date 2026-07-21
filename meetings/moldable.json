@@ -284,9 +284,9 @@
   "license": "FSL-1.1-ALv2",
   "modified": false,
   "moldableDependencies": {
-    "@moldable-ai/editor": "^0.1.17",
+    "@moldable-ai/editor": "^0.1.18",
     "@moldable-ai/storage": "^0.1.6",
-    "@moldable-ai/ui": "^0.2.18"
+    "@moldable-ai/ui": "^0.2.19"
   },
   "name": "Meetings",
   "repository": "moldable-ai/apps",
@@ -374,6 +374,6 @@
       "url": "https://console.deepgram.com/"
     }
   ],
-  "version": "0.1.13",
+  "version": "0.1.14",
   "visibility": "public"
 }

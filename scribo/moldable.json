@@ -1,6 +1,6 @@
 {
   "name": "Scribo Languages",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "aliases": ["translation", "languages"],
   "visibility": "public",
   "description": "Language learning journal with AI-powered translations",
@@ -13,8 +13,8 @@
   "category": "education",
   "tags": ["languages", "translation", "learning", "journal"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.18",
-    "@moldable-ai/editor": "^0.1.17",
+    "@moldable-ai/ui": "^0.2.19",
+    "@moldable-ai/editor": "^0.1.18",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {

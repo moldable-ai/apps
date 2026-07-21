@@ -1,10 +1,5 @@
 {
-  "aliases": [
-    "alarms",
-    "timer",
-    "stopwatch",
-    "world clock"
-  ],
+  "aliases": ["alarms", "timer", "stopwatch", "world clock"],
   "appApi": {
     "capabilities": [
       {
@@ -18,12 +13,7 @@
             "inputSchema": {
               "properties": {
                 "state": {
-                  "enum": [
-                    "running",
-                    "paused",
-                    "idle",
-                    "finished"
-                  ],
+                  "enum": ["running", "paused", "idle", "finished"],
                   "type": "string"
                 }
               },
@@ -47,9 +37,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "durationMs"
-              ],
+              "required": ["durationMs"],
               "type": "object"
             },
             "name": "Create timer"
@@ -63,9 +51,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "type": "object"
             },
             "name": "Start timer"
@@ -79,9 +65,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "type": "object"
             },
             "name": "Pause timer"
@@ -95,9 +79,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "type": "object"
             },
             "name": "Reset timer"
@@ -111,9 +93,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "type": "object"
             },
             "name": "Delete timer"
@@ -171,9 +151,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "time"
-              ],
+              "required": ["time"],
               "type": "object"
             },
             "name": "Create alarm"
@@ -204,9 +182,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "type": "object"
             },
             "name": "Update alarm"
@@ -220,9 +196,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "id"
-              ],
+              "required": ["id"],
               "type": "object"
             },
             "name": "Delete alarm"
@@ -258,21 +232,14 @@
   "modified": false,
   "moldableDependencies": {
     "@moldable-ai/storage": "^0.1.6",
-    "@moldable-ai/ui": "^0.2.18"
+    "@moldable-ai/ui": "^0.2.19"
   },
   "name": "Clock",
   "repository": "moldable-ai/apps",
   "routeName": "clock",
   "runtime": "vite_hono",
   "tagline": "Alarms, timers, stopwatch, and world clocks — local-first",
-  "tags": [
-    "clock",
-    "alarm",
-    "timer",
-    "stopwatch",
-    "world clock",
-    "time"
-  ],
+  "tags": ["clock", "alarm", "timer", "stopwatch", "world clock", "time"],
   "upstream": {
     "fileHashes": {
       ".gitignore": "0a17fbecdb9290b71a9b29be1143f028d2e346639b978ae2358279eadfa5a92b",
@@ -314,6 +281,6 @@
     "path": "clock",
     "repo": "moldable-ai/apps"
   },
-  "version": "0.1.8",
+  "version": "0.1.9",
   "visibility": "public"
 }

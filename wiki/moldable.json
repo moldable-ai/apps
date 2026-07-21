@@ -11,8 +11,8 @@
   "category": "reference",
   "tags": ["markdown", "notes", "wiki", "knowledge-base"],
   "moldableDependencies": {
-    "@moldable-ai/editor": "^0.1.17",
-    "@moldable-ai/ui": "^0.2.18",
+    "@moldable-ai/editor": "^0.1.18",
+    "@moldable-ai/ui": "^0.2.19",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {

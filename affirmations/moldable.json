@@ -1,6 +1,6 @@
 {
   "name": "Daily Affirmations",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "aliases": ["mindfulness", "wellness"],
   "visibility": "public",
   "description": "A soothing, daily affirmation app to improve mental health and positivity.",
@@ -12,7 +12,7 @@
   "category": "health-fitness",
   "tags": [],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.18",
+    "@moldable-ai/ui": "^0.2.19",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {

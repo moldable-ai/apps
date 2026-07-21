@@ -1,6 +1,6 @@
 {
   "name": "Mail",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "aliases": ["email", "inbox"],
   "runtime": "vite_hono",
   "visibility": "public",
@@ -11,7 +11,7 @@
   "category": "productivity",
   "tags": ["email", "gmail", "inbox", "productivity"],
   "moldableDependencies": {
-    "@moldable-ai/ui": "^0.2.18",
+    "@moldable-ai/ui": "^0.2.19",
     "@moldable-ai/storage": "^0.1.6"
   },
   "appApi": {

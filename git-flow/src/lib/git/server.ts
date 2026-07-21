@@ -1135,6 +1135,37 @@ export async function addRepo(repoPath: string, workspaceId?: string) {
   return await getStatus(normalizedPath, workspaceId)
 }
 
+export async function removeRepo(repoPath: string, workspaceId?: string) {
+  const settings = await getSettings(workspaceId)
+  const normalizedPath = normalizeRepoPath(repoPath)
+  const repoIndex = settings.recentRepos.findIndex(
+    (repo) => normalizeRepoPath(repo.path) === normalizedPath,
+  )
+
+  if (repoIndex === -1) {
+    throw new Error('Repository is not tracked by Git.')
+  }
+
+  settings.recentRepos.splice(repoIndex, 1)
+  delete settings.repoPreferences[normalizedPath]
+
+  if (
+    settings.currentRepoPath &&
+    normalizeRepoPath(settings.currentRepoPath) === normalizedPath
+  ) {
+    settings.currentRepoPath = settings.recentRepos[0]?.path ?? ''
+  }
+
+  await saveSettings(settings, workspaceId)
+
+  const [status, recentRepos] = await Promise.all([
+    getStatus(settings.currentRepoPath, workspaceId),
+    getRecentRepos(workspaceId),
+  ])
+
+  return { ...status, recentRepos, removedPath: normalizedPath }
+}
+
 export async function getStatus(repoPath?: string, workspaceId?: string) {
   const settings = await getSettings(workspaceId)
   const pathToUse = resolveRepoPath(repoPath, settings.currentRepoPath)

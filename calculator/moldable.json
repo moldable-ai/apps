@@ -1,9 +1,5 @@
 {
-  "aliases": [
-    "calc",
-    "convert",
-    "converter"
-  ],
+  "aliases": ["calc", "convert", "converter"],
   "appApi": {
     "capabilities": [
       {
@@ -18,10 +14,7 @@
               "properties": {
                 "angleMode": {
                   "description": "Angle unit for trigonometric functions. Defaults to deg.",
-                  "enum": [
-                    "deg",
-                    "rad"
-                  ],
+                  "enum": ["deg", "rad"],
                   "type": "string"
                 },
                 "expression": {
@@ -33,9 +26,7 @@
                   "type": "boolean"
                 }
               },
-              "required": [
-                "expression"
-              ],
+              "required": ["expression"],
               "type": "object"
             },
             "name": "Evaluate an expression"
@@ -76,11 +67,7 @@
                   "type": "number"
                 }
               },
-              "required": [
-                "value",
-                "from",
-                "to"
-              ],
+              "required": ["value", "from", "to"],
               "type": "object"
             },
             "name": "Convert units or currency"
@@ -121,9 +108,7 @@
                   "type": "string"
                 }
               },
-              "required": [
-                "query"
-              ],
+              "required": ["query"],
               "type": "object"
             },
             "name": "Search calculations"
@@ -152,21 +137,14 @@
   "modified": false,
   "moldableDependencies": {
     "@moldable-ai/storage": "^0.1.6",
-    "@moldable-ai/ui": "^0.2.18"
+    "@moldable-ai/ui": "^0.2.19"
   },
   "name": "Calculator",
   "repository": "moldable-ai/apps",
   "routeName": "calculator",
   "runtime": "vite_hono",
   "tagline": "Everyday, scientific, and unit/currency math — with history",
-  "tags": [
-    "calculator",
-    "math",
-    "scientific",
-    "convert",
-    "currency",
-    "units"
-  ],
+  "tags": ["calculator", "math", "scientific", "convert", "currency", "units"],
   "upstream": {
     "fileHashes": {
       ".gitignore": "0a17fbecdb9290b71a9b29be1143f028d2e346639b978ae2358279eadfa5a92b",
@@ -201,6 +179,6 @@
     "path": "calculator",
     "repo": "moldable-ai/apps"
   },
-  "version": "0.1.8",
+  "version": "0.1.9",
   "visibility": "public"
 }
