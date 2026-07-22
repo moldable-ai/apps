@@ -191,47 +191,5 @@
       }
     ]
   },
-  "tagline": "Explore anything in science as interactive 3D",
-  "upstream": {
-    "repo": "moldable-ai/apps",
-    "path": "microscope",
-    "installedVersion": "0.1.2",
-    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
-    "installedAt": "2026-06-01T14:46:46.810Z",
-    "fileHashes": {
-      ".gitignore": "a552cd01b17606c22d31ff4fd57f127a8e6e0f9e16e77ac3b689d2e964acadc9",
-      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
-      "index.html": "118fe496f814a46ecfe759b869874a835669d068b974389e8054d77dc51d4fe2",
-      "package.json": "bdf46b01f416ea4c603554b8b2fd387559cae27e21b47e701a3409223845b290",
-      "pnpm-lock.yaml": "003f7d5f747fe484c90294a0f141df881ada8ce78fa8797b31544893cc89063c",
-      "public/icon.png": "b0fd2868b817b3aafbbd25fc0e367a2eaa4ac5ee333919251152db49a21dd507",
-      "scripts/moldable-dev.mjs": "560aebdf21680d0e8d6bf36083dc947afd6be4f33b7591e1f7de66866ec1bf34",
-      "src/client/app.tsx": "59155d9d6e098080467ea50d0ad0493f4dbc19bcdd41db9e474774632ef21b82",
-      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
-      "src/client/components/scene-viewer.tsx": "5bb69234f442e76e59003d7af2f8ddc3252eae76f1725e762f7c099237ad27d3",
-      "src/client/globals.css": "1c6a0e1ba6ff27cd826c66d5c6683e4b773c452ecf5623b04fe25d0c3456af6d",
-      "src/client/lib/api.ts": "b536b7add65fbb66be7eab798087165d6a8e681fcfa8eeed2f49e24a2fdcb476",
-      "src/client/lib/relief.ts": "1581326106832faa8ca3d045ada1b9ad56a55ba93dd78e8c1cd2ce508f817c06",
-      "src/client/main.tsx": "1c202dd037754bd158ab6e36561187be1d94744a9c24ad5e6b0d05ef7d338df8",
-      "src/client/query-provider.tsx": "9ea75b01a3eb727018caa1a51fdf51d51626c11ca8790a0cabecac7befa7d16b",
-      "src/server/aivault.ts": "156c1e5712bd4eaf5f4ef4914cd35cbcc3ce05d5a9be76db452398d07b363281",
-      "src/server/app.ts": "f351e20f18f0c921dbf663119aef036973be6f9cee820b4396740b8a4dbb65a8",
-      "src/server/index.ts": "5d77dfeeb5868afd4bc30e0d198c0dd31d5b7f859312de55e34c482ff5c68435",
-      "src/server/model-providers/assets.ts": "92dcee81ac6b9157225a3f5aacfb6404a7a3813cee3d93c1e92d06b424964f5d",
-      "src/server/model-providers/fal.ts": "85bcc6ea801ec87a590fe45a76cbaf4de4431142e58c8b5ba09889f29985f220",
-      "src/server/model-providers/index.ts": "0de8796b000cff0940b1ed33c44b26e62af99ca1e96ce6e5c16fc0cfab30bacc",
-      "src/server/model-providers/timeouts.ts": "4d8e6ca67802a03efeb6a55edbb0a54e5898b6e94b078b266e01a8ef061945d6",
-      "src/server/model-providers/tripo.ts": "de57052a12a4a105b5f5e3913c1f0febfe8bc87d9a63f9c40f3746c945fb0743",
-      "src/server/model-providers/types.ts": "7c5f6b6116d43d2a5edf014760ea1af62bfea616d1ca5b1fe0cbb677c088d600",
-      "src/server/moldable.ts": "f3391a8cc56af939269bcdc56133adb4d100c51c51614f7cfb1a83e226e9927c",
-      "src/server/static.ts": "3f0ab10616534534b6a92651d8659a4556d50c57d425f119677126af4aa54626",
-      "src/shared/category-prompts.ts": "2a9a765b416e8d10078e10ed0d7b8bea8daa2fad0069e62807794100befcc2b4",
-      "src/shared/library.ts": "583fc4d82e16315bbc05d2126869e9b8095ee1686a1ab0bb88e7cd9acb58a9ce",
-      "src/shared/types.ts": "50e701acdbdf36c6ca07f7888c63e1fe19dad8e62dae76e0fb30684c3ff7b2bc",
-      "STORE.md": "83893b828dedda25dce3b57adde437ba1a56e8d476f9f9a03d8cd45c13507b90",
-      "tsconfig.json": "2c2086735a1494ec9219070ed35e32706ca3c9b88c25d484f4fd37f5600a4b7a",
-      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
-    }
-  },
-  "modified": false
+  "tagline": "Explore anything in science as interactive 3D"
 }

@@ -48,44 +48,5 @@
     ]
   },
   "env": [],
-  "tagline": "A linked, local-first Markdown knowledge base",
-  "upstream": {
-    "repo": "moldable-ai/apps",
-    "path": "wiki",
-    "installedVersion": "0.1.2",
-    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
-    "installedAt": "2026-06-01T14:47:18.409Z",
-    "fileHashes": {
-      ".gitignore": "d42bc62af442b401d9e53db232c1321613287763b9dda357bb2d5f6f9eceab11",
-      "data/vaults.json": "e92039778e6e0993f9a0e0f2d1756fe4dda0d599f88785375fff7d4b22e1fd2a",
-      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
-      "index.html": "70ab3cb5e11e335a615fbdc0a4731b87ef56d17dbd8c417f435387678479de22",
-      "package.json": "5b688e011751575f933c8c1f394122877ee46d2b6cdd9bc01a9db2fab35ad9ea",
-      "pnpm-lock.yaml": "3275c21a8e952c301786396f749f5c090e7c0b1a7d861acd2489eb49fdd11b1a",
-      "public/fonts/opendyslexic/OFL.txt": "caafcccfb70fc72458fcbda812ec8f0a06cb300cbabb87eabbb30b946124394b",
-      "public/fonts/opendyslexic/OpenDyslexic-Bold-Italic.woff2": "1aadc8fa9656c92c09c8194790d0671bcd2b4bd961ba41fb8f7e605e5c493be0",
-      "public/fonts/opendyslexic/OpenDyslexic-Bold.woff2": "b534a0b84ef3cca941ebdb506ce3f4e0010aa4ef881271bac8b6959dbf694fbf",
-      "public/fonts/opendyslexic/OpenDyslexic-Italic.woff2": "b18685dcb99b4ba903549d215c0ae2ab39a5087097614fd4100ae6d387332b47",
-      "public/fonts/opendyslexic/OpenDyslexic-Regular.woff2": "0441bc21071e42db57c217f93fbc48d3b55a2987c02814c94dc93621c42e8695",
-      "public/icon.png": "baa1dfc904915cd7ebb237919495dab17f7a0be4f1d5cfbe02b3b9f033bd4f71",
-      "scripts/moldable-dev.mjs": "339a4a0e9f314627e530a54f69f2a3271da0a2ad2f0a57c3e4f842166cf69833",
-      "src/client/app.tsx": "eff25827b85d19121c56b12830be3ad4550cfacecd83420e8bf75adabf0d8a3e",
-      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
-      "src/client/frontmatter.test.ts": "056bb2aeadd306f53d20b2ff948c35557be44ba608f7fa0e1f0f2680d1ffe191",
-      "src/client/frontmatter.ts": "1647df4264837585a754a8522308c1aefc71e525ebc48fb34307a4cd95cbf73b",
-      "src/client/globals.css": "1be9a56b971907706f8d01d11053103fc5f3496644f27e4c3123ac8d1e3aacf8",
-      "src/client/main.tsx": "0e0a4a4def710c1ae39bf515048648c33bc7bf870ec1464583b90b736dd8500b",
-      "src/client/query-provider.tsx": "ccd981e9d5208c05ad9d4693e4cec53fcc21082fb44fb8d237808f8d3c67d211",
-      "src/server/app.ts": "6f34a8f85c0e001795b53ca22161a5ba99728b5dc3f57a564b3acb88f9afd362",
-      "src/server/index.test.ts": "a225d422d96764af9a717167014686e976eced9034f9d4fb84725d479f14513d",
-      "src/server/index.ts": "1cd6462daf4ebb3727aa3264b7e9e7b89d2383d1a4d64666981b0be5d068b1de",
-      "src/server/moldable.ts": "7f40a251c553cf68212e93f32e6747bc8fb339129e79882cf3e7bda8ed366271",
-      "src/server/static.ts": "3f0ab10616534534b6a92651d8659a4556d50c57d425f119677126af4aa54626",
-      "src/shared/types.ts": "12db013ba4144c86da6a0b35223a430a02c044f182201b314a3a35632ae553c5",
-      "STORE.md": "49726de0d4c8284d434f7fe65cd6ce348ea99144f7735b205862fc3d133b2acd",
-      "tsconfig.json": "2c2086735a1494ec9219070ed35e32706ca3c9b88c25d484f4fd37f5600a4b7a",
-      "vite.config.ts": "806d8ba822a06f17ae29ebd052e8da79215f54fbd914333445a9155aeebc44ee"
-    }
-  },
-  "modified": false
+  "tagline": "A linked, local-first Markdown knowledge base"
 }

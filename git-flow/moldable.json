@@ -170,39 +170,6 @@
     ]
   },
   "env": [],
-  "upstream": {
-    "repo": "moldable-ai/apps",
-    "path": "git-flow",
-    "installedVersion": "0.1.6",
-    "installedCommit": "65b2aa44e78ed08d560a2d7bb56e07ed3fabf037",
-    "installedAt": "2026-06-01T14:46:30.175Z",
-    "fileHashes": {
-      ".gitignore": "174f94c5fec64d43820dde2d953673a8e2e4bdd0be34f2b76281a7d4ebff7081",
-      "eslint.config.js": "2b7cb55dfb3d52107ae2fcce68f48753a980a16692432032e95ff248c15523a2",
-      "index.html": "4af788ce0d77785efe6ac114646c37d98e5d22ee73cc1870df0a68ccba647960",
-      "package.json": "125ca49e1efa6b2bd3856e9cc60b7ce032a32fc487a5e99ef4418e99d604902b",
-      "pnpm-lock.yaml": "096af6a391fc9d4d4fe40abd8c4c752de622c77b21030fb3f491d4bbe4daa1a2",
-      "public/icon.png": "88db36cc941029312a6b818de1d56c9c7d269e82b43dc93c56d8972a16e63dd7",
-      "public/screenshots/1.png": "f40b3fba8537b2e12802754b516deb48be5d8c205925b541cc2e0bcb7871131f",
-      "scripts/moldable-dev.mjs": "2f533cc5909fc7e82b4b78f97c6edce23e369d2ef6f0943af6544b774e227947",
-      "src/client/app.tsx": "ce07af6102af6ddfef6cba4a506c386e7bd8562557b205311d9a84c787663571",
-      "src/client/components/error-boundary.tsx": "ff99a60bb9c03979ccc500dfb4875a1c31f06827d8161b68db3f686fc6e5c296",
-      "src/client/globals.css": "32078850e35bd00939c1e2d6d721911fdd776ed4cfa695a3c45c9186dad3c22f",
-      "src/client/main.tsx": "3e745ed46d683e287656408a19ac4bc6a128e80cf6f55492dbff5bd7abb2e3e8",
-      "src/client/query-provider.tsx": "a7db658e196e93a94544fc5de1799ba1b9f04c7c6f34997fec2908207d7cb79f",
-      "src/components/ui/checkbox.tsx": "834cff7b5cb361d4bbd9cf02fb6abf3f85d869a84e7f50f25ec04fb65600d5c7",
-      "src/components/ui/select.tsx": "0442ef8662e1c1f35d0b1f736214e30635c68e9f6c5a35e5428467f3e311fedc",
-      "src/lib/git/server.ts": "ddea6f2344b999c4ba5a14f729b920161600c0eda27c3fd83be5c1ea1683d35e",
-      "src/lib/llm/generate-json.server.ts": "4820e4cd64d1db839cf89ddcb6907b93853dc14900c781a004918b2f783bedd3",
-      "src/lib/utils.ts": "746e4d9beb1a5b6f0e047ec19d5f1c542c9f8117f4ea7c80d7b9bd0fe2128e91",
-      "src/server/app.ts": "d369c2ec05c4757ff6f15b9a0424e57277915a9146da37d686b91e7f5efdeb03",
-      "src/server/index.ts": "c125946fa92eba65c21c171b74d59522ebb3c7b3a9878d7ae1cf0aff26256ad2",
-      "STORE.md": "1eb3383e9d73931d238e101bb9f7cc98252732c8abd61dd6a92208fa2af073f0",
-      "tsconfig.json": "bf42036d631d553634cf1435e214edb5e9f1fe74336529ede77b7359abdf49b0",
-      "vite.config.ts": "dd8f670694a69d72d21e4aa51a000a0ba1b43d0d17e2ab3c15de32232d5a21b6"
-    }
-  },
-  "modified": false,
   "screenshots": ["public/screenshots/1.png"],
   "tagline": "A clean Git client with AI commits and review, built in"
 }
