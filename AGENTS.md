@@ -190,7 +190,7 @@ Apps are NOT run directly - Moldable desktop manages app lifecycle. When develop
 1. Copy structure from an existing app (e.g., `todo`)
 2. Update `moldable.json` with your app's metadata
 3. Implement your app
-4. Run `npm run generate-manifest` to update the registry
+4. Run `pnpm release` to commit the app and update the registry safely
 5. Submit a PR
 
 ## Releasing Apps
@@ -198,19 +198,23 @@ Apps are NOT run directly - Moldable desktop manages app lifecycle. When develop
 The release process copies public apps from `~/.moldable/shared/apps`, runs quality checks, and commits:
 
 ```bash
-pnpm release           # Full release (copy, format, lint, types, manifest, commit)
+pnpm apps:release      # Copy all changed public apps, patch-bump, release, and backfill
+pnpm release           # Finalize apps already copied into this repo
 pnpm release --dry-run # Preview what would happen
-pnpm release --skip-copy # Skip copying from ~/.moldable/shared/apps
 ```
 
 The release script:
 
-1. Copies all apps with `"visibility": "public"` from `~/.moldable/shared/apps`
-2. Runs prettier (format)
-3. Runs eslint (lint)
-4. Checks TypeScript types
-5. Generates `manifest.json`
-6. Commits all changes (does NOT push - you push manually)
+1. `apps:release` copies all public apps from `~/.moldable/shared/apps` and patch-bumps only changed apps
+2. Runs prettier, eslint, and TypeScript checks
+3. Commits app content first so it has a stable release commit
+4. Generates and separately commits `manifest.json` against that exact app commit
+5. `apps:release` backfills released versions, commit, and file hashes into every public local source app
+6. Does not push; you push manually
+
+Do not run `app:copy` followed directly by `generate-manifest`: uncommitted app
+content cannot be addressed by a Git commit. The generator rejects that unsafe
+state and directs you to `pnpm release`.
 
 ### Copying Individual Apps
 

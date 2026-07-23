@@ -102,7 +102,7 @@ app-name/
 
 The `visibility` field controls whether an app is included in the public release:
 
-- `"public"` - App will be copied when running `pnpm release` or `pnpm app:copy:all`
+- `"public"` - App will be copied when running `pnpm apps:release` or `pnpm app:copy:all`
 - `"private"` - App will not be copied (useful for local-only apps)
 
 ## Release Process
@@ -110,14 +110,14 @@ The `visibility` field controls whether an app is included in the public release
 Apps are developed locally in `~/.moldable/shared/apps` and released to this repo:
 
 ```bash
-# Full release (copy, format, lint, types, manifest, commit)
-pnpm release
+# Full release (copy, conditional patch bump, checks, commits, backfill all public apps)
+pnpm apps:release
 
 # Preview what would happen
 pnpm release --dry-run
 
-# Skip copying (just format, lint, types, manifest, commit)
-pnpm release --skip-copy
+# Finalize apps you already copied into this repo
+pnpm release
 ```
 
 ### Copying Apps
@@ -130,6 +130,11 @@ pnpm app:copy todo notes
 # Copy all public apps
 pnpm app:copy:all
 ```
+
+After a manual copy, use `pnpm release` rather than calling
+`pnpm generate-manifest` directly. The release command commits app content
+first, generates a registry that references that exact commit, and records the
+released version and hash baseline back in the local source apps.
 
 ### Updating Local Apps
 
@@ -152,7 +157,7 @@ This preserves local dependencies, lockfiles, and Moldable runtime metadata.
 2. Copy structure from an existing app (e.g., `todo`)
 3. Create your `moldable.json` manifest with `"visibility": "public"`
 4. Implement your app (see [AGENTS.md](AGENTS.md) for guidelines)
-5. Run `pnpm release` to copy, validate, and commit
+5. Run `pnpm apps:release` to copy, validate, commit, and backfill
 6. Push and submit a PR
 
 ## License

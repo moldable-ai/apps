@@ -105,3 +105,41 @@ test('generate-manifest marks first-party app ids as official', () => {
   assert.equal(byId.get('redecorate')?.official, true)
   assert.equal(byId.get('redecorate')?.author, 'Moldable')
 })
+
+test('generate-manifest derives registry identity from the app directory', () => {
+  const root = makeFixture()
+  writeApp(root, 'notes', {
+    id: 'impersonated-app',
+    path: '../outside',
+  })
+
+  const manifest = runGenerate(root)
+
+  assert.equal(manifest.apps[0].id, 'notes')
+  assert.equal(manifest.apps[0].path, 'notes')
+})
+
+test('generate-manifest refuses to reference uncommitted app content', () => {
+  const root = makeFixture()
+  writeApp(root, 'notes', { name: 'Notes' })
+  execFileSync('git', ['init'], { cwd: root, stdio: 'ignore' })
+  execFileSync('git', ['config', 'user.email', 'test@example.com'], {
+    cwd: root,
+  })
+  execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: root })
+  execFileSync('git', ['add', '.'], { cwd: root })
+  execFileSync('git', ['commit', '-m', 'fixture'], {
+    cwd: root,
+    stdio: 'ignore',
+  })
+  writeApp(root, 'notes', { name: 'Changed Notes' })
+
+  assert.throws(
+    () => runGenerate(root),
+    (error) => {
+      assert.match(error.stderr.toString(), /app files are uncommitted: notes/)
+      assert.match(error.stderr.toString(), /run `pnpm release`/)
+      return true
+    },
+  )
+})

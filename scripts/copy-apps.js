@@ -251,6 +251,20 @@ function setTargetManifestVersion(targetApp, version) {
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 }
 
+function removeLocalInstallMetadata(targetApp) {
+  const manifestPath = join(targetApp, 'moldable.json')
+  const manifest = readAppManifest(targetApp)
+  if (!manifest) return
+
+  const hadInstallMetadata =
+    Object.hasOwn(manifest, 'upstream') || Object.hasOwn(manifest, 'modified')
+  if (!hadInstallMetadata) return
+
+  delete manifest.upstream
+  delete manifest.modified
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+}
+
 function restoreTargetManifestVersion(targetApp, version) {
   if (!version) return
 
@@ -307,6 +321,8 @@ function readComparableFile(root, relativePath) {
   if (relativePath === 'moldable.json') {
     const manifest = JSON.parse(readFileSync(fullPath, 'utf-8'))
     delete manifest.version
+    delete manifest.upstream
+    delete manifest.modified
     return `${JSON.stringify(manifest, null, 2)}\n`
   }
 
@@ -415,6 +431,7 @@ function copyApp(appId, { versionBump } = {}) {
     })
 
     rewriteReleaseDependencies(targetApp)
+    removeLocalInstallMetadata(targetApp)
     restoreTargetManifestVersion(targetApp, previousTargetVersion)
     restoreTargetPackageVersion(targetApp, targetPackageVersion)
     formatCopiedApp(targetApp)

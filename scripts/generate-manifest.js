@@ -3,7 +3,7 @@
  * Generate manifest.json from all moldable.json files in the apps directory.
  * Run from the root of the moldable-apps repo.
  */
-import { execSync } from 'child_process'
+import { execFileSync, execSync } from 'child_process'
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
@@ -95,11 +95,47 @@ function getGitCommitHash() {
     return execSync('git rev-parse HEAD', {
       cwd: ROOT,
       encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
     }).trim()
   } catch {
     console.warn('⚠️  Could not get git commit hash')
     return null
   }
+}
+
+function assertPublicAppsAreCommitted(apps) {
+  try {
+    execFileSync('git', ['rev-parse', '--is-inside-work-tree'], {
+      cwd: ROOT,
+      stdio: 'ignore',
+    })
+  } catch {
+    return
+  }
+
+  const dirtyApps = apps
+    .filter((app) => {
+      const status = execFileSync(
+        'git',
+        ['status', '--porcelain=v1', '--untracked-files=all', '--', app.path],
+        { cwd: ROOT, encoding: 'utf-8' },
+      )
+      return status.trim().length > 0
+    })
+    .map((app) => app.id)
+
+  if (dirtyApps.length === 0) return
+
+  console.error(
+    `❌ Cannot generate a releasable manifest while app files are uncommitted: ${dirtyApps.join(', ')}`,
+  )
+  console.error(
+    '   The manifest commit must contain the exact app source it references.',
+  )
+  console.error(
+    '   After app:copy, run `pnpm release` to commit apps, generate the manifest, and backfill local versions safely.',
+  )
+  process.exit(1)
 }
 
 function findPublicApps(dir) {
@@ -120,9 +156,12 @@ function findPublicApps(dir) {
         if (manifest.visibility !== 'public') continue
 
         apps.push({
+          ...manifest,
+          // Registry identity is derived from the checked-in directory. App
+          // metadata must not be able to redirect installs or impersonate a
+          // different app id.
           id: entry,
           path: entry,
-          ...manifest,
         })
       } catch {
         // No moldable.json or invalid JSON, skip
@@ -152,6 +191,7 @@ function generateManifest() {
   console.log('🔍 Scanning for apps...')
 
   const apps = findPublicApps(ROOT)
+  assertPublicAppsAreCommitted(apps)
   const commit = getGitCommitHash()
 
   console.log(`📦 Found ${apps.length} public apps`)

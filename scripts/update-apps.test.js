@@ -102,6 +102,7 @@ test('app:update stamps upstream version, commit, and file hashes', () => {
   assert.equal(manifest.upstream.installedVersion, '0.2.0')
   assert.equal(manifest.upstream.installedCommit, commit)
   assert.deepEqual(Object.keys(manifest.upstream.fileHashes), [
+    'moldable.json',
     'package.json',
     'src.txt',
   ])

@@ -135,6 +135,29 @@ test('--patch preserves the target version when only versions changed', () => {
   )
 })
 
+test('--patch strips local install metadata without treating it as an app change', () => {
+  const fixture = makeFixture()
+  writeApp(fixture.source, 'notes', {
+    version: '0.4.0',
+    modified: false,
+    upstream: {
+      repo: 'moldable-ai/apps',
+      path: 'notes',
+      installedVersion: '0.4.0',
+      installedCommit: 'a'.repeat(40),
+      fileHashes: { 'src.txt': 'old' },
+    },
+  })
+  writeApp(fixture.target, 'notes', { version: '1.2.3' })
+
+  runCopy(fixture, ['--all', '--patch'])
+
+  const manifest = readJson(join(fixture.target, 'notes', 'moldable.json'))
+  assert.equal(manifest.version, '1.2.3')
+  assert.equal(manifest.upstream, undefined)
+  assert.equal(manifest.modified, undefined)
+})
+
 test('--patch ignores app-specific ignored files when detecting changes', () => {
   const fixture = makeFixture()
   writeApp(fixture.source, 'notes', { version: '0.4.0' })
