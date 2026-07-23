@@ -979,7 +979,7 @@ still rejects a request, `src/server/moldable.ts` now surfaces the upstream
 error body and writes a bounded workspace diagnostic to
 `llm-generate-json-failures.jsonl`.
 
-Live smoke over `https://money.localhost:1355` with
+Live smoke over the session-specific `MOLDABLE_APP_URL` with
 `missingNamespace=budget`, `direction=expense`, `limit=3`,
 `saveProposals=false`, and `model=openai/gpt-5.5` returned `ok: true`,
 selected a bounded transaction batch and produced proposals.

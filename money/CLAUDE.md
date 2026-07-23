@@ -12,8 +12,8 @@ what is still open.
 - Backend work should stay in `src/server/**`, `moldable.json`, PRDs, and data
   contract docs unless UI glue is explicitly needed.
 - Do not start the dev server manually; Moldable owns app lifecycle.
-- Use `https://money.localhost:1355` for runtime smoke checks when Moldable has
-  the app running.
+- Use the session-specific `MOLDABLE_APP_URL` for runtime smoke checks when
+  Moldable has the app running.
 
 ## Frontend / UI-Kit Status (frontend agent)
 

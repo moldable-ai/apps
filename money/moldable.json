@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "runtime": "vite_hono",
   "routeName": "money",
-  "url": "https://money.localhost:1355",
   "visibility": "private",
   "description": "Local-first personal finance backend with Plaid sync, normalized facts, and formula-backed cards.",
   "author": "",
